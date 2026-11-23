@@ -9,6 +9,7 @@ import { errorText } from '../lib/errors'
 import { notifyError } from '../chat/Notifications'
 import { t, useLanguage } from '../i18n'
 import { ownHostId } from '../hosts'
+import { useRestartingHosts } from './restartingHosts'
 
 let computerState: Computers | null = null
 let started = false,
@@ -64,16 +65,18 @@ export function useScopedHosts(): ScopedHost[] {
   }, [state])
 }
 
-export const statusText = (status: ComputerStatus) =>
-  status === 'connected'
-    ? t('Connected')
-    : status === 'connecting'
-      ? t('Connecting…')
-      : status === 'offline'
-        ? t('Offline')
-        : status === 'paused'
-          ? t('Paused')
-          : t('Pair again')
+export const statusText = (status: ComputerStatus, restarting = false) =>
+  restarting && status !== 'connected'
+    ? t('Restarting…')
+    : status === 'connected'
+      ? t('Connected')
+      : status === 'connecting'
+        ? t('Connecting…')
+        : status === 'offline'
+          ? t('Offline')
+          : status === 'paused'
+            ? t('Paused')
+            : t('Pair again')
 
 export function StatusDot({ status, className = '' }: { status: ComputerStatus; className?: string }) {
   return (
@@ -85,11 +88,14 @@ export function StatusDot({ status, className = '' }: { status: ComputerStatus; 
 }
 
 /** What is going on over there, in the fewest words. */
-export function activityText(computer: Pick<Computer, 'status' | 'running' | 'needsInput' | 'waiting'>): string {
+export function activityText(
+  computer: Pick<Computer, 'status' | 'running' | 'needsInput' | 'waiting'>,
+  restarting = false,
+): string {
   if (computer.status !== 'connected')
     return computer.status === 'offline' && computer.waiting === 'network'
       ? t('Waiting for network')
-      : statusText(computer.status)
+      : statusText(computer.status, restarting)
   const parts = [
     computer.needsInput ? t('{0} waiting', { 0: computer.needsInput }) : '',
     computer.running ? t('{0} working', { 0: computer.running }) : '',
@@ -108,6 +114,7 @@ export function hostRoute(computer: Pick<Computer, 'local' | 'url' | 'ssh' | 'st
 export function ComputerSwitcher() {
   useLanguage()
   const state = useComputers()
+  const restarting = useRestartingHosts()
   if (!state || state.computers.length < 2) return null
   const selected = state.computers.find((computer) => computer.id === state.scope)
   const select = (id: string | null) =>
@@ -150,7 +157,13 @@ export function ComputerSwitcher() {
         <>
           <StatusDot status={computer.status} />
           <span className="truncate">
-            {[activityText(computer) || statusText(computer.status), hostRoute(computer)].filter(Boolean).join(' · ')}
+            {[
+              activityText(computer, restarting.has(computer.id)) ||
+                statusText(computer.status, restarting.has(computer.id)),
+              hostRoute(computer),
+            ]
+              .filter(Boolean)
+              .join(' · ')}
           </span>
         </>,
       ),

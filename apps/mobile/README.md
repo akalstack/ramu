@@ -10,9 +10,9 @@ The iOS and Android app for a Ramu host. The host runs your agents, providers, G
 2. Install the app from a store. From source, install a development build once (`pnpm --filter @ramu/mobile eas:ios`, `eas:android`, or locally `build:ios`, `build:android`) and run `pnpm dev:mobile` first.
 3. Open it. A phone with no host starts a short setup, one step per screen. **Look around first** (or **Skip** once paired) leaves it, and the **Pair a host** chip brings it back. A reopened app resumes at the step it left.
    1. **Welcome:** what the phone is for, and the language.
-   2. **Connect:**
+   2. **Connect:** says where the code is on the computer (the phone button at the foot of Ramu's sidebar) and that a computer signed in to the same Ramu account connects on its own.
       - **Scan QR code** pairs the moment it reads the host's code. The phone's own camera works too: the code opens getramu.dev, which opens the app (or its store page first). The host's address and code stay after `#` in that link, so the site never receives them.
-      - **Sign in with your Ramu account** adds the hosts that let your account's devices in, from anywhere.
+      - **Sign in with your Ramu account** adds the hosts that let your account's devices in, from anywhere, and returns to the setup once one is added. A host that can't be added says why, such as turning on **Allow other devices** or Ramu Link there.
       - **Find a computer nearby** lists hosts on the same network. Allow the phone on the host when both screens show the same six-digit number.
       - **Enter address and code** types them by hand.
       - **No Ramu on a computer yet?** shares the download link.
@@ -35,8 +35,8 @@ Use the host's LAN or VPN address, never `localhost`. The host must stay awake a
 - **Search:** threads on every host.
 - **Source Control:** status, staging, commits with AI drafts, branches, sync, stashes and undo. A repository with no remote offers **Publish to GitHub** (private by default), which creates it, adds it as origin and pushes the branch. The branch's pull request shows its checks, where a connected platform reports its preview, and review state.
 - **Live app:** **Live app** in a project's menu shows the latest deploy's checks as the Git host reports them, the live address watch with a switch to turn it off or on, and whether a production database address is saved. The live address and the database address are set on a computer. See [Deploying an app](../../docs/guide/deploy.md).
-- **Files:** browse, view, edit and move files, and add folders and clone projects on the host.
-- **Terminals:** real host terminals with an extra-key rail. Hold and drag for arrow keys, and pinch to change the text size (remembered on the phone). From a thread's terminal, **Add screen to chat** puts the rows on screen above the thread's message box; the agent reads them with your next message.
+- **Files:** browse, view, edit and move files, and add folders and clone projects on the host. The folder picker starts from the host's home folder, root, drives and projects, and takes a typed path.
+- **Terminals:** real host terminals with an extra-key rail. Hold and drag for arrow keys, and pinch to change the text size (remembered on the phone). **Copy** in the terminal's bar copies a recent command with its output, the screen, or text you select from recent output; **Paste into terminal** pastes the clipboard and asks first for more than one line. From a thread's terminal, **Add screen to chat** puts the rows on screen above the thread's message box; the agent reads them with your next message.
 - **Browser and computer:** the Browser and Computer pills open full-screen viewers you can control by touch.
 - **Hosts:** several hosts connect at once. Each has a switch that turns its connection off and on, keeping its pairing.
 - **Offline:** drafts and an outbox stay on the phone and send in order when the host is back. A send that may or may not have arrived is marked **uncertain** and never retried by itself.

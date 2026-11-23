@@ -25,6 +25,10 @@ export interface AppUpdateStatus {
   waiting?: { version: string; notesUrl: string; settlesAt: string } | null
 }
 
+/** A downloaded update this app can install by itself, without the person downloading an installer. */
+export const installsUnattended = (status: AppUpdateStatus): boolean =>
+  APP_AUTO_UPDATE && status.phase === 'ready' && !!status.nativeReady && status.supported !== false
+
 /** What one host needs to be current: a newer Ramu release, and the provider CLIs that have newer versions. */
 export interface HostUpdateSummary {
   currentVersion: string | null

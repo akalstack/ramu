@@ -13,6 +13,7 @@ import type { SettingsStore } from '../settings/settingsStore'
 import { loadProjectConfig } from './projectConfig'
 import * as gitCli from './git'
 import { NO_PROJECT } from '@ramu/shared/types'
+import { isSystemFolder } from '@ramu/shared/workspace/hostFolders'
 import type {
   AgentScope,
   BindingSetupState,
@@ -236,6 +237,9 @@ export class Workspace {
   /** Creates a project from a folder: a workspace with its child repositories (all, or only `repos`), or a single repository. */
   async addProjectFromFolder(dir: string, repos?: string[]): Promise<{ project: Project; repositories: Repository[] }> {
     const found = await this.inspectFolder(dir)
+    // An agent given a filesystem root or a system folder as its project would work across the whole computer.
+    if (isSystemFolder(found.root, process.platform))
+      throw new Error(`${found.root} is a system folder. Choose a project folder inside it instead.`)
     const chosen = found.kind === 'workspace' && repos ? found.repos.filter((repo) => repos.includes(repo)) : null
     if (chosen && !chosen.length) throw new Error('Choose at least one repository.')
     const existing = this.listProjects().find((p) => p.root === found.root)

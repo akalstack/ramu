@@ -4,8 +4,9 @@ import { ChatLink } from '../../../chat/ChatReferences'
 import { parseThreadReference, remarkChatReferences, SKILL_REFERENCE_PREFIX } from '@ramu/shared/chat/chatReferences'
 import { useLanguage } from '../../../i18n'
 import { memo, useMemo, useRef, useState } from 'react'
-import Markdown, { defaultUrlTransform, type Components } from 'react-markdown'
+import { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { MarkdownText } from '../../../chat/MarkdownText'
 import type { AgentEvent } from '@ramu/shared/types'
 import { inlineCodeFileLink, localFileLink } from '@ramu/shared/workspace/fileLinks'
 import { MessageTime } from './MessageTime'
@@ -84,7 +85,7 @@ export const AssistantText = memo(function AssistantText({
       <MessageContent className="gap-0">
         <Bubble variant="ghost" className="w-full">
           <BubbleContent className={`${MSG_CLASS} assistant${writing ? ' generating' : ''} w-full overflow-visible`}>
-            <Markdown
+            <MarkdownText
               remarkPlugins={[remarkGfm, remarkChatReferences]}
               rehypePlugins={writing ? rehypePlugins : undefined}
               urlTransform={(url) =>
@@ -95,7 +96,7 @@ export const AssistantText = memo(function AssistantText({
               components={components}
             >
               {text}
-            </Markdown>
+            </MarkdownText>
           </BubbleContent>
         </Bubble>
         {actions && !writing && (

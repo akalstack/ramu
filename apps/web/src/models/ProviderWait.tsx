@@ -1,4 +1,4 @@
-import { ChevronDown, Clock3, WifiOff } from 'lucide-react'
+import { ChevronDown, Clock3, RefreshCw, WifiOff } from 'lucide-react'
 import { limitTrayView, type ProviderWaitState } from '@ramu/shared/chat/providerWait'
 import { Button } from '@/components/desktop-button'
 import { t, useLanguage } from '../i18n'
@@ -6,6 +6,7 @@ import { limitTrayCopy, resumeTime } from './limitCopy'
 import { Menu } from '../Menu'
 import type { LimitRetry } from './useLimitRetry'
 import { autoResumeLabel, autoResumeSection, type AutoResumeControl } from './autoResumeMenu'
+import { useRestartingHosts } from '../workspace/restartingHosts'
 
 /** Status-slot icon for chat lists: the chat is at a usage limit and continues on its own once it resets. */
 export function ProviderWaitIcon({ retryAt }: { retryAt: number }) {
@@ -118,16 +119,21 @@ export function ProviderWaitNote({
 }
 
 /** Shown in the chat tray while this window's computer is unreachable. Like a usage limit, messages are kept and sent once it is back. */
-export function HostWaitNote({ name }: { name: string }) {
+export function HostWaitNote({ name, hostId }: { name: string; hostId: string }) {
   useLanguage()
+  // A restart someone asked for is brief and expected; it is not the host going away.
+  const restarting = useRestartingHosts().has(hostId)
   const detail = t(
     '{0} is not reachable. Keep writing: messages wait on this device and send in order when it reconnects. They never interrupt a running turn.',
     { '0': name },
   )
+  const Icon = restarting ? RefreshCw : WifiOff
   return (
     <div role="status" title={detail} className="provider-wait flex items-center gap-2 min-h-7 px-1 text-caption">
-      <WifiOff size={14} className="flex-none text-muted-foreground" aria-hidden="true" />
-      <strong className="flex-none font-medium text-foreground">{t('Waiting for {0}', { '0': name })}</strong>
+      <Icon size={14} className="flex-none text-muted-foreground" aria-hidden="true" />
+      <strong className="flex-none font-medium text-foreground">
+        {restarting ? t('{0} is restarting', { '0': name }) : t('Waiting for {0}', { '0': name })}
+      </strong>
       <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-muted-foreground">
         {t('Messages send when it reconnects')}
       </span>

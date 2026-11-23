@@ -90,6 +90,17 @@ it('tracks each host’s connection independently, including a rejected token', 
   expect(deps.changed).toHaveBeenCalled()
 })
 
+it('shows this host as connecting, not offline, while the app restarts its service', () => {
+  const { registry } = setup()
+  const local = () => registry.list(LOCAL).computers.find((c) => c.id === LOCAL)!.status
+  registry.setLocalStatus(false, true)
+  expect(local()).toBe('connecting')
+  registry.setLocalStatus(true)
+  expect(local()).toBe('connected')
+  registry.setLocalStatus(false)
+  expect(local()).toBe('offline')
+})
+
 it('retrying an offline host keeps the other host connected and delivering events', () => {
   const { servers, streams, stops, delivered, registry } = setup()
   const a = servers.add('10.0.0.2:7788', 'Studio', 'a'),

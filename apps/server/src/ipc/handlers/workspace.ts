@@ -300,7 +300,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
       run: (taskId: string, event: ContinuedEvent) => agents.recordContinued(taskId, event),
     },
     'projects.create': {
-      // A chosen parent is held to the host's browse roots by hostFolders.create, as the folder browser is.
+      // A chosen parent is checked by hostFolders.create, as the folder browser's folders are.
       args: z.tuple([
         z
           .object({
@@ -323,6 +323,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
     },
     'projects.defaultParent': { args: z.tuple([]), run: () => workspace.newProjectParent() },
     'folders.roots': { args: z.tuple([]), run: () => hostFolders.roots() },
+    'folders.places': { args: z.tuple([]), run: () => hostFolders.places() },
     'folders.list': { args: z.tuple([z.string().max(4096)]), run: (path: string) => hostFolders.list(path) },
     'folders.create': {
       args: z.tuple([z.string().max(4096), z.string().max(200)]),

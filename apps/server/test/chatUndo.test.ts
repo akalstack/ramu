@@ -43,7 +43,8 @@ beforeEach(async () => {
   const agents = {
     get: () => ({ taskId, cwd, covers: [cwd], additionalDirs: [], settings: DEFAULT_AGENT_SETTINGS }),
     events,
-    activeWriter: () => null,
+    writing: () => false,
+    rootOf: (id: string) => id,
     withWorkspaceReservation: async (_covers: string[], action: () => Promise<unknown>) => action(),
     recordFileRestore: (_id: string, userSeq: number, fileCount: number) =>
       record({ kind: 'file-restore', userSeq, fileCount }),

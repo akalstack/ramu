@@ -63,6 +63,8 @@ export class SessionRecorder {
   private readonly unsettled = new Map<string, Map<string, HeldReply>>()
 
   record(id: string, recorded: AgentEvent, replacesMessageId?: string): void {
+    if (recorded.kind === 'tool-use' || recorded.kind === 'tool-result')
+      this.host.reviewHooks()?.observe?.(id, recorded)
     if (recorded.kind === 'text' && recorded.messageId) {
       const held = this.unsettled.get(id) ?? new Map<string, HeldReply>()
       this.unsettled.set(id, held)

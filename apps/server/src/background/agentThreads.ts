@@ -73,7 +73,7 @@ const REQUEST_ID = z
   .max(120)
   .optional()
   .describe('Any unique string; sending the same call again returns the first result instead of repeating it.')
-// Held to the host's browse roots by the folder calls it goes through, as the folder browser is.
+// Checked by the folder calls it goes through, as the folder browser's folders are.
 const PARENT_FOLDER = z
   .string()
   .min(1)

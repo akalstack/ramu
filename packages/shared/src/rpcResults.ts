@@ -46,7 +46,13 @@ export function rpcMismatch(
         : `${path}: expected ${JSON.stringify(shape.v)}, got ${JSON.stringify(value)?.slice(0, 60)}`
     case 'union': {
       const misses = shape.of.map((member) => rpcMismatch(table, member, value, path, depth + 1))
-      return misses.includes(null) ? null : (misses.sort((a, b) => b!.length - a!.length)[0] ?? null)
+      if (misses.includes(null)) return null
+      // A value that is there departs from the member it was meant to be, not from "nothing": name that field.
+      const present = value !== undefined && value !== null
+      const telling = misses.filter(
+        (miss, index) => !present || !['undefined', 'null'].includes(table.shapes[shape.of[index]!]?.k ?? ''),
+      )
+      return (telling.length ? telling : misses).sort((a, b) => b!.length - a!.length)[0] ?? null
     }
     case 'array':
       if (!Array.isArray(value)) return `${path}: expected a list, got ${describe(value)}`

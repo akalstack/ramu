@@ -27,7 +27,7 @@ function Outputs({ cell }: { cell: NotebookCell }) {
             />
           </ImagePreview>
         ) : output.kind === 'markdown' ? (
-          <Markdown key={index} text={output.text} />
+          <Markdown key={index} text={output.text} density="compact" />
         ) : (
           <T key={index} size={font.caption} mono tone={output.error ? 'bad' : 'soft'} numberOfLines={40}>
             {output.text}
@@ -41,7 +41,7 @@ function Outputs({ cell }: { cell: NotebookCell }) {
 function Source({ cell }: { cell: NotebookCell }) {
   return cell.type === 'markdown' ? (
     <View style={{ padding: space.s }}>
-      <Markdown text={cell.source} />
+      <Markdown text={cell.source} density="compact" />
     </View>
   ) : (
     <T size={font.caption} mono tone="soft" style={{ padding: space.s }}>

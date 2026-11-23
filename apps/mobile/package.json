@@ -37,7 +37,6 @@
     "gen:icons": "swift scripts/gen-icons.swift"
   },
   "dependencies": {
-    "@bsky.app/react-native-uitextview": "2.7.2",
     "@expo/metro-runtime": "~58.0.17",
     "@expo/ui": "~58.0.28",
     "@legendapp/list": "3.7.3",

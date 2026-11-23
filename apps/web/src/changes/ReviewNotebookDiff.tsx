@@ -1,11 +1,9 @@
 import { Fragment, useMemo, useState } from 'react'
-import Markdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import type { ChangeFile } from '@ramu/shared/types'
 import type { DiffRow } from '@ramu/shared/review/lineDiff'
 import { diffNotebook, type NotebookCell, type NotebookCellChange } from '@ramu/shared/review/notebookDiff'
 import { Button } from '@/components/desktop-button'
-import { chatMarkdownComponents } from '../chat/ChatMarkdown'
+import { MarkdownText } from '../chat/MarkdownText'
 import { t, useLanguage } from '../i18n'
 
 const TONE = {
@@ -28,11 +26,9 @@ function Outputs({ cell }: { cell: NotebookCell }) {
             className="block max-h-80 max-w-full object-contain"
           />
         ) : output.kind === 'markdown' ? (
-          <div key={index} className="text-control">
-            <Markdown remarkPlugins={[remarkGfm]} components={chatMarkdownComponents}>
-              {output.text}
-            </Markdown>
-          </div>
+          <MarkdownText key={index} density="compact">
+            {output.text}
+          </MarkdownText>
         ) : (
           <pre
             key={index}
@@ -49,11 +45,9 @@ function Outputs({ cell }: { cell: NotebookCell }) {
 function Source({ cell }: { cell: NotebookCell }) {
   if (cell.type === 'markdown')
     return (
-      <div className="p-3 text-control">
-        <Markdown remarkPlugins={[remarkGfm]} components={chatMarkdownComponents}>
-          {cell.source}
-        </Markdown>
-      </div>
+      <MarkdownText density="compact" className="p-3">
+        {cell.source}
+      </MarkdownText>
     )
   return (
     <pre className="m-0 overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-caption text-soft">

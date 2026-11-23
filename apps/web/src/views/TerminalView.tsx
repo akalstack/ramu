@@ -14,7 +14,7 @@ import { useOpenFileLink } from '../workspace/useOpenFileLink'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useAppSettings } from '../settings/AppSettings'
-import { invoke as invokeHere, ramu } from '../ipc'
+import { copyText, invoke as invokeHere, ramu } from '../ipc'
 import { errorText } from '../workspace/TaskPane'
 import { useHostRuntime, useWorkspace } from '../workspace/workspace'
 import { useHost } from '../workspace/HostProvider'
@@ -32,6 +32,8 @@ import { captureTerminal } from '../workspace/terminalCapture'
 import { isProjectCtx } from '../workspace/workspaceModel'
 import { draftKey, draftStore, loadDraft, saveDraft } from '../composer/drafts'
 import { sendTerminalToChat, terminalAttachmentMarkdown } from '../chat/terminalToChat'
+import { terminalBlockAt, trackTerminalBlocks, type TerminalBlocks } from '@ramu/shared/workspace/terminalBlocks'
+import { terminalClipboardKey, terminalPlatform } from '../workspace/terminalClipboard'
 
 const shellQuote = (path: string) => (/^[\w@%+=:,./-]+$/.test(path) ? path : `'${path.replace(/'/g, `'\\''`)}'`)
 
@@ -70,6 +72,7 @@ export function TerminalView({
   const renderer = useRef<WebglAddon | null>(null)
   const rendererLoss = useRef<{ dispose(): void } | null>(null)
   const host = useRef<HTMLDivElement>(null)
+  const blocksRef = useRef<TerminalBlocks | null>(null)
   const connectRef = useRef<(() => void) | null>(null)
   const scheduleFitRef = useRef<(() => void) | null>(null)
   const [cwd, setCwd] = useState<string | null>(null)
@@ -135,6 +138,27 @@ export function TerminalView({
     let termId: string | null = null
     let disposed = false
     const offs: (() => void)[] = []
+    // Before any output, so prompt marks in replayed output count too.
+    const blocks = trackTerminalBlocks(term)
+    blocksRef.current = blocks
+    offs.push(() => {
+      blocks.dispose()
+      blocksRef.current = null
+    })
+    const platform = terminalPlatform(navigator.userAgent)
+    term.attachCustomKeyEventHandler((event) => {
+      const action = terminalClipboardKey(event, platform, term.hasSelection())
+      if (!action) return true
+      if (action === 'copy') {
+        event.preventDefault()
+        const text = term.getSelection()
+        if (text) void copyText(text).catch((e) => setError(errorText(e)))
+        // A second Ctrl+C then interrupts, as in other terminals.
+        if (!event.shiftKey) term.clearSelection()
+      }
+      // A paste is left to the browser, whose paste event xterm brackets for shells that ask for it.
+      return false
+    })
     // Printed web addresses and paths are links a plain click opens. A path links only once the host finds it, so prose
     // such as `and/or` stays text; a shell that changed folder still resolves through the thread's folders.
     const found = new Map<string, Promise<string | null>>()
@@ -224,6 +248,7 @@ export function TerminalView({
     let readOnly = false
     const input = term.onData((data) => {
       if (readOnly || !canWrite()) return
+      blocks.input(data)
       if (!termId) {
         pendingInput += data
         return
@@ -402,6 +427,7 @@ export function TerminalView({
             if (command && canWrite()) {
               gate.arm()
               term.focus()
+              blocks.input(`${command}\r`)
               void invoke('term.write', info.id, `${command}\r`).catch((e) => setError(errorText(e)))
             }
           },
@@ -498,9 +524,23 @@ export function TerminalView({
     ws.newTask(project)
   }
 
-  const openMenu = (term: Terminal, point: { x: number; y: number }) => {
+  /** The command and output under `point`; from the keyboard, the newest command's. */
+  const blockText = (term: Terminal, point: { x: number; y: number } | null) => {
+    const blocks = blocksRef.current
+    const ranges = blocks?.blocks() ?? []
+    if (!blocks || !ranges.length) return ''
+    const screen = term.element?.querySelector('.xterm-screen')?.getBoundingClientRect()
+    const row =
+      point && screen?.height
+        ? term.buffer.active.viewportY + Math.floor((point.y - screen.top) / (screen.height / term.rows))
+        : Infinity
+    const text = blocks.text(terminalBlockAt(ranges, row) ?? ranges.at(-1)!)
+    return text.length <= 1_000_000 ? text : ''
+  }
+
+  const openMenu = (term: Terminal, point: { x: number; y: number }, pointed: boolean) => {
     // The menu opens on this machine, so it goes through this window's own host.
-    void invokeHere('term.menu', term.getSelection(), point).then(
+    void invokeHere('term.menu', term.getSelection(), point, blockText(term, pointed ? point : null)).then(
       (action) => {
         if (!canWrite()) return
         if (action === 'selectAll') term.selectAll()
@@ -580,7 +620,7 @@ export function TerminalView({
           if (!canWrite()) return
           const term = terminal.current
           if (!term) return
-          openMenu(term, { x: event.clientX, y: event.clientY })
+          openMenu(term, { x: event.clientX, y: event.clientY }, true)
         }}
         onKeyDown={(event) => {
           if (initialCommand && event.key === 'Escape') {
@@ -594,7 +634,7 @@ export function TerminalView({
           const term = terminal.current,
             rect = event.currentTarget.getBoundingClientRect()
           if (!term) return
-          openMenu(term, { x: rect.left + 12, y: rect.top + 12 })
+          openMenu(term, { x: rect.left + 12, y: rect.top + 12 }, false)
         }}
       >
         <div ref={host} className="flex-1 min-h-0 min-w-0 overflow-hidden" />

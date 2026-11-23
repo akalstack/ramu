@@ -26,7 +26,7 @@ export interface MessageDispatcherHost
     Pick<GoalManager, 'controlGoal' | 'getGoal' | 'setGoal' | 'setVerify'>,
     Pick<ProviderWaits, 'providerWait' | 'scheduleProvider'>,
     Pick<SessionRecorder, 'activeTools' | 'record'>,
-    Pick<SessionRegistry, 'activeWriter' | 'live' | 'runners' | 'transitioning'>,
+    Pick<SessionRegistry, 'live' | 'runners' | 'transitioning'>,
     Pick<SessionStarter, 'send'>,
     Pick<SessionStore, 'get' | 'queuePaused' | 'queued' | 'threadDone'> {
   shutdown(): AgentService['shutdown']
@@ -55,10 +55,7 @@ export class MessageDispatcher {
   private wakeAgain = false
 
   async withWorkspaceReservation<T>(covers: string[], action: () => Promise<T>): Promise<T> {
-    if (
-      this.host.activeWriter(covers) ||
-      covers.some((cwd) => this.workspaceReservations.has(cwd) || this.capturing.has(cwd))
-    )
+    if (covers.some((cwd) => this.workspaceReservations.has(cwd) || this.capturing.has(cwd)))
       throw new Error('Wait for the workspace operation to finish')
     covers.forEach((cwd) => this.workspaceReservations.add(cwd))
     try {
@@ -222,11 +219,7 @@ export class MessageDispatcher {
   }
 
   updateQueue(id: string, messages: QueuedMessage[], paused = this.host.queuePaused(id)): void {
-    // An idle thread's messages that wait on another thread's turn in the same checkout say whose, so the wait is not a mystery.
-    const session = messages.length && !paused ? this.host.get(id) : null
-    const writer =
-      session && !WRITING_STATES.includes(session.state) ? this.host.activeWriter(session.covers, id) : null
-    this.host.record(id, { kind: 'queue', messages, paused, ...(writer ? { waitingFor: writer.taskId } : {}) })
+    this.host.record(id, { kind: 'queue', messages, paused })
   }
 
   /** Durable background input; preserve a user's paused queue and never steer a running turn. */
@@ -301,7 +294,7 @@ export class MessageDispatcher {
     }
     if (!this.canSteer(session, fromUser)) mode = 'queue'
     if (!WRITING_STATES.includes(session.state)) {
-      if (this.workspaceBusy(session.covers, id) || this.host.queued(id).length || this.startingSends.has(id)) {
+      if (this.workspaceBusy(session.covers) || this.host.queued(id).length || this.startingSends.has(id)) {
         this.updateQueue(
           id,
           [
@@ -436,7 +429,7 @@ export class MessageDispatcher {
       first = messages[0]
     // Order holds: a message the person is editing keeps everything after it waiting too.
     if (!first || first.held || this.sendingMessages.has(first.id)) return
-    if (this.workspaceBusy(this.host.get(id).covers, id)) {
+    if (this.workspaceBusy(this.host.get(id).covers)) {
       this.workspaceQueue.add(id)
       return
     }
@@ -479,11 +472,12 @@ export class MessageDispatcher {
     )
   }
 
-  workspaceBusy(covers: string[], self?: string): boolean {
-    return (
-      !!this.host.activeWriter(covers, self) ||
-      covers.some((cwd) => this.capturing.has(cwd) || this.workspaceReservations.has(cwd))
-    )
+  /**
+   * Threads in one checkout work side by side; each turn's changes are told apart by who wrote them. A message waits
+   * only while an undo, commit or branch switch rewrites that checkout's files.
+   */
+  workspaceBusy(covers: string[]): boolean {
+    return covers.some((cwd) => this.workspaceReservations.has(cwd))
   }
 
   wakeWorkspaceQueue(): void {
@@ -501,7 +495,7 @@ export class MessageDispatcher {
               this.workspaceQueue.delete(id)
               continue
             }
-            if (!this.workspaceBusy(this.host.get(id).covers, id)) await this.dispatchQueued(id, true)
+            if (!this.workspaceBusy(this.host.get(id).covers)) await this.dispatchQueued(id, true)
           }
         } finally {
           this.wakingWorkspace = false

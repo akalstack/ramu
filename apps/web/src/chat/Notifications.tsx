@@ -5,14 +5,14 @@ import { NewModelsDialog, showNewModels } from '../models/NewModelsDialog'
 import { ProviderIcon } from '../models/ProviderIcon'
 import { AppToaster, notify, type AppToastData } from '@/components/app-toaster'
 import { MessageCircleQuestion } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useAppSettings } from '../settings/AppSettings'
 import { errorText } from '../lib/errors'
 import { ramu, invokerFor } from '../ipc'
 import { useHostRuntime, useWorkspace } from '../workspace/workspace'
 import { useHostSelection } from '../workspace/HostSelection'
 import { useHost } from '../workspace/HostProvider'
-import { TOAST_MS, notices, useStatusPanelReach } from './notificationCenter'
+import { TOAST_MS, notices, useNotices, useStatusPanelOpen, useStatusPanelReach } from './notificationCenter'
 import type { InboxNotice } from '@ramu/shared/chat/notices'
 import { isGlobalPage, type ModelNotice } from '@ramu/shared/types'
 
@@ -41,6 +41,13 @@ export function Notifications() {
   const { on } = useHostRuntime()
   const { preferences } = useAppSettings()
   const clearBottom = useStatusPanelReach()
+  // The open notifications panel already shows these, so their toasts would repeat them on top of it.
+  const centerOpen = useStatusPanelOpen('notifications')
+  const centerList = useNotices()
+  const listed = useMemo(
+    () => new Set(centerOpen ? centerList.map((notice) => notice.id) : []),
+    [centerOpen, centerList],
+  )
   // Models providers started offering: one grouped notice, told once on every device and gone everywhere once dismissed.
   useEffect(() => {
     if (!preferences.newModelNotices) return
@@ -333,7 +340,12 @@ export function Notifications() {
     <>
       <UpdateNotices providerChecks={preferences.providerUpdateChecks} />
       <NewModelsDialog />
-      <AppToaster label={t('Notifications')} closeLabel={t('Dismiss notification')} clearBottom={clearBottom} />
+      <AppToaster
+        label={t('Notifications')}
+        closeLabel={t('Dismiss notification')}
+        clearBottom={clearBottom}
+        listed={listed}
+      />
     </>
   )
 }

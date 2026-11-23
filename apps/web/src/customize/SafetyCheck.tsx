@@ -103,7 +103,7 @@ export function SafetyCheck({ target, disabled }: { target: AuditTarget; disable
                     {finding.severity === 'high' ? t('High') : finding.severity === 'medium' ? t('Medium') : t('Low')}
                   </span>
                   <span className="min-w-0 text-muted-foreground">
-                    {finding.where && <code className="mr-1 font-mono text-[11px] text-soft">{finding.where}</code>}
+                    {finding.where && <code className="mr-1 font-mono text-micro text-soft">{finding.where}</code>}
                     {finding.issue}
                   </span>
                 </li>

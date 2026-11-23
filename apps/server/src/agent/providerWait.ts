@@ -222,7 +222,7 @@ export class ProviderWaits {
       WRITING_STATES.includes(session.state) ||
       this.host.transitioning.has(id) ||
       this.host.startingSends.has(id) ||
-      this.host.workspaceBusy(session.covers, id) ||
+      this.host.workspaceBusy(session.covers) ||
       this.host.hasBlockingQuestions(id) ||
       this.host.hasRunningTasks(id)
     )

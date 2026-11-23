@@ -1,0 +1,245 @@
+/*
+ * Rendered Markdown and long-form text everywhere in the app: replies, file previews, the Markdown editor, pull
+ * requests, summaries and reviews. The numbers come from `@ramu/shared/prose` (set on the root in main.tsx) so the phone
+ * reads the same scale. A density picks one set; a surface sets its own size or colour with a utility, which wins
+ * because this sits in the components layer. Elements drawn by shadcn parts (`[data-slot]`) keep their own frame.
+ */
+@layer components {
+  .ramu-prose {
+    --prose-size: var(--font-chat);
+    --prose-leading: var(--prose-reply-leading);
+    --prose-block-gap: var(--prose-reply-block-gap);
+    --prose-item-gap: var(--prose-reply-item-gap);
+    --prose-heading-gap: var(--prose-reply-heading-gap);
+    --prose-heading-leading: var(--prose-reply-heading-leading);
+    --prose-code: var(--prose-reply-code);
+    --prose-code-leading: var(--prose-reply-code-leading);
+    --prose-h1: var(--prose-reply-h1);
+    --prose-h2: var(--prose-reply-h2);
+    --prose-h3: var(--prose-reply-h3);
+    --prose-h4: var(--prose-reply-h4);
+    --prose-h5: var(--prose-reply-h5);
+    --prose-h6: var(--prose-reply-h6);
+    min-width: 0;
+    color: var(--text-body);
+    font-size: var(--prose-size);
+    line-height: var(--prose-leading);
+    letter-spacing: -0.008em;
+    overflow-wrap: break-word;
+    user-select: text;
+  }
+  .ramu-prose[data-density='compact'] {
+    --prose-size: var(--font-control);
+    --prose-leading: var(--prose-compact-leading);
+    --prose-block-gap: var(--prose-compact-block-gap);
+    --prose-item-gap: var(--prose-compact-item-gap);
+    --prose-heading-gap: var(--prose-compact-heading-gap);
+    --prose-heading-leading: var(--prose-compact-heading-leading);
+    --prose-code: var(--prose-compact-code);
+    --prose-code-leading: var(--prose-compact-code-leading);
+    --prose-h1: var(--prose-compact-h1);
+    --prose-h2: var(--prose-compact-h2);
+    --prose-h3: var(--prose-compact-h3);
+    --prose-h4: var(--prose-compact-h4);
+    --prose-h5: var(--prose-compact-h5);
+    --prose-h6: var(--prose-compact-h6);
+    letter-spacing: -0.003em;
+  }
+  .ramu-prose[data-density='document'] {
+    --prose-leading: var(--prose-document-leading);
+    --prose-block-gap: var(--prose-document-block-gap);
+    --prose-item-gap: var(--prose-document-item-gap);
+    --prose-heading-gap: var(--prose-document-heading-gap);
+    --prose-heading-leading: var(--prose-document-heading-leading);
+    --prose-code: var(--prose-document-code);
+    --prose-code-leading: var(--prose-document-code-leading);
+    --prose-h1: var(--prose-document-h1);
+    --prose-h2: var(--prose-document-h2);
+    --prose-h3: var(--prose-document-h3);
+    --prose-h4: var(--prose-document-h4);
+    --prose-h5: var(--prose-document-h5);
+    --prose-h6: var(--prose-document-h6);
+  }
+
+  .ramu-prose > :first-child {
+    margin-top: 0;
+  }
+  .ramu-prose > :last-child {
+    margin-bottom: 0;
+  }
+  /* Text stops at a comfortable line length in a reply or a card; code and tables keep the full column. */
+  .ramu-prose:not([data-density='document']) > :is(p, ul, ol, h1, h2, h3, h4, h5, h6, blockquote) {
+    max-width: var(--prose-measure);
+  }
+
+  .ramu-prose p {
+    margin: 0 0 var(--prose-block-gap);
+  }
+  .ramu-prose :is(strong, b) {
+    color: var(--text);
+    font-weight: 600;
+  }
+  .ramu-prose :is(h1, h2, h3, h4, h5, h6) {
+    color: var(--text);
+    font-weight: 600;
+    line-height: var(--prose-heading-leading);
+    letter-spacing: -0.012em;
+    margin: var(--prose-heading-gap) 0 calc(var(--prose-block-gap) / 2);
+  }
+  .ramu-prose h1 {
+    font-size: var(--prose-h1);
+  }
+  .ramu-prose h2 {
+    font-size: var(--prose-h2);
+  }
+  .ramu-prose h3 {
+    font-size: var(--prose-h3);
+  }
+  .ramu-prose h4 {
+    font-size: var(--prose-h4);
+  }
+  .ramu-prose h5 {
+    font-size: var(--prose-h5);
+  }
+  .ramu-prose h6 {
+    font-size: var(--prose-h6);
+    color: var(--soft);
+  }
+  /* A document's top headings carry a rule under them, as a file on a forge does. */
+  .ramu-prose[data-density='document'] :is(h1, h2) {
+    padding-bottom: 0.3em;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .ramu-prose :is(ul, ol) {
+    margin: 0 0 var(--prose-block-gap);
+    padding-left: 1.45em;
+  }
+  .ramu-prose ul {
+    list-style: disc;
+  }
+  .ramu-prose ol {
+    list-style: decimal;
+  }
+  .ramu-prose :is(ul, ol) :is(ul, ol) {
+    margin: calc(var(--prose-item-gap) / 2) 0 0;
+  }
+  .ramu-prose li {
+    margin: calc(var(--prose-item-gap) / 2) 0;
+  }
+  .ramu-prose li::marker {
+    color: var(--muted);
+  }
+  .ramu-prose li > p {
+    margin-bottom: calc(var(--prose-item-gap) / 2);
+  }
+  .ramu-prose :is(ul.contains-task-list, ul[data-type='taskList']) {
+    list-style: none;
+    padding-left: 0;
+  }
+  .ramu-prose :is(li.task-list-item, li[data-type='taskItem']) {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6em;
+  }
+  .ramu-prose li.task-list-item:has(> [data-slot='checkbox']) {
+    align-items: center;
+  }
+  .ramu-prose input[type='checkbox'] {
+    accent-color: var(--primary);
+  }
+
+  .ramu-prose blockquote {
+    margin: 0 0 var(--prose-block-gap);
+    padding-left: 1em;
+    border-left: 2px solid var(--line-strong);
+    color: var(--soft);
+  }
+  .ramu-prose blockquote > :last-child {
+    margin-bottom: 0;
+  }
+
+  /* Inline code reads as part of the sentence: smaller, soft, and its padding kept when it wraps. */
+  .ramu-prose :not(pre) > code {
+    background: rgb(var(--ink) / 0.06);
+    border-radius: var(--radius-xs);
+    padding: 1px 4px;
+    color: var(--text-body);
+    font-family: var(--mono);
+    font-size: var(--prose-code);
+    letter-spacing: normal;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    overflow-wrap: break-word;
+  }
+  .ramu-prose pre:not([data-slot] pre) {
+    background: var(--code-bg);
+    border-radius: var(--radius-m);
+    margin: 0 0 var(--prose-block-gap);
+    padding: 12px 14px;
+    font-family: var(--mono);
+    font-size: var(--prose-code);
+    line-height: var(--prose-code-leading);
+    letter-spacing: normal;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .ramu-prose pre code {
+    background: none;
+    padding: 0;
+    font-size: inherit;
+  }
+  .ramu-prose [data-slot='code-block'] {
+    margin-bottom: var(--prose-block-gap);
+  }
+
+  .ramu-prose a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .ramu-prose a:hover {
+    text-decoration: underline;
+  }
+  .ramu-prose img {
+    max-width: 100%;
+  }
+
+  .ramu-prose table:not([data-slot]) {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0 0 var(--prose-block-gap);
+  }
+  .ramu-prose :is(td, th):not([data-slot]) {
+    border: 1px solid var(--line-strong);
+    padding: 4px 8px;
+    vertical-align: top;
+  }
+  .ramu-prose th:not([data-slot]) {
+    background: var(--fill);
+    font-weight: 600;
+    text-align: left;
+  }
+  .ramu-prose :is(td, th) > p {
+    margin: 0;
+  }
+  .ramu-prose hr:not([data-slot]) {
+    border: 0;
+    border-top: 1px solid var(--line);
+    margin: var(--prose-block-gap) 0;
+  }
+
+  .ramu-prose .md-frontmatter {
+    margin-bottom: 16px;
+    padding: 8px 12px;
+    border-radius: var(--radius-s);
+    background: var(--fill);
+    color: var(--soft);
+  }
+  .ramu-prose .md-frontmatter summary {
+    cursor: pointer;
+    font-size: var(--font-control);
+  }
+  .ramu-prose .md-frontmatter pre {
+    margin-bottom: 0;
+  }
+}

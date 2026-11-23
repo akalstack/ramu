@@ -43,10 +43,7 @@ export interface SessionStarterHost
     Pick<SessionProcess, 'fail' | 'goalPolicySent' | 'launch' | 'refreshProviderTools' | 'rulesUpdate'>,
     Pick<ProviderWaits, 'providerWait' | 'scheduleProvider'>,
     Pick<SessionRecorder, 'record' | 'setState'>,
-    Pick<
-      SessionRegistry,
-      'activeWriter' | 'draining' | 'finalizing' | 'live' | 'revisions' | 'runners' | 'transitioning'
-    >,
+    Pick<SessionRegistry, 'draining' | 'finalizing' | 'live' | 'revisions' | 'runners' | 'transitioning'>,
     Pick<UserRequests, 'hasBlockingQuestions'>,
     Pick<import('./catalogService').CatalogService, 'validateLaunch' | 'validateSettings'>,
     Pick<
@@ -144,12 +141,6 @@ export class SessionStarter {
     if (scope.covers.some((cwd) => this.host.workspaceReservations.has(cwd)))
       throw new Error('Files are being updated. Try again when the workspace operation finishes.')
     if (this.host.shutdown()) throw new Error('Application is shutting down')
-    const writer = this.host.activeWriter(scope.covers)
-    if (writer) {
-      throw new Error(
-        `Another agent session is already writing in ${writer.covers.filter((c) => scope.covers.includes(c)).join(', ')}. Stop it, wait for it, or use an isolated task.`,
-      )
-    }
     const session = this.host.createSession(taskId, scope, settings, 'starting')
     this.host.attempted.set(session.id, new Set([stepKey(settings)]))
     this.host.attemptedAccounts.delete(session.id)
@@ -193,11 +184,9 @@ export class SessionStarter {
     await this.host.finalizing.get(id)
     if (this.host.transitioning.has(id)) throw new Error('Provider switch in progress. Try again in a moment.')
     let s = this.host.get(id)
-    if (s.covers.some((cwd) => this.host.workspaceReservations.has(cwd) || this.host.capturing.has(cwd)))
+    if (s.covers.some((cwd) => this.host.workspaceReservations.has(cwd)))
       throw new Error('Files are being updated. Try again when the workspace operation finishes.')
     if (WRITING_STATES.includes(s.state)) throw new Error('Wait for the current turn to finish, or interrupt it first.')
-    const writer = this.host.activeWriter(s.covers, id)
-    if (writer && writer.id !== id) throw new Error(`Another agent session is already writing in ${writer.cwd}`)
     // A provider at its limit would only fail this message; continue with the next fallback instead.
     if (await this.host.switchBeforeSend(id)) {
       await this.host.finalizing.get(id)

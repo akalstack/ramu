@@ -2,7 +2,7 @@ import { afterEach, expect, it } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { closeHostSockets, runtimeInvoke, runtimeSocket, subscribeRuntime } from '../src'
+import { closeHostSockets, forgetHostSocket, runtimeInvoke, runtimeSocket, subscribeRuntime } from '../src'
 import { socketHost } from './support/socketHost'
 
 const dirs: string[] = [],
@@ -100,6 +100,40 @@ it('flags a restart only when the host announces a different run after reconnect
   expect(seen.filter((item) => item.payload.restarted)).toHaveLength(1)
   stop()
 }, 25000)
+
+it('keeps hearing the service on this machine after a caller forgets its socket during a restart', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-rt-restart-'))
+  dirs.push(dir)
+  const path = runtimeSocket(dir)
+  const first = await socketHost({ unix: path, epoch: () => 'run-a' })
+  const seen: { channel: string; payload: { connected?: boolean; restarted?: boolean } }[] = []
+  const stop = subscribeRuntime(path, (channel, payload) =>
+    seen.push({ channel, payload: payload as { connected?: boolean; restarted?: boolean } }),
+  )
+  await expect.poll(() => seen.some((item) => item.payload.connected)).toBe(true)
+  await first.close()
+  // What the app does while it waits for the old service to exit and polls for the new one.
+  forgetHostSocket({ kind: 'socket', path })
+  await expect(runtimeInvoke(path, 'x.y')).rejects.toMatchObject({ code: expect.stringMatching(/ENOENT|ECONNREFUSED/) })
+  const second = await host({ unix: path, epoch: () => 'run-b' })
+  // Polled as the app polls for its new service: a call that finds nothing listening starts a fresh connection.
+  await expect
+    .poll(
+      () =>
+        runtimeInvoke(path, 'x.y').then(
+          () => true,
+          () => false,
+        ),
+      { interval: 100 },
+    )
+    .toBe(true)
+  await expect.poll(() => seen.some((item) => item.payload.restarted)).toBe(true)
+  second.push('automation:changed')
+  await expect.poll(() => seen.some((item) => item.channel === 'automation:changed')).toBe(true)
+  // The stream and the calls share the new connection.
+  expect(second.upgrades).toHaveLength(1)
+  stop()
+})
 
 it('stops retrying when the server rejects the token, so a revoked device is not locked out of pairing', async () => {
   const running = await host()

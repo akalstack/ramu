@@ -31,7 +31,6 @@ import { Dialog, Menu } from '../Menu'
 import { t, useLanguage } from '../i18n'
 import { registerSelection } from './editorBuffers'
 import type { monaco } from './monaco'
-import './markdown-document.css'
 import './markdown-editor.css'
 
 // Keep HTML blocks as editable source instead of dropping attributes or executing embedded markup.
@@ -161,7 +160,8 @@ export function MarkdownEditor({
       contentType: 'markdown',
       editorProps: {
         attributes: {
-          class: 'ramu-rich-text markdown-document',
+          class: 'ramu-rich-text ramu-prose',
+          'data-density': 'document',
           role: 'textbox',
           'aria-label': t('Markdown editor'),
           'aria-multiline': 'true',

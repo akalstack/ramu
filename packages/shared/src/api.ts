@@ -8,6 +8,7 @@ import type {
   BrowserTabInfo,
 } from './types/browser'
 import type { RoutingCandidate, RoutingOutcome } from './workspace/projectRouting'
+import type { HostFolderListing, HostPlace } from './workspace/hostFolders'
 import type { BranchChoice, BranchNamingIntent, BranchNamingStrategy } from './workspaceDefaults'
 import type { AntigravitySignIn, ProviderEnvironmentStatus, ProviderEnvironmentValues } from './providers/environment'
 import type { HostOverview, HostDestination, HostTaskMethod } from './hostOverview'
@@ -139,6 +140,7 @@ import type {
   WorkspaceUiState,
   WorktreePlanEntry,
   WorktreeWorkspace,
+  HostNameInfo,
 } from './types'
 
 export interface TerminalInfo {
@@ -941,6 +943,8 @@ export interface RamuMethods extends ArtifactMethods {
   'reviews.markReviewed'(id: string, reviewed: boolean): ChangeReview
   'reviews.undoPreview'(id: string): UndoPreview
   'reviews.undoApply'(token: string, fileIds: string[]): ChangeReview
+  /** Moves files set apart as someone else's into this turn's own changes. */
+  'reviews.claimElsewhere'(id: string, fileIds: string[]): ChangeReview
   'reviews.chatUndoPreview'(sessionId: string, userSeq: number): UndoPreview
   'reviews.chatUndoApply'(token: string, fileIds: string[]): void
   'activity.status'(): BackgroundActivity[]
@@ -956,7 +960,11 @@ export interface RamuMethods extends ArtifactMethods {
   'updates.status'(): Promise<AppUpdateStatus>
   'updates.check'(): Promise<AppUpdateStatus>
   'updates.download'(): Promise<AppUpdateStatus>
-  'updates.restart'(): Promise<void>
+  /**
+   * Installs a downloaded update and restarts the app, after a confirmation. `idle` installs only if Auto-update is on
+   * and nothing is running and nobody has used this computer for a while, without asking. Desktop only.
+   */
+  'updates.restart'(when?: 'idle'): Promise<void>
   /** Installs the newest release on this host: through its desktop app, or by rebuilding a headless source checkout. Owner devices only. */
   /** Offers a release still inside its waiting period now. */
   'updates.skipWait'(): Promise<AppUpdateStatus>
@@ -1043,8 +1051,16 @@ export interface RamuMethods extends ArtifactMethods {
   'network.useLink'(): { tunnel: NetworkStatus['tunnel'] | null }
   /** One device's pairing lifetime: days, never, or back to this host's default. Host only. */
   'network.setDeviceExpiry'(deviceId: string, days: number | 'never' | 'default'): NetworkStatus
+  /** Renames a paired device as this host lists it; `null` gives it back the name it paired with. */
+  'network.renameDevice'(deviceId: string, name: string | null): NetworkStatus
+  /** Names this host for every device and host that sees it; `null` goes back to the computer's own name. */
+  'network.renameHost'(name: string | null): HostNameInfo
   /** A paired device saying what it runs on, so this host shows the right icon and OS for it. */
   'device.describe'(os: import('./types').DeviceOs): void
+  /** Renames the calling device as the host lists it; `null` gives it back the name it paired with. */
+  'device.rename'(name: string | null): void
+  /** What this host is called, and the computer's own name when the person chose another. */
+  'host.name'(): HostNameInfo
   /** Hosts only: the most access threads that paired host starts here may have. */
   'network.setHostAccess'(deviceId: string, access: 'edits' | 'auto' | 'full'): NetworkStatus
   /** Other hosts this host's agents may start threads on. */
@@ -1164,7 +1180,10 @@ export interface RamuMethods extends ArtifactMethods {
   /** Labels the original thread once its continuation has started. */
   'threads.noteContinued'(taskId: string, event: import('./continuation').ContinuedEvent): void
   'folders.roots'(): string[]
-  'folders.list'(path: string): { path: string; parent: string | null; folders: { name: string; path: string }[] }
+  /** Where the folder picker starts: home, the computer's root, each mounted drive, then project folders. */
+  'folders.places'(): HostPlace[]
+  /** One folder's subfolders. `path` is absolute, or starts with `~` for the host's home folder. */
+  'folders.list'(path: string): HostFolderListing
   'folders.create'(parent: string, name: string): string
   /** Clones into a new folder. A client-chosen `cloneId` lets progress be read and the clone cancelled. */
   'folders.clone'(parent: string, name: string, url: string, cloneId?: string): string
@@ -1521,7 +1540,10 @@ export interface RamuMethods extends ArtifactMethods {
   ): string
   'git.history'(taskId: string, repoId: string): GitCommit[]
   'git.branches'(taskId: string, repoId: string): GitBranchInfo[]
-  'git.checkout'(taskId: string, repoId: string, branch: string): void
+  /** `whenIdle`: wait for the threads working in the checkout to finish (holding new turns back) instead of refusing. */
+  'git.checkout'(taskId: string, repoId: string, branch: string, options?: { whenIdle?: boolean }): void
+  /** Changed files in the checkout that another thread wrote last, so a commit from this thread leaves them out. */
+  'git.otherThreadPaths'(taskId: string, repoId: string): string[]
   'git.init'(taskId: string, repoId: string): void
   'git.fetch'(taskId: string, repoId: string): void
   'git.pull'(taskId: string, repoId: string, mode?: PullMode): void
@@ -1777,10 +1799,14 @@ export interface RamuMethods extends ArtifactMethods {
   'clipboard.readFiles'(): string[]
   /** Puts these files of this computer on the clipboard for the file manager to paste. */
   'clipboard.writeFiles'(paths: string[]): void
-  /** The terminal's context menu; `addToChat` puts the selection, or the rows on screen, into the thread's chat. */
+  /**
+   * The terminal's context menu; `addToChat` puts the selection, or the rows on screen, into the thread's chat. `block`
+   * is the command and output under the pointer, which the menu offers to copy.
+   */
   'term.menu'(
     selection: string,
     point: { x: number; y: number },
+    block?: string,
   ): 'selectAll' | 'clear' | 'addToChat' | { paste: string } | null
   'agent.list'(taskId: string): AgentSessionInfo[]
   'agent.get'(sessionId: string): AgentSessionInfo
@@ -2043,6 +2069,8 @@ export type PushEvents = {
     restarted?: boolean
     /** Turned off on this desktop; it does not try to connect. */
     paused?: boolean
+    /** This computer's service is restarting on purpose and is expected back shortly. */
+    restarting?: boolean
     /** What a lost connection waits for: the network to return, or the host itself. */
     waiting?: 'network' | 'computer'
     /** When the next attempt is due, for a host reached over SSH. */

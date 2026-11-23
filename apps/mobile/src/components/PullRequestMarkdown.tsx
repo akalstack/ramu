@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import type { ProseDensity } from '@ramu/shared/prose'
 import { Pressable, View } from 'react-native'
 import { forgeSegments, type ForgeSegment } from '../runtime/forgeMarkdown'
 import { font, radius, space, useTheme } from '../theme'
@@ -10,7 +11,7 @@ import { Disclosure } from './Motion'
 import { T, tap } from './ui'
 
 /** A <details> fold: closed unless the author opened it, as GitHub shows it, with its body read the same way. */
-function Fold({ segment }: { segment: Extract<ForgeSegment, { kind: 'details' }> }) {
+function Fold({ segment, density }: { segment: Extract<ForgeSegment, { kind: 'details' }>; density: ProseDensity }) {
   const say = useSay()
   const { c } = useTheme()
   const [open, setOpen] = useState(segment.open)
@@ -33,7 +34,7 @@ function Fold({ segment }: { segment: Extract<ForgeSegment, { kind: 'details' }>
       </Pressable>
       {open ? (
         <View style={{ paddingBottom: space.s }}>
-          <PullRequestMarkdown text={segment.body} />
+          <PullRequestMarkdown text={segment.body} density={density} />
         </View>
       ) : null}
     </View>
@@ -44,16 +45,23 @@ function Fold({ segment }: { segment: Extract<ForgeSegment, { kind: 'details' }>
  * A pull request's description or comment as the hosting service shows it: GitHub-flavored Markdown, its HTML drawn as
  * the same Markdown, hidden comments left out, <details> folded, and suggestions shown as the lines they add.
  */
-export function PullRequestMarkdown({ text }: { text: string }) {
+export function PullRequestMarkdown({
+  text,
+  density = 'compact',
+}: {
+  text: string
+  /** A comment reads as a card; a description, which is the page's main text, as a reply. */
+  density?: ProseDensity
+}) {
   const { language } = useStore()
   const segments = useMemo(() => forgeSegments(text, (key) => translate(language, key)), [text, language])
   return (
     <View style={{ gap: space.s }}>
       {segments.map((segment, index) =>
         segment.kind === 'markdown' ? (
-          <Markdown key={index} text={segment.text} />
+          <Markdown key={index} text={segment.text} density={density} />
         ) : (
-          <Fold key={index} segment={segment} />
+          <Fold key={index} segment={segment} density={density} />
         ),
       )}
     </View>

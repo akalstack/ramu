@@ -234,7 +234,7 @@ export class RestartRecovery {
         if (this.host.shutdown()) break
         if (!this.host.isRecoveryPending(id)) continue
         const session = this.host.get(id)
-        if (this.host.workspaceBusy(session.covers, id)) continue
+        if (this.host.workspaceBusy(session.covers)) continue
         try {
           // Old requests belong to dead processes. Let the resumed provider ask again, without carrying approvals.
           const events = this.host.events(id)

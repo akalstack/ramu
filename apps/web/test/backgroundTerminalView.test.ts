@@ -45,10 +45,17 @@ vi.mock('@xterm/xterm', () => ({
     options = control.options
     buffer = {
       active: {
+        type: 'normal',
         getLine: (row: number) =>
           row < control.lines.length ? { isWrapped: false, translateToString: () => control.lines[row]! } : undefined,
       },
+      normal: { baseY: 0, cursorY: 0, getLine: () => undefined },
     }
+    parser = { registerOscHandler: () => ({ dispose() {} }) }
+    registerMarker() {
+      return undefined
+    }
+    attachCustomKeyEventHandler() {}
     registerLinkProvider(provider: typeof control.linkProvider) {
       control.linkProvider = provider
       return { dispose() {} }

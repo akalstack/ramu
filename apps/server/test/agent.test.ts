@@ -1162,9 +1162,6 @@ describe('AgentService', () => {
       expect(svc.get(s.id).state).toBe('idle')
       expect(svc.activeWriter([cwd])?.id).toBe(s.id)
       expect(svc.activeWriter([cwd], s.id)).toBeNull()
-      expect(() => svc.start('t2', scopeOf(cwd), 'hi', { ...DEFAULT_AGENT_SETTINGS, access: 'full' })).toThrow(
-        /already writing/,
-      )
       // Its own follow-up goes straight out instead of waiting for its helper.
       await svc.submit(s.id, 'meanwhile, a question', 'queue')
       expect(svc.queued(s.id)).toHaveLength(0)
@@ -1197,19 +1194,20 @@ describe('AgentService', () => {
     }
   })
 
-  it('allows one active writer per canonical checkout, across tasks', async () => {
+  it('lets threads of other tasks work in the same checkout at once', async () => {
     const svc = new AgentService(db, () => {}, fakeQuery([]))
     const s = svc.start('t', scopeOf(cwd), 'one')
-    expect(() => svc.start('t2', scopeOf(cwd), 'two')).toThrow(/already writing/)
+    const other = svc.start('t2', scopeOf(cwd), 'two')
+    expect(svc.get(other.id).state).not.toBe('idle')
     await svc.stopAndWait(s.id)
-    expect(() => svc.start('t2', scopeOf(cwd), 'two')).not.toThrow()
+    await svc.stopAndWait(other.id)
   })
 
   it('treats a workspace-scoped agent as a writer in every repository it covers', () => {
     const svc = new AgentService(db, () => {}, fakeQuery([]))
     const ws = svc.start('t', { cwd: '/ws', additionalDirs: [], covers: ['/ws/web', '/ws/api'] }, 'all repos')
-    expect(() => svc.start('t2', scopeOf('/ws/api'), 'just api')).toThrow(/already writing in \/ws\/api/)
-    expect(() => svc.start('t2', scopeOf('/elsewhere'), 'other')).not.toThrow()
+    expect(svc.activeWriter(['/ws/api'])?.id).toBe(ws.id)
+    expect(svc.activeWriter(['/elsewhere'])).toBeNull()
     svc.stop(ws.id)
   })
 
@@ -1856,23 +1854,11 @@ describe('busy agent messages', () => {
     }
   }
 
-  it('queues another thread until the previous run snapshot is complete', async () => {
-    const { service, session, complete } = setup()
-    let release!: () => void
-    const capture = new Promise<void>((resolve) => {
-      release = resolve
-    })
+  it('starts another thread in the checkout at once, recording its own changes, while the first still works', async () => {
+    const { service, session } = setup()
     const begin = vi.fn(async () => 'review'),
-      followup = vi.fn(async () => {})
-    service.reviewHooks = {
-      begin,
-      bind: () => {},
-      abandon: () => {},
-      followup,
-      complete: async (id) => {
-        if (id === session.id) await capture
-      },
-    }
+      bind = vi.fn()
+    service.reviewHooks = { begin, bind, abandon: () => {}, followup: async () => {} }
     // This fake runtime has no model catalog; starting checks are covered elsewhere.
     vi.spyOn(service, 'validateSettings').mockResolvedValue()
     const second = await service.startReviewed('t2', scopeOf(cwd), 'second thread', {
@@ -1880,18 +1866,10 @@ describe('busy agent messages', () => {
       access: 'full' as const,
       provider: 'codex',
     })
-    expect(second.state).toBe('idle')
-    expect(service.queued(second.id)[0]?.text).toBe('second thread')
-    expect(begin).not.toHaveBeenCalled()
-    expect(followup).not.toHaveBeenCalled()
-    complete()
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    expect(service.activeWriter([cwd])?.id).toBe(session.id)
-    expect(followup).not.toHaveBeenCalled()
-    release()
-    await until(() => service.get(second.id).state === 'running')
-    expect(followup).toHaveBeenCalledWith(second.id)
+    expect(service.get(session.id).state).toBe('running')
     expect(service.queued(second.id)).toEqual([])
+    expect(begin).toHaveBeenCalledWith('t2', expect.anything())
+    expect(bind).toHaveBeenCalledWith('review', second.id)
     service.stopAll()
     await service.stopAndWait(session.id)
     await service.stopAndWait(second.id)
@@ -3627,7 +3605,7 @@ describe('thread continuation after restart', () => {
     restored.stopAll()
   })
 
-  it('waits for a shared checkout, preserves queued input, and respects Stop while waiting', async () => {
+  it('resumes an interrupted thread beside another writer in its checkout, with its queued input', async () => {
     const original = service()
     const chat = original.start('t', scopeOf(cwd), 'pending', { ...DEFAULT_AGENT_SETTINGS, access: 'edits' })
     await until(() => original.get(chat.id).state === 'needs-input')
@@ -3640,13 +3618,8 @@ describe('thread continuation after restart', () => {
     const blocker = restored.start('t2', scopeOf(cwd), 'other writer', { ...DEFAULT_AGENT_SETTINGS, access: 'edits' })
     await until(() => restored.get(blocker.id).state === 'needs-input')
     await restored.resumeInterruptedChats()
-    expect(restored.isRecoveryPending(chat.id)).toBe(true)
-    expect(restored.queued(chat.id).map((e) => e.text)).toEqual(['follow-up'])
-    restored.stop(chat.id)
-    restored.stop(blocker.id)
-    await restored.resumeInterruptedChats()
-    expect(calls).toHaveLength(1)
-    expect(restored.get(chat.id).state).toBe('stopped')
+    expect(restored.isRecoveryPending(chat.id)).toBe(false)
+    await until(() => calls.length === 2)
     restored.stopAll()
   })
 
@@ -3681,7 +3654,7 @@ describe('thread continuation after restart', () => {
     restored.stopAll()
   })
 
-  it('starts the next recovering thread only after the shared checkout writer finishes', async () => {
+  it('resumes every interrupted thread of a shared checkout together', async () => {
     const outputs: ((event: AgentEvent) => void)[] = []
     const factory: import('../src/agent/agentRunner').AgentRunnerFactory = (_scope, _settings, output) => ({
       start: async () => {
@@ -3706,13 +3679,8 @@ describe('thread continuation after restart', () => {
     const restored = new AgentService(db, () => {}, fakeQuery([]), factory)
     restored.markRestoredOnBoot()
     await restored.resumeInterruptedChats()
-    expect(outputs).toHaveLength(1)
+    await until(() => outputs.length === 2)
     expect(restored.get(a.id).state).toBe('running')
-    expect(restored.isRecoveryPending(b.id)).toBe(true)
-    outputs[0]!({ kind: 'result', text: 'done', isError: false, costUsd: null })
-    await until(() => !restored.activeWriter([cwd]))
-    await restored.resumeInterruptedChats()
-    expect(outputs).toHaveLength(2)
     expect(restored.get(b.id).state).toBe('running')
     expect(restored.isRecoveryPending(b.id)).toBe(false)
     restored.stopAll()
@@ -4142,34 +4110,47 @@ describe('questions while work continues', () => {
     expect(svc.get(chat.id).state).toBe('stopped')
   })
 
-  it('keeps a late answer queued while another thread owns the shared checkout', async () => {
+  it('sends a late answer at once while another thread works in the shared checkout', async () => {
     const { svc, start, outputs, starts } = fixture(),
       chat = start()
     const asked = await svc.askQuestion(chat.id, { questions })
     outputs.get('1')!({ kind: 'result', isError: false, text: 'Done', costUsd: null })
     start('t2')
     svc.replyQuestion(chat.id, asked.request.requestId, { db: 'SQLite', region: 'Jakarta' })
-    await new Promise((resolve) => setTimeout(resolve, 25))
-    expect(starts).toHaveLength(2)
-    expect(svc.queued(chat.id)).toHaveLength(1)
-    outputs.get('2')!({ kind: 'result', isError: false, text: 'Done', costUsd: null })
     await until(() => starts.length === 3)
     expect(svc.queued(chat.id)).toHaveLength(0)
     svc.stopAll()
   })
 
-  it('says which thread a queued message waits for in the shared checkout', async () => {
+  it('switches a checkout after its threads finish, holding new turns there until it has', async () => {
+    const { svc, start, outputs, starts } = fixture()
+    start()
+    const idle = start('t2')
+    outputs.get('2')!({ kind: 'result', isError: false, text: 'Done', costUsd: null })
+    let switched = false
+    const switching = svc.whenWritersFinish([cwd], async () => {
+      switched = true
+    })
+    await svc.submit(idle.id, 'after the switch', 'queue')
+    await new Promise((resolve) => setTimeout(resolve, 25))
+    expect(switched).toBe(false)
+    expect(svc.queued(idle.id)).toHaveLength(1)
+    outputs.get('1')!({ kind: 'result', isError: false, text: 'Done', costUsd: null })
+    await switching
+    expect(switched).toBe(true)
+    await until(() => starts.length === 3)
+    expect(svc.queued(idle.id)).toEqual([])
+    svc.stopAll()
+  })
+
+  it('sends a message at once while another thread works in the shared checkout', async () => {
     const { svc, start, outputs, starts } = fixture(),
       chat = start()
     outputs.get('1')!({ kind: 'result', isError: false, text: 'Done', costUsd: null })
     start('t2')
     await svc.submit(chat.id, 'next step', 'queue')
-    const queue = () => svc.events(chat.id).findLast((e) => e.kind === 'queue')
-    expect(queue()).toMatchObject({ messages: [{ text: 'next step' }], waitingFor: 't2' })
-    outputs.get('2')!({ kind: 'result', isError: false, text: 'Done', costUsd: null })
     await until(() => starts.length === 3)
-    expect(queue()).toMatchObject({ messages: [] })
-    expect(queue()).not.toHaveProperty('waitingFor')
+    expect(svc.queued(chat.id)).toEqual([])
     svc.stopAll()
   })
 })

@@ -4,9 +4,7 @@ import { Button } from '@/components/desktop-button'
 import { Brain, ChevronRight } from 'lucide-react'
 import { thoughtLine } from '@ramu/shared/chat/thoughtLine'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import Markdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import { chatMarkdownComponents } from '../../../chat/ChatMarkdown'
+import { MarkdownText } from '../../../chat/MarkdownText'
 import { scrollMotion } from '../../../workspace/panelMotion'
 import { useScrollFade } from '../hooks/useScrollFade'
 import { formatDuration } from '../lib/format'
@@ -73,18 +71,14 @@ export function ThinkingRow({ text, active = false }: { text: string; active?: b
         <ChevronRight size={12} className={CARET_CLASS} />
       </CollapsibleTrigger>
       <CollapsibleContent className={TOOL_DISCLOSURE_PANEL_CLASS}>
-        <div
+        <MarkdownText
           ref={body}
-          className={`thinking-body fade-scroll [--fade-top:0px] [--fade-bottom:0px] [mask-image:linear-gradient(to_bottom,_transparent_0,_#000_var(--fade-top),_#000_calc(100%_-_var(--fade-bottom)),_transparent_100%)] [transition:--fade-top_0.14s_ease-out,_--fade-bottom_0.14s_ease-out] m-[2px_0_4px] text-muted-foreground text-control leading-[1.55] [overflow-wrap:anywhere] overflow-y-auto [&_p]:m-[0_0_6px] [&_p:last-child]:mb-0 [&_ul]:m-[0_0_6px] [&_ul]:pl-5 [&_ol]:m-[0_0_6px] [&_ol]:pl-5 [&_li]:m-[2px_0] [&_strong]:font-semibold [&_strong]:text-soft [&_:is(h1,_h2,_h3,_h4)]:m-[6px_0_4px] [&_:is(h1,_h2,_h3,_h4)]:text-[length:1em] [&_:is(h1,_h2,_h3,_h4)]:font-semibold [&_:not(pre)>code]:rounded-(--radius-xs) [&_:not(pre)>code]:bg-fill [&_:not(pre)>code]:px-1 [&_:not(pre)>code]:text-[length:0.9em] max-h-[260px]`}
+          density="compact"
+          className="thinking-body fade-scroll [--fade-top:0px] [--fade-bottom:0px] [mask-image:linear-gradient(to_bottom,_transparent_0,_#000_var(--fade-top),_#000_calc(100%_-_var(--fade-bottom)),_transparent_100%)] [transition:--fade-top_0.14s_ease-out,_--fade-bottom_0.14s_ease-out] m-[2px_0_4px] text-muted-foreground [overflow-wrap:anywhere] overflow-y-auto [&_:is(strong,h1,h2,h3,h4,h5,h6)]:text-soft [&_:not(pre)>code]:text-inherit max-h-[260px]"
+          rehypePlugins={active ? rehypePlugins : undefined}
         >
-          <Markdown
-            remarkPlugins={[remarkGfm]}
-            rehypePlugins={active ? rehypePlugins : undefined}
-            components={chatMarkdownComponents}
-          >
-            {text}
-          </Markdown>
-        </div>
+          {text}
+        </MarkdownText>
       </CollapsibleContent>
     </Collapsible>
   )

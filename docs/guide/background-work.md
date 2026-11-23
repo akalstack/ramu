@@ -4,7 +4,9 @@ The desktop app connects to a local service that owns threads, terminals and sch
 
 Ramu doesn't start at login or keep the computer awake until you choose to: **Start at login** and **Keep host awake** are off on a new install, and **Remote access** offers them once other devices may use the host. **Keep running when Ramu closes** is on by default, so closing the window never cuts off an agent mid-task. Turned off, the service runs only while the app is open: quitting Ramu stops it, so running threads stop, schedules wait and paired devices can't connect until you open Ramu again. **Start at login** needs it on, and turning it off turns starting at login off too.
 
-The command palette (Cmd/Ctrl+Shift+P, or `>` in Cmd/Ctrl+P) offers **Reload window**, **Reload window and background service**, and **Restart background service**, which leaves the window as it is and reconnects it. Restarting the service asks first, since it stops running agents; unfinished threads resume when restart recovery is on.
+**Settings → Background → Restart service** restarts it, as does **Restart background service** in the command palette (Cmd/Ctrl+Shift+P, or `>` in Cmd/Ctrl+P), which also offers **Reload window** and **Reload window and background service**. Restarting asks first only when agents, terminals or commands are running, since it stops them; unfinished threads resume when restart recovery is on. While it restarts, this host reads **Restarting…** rather than offline, and the window reconnects and refreshes as soon as the new service answers. Messages and new threads you write meanwhile wait on this device and go out in order once it is back ([how](remote-hosts.md#from-the-desktop-app)). Settings has no Stop, since a stopped service leaves nothing for the app to reconnect to: to run it only while Ramu is open, turn off **Keep running when Ramu closes**, or stop it with `ramu stop` in a terminal.
+
+With **Auto-update Ramu** on (**Settings → About**), a downloaded update installs and restarts Ramu on its own once no thread is working or waiting for you, no terminal or command is running, nothing in the window would be lost (an unsaved file, an open terminal tab, an attachment still uploading), and nobody has used the computer for five minutes. **Restart to update** in the status bar installs it right away. When nothing is running, the background service updates with it.
 
 ## Messages while an agent works
 
@@ -12,7 +14,7 @@ Enter uses your Steer or Queue choice, and Cmd/Ctrl+Enter uses the other. **Stee
 
 A steered message stays part of the turn it joined: the turn keeps one timer and folds under one **Worked for** with its whole time, and the work after each steer folds under **Continued for** below that message. A turn folds only once it has finished. A stopped turn says **Stopped after**.
 
-Only one thread works in a checkout at a time. A message sent to another thread in the same checkout waits, and a new thread whose first message waits shows it as its opening message with **Waiting for "…" in the same checkout** and **Open thread**, so you can answer what holds the other thread up.
+Threads in the same checkout work at the same time. A message waits only for the few seconds an undo or restore rewrites that checkout's files. See [Threads sharing a checkout](working-with-agents.md#threads-sharing-a-checkout) for how each thread keeps its own changes apart.
 
 On the phone, **Settings → Threads** sets the choice, and the warning before changing model, for **All devices** (the host's own setting), **All mobile devices** (every phone paired with that host) or **This phone**. The narrowest one set wins, and the page shows where the current value comes from.
 

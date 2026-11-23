@@ -1,13 +1,11 @@
 import { ChevronRight, GitFork, MessageSquareShare } from 'lucide-react'
-import Markdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import type { MessageOrigin, StartedThread, ThreadReportOutcome } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { chatMarkdownComponents } from '../../../chat/ChatMarkdown'
+import { MarkdownText } from '../../../chat/MarkdownText'
 import { t, useLanguage } from '../../../i18n'
 import { useWorkspace } from '../../../workspace/workspace'
-import { CARET_CLASS, GHOST_TEXT_BUTTON_CLASS, MSG_CLASS, TOOL_DISCLOSURE_PANEL_CLASS } from '../styles'
+import { CARET_CLASS, GHOST_TEXT_BUTTON_CLASS, TOOL_DISCLOSURE_PANEL_CLASS } from '../styles'
 import { MessageTime } from './MessageTime'
 
 /** The header chip on a thread an agent started: it opens the starting thread. */
@@ -146,11 +144,9 @@ export function ThreadMessageCard({ from, at }: { from: MessageOrigin; at?: numb
               <ChevronRight size={12} className={`${CARET_CLASS} group-data-[panel-open]:rotate-90`} />
             </CollapsibleTrigger>
             <CollapsibleContent className={TOOL_DISCLOSURE_PANEL_CLASS}>
-              <div className={`${MSG_CLASS} assistant mt-1 max-h-[360px] overflow-y-auto text-control`}>
-                <Markdown remarkPlugins={[remarkGfm]} components={chatMarkdownComponents}>
-                  {from.detail}
-                </Markdown>
-              </div>
+              <MarkdownText density="compact" className="msg assistant mt-1 max-h-[360px] overflow-y-auto">
+                {from.detail}
+              </MarkdownText>
             </CollapsibleContent>
           </Collapsible>
         )}

@@ -15,7 +15,6 @@ import {
   ActionSheetIOS,
   type TextStyle,
   View,
-  ScrollView,
 } from 'react-native'
 import { MenuView } from '@react-native-menu/menu'
 import { markdownRuns, type MarkdownMark } from '@ramu/shared/chat/markdownRuns'
@@ -102,6 +101,7 @@ import {
   useVoiceCapability,
   useVoiceSettings,
 } from '../runtime/useDictation'
+import { NextMessageChips } from './NextMessageChips'
 
 export interface ModelChoice {
   provider: AgentProvider
@@ -1203,19 +1203,7 @@ export function Composer({
         </View>
       ) : null}
       {limited && chatId ? <LimitTray chatId={chatId} /> : null}
-      {!text && nextMessages?.length ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          accessibilityLabel={say('Suggested next messages')}
-          contentContainerStyle={{ gap: space.xs, paddingHorizontal: space.m, paddingBottom: space.xs }}
-        >
-          {nextMessages.map((message) => (
-            <Chip key={message} small label={message} maxLabelWidth={260} onPress={() => edit(message)} />
-          ))}
-        </ScrollView>
-      ) : null}
+      {!text && nextMessages?.length ? <NextMessageChips messages={nextMessages} onUse={edit} /> : null}
       {activity}
       {!activity && (
         <GoalQueueTray

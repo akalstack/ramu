@@ -5,7 +5,7 @@ import type { BrowserWindow } from 'electron'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const desktop = vi.hoisted(() => ({
-  items: [] as { label?: string; enabled?: boolean; click?: () => void }[],
+  items: [] as { label?: string; enabled?: boolean; visible?: boolean; click?: () => void }[],
   closed: (() => {}) as () => void,
   readText: vi.fn(),
   writeText: vi.fn(),
@@ -99,6 +99,18 @@ it('copies the terminal selection rather than the hidden textarea, and dismisses
   desktop.closed()
   expect(await result).toBeNull()
   expect(desktop.writeText).toHaveBeenCalledWith('selected terminal output')
+})
+
+it('copies the command and output under the pointer, and offers it only when there is one', async () => {
+  const result = terminalMenu(window, '', { x: 10, y: 10 }, '$ ls\na.txt')
+  const item = desktop.items.find((entry) => entry.label === 'Copy command and output')!
+  expect(item).toMatchObject({ visible: true })
+  item.click!()
+  desktop.closed()
+  expect(await result).toBeNull()
+  expect(desktop.writeText).toHaveBeenCalledWith('$ ls\na.txt')
+  void terminalMenu(window, '', { x: 10, y: 10 })
+  expect(desktop.items.find((entry) => entry.label === 'Copy command and output')).toMatchObject({ visible: false })
 })
 
 it('exports an attachment copy and leaves its history copy intact, including save cancellation', async () => {

@@ -41,6 +41,8 @@ import { newerVersion } from '@ramu/shared/version'
 import { DesktopUpdater } from './desktopUpdater'
 import { whileStarting } from './startupWindow'
 import { serviceIsIdle } from './serviceIdle'
+import { ServiceRestart } from './serviceRestart'
+import { mayInstallUnattended } from './unattendedUpdate'
 import { rememberBounds, savedBounds } from './windowBounds'
 import { runtimeBuild } from '@ramu/server/build'
 import { unloadLoginService } from './runtimeLauncher'
@@ -93,6 +95,7 @@ import {
   hostSocket,
 } from '@ramu/client-runtime'
 import { HOST_PUSH_CHANNELS, STREAMING_KINDS, pushMessage, type PushArgs } from '@ramu/shared/pushChannels'
+import type { PushEvents } from '@ramu/shared/api'
 import { SshComputers } from './sshComputers'
 import { NearbyBrowser } from './discovery'
 import { RemoteServers } from './remoteServers'
@@ -222,18 +225,26 @@ async function main() {
       counts: () => runtimeInvoke(runtime, 'agent.counts'),
       resources: () => runtimeInvoke(runtime, 'resources.snapshot'),
     })
+  // Windows hear a restart the app asked for as one, not as the service going offline; the stream is wired below.
+  let deliverLocalConnection: (payload: PushEvents['background:connection']) => void = () => {}
+  const serviceRestart = new ServiceRestart((payload) => deliverLocalConnection(payload))
   /** Stops the service and starts it again from the daemon on disk, keeping login startup as it was. */
   const restartRuntime = async () => {
     const startup = loginEnabled(userData)
-    // Unload the old supervisor so it cannot race the replacement back into existence.
-    if (startup) {
-      loginService(userData, daemonPath, false)
-      unloadLoginService(userData)
+    serviceRestart.begin()
+    try {
+      // Unload the old supervisor so it cannot race the replacement back into existence.
+      if (startup) {
+        loginService(userData, daemonPath, false)
+        unloadLoginService(userData)
+      }
+      await runtimeInvoke(runtime, 'background.restart').catch(() => {})
+      await waitForRuntimeExit(runtime)
+      await ensureRuntime(userData, daemonPath)
+      if (startup) loginService(userData, daemonPath, true)
+    } finally {
+      serviceRestart.end()
     }
-    await runtimeInvoke(runtime, 'background.restart').catch(() => {})
-    await waitForRuntimeExit(runtime)
-    await ensureRuntime(userData, daemonPath)
-    if (startup) loginService(userData, daemonPath, true)
   }
   // Under `pnpm dev` the service outlives the app, and electron-vite rebuilds the daemon only when the app starts, so a
   // restart or a new `pnpm dev` would otherwise keep serving the previous build's code.
@@ -983,7 +994,7 @@ async function main() {
         })()
     }
     observeHostActivity(LOCAL, ...([channel, payload] as PushArgs))
-    if (channel === 'background:connection') computers.setLocalStatus(payload.connected)
+    if (channel === 'background:connection') computers.setLocalStatus(payload.connected, payload.restarting)
     computers.observe(LOCAL, ...([channel, payload] as PushArgs))
     if (channel === 'updates:changed') {
       updateStatus = payload
@@ -996,6 +1007,7 @@ async function main() {
       notifierFor(LOCAL).observe(channel, payload)
     }
   }
+  deliverLocalConnection = (payload) => onLocalEvent('background:connection', payload)
   const unsubscribe = subscribeRuntime(
     runtime,
     // Two channels are private to this desktop and its local service; anything else must be a known push event.
@@ -1003,7 +1015,8 @@ async function main() {
       if (channel === 'browser:operation') return onBrowserOperation(raw as BrowserBridgeRequest)
       if (channel === 'host:request') return onHostRequest(raw as { requestId: string; method: string; path?: string })
       const message = pushMessage(channel, raw)
-      if (message) onLocalEvent(...([message.channel, message.payload] as PushArgs))
+      if (message?.channel === 'background:connection') serviceRestart.observe(message.payload)
+      else if (message) onLocalEvent(...([message.channel, message.payload] as PushArgs))
     },
     runtimeNetwork,
     { localClientId: browserClientId },
@@ -1279,10 +1292,11 @@ async function main() {
         typeof point.x !== 'number' ||
         typeof point.y !== 'number' ||
         !Number.isFinite(point.x) ||
-        !Number.isFinite(point.y)
+        !Number.isFinite(point.y) ||
+        (args[2] !== undefined && (typeof args[2] !== 'string' || args[2].length > 1_000_000))
       )
         throw new Error('Invalid terminal menu request')
-      return terminalMenu(win, args[0], { x: point.x, y: point.y })
+      return terminalMenu(win, args[0], { x: point.x, y: point.y }, args[2] ?? '')
     }
     if (['attachments.menu', 'attachments.save', 'attachments.copy', 'attachments.reveal'].includes(method)) {
       if (remote) throw new Error(t('Not available while connected to another host'))
@@ -1526,17 +1540,20 @@ async function main() {
     }
     if (method === 'background.restartService') {
       const then = args[0] === 'reload' ? 'reload' : 'keep'
-      const choice = await dialog.showMessageBox(win, {
-        type: 'question',
-        message: t('Restart the background service?'),
-        detail: t('Stops running agents. Unfinished threads resume if restart recovery is enabled.'),
-        buttons: [t('Restart now'), t('Later')],
-        defaultId: 1,
-        cancelId: 1,
-      })
-      if (choice.response !== 0) return
+      // Asked only when the restart would stop something; an idle service just restarts.
+      if (!(await serviceIdle())) {
+        const choice = await dialog.showMessageBox(win, {
+          type: 'question',
+          message: t('Restart the background service?'),
+          detail: t('Stops running agents. Unfinished threads resume if restart recovery is enabled.'),
+          buttons: [t('Restart now'), t('Later')],
+          defaultId: 1,
+          cancelId: 1,
+        })
+        if (choice.response !== 0) return
+      }
       await restartRuntime()
-      // The window reconnects on its own; a reload also starts the page fresh.
+      // The window reconnects as soon as the new service answers; a reload also starts the page fresh.
       if (then === 'reload') win.webContents.reload()
       return
     }
@@ -1572,6 +1589,19 @@ async function main() {
       return
     }
     if (method === 'updates.restart') {
+      // The window asks this while it holds nothing unsaved; the rest is checked here, and anything busy waits.
+      if (args[0] === 'idle') {
+        const install =
+          !remote &&
+          (await mayInstallUnattended({
+            ready: desktopUpdater.ready,
+            autoUpdate: async () => (await runtimeInvoke(runtime, 'settings.app.get')).appAutoUpdate,
+            idleSeconds: () => powerMonitor.getSystemIdleTime(),
+            serviceIdle,
+          }))
+        if (install) desktopUpdater.install()
+        return
+      }
       const idle = !remote && (await serviceIdle())
       const choice = await dialog.showMessageBox(win, {
         type: 'question',

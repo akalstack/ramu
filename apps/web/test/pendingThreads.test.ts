@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_AGENT_SETTINGS, NO_PROJECT } from '@ramu/shared/types'
-import { createPendingThreads, deliverPendingThread, PENDING_THREAD_LIMIT } from '../src/composer/pendingThreads'
+import {
+  createPendingThreads,
+  deliverPendingThread,
+  PENDING_THREAD_LIMIT,
+  withRecalled,
+} from '../src/composer/pendingThreads'
 
 const memory = () => {
   const data = new Map<string, string>()
@@ -55,5 +60,21 @@ describe('threads waiting for their host', () => {
       expect.objectContaining({ projectId: NO_PROJECT, requestId: 'local-1' }),
     )
     expect(invoke).toHaveBeenCalledWith('agent.start', 'task', 'Fix the login bug', DEFAULT_AGENT_SETTINGS, [], [])
+  })
+
+  it('takes a waiting thread back for editing, but not one being started', () => {
+    const box = createPendingThreads(memory())
+    const waiting = box.add(draft, 'a')
+    const starting = box.add(draft, 'b')
+    box.update(starting.id, { state: 'sending' })
+    expect(box.take(starting.id)).toBeUndefined()
+    expect(box.take(waiting.id)?.prompt).toBe('Fix the login bug')
+    expect(box.snapshot().map((item) => item.id)).toEqual(['b'])
+  })
+
+  it('puts a recalled first message after what is already in the message box', () => {
+    expect(withRecalled('', 'Fix it')).toBe('Fix it')
+    expect(withRecalled('  ', 'Fix it')).toBe('Fix it')
+    expect(withRecalled('Also check tests\n', 'Fix it')).toBe('Also check tests\n\nFix it')
   })
 })

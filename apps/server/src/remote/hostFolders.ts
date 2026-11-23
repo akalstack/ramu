@@ -1,8 +1,15 @@
 import { mkdir, readdir, realpath, rm, stat } from 'node:fs/promises'
 import { delimiter, dirname, isAbsolute, join, relative, sep } from 'node:path'
 import { homedir } from 'node:os'
-import type { HostFolder, HostFolderListing } from '@ramu/shared/workspace/hostFolders'
+import {
+  folderName,
+  isSystemFolder,
+  type HostFolder,
+  type HostFolderListing,
+  type HostPlace,
+} from '@ramu/shared/workspace/hostFolders'
 import { spawn, type ChildProcess } from 'node:child_process'
+import { hostDrives, withDeadline } from './hostDrives'
 
 /** A Git checkout keeps `.git` as a folder, or as a file in a linked worktree or submodule. */
 const isRepository = (path: string) =>
@@ -33,12 +40,19 @@ const MAX_LISTED = 2000
 const LIST_CONCURRENCY = 16
 /** A folder that takes longer than this to look at is left out of its listing. */
 const ENTRY_MS = 1500
+/** How many project folders the picker's places offer. */
+const MAX_PROJECT_PLACES = 8
 
-const withDeadline = <T>(work: Promise<T>, ms: number) =>
-  new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('Timed out')), ms)
-    work.then(resolve, reject).finally(() => clearTimeout(timer))
-  })
+/** `~` and `~/…` are the host's home folder, so a typed path can start there. */
+const expandHome = (path: string) => (/^~(?=$|[\\/])/.test(path) ? homedir() + path.slice(1) : path)
+
+/** A failed look at a folder, said so a person knows what to change. */
+const unreadable = (path: string, error: unknown): Error => {
+  const code = (error as NodeJS.ErrnoException | undefined)?.code
+  if (code === 'ENOENT' || code === 'ENOTDIR') return new Error(`There is no folder at ${path} on the host`)
+  if (code === 'EACCES' || code === 'EPERM') return new Error(`The host can't open ${path}. Its user has no access.`)
+  return new Error(`The host can't open ${path}`, { cause: error })
+}
 
 async function eachLimited<T>(items: T[], limit: number, run: (item: T) => Promise<void>) {
   let next = 0
@@ -74,22 +88,67 @@ export class HostFolders {
     return true
   }
   async roots(): Promise<string[]> {
-    const configured = process.env.RAMU_BROWSE_ROOTS?.split(delimiter).filter(Boolean)
-    const roots = configured ?? [homedir(), ...this.projectRoots()]
+    const roots = (await this.confinement()) ?? [homedir(), ...this.projectRoots()]
     return [...new Set(await Promise.all(roots.map((root) => realpath(root))))]
   }
-  private async check(path: string, roots?: string[]) {
-    if (!isAbsolute(path) || path.includes('\0')) throw new Error('Choose an absolute host folder path')
-    const actual = await realpath(path)
-    if (!(roots ?? (await this.roots())).some((root) => within(root, actual)))
+  /**
+   * `RAMU_BROWSE_ROOTS` holds the folder calls to those folders. Without it they reach every folder the host's user can
+   * read, as a native folder dialog on the host would; the device asking is already an owner of this host.
+   */
+  private async confinement(): Promise<string[] | null> {
+    const configured = process.env.RAMU_BROWSE_ROOTS?.split(delimiter).filter(Boolean)
+    return configured ? [...new Set(await Promise.all(configured.map((root) => realpath(root))))] : null
+  }
+  private async check(path: string, confine?: string[] | null) {
+    const wanted = expandHome(path)
+    if (!isAbsolute(wanted) || wanted.includes('\0')) throw new Error('Choose an absolute host folder path')
+    const actual = await realpath(wanted).catch((error: unknown) => {
+      throw unreadable(wanted, error)
+    })
+    const roots = confine === undefined ? await this.confinement() : confine
+    if (roots && !roots.some((root) => within(root, actual)))
       throw new Error('This folder is outside the host browse roots')
-    if (!(await stat(actual)).isDirectory()) throw new Error('Not a host folder')
+    if (!(await stat(actual)).isDirectory()) throw new Error(`${wanted} is a file, not a folder`)
     return actual
   }
+  /**
+   * Where the picker starts: the home folder, the computer's root and each mounted drive, then the project folders.
+   * Each is looked at with a deadline, so an absent network volume cannot hold the list up; one that is gone, slow
+   * or outside the browse roots is left out, and a place reached twice is listed once.
+   */
+  async places(): Promise<HostPlace[]> {
+    const confine = await this.confinement()
+    const home = homedir()
+    const candidates: HostPlace[] = [
+      { kind: 'home', name: folderName(home), path: home },
+      ...(await hostDrives()),
+      ...this.projectRoots()
+        .slice(0, MAX_PROJECT_PLACES)
+        .map((path): HostPlace => ({ kind: 'project', name: folderName(path), path })),
+    ]
+    const checked = await Promise.all(
+      candidates.map((place) =>
+        withDeadline(this.check(place.path, confine), this.entryMs).then(
+          (path) => ({ ...place, path }),
+          () => null,
+        ),
+      ),
+    )
+    const seen = new Set<string>()
+    return checked.filter((place): place is HostPlace => {
+      if (!place || seen.has(place.path)) return false
+      seen.add(place.path)
+      return true
+    })
+  }
   async list(path: string): Promise<HostFolderListing> {
-    const roots = await this.roots()
+    const roots = await this.confinement()
     const actual = await this.check(path, roots)
-    const entries = (await readdir(actual, { withFileTypes: true }))
+    const entries = (
+      await readdir(actual, { withFileTypes: true }).catch((error: unknown) => {
+        throw unreadable(actual, error)
+      })
+    )
       // Hidden folders (.git, .cache, .config) are never where a project starts, and they crowd the list.
       .filter((entry) => (entry.isDirectory() || entry.isSymbolicLink()) && !entry.name.startsWith('.'))
       .slice(0, MAX_LISTED)
@@ -105,10 +164,12 @@ export class HostFolders {
       // Inaccessible, slow and symlink-escaping folders are not offered.
       if (repo !== null) folders.push({ name: entry.name, path: candidate, repo })
     })
+    const up = dirname(actual)
     return {
       path: actual,
-      parent: roots.some((root) => within(root, dirname(actual))) ? dirname(actual) : null,
+      parent: up === actual || (roots && !roots.some((root) => within(root, up))) ? null : up,
       repo: await isRepository(actual),
+      system: isSystemFolder(actual, process.platform),
       folders: folders.sort((a, b) => a.name.localeCompare(b.name)),
     }
   }

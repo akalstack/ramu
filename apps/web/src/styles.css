@@ -37,6 +37,8 @@
   --primary-hover: #8060d8;
   --accent: #b7a6f3;
   --ui-font-size: 14px;
+  /* Counts, badges and file names in dense rows; it follows the text size setting like every other step. */
+  --font-micro: calc(var(--ui-font-size) - 3px);
   --font-caption: calc(var(--ui-font-size) - 2px);
   --font-control: calc(var(--ui-font-size) - 1px);
   --font-body: var(--ui-font-size);
@@ -44,6 +46,8 @@
   --font-heading: calc(var(--ui-font-size) + 4px);
   --font-hero: calc(var(--ui-font-size) + 12px);
   --chat-column-width: 760px;
+  /* The longest line of reading text before it wraps; code and tables run wider. */
+  --prose-measure: 72ch;
   --primary-ink: #ffffff;
   /* Text on the darkened error fill of destructive buttons; a theme does not change it, so it always reads. */
   --bad-ink: #ffffff;

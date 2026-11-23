@@ -2,7 +2,7 @@ import { randomUUID, createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { mkdirSync, readFileSync, readdirSync, writeFileSync, existsSync, rmSync } from 'node:fs'
 import { readdir, stat } from 'node:fs/promises'
-import { join, resolve } from 'node:path'
+import { isAbsolute, join, relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { gunzip, gzip } from 'node:zlib'
 import { z } from 'zod'
@@ -12,6 +12,7 @@ import type { Workspace } from '../workspace/workspace'
 import { resolveInRoot } from '../workspace/files'
 import { commitBranchInfo } from '../workspace/git'
 import { RunUndo } from './undo'
+import { WriteLedger } from './writeLedger'
 import { combineChatUndo } from './chatUndo'
 import {
   readReviewCurrent,
@@ -28,8 +29,10 @@ import { MAX_REVIEW_KEPT_BYTES, reviewKeepsBytes } from '@ramu/shared/review/rev
 import { modelViewerHtml } from '../interactive/modelViewer'
 import type { ModelViewerLabels } from '@ramu/shared/interactive'
 import {
+  type AgentEvent,
   type AgentScope,
   type Attachment,
+  type ChangeElsewhere,
   type ChangeFile,
   type ChangeReview,
   type ReviewComment,
@@ -37,6 +40,8 @@ import {
   type ReviewBranchState,
 } from '@ramu/shared/types'
 const exec = promisify(execFile)
+/** Recent turns read to tell whose an uncommitted file is; older ones were most likely committed already. */
+const OWNER_REVIEWS = 200
 interface SnapshotFile {
   repoId: string
   repoName: string
@@ -143,6 +148,7 @@ export class ReviewService {
   >()
   stop(): void {
     this.stopping = true
+    this.ledger.close()
   }
   async settle(): Promise<void> {
     await Promise.allSettled([...this.completing.values()])
@@ -157,6 +163,134 @@ export class ReviewService {
   ) {
     mkdirSync(root, { recursive: true, mode: 0o700 })
     this.undo = new RunUndo(join(root, 'undo'))
+    this.ledger = new WriteLedger({
+      clash: (sessionId, otherId, path) => {
+        const mine = this.taskOf(sessionId),
+          theirs = this.taskOf(otherId)
+        if (theirs) this.agents.recordCheckoutClash(sessionId, path, theirs)
+        if (mine) this.agents.recordCheckoutClash(otherId, path, mine)
+      },
+    })
+  }
+  private readonly ledger: WriteLedger
+  private taskOf(sessionId: string): string | null {
+    try {
+      return this.agents.get(sessionId).taskId
+    } catch {
+      return null
+    }
+  }
+  /** A tool call of a chat or one of its sub-agents, counted for the chat. */
+  observe(sessionId: string, event: AgentEvent): void {
+    try {
+      this.ledger.observe(this.agents.rootOf(sessionId), this.agents.get(sessionId).cwd, event)
+    } catch {
+      // A session that is gone has nothing left to tell apart.
+    }
+  }
+  /** Files written by this thread stay its own; the rest of what changed in a shared checkout is set apart by writer. */
+  private byWriter(review: ReviewData, changed: ChangeFile[]): Pick<ChangeReview, 'files' | 'elsewhere'> {
+    const where = (file: ChangeFile) =>
+      resolve(review.roots.find((root) => root.repoId === file.repoId)?.cwd ?? '', file.path)
+    const authors = this.ledger.authorship(review.id, changed.map(where))
+    const files: ChangeFile[] = [],
+      elsewhere = new Map<string, ChangeElsewhere>()
+    const setApart = (key: string, group: Omit<ChangeElsewhere, 'files'>, file: ChangeFile) => {
+      const entry = elsewhere.get(key) ?? { ...group, files: [] }
+      entry.files.push(file)
+      elsewhere.set(key, entry)
+    }
+    for (const file of changed) {
+      const author = authors.get(where(file)) ?? { kind: 'mine' as const }
+      const you = 'byYou' in author && author.byYou ? { editedByYou: true as const } : {}
+      if (author.kind === 'mine') files.push({ ...file, ...you })
+      else if (author.kind === 'shared')
+        files.push({ ...file, ...you, sharedWith: author.with.flatMap((id) => this.taskOf(id) ?? []) })
+      else if (author.kind === 'you') setApart('you', { taskId: null, byYou: true }, file)
+      else if (author.kind === 'other') {
+        const taskId = this.taskOf(author.by)
+        setApart(taskId ?? 'unknown', { taskId }, file)
+      } else setApart('unknown', { taskId: null }, file)
+    }
+    const groups = [...elsewhere.values()]
+    return { files, ...(groups.length ? { elsewhere: groups } : {}) }
+  }
+  /** Files someone else changed too during the turn: undoing them would throw away those edits. */
+  private sharedBlocked(files: ChangeFile[]): Record<string, string> {
+    return Object.fromEntries(
+      files.flatMap((file) =>
+        file.sharedWith?.length
+          ? [[file.id, 'Another thread also changed this file during this turn. Undo it by hand to keep its edits.']]
+          : file.editedByYou
+            ? [[file.id, 'You also edited this file during this turn. Undo it by hand to keep your edits.']]
+            : [],
+      ),
+    )
+  }
+  /** The person saved a file in Ramu's editor; a turn that also changed it leaves it to them on undo. */
+  personWrote(path: string): void {
+    this.ledger.personWrote(path)
+  }
+  /**
+   * Holds a chat's command while another thread's command runs in the checkout they share, so each command's writes
+   * have one author. The chat says whose command it waited for.
+   */
+  async commandTurn(sessionId: string, toolUseId: string, signal?: AbortSignal): Promise<void> {
+    let root: string
+    try {
+      root = this.agents.rootOf(sessionId)
+    } catch {
+      return
+    }
+    const waited = await this.ledger.commandTurn(root, toolUseId, signal, (other) => {
+      const taskId = this.taskOf(other)
+      if (taskId) this.agents.recordCommandWait(root, taskId)
+    })
+    if (waited) this.agents.recordCommandWait(root, null)
+  }
+  /** Files set apart as written by others that the person says belong to this turn: undone and committed with it. */
+  claimElsewhere(id: string, fileIds: string[]): ChangeReview {
+    const review = this.get(id)
+    const wanted = new Set(fileIds)
+    const moved = (review.elsewhere ?? []).flatMap((group) => group.files.filter((file) => wanted.has(file.id)))
+    if (!moved.length) throw new Error('Those files are no longer set apart in this turn.')
+    const elsewhere = (review.elsewhere ?? [])
+      .map((group) => ({ ...group, files: group.files.filter((file) => !wanted.has(file.id)) }))
+      .filter((group) => group.files.length)
+    const { elsewhere: _dropped, ...rest } = review
+    this.update({ ...rest, files: [...review.files, ...moved], ...(elsewhere.length ? { elsewhere } : {}) })
+    return this.get(id)
+  }
+  /**
+   * Changed files in this checkout that another thread wrote last, relative to it, so committing from this thread
+   * leaves them for that thread. A file this thread also changed since is its own.
+   */
+  async otherThreadPaths(taskId: string, cwd: string): Promise<string[]> {
+    const dirty = await dirtyPaths({ cwd })
+    if (!dirty?.paths.length) return []
+    const owners = new Map<string, Set<string>>()
+    const rows = this.db
+      .prepare("SELECT data FROM change_reviews WHERE state='ready' ORDER BY created_at DESC, rowid DESC LIMIT ?")
+      .all(OWNER_REVIEWS) as { data: string }[]
+    // Newest first: the latest turn to change a file decides whose it is.
+    for (const row of rows) {
+      const review = JSON.parse(row.data) as ReviewData
+      const rootOf = (repoId: string) => review.roots.find((root) => root.repoId === repoId)?.cwd
+      const claim = (file: ChangeFile, tasks: string[]) => {
+        const root = rootOf(file.repoId)
+        if (!root) return
+        const path = relative(resolve(cwd), resolve(root, file.path))
+        if (path.startsWith('..') || isAbsolute(path) || owners.has(path)) return
+        owners.set(path, new Set(tasks))
+      }
+      for (const file of review.files) claim(file, [review.taskId, ...(file.sharedWith ?? [])])
+      for (const group of review.elsewhere ?? [])
+        if (group.taskId) for (const file of group.files) claim(file, [group.taskId])
+    }
+    return dirty.paths.filter((path) => {
+      const tasks = owners.get(path)
+      return !!tasks && !tasks.has(taskId)
+    })
   }
   /** Image bytes by digest, shared by every run that saw the same picture. */
   private imagePath(hash: string): string {
@@ -334,9 +468,18 @@ export class ReviewService {
           }
         ).seq
       : 0
-    this.update({ ...this.get(id), sessionId, startSeq: seq })
+    const review = this.get(id) as ReviewData
+    this.update({ ...review, sessionId, startSeq: seq })
+    this.ledger.begin(
+      id,
+      sessionId,
+      review.roots.map((root) => root.cwd),
+      review.createdAt,
+    )
   }
   abandon(id: string, error: unknown): void {
+    this.ledger.end(id)
+    this.ledger.forget(id)
     this.update({ ...this.get(id), state: 'failed', error: String(error) })
     try {
       rmSync(join(this.root, `${id}.gz`))
@@ -375,6 +518,8 @@ export class ReviewService {
     }
     const operation = (async () => {
       const recording = this.stored(sessionId).filter((r) => r.state === 'recording')
+      // What is written from here on belongs to the next turn.
+      for (const review of recording) this.ledger.end(review.id)
       for (const [index, base] of recording.entries()) {
         try {
           const review = base as ReviewData
@@ -452,11 +597,20 @@ export class ReviewService {
               ...(old?.binary || current?.binary ? { oldSize: old?.size, newSize: current?.size } : {}),
             })
           }
-          const files = await reviewLineStats(changed, this.root).catch(() => changed)
-          this.update({ ...this.get(review.id), roots, state: 'ready', files, endSeq } as ReviewData)
+          const counted = await reviewLineStats(changed, this.root).catch(() => changed)
+          await this.ledger.settled()
+          this.update({
+            ...this.get(review.id),
+            roots,
+            state: 'ready',
+            ...this.byWriter(review, counted),
+            endSeq,
+          } as ReviewData)
           rmSync(join(this.root, `${review.id}.gz`), { force: true })
         } catch (error) {
           this.update({ ...this.get(base.id), state: 'failed', error: String(error) })
+        } finally {
+          this.ledger.forget(base.id)
         }
       }
     })().finally(() => this.completing.delete(sessionId))
@@ -749,9 +903,9 @@ export class ReviewService {
     const review = this.get(id) as ReviewData
     if (review.state !== 'ready') throw new Error('Wait for the run to finish')
     await this.requireOriginalCheckout(id)
-    if (this.agents.activeWriter(review.roots.map((r) => r.cwd)))
-      throw new Error('Wait for the workspace agent to finish before undoing')
-    return this.undo.preview(id, review.files, review.roots, review.undoFileIds)
+    if (review.sessionId && this.agents.writing(review.sessionId))
+      throw new Error('Wait for this thread to finish before undoing')
+    return this.undo.preview(id, review.files, review.roots, review.undoFileIds, this.sharedBlocked(review.files))
   }
   undoReviewId(token: string): string {
     return this.undo.reviewId(token)
@@ -780,8 +934,7 @@ export class ReviewService {
     for (const review of ranges) await this.requireOriginalCheckout(review.id)
     const combined = combineChatUndo(ranges.map((review) => this.get(review.id) as ReviewData))
     const covers = [...new Set(combined.roots.map((root) => root.cwd))]
-    if (this.agents.activeWriter(covers))
-      throw new Error('Wait for the workspace agent to finish before restoring files.')
+    if (this.agents.writing(sessionId)) throw new Error('Wait for this thread to finish before restoring files.')
     const preview = await this.undo.preview(first.id, combined.files, combined.roots, [], combined.blocked)
     for (const [token, plan] of this.chatUndoPlans) if (plan.expires < Date.now()) this.chatUndoPlans.delete(token)
     this.chatUndoPlans.set(preview.token, {
@@ -830,8 +983,8 @@ export class ReviewService {
   async undoApply(token: string, fileIds: string[]): Promise<ChangeReview> {
     const id = this.undo.reviewId(token)
     await this.requireOriginalCheckout(id)
-    if (this.agents.activeWriter(this.covers(id)))
-      throw new Error('Wait for the workspace agent to finish before undoing')
+    const owner = this.get(id).sessionId
+    if (owner && this.agents.writing(owner)) throw new Error('Wait for this thread to finish before undoing')
     const result = await this.agents.withWorkspaceReservation(this.covers(id), async () => {
         await this.requireOriginalCheckout(id)
         return this.undo.apply(token, fileIds)

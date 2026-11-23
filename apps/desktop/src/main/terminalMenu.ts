@@ -6,6 +6,8 @@ export function terminalMenu(
   win: BrowserWindow,
   selection: string,
   point: { x: number; y: number },
+  /** The command and output under the pointer; empty when the terminal has no command to offer. */
+  block = '',
 ): Promise<TerminalMenuResult> {
   return new Promise((resolve) => {
     let chosen = false
@@ -19,6 +21,13 @@ export function terminalMenu(
         enabled: !!selection,
         click: () => {
           void clipboard.writeText(selection).catch(failed)
+        },
+      },
+      {
+        label: t('Copy command and output'),
+        visible: !!block,
+        click: () => {
+          void clipboard.writeText(block).catch(failed)
         },
       },
       {

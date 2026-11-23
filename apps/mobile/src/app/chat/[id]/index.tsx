@@ -94,17 +94,14 @@ import {
   CancelPendingSettings,
   ChatMentions,
   MessageMenu,
-  type MessageSelection,
   RowToggle,
   TranscriptListRow,
   type ItemMeta,
 } from '../../../components/Transcript'
 import { RunCommandProvider } from '../../../runtime/runCommand'
-import { SelectionBar } from '../../../components/SelectionBar'
 import { Button, ConnectionDot, Sheet, T, tap } from '../../../components/ui'
 import { BottomFade, Glass, TopFade, floatingChrome } from '../../../components/Glass'
 import { ComposerDock, KeyboardLift, useKeyboardHeight } from '../../../components/Keyboard'
-import { ReadableColumn } from '../../../components/ReadableColumn'
 import { PendingBubble } from '../../../components/Outbox'
 import { SteeringBubble } from '../../../components/SteeringBubble'
 import { QueuedOpening } from '../../../components/QueuedOpening'
@@ -233,9 +230,6 @@ function ChatView({ id }: { id: string }) {
   const [away, setAway] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const [composerHeight, setComposerHeight] = useState(120)
-  const [selection, setSelection] = useState<MessageSelection | null>(null)
-  // The selection bar sits on the composer, and the jump-to-latest button stacks above it rather than under it.
-  const [selectionBarHeight, setSelectionBarHeight] = useState(0)
   // iOS: the composer and keyboard cover the list's bottom through UIScrollView.contentInset, which moves no content.
   // The keyboard handler then sets the offset itself: the end when following, else the same lines stay above the keys.
   const ios = Platform.OS === 'ios'
@@ -1431,7 +1425,6 @@ function ChatView({ id }: { id: string }) {
         <MessageMenu.Provider
           value={{
             readOnly: viewOnly,
-            select: setSelection,
             goTo: (itemId) => {
               const index = pageRows.findIndex((row) => row.id === itemId)
               if (index < 0) return
@@ -1720,16 +1713,6 @@ function ChatView({ id }: { id: string }) {
                 ) : null}
                 <KeyboardLift keyboard={keyboard}>
                   <BottomFade height={composerHeight * 0.75} color={c.window} />
-                  {selection ? (
-                    <View
-                      style={{ position: 'absolute', left: 0, right: 0, bottom: composerHeight }}
-                      onLayout={(event) => setSelectionBarHeight(event.nativeEvent.layout.height)}
-                    >
-                      <ReadableColumn>
-                        <SelectionBar selection={selection} />
-                      </ReadableColumn>
-                    </View>
-                  ) : null}
                   {/* iOS/web: the glass composer floats over the transcript, which scrolls beneath it. */}
                   <ComposerDock onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
                     {chat.status === 'archived' && !viewer ? (
@@ -1974,7 +1957,7 @@ function ChatView({ id }: { id: string }) {
                     style={{
                       position: 'absolute',
                       alignSelf: 'center',
-                      bottom: composerHeight + (selection ? selectionBarHeight : 0) + space.s,
+                      bottom: composerHeight + space.s,
                     }}
                   >
                     <Pressable

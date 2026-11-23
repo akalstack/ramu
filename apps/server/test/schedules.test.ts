@@ -59,7 +59,7 @@ describe('timezone-aware recurrence', () => {
   })
 })
 let db: Db, dir: string, ws: Workspace, service: ScheduleService
-let state: string, blocked: boolean
+let state: string
 // The run thread's goal, if any, and the messages waiting to be sent to it.
 let goal: { status: string; reason: string; pausedBy?: string } | null, queuedMessages: unknown[]
 // A run held at a usage limit, and whether the thread continues by itself.
@@ -81,7 +81,6 @@ beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'ramu-schedules-'))
   ws = new Workspace(db, join(dir, 'worktrees'))
   state = 'running'
-  blocked = false
   limited = false
   autoResume = true
   goal = null
@@ -90,7 +89,6 @@ beforeEach(() => {
   startFailed = vi.fn()
   const agents = {
     validateSettings: async () => {},
-    activeWriter: () => (blocked ? { id: 'other' } : null),
     startReviewed: start,
     isRecoveryPending: () => false,
     providerWait: () => (limited ? { retryAt: 1 } : null),
@@ -180,17 +178,13 @@ describe('durable dispatch', () => {
     expect(start).not.toHaveBeenCalled()
     expect(service.runs(s.id)[0]?.status).toBe('missed')
   })
-  it('defers a busy workspace and dispatches the same occurrence when it is free', async () => {
+  it('starts an occurrence once, on time, whatever else works in the checkout', async () => {
     const s = service.save(
       input({ kind: 'once', at: '2026-10-10T09:00:00+07:00' }),
       undefined,
       at('2026-10-09T00:00:00Z'),
     )
-    blocked = true
     await service.tick(at('2026-10-10T02:00:00Z'))
-    expect(start).not.toHaveBeenCalled()
-    expect(service.runs(s.id)[0]?.status).toBe('queued')
-    blocked = false
     await service.tick(at('2026-10-10T02:01:00Z'))
     expect(start).toHaveBeenCalledTimes(1)
     expect(service.runs(s.id)).toHaveLength(1)

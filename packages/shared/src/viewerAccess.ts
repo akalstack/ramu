@@ -3,6 +3,9 @@ const viewerMethods = new Set([
   'background.status',
   // Saying what it runs on changes nothing on the host but the icon shown for it.
   'device.describe',
+  // A device's own name and the host's name change nothing a viewer could misuse.
+  'device.rename',
+  'host.name',
   'agent.all',
   'agent.list',
   'agent.get',

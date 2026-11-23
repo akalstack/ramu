@@ -58,9 +58,9 @@ export function SettingHosts({
     setRestarting(true)
     setProblem(null)
     try {
-      await ramu.invoke('background.restart')
-      // The restarted service answers with the settings its build knows; read them again once it is back.
-      window.setTimeout(() => scope.reload(), 1500)
+      // Resolves once the restarted service answers, with the settings its build knows.
+      await ramu.invoke('background.restartService', 'keep')
+      scope.reload()
     } catch (reason) {
       setProblem(errorText(reason))
       setRestarting(false)

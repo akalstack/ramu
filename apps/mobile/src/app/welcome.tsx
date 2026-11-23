@@ -247,7 +247,9 @@ function ConnectStep({ t }: { t: Strings }) {
           <GlassButton
             icon={UserRound}
             title={t.welcomeAccount}
-            onPress={() => router.push({ pathname: '/settings/[section]', params: { section: 'account' } })}
+            onPress={() =>
+              router.push({ pathname: '/settings/[section]', params: { section: 'account', from: 'onboarding' } })
+            }
           />
           {native ? <GlassButton icon={Radar} title={t.welcomeNearby} onPress={() => pairWith('nearby')} /> : null}
           <Button kind="ghost" title={t.welcomeManual} onPress={() => pairWith('manual')} />
@@ -255,7 +257,8 @@ function ConnectStep({ t }: { t: Strings }) {
       }
     >
       <Heading title={t.welcomeTitle} />
-      <Note icon={Monitor}>{t.welcomeWhere}</Note>
+      <Note icon={ScanQrCode}>{t.welcomeWhere}</Note>
+      <Note icon={UserRound}>{t.welcomeAccountHint}</Note>
       <View style={{ gap: space.xs, alignItems: 'center' }}>
         <T size={font.control} tone="muted">
           {t.onboardNoComputer}

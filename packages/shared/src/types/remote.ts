@@ -72,6 +72,8 @@ export interface DeviceOs {
 export interface NetworkDevice {
   id: string
   name: string
+  /** The name the device paired with, present once it was renamed here, so the rename can be undone. */
+  pairedName?: string
   createdAt: number
   expiresAt?: number | null
   role?: 'owner' | 'viewer'
@@ -257,4 +259,13 @@ export interface AgentHostSummary {
   deviceId: string
   expiresAt: number | null
   addedAt: number
+}
+
+/** What a host is called: the person's choice, or the computer's own name (`systemName`) when `custom` is false. */
+export interface HostNameInfo {
+  name: string
+  systemName: string
+  custom: boolean
+  /** For a paired device asking: what this host calls it, and whether that differs from the name it paired with. */
+  device?: { name: string; renamed: boolean }
 }

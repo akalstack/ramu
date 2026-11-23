@@ -1,5 +1,6 @@
 import { LiveWindowView } from './liveView/LiveView'
 import { chatMotionVariables } from '@ramu/shared/chat/presentation'
+import { proseVariables } from '@ramu/shared/prose'
 import '@fontsource-variable/geist'
 import '@fontsource-variable/geist-mono'
 import '@xterm/xterm/css/xterm.css'
@@ -8,6 +9,7 @@ import './styles.css'
 import './chat.css'
 import './motion.css'
 import './git-panel.css'
+import './prose.css'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { monaco } from './editor/monaco'
 import { createRoot } from 'react-dom/client'
@@ -26,7 +28,8 @@ import { HostProvider } from './workspace/HostProvider'
 import { StartupScreen } from './Brand'
 import { ErrorBoundary } from './ErrorBoundary'
 
-for (const [name, value] of Object.entries(chatMotionVariables)) document.documentElement.style.setProperty(name, value)
+for (const [name, value] of Object.entries({ ...chatMotionVariables, ...proseVariables }))
+  document.documentElement.style.setProperty(name, value)
 
 function Startup() {
   const [fontsReady, setFontsReady] = useState(false)

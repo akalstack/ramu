@@ -12,7 +12,10 @@ import {
   FolderGit2,
   FolderPlus,
   HardDrive,
+  House,
   Lock,
+  Monitor,
+  PencilLine,
   Search,
   X,
 } from 'lucide-react-native'
@@ -23,8 +26,12 @@ import {
   cloneStartFolder,
   folderCrumbs,
   folderName,
+  placeLabel,
+  placesFromRoots,
+  typedFolderPath,
   type CloneStep,
   type HostFolderListing,
+  type HostPlace,
 } from '@ramu/shared/workspace/hostFolders'
 import { goBackOrHome } from '../runtime/navigation'
 import { finishFolderPick } from '../runtime/folderPick'
@@ -39,9 +46,11 @@ import { useSay } from '../i18n'
 import { PageLoader } from '../components/PageLoader'
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
+const PLACE_ICONS = { home: House, computer: Monitor, drive: HardDrive, project: FolderGit2 } as const
 
 /**
- * Add a project from a folder on the selected host: walk its folders (Git repositories are marked), make a new one, or
+ * Add a project from a folder on the selected host: start from its home, root, drives or project folders, walk its
+ * folders (Git repositories are marked) or type a path, make a new one, or
  * clone a repository here, then add the folder in view with the one button at the bottom. Opened with `purpose=parent`
  * it chooses where a new project's folder goes instead (from `start`, on host `computer`), answering `pickFolder`.
  * Opened with `clone=owner/repo` (a pull request's repository no project holds) it opens where the host's projects sit
@@ -68,7 +77,7 @@ export default function HostFolders() {
   const cloneName = wanted ? cloneFolderName(wanted) : ''
   // Leaving without choosing answers the sheet that asked with no folder.
   useEffect(() => () => void (choosingParent && finishFolderPick(null)), [choosingParent])
-  const [roots, setRoots] = useState<string[] | null>(null)
+  const [places, setPlaces] = useState<HostPlace[] | null>(null)
   const [listing, setListing] = useState<HostFolderListing | null>(null)
   const [error, setError] = useState<{ text: string; retry: () => void } | null>(null)
   // The folder being opened, shown on its row until the host answers.
@@ -77,6 +86,8 @@ export default function HostFolders() {
   const [searching, setSearching] = useState(false)
   // The new folder's name while its row is open; null while it is closed.
   const [naming, setNaming] = useState<string | null>(null)
+  // A path being typed; null while its row is closed.
+  const [typing, setTyping] = useState<string | null>(null)
   const crumbBar = useRef<ScrollViewInstance>(null)
   const browsing = useRef(0)
   const cloneRun = useClone(computerId)
@@ -113,6 +124,7 @@ export default function HostFolders() {
         if (mine !== browsing.current) return
         setListing(next)
         setNaming(null)
+        setTyping(null)
         setOpening(null)
       },
       (e: unknown) => {
@@ -132,25 +144,30 @@ export default function HostFolders() {
     setError(null)
     setListing(null)
   }
-  const loadRoots = () => {
+  const loadPlaces = () => {
     setError(null)
-    setRoots(null)
-    store.invoke(computerId, 'folders.roots').then(
-      (found) => {
-        setRoots(found)
-        // Where the project would go now opens first; a clone opens where the host's projects sit; one place to
-        // browse needs no choosing.
-        const first =
-          (choosingParent && params.start) ||
-          (wanted ? cloneStartFolder(found) : undefined) ||
-          (found.length === 1 ? found[0] : undefined)
-        if (first) browse(first)
-      },
-      (e: unknown) => setError({ text: errorText(e), retry: loadRoots }),
-    )
+    setPlaces(null)
+    // A host too old to list places still has its browse roots.
+    store
+      .invoke(computerId, 'folders.places')
+      .catch(() => store.invoke(computerId, 'folders.roots').then(placesFromRoots))
+      .then(
+        (found) => {
+          setPlaces(found)
+          const usual = found.filter((place) => place.kind === 'home' || place.kind === 'project')
+          // Where the project would go now opens first; a clone opens where the host's projects sit; one place to
+          // browse needs no choosing.
+          const first =
+            (choosingParent && params.start) ||
+            (wanted ? cloneStartFolder(usual.map((place) => place.path)) : undefined) ||
+            (found.length === 1 ? found[0]?.path : undefined)
+          if (first) browse(first)
+        },
+        (e: unknown) => setError({ text: errorText(e), retry: loadPlaces }),
+      )
   }
   useEffect(() => {
-    loadRoots()
+    loadPlaces()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [computerId] by design; the values it reads beyond these are current as of that run
   }, [computerId])
   const addProject = (path: string) =>
@@ -178,12 +195,64 @@ export default function HostFolders() {
       goBackOrHome(router)
     })
   }
-  const crumbs = listing ? folderCrumbs(listing.path, roots ?? []) : []
+  const crumbs = listing ? folderCrumbs(listing.path, places?.map((place) => place.path) ?? []) : []
   const here = listing ? folderName(listing.path) : ''
   // The repository may already be here; adding that checkout beats cloning it again.
   const existing = wanted ? listing?.folders.find((folder) => folder.name === cloneName && folder.repo) : undefined
   const cloning = !!cloneRun.running
   const working = busy || cloning
+  // A filesystem root or system folder can be walked through, and a new project can go in it, but it is no project.
+  const refused = !choosingParent && !wanted && !!listing?.system
+  const goTo = () => {
+    const path = typedFolderPath(typing ?? '')
+    if (path) open(path)
+  }
+  // The whole path typed or pasted, from the host's places or from the folder in view, which it starts from.
+  const pathRow =
+    typing === null ? (
+      <Row onPress={() => setTyping(listing?.path ?? '')} disabled={working}>
+        <PencilLine size={16} color={c.accent} />
+        <T tone="accent" weight="500" style={{ flex: 1 }}>
+          {say('Type a path')}
+        </T>
+      </Row>
+    ) : (
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: space.m,
+          paddingLeft: space.l,
+          paddingRight: space.s,
+          minHeight: 48,
+        }}
+      >
+        <PencilLine size={16} color={c.accent} />
+        <TextInput
+          autoFocus
+          value={typing}
+          onChangeText={setTyping}
+          onSubmitEditing={goTo}
+          returnKeyType="go"
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="url"
+          placeholder={say('Folder path on the host, like ~/code or /Volumes/Drive')}
+          placeholderTextColor={c.placeholder}
+          accessibilityLabel={say('Folder path')}
+          style={{ flex: 1, color: c.text, fontSize: font.body, paddingVertical: space.s }}
+        />
+        <IconButton
+          icon={ChevronRight}
+          label={say('Go')}
+          size={34}
+          tone="accent"
+          disabled={!!opening || !typedFolderPath(typing)}
+          onPress={goTo}
+        />
+        <IconButton icon={X} label={say('Cancel')} size={34} tone="muted" onPress={() => setTyping(null)} />
+      </View>
+    )
 
   if (searching && listing)
     return (
@@ -222,7 +291,7 @@ export default function HostFolders() {
           onContentSizeChange={() => crumbBar.current?.scrollToEnd({ animated: false })}
           contentContainerStyle={{ paddingHorizontal: space.l, paddingVertical: space.s, gap: 4, alignItems: 'center' }}
         >
-          {(roots?.length ?? 0) > 1 ? (
+          {(places?.length ?? 0) > 1 ? (
             <>
               <Chip small icon={HardDrive} label={say('Locations')} onPress={showLocations} />
               <ChevronRight size={12} color={c.placeholder} />
@@ -274,7 +343,7 @@ export default function HostFolders() {
           </View>
         ) : null}
         {!listing ? (
-          roots === null || (opening && !roots.includes(opening)) ? (
+          places === null || (opening && !places.some((place) => place.path === opening)) ? (
             error ? null : (
               <View style={{ alignItems: 'center', gap: space.s, margin: space.xl }}>
                 <PageLoader color={c.accent} />
@@ -285,26 +354,35 @@ export default function HostFolders() {
             )
           ) : (
             <>
+              {pathRow}
               <SectionLabel>{say('Locations')}</SectionLabel>
-              {roots.map((root, index) => (
-                <View key={root}>
-                  {index ? <Divider inset={ROW_INSET} /> : null}
-                  <Row onPress={() => open(root)} accessibilityState={{ busy: opening === root }}>
-                    <HardDrive size={16} color={c.soft} />
-                    <View style={{ flex: 1 }}>
-                      <T numberOfLines={1}>{folderName(root)}</T>
-                      <T size={font.caption} tone="muted" numberOfLines={1} ellipsizeMode="head">
-                        {root}
-                      </T>
-                    </View>
-                    {opening === root ? (
-                      <ActivityIndicator size="small" color={c.accent} />
-                    ) : (
-                      <ChevronRight size={15} color={c.muted} />
-                    )}
-                  </Row>
-                </View>
-              ))}
+              {places.map((place, index) => {
+                const Icon = PLACE_ICONS[place.kind]
+                const firstProject = place.kind === 'project' && places[index - 1]?.kind !== 'project'
+                return (
+                  <View key={place.path}>
+                    {firstProject ? (
+                      <SectionLabel>{say('Projects')}</SectionLabel>
+                    ) : index ? (
+                      <Divider inset={ROW_INSET} />
+                    ) : null}
+                    <Row onPress={() => open(place.path)} accessibilityState={{ busy: opening === place.path }}>
+                      <Icon size={16} color={c.soft} />
+                      <View style={{ flex: 1 }}>
+                        <T numberOfLines={1}>{placeLabel(place, say)}</T>
+                        <T size={font.caption} tone="muted" numberOfLines={1} ellipsizeMode="head">
+                          {place.path}
+                        </T>
+                      </View>
+                      {opening === place.path ? (
+                        <ActivityIndicator size="small" color={c.accent} />
+                      ) : (
+                        <ChevronRight size={15} color={c.muted} />
+                      )}
+                    </Row>
+                  </View>
+                )
+              })}
             </>
           )
         ) : (
@@ -365,6 +443,8 @@ export default function HostFolders() {
                 </Row>
               </>
             )}
+            <Divider inset={ROW_INSET} />
+            {pathRow}
             <SectionLabel>{here}</SectionLabel>
             {listing.folders.map((folder, index) => (
               <View key={folder.path}>
@@ -434,7 +514,7 @@ export default function HostFolders() {
                       ? say('Put it here')
                       : say('Add {0}', { 0: here })
                 }
-                disabled={working || !!opening}
+                disabled={working || !!opening || (refused && !existing)}
                 onPress={() => {
                   if (existing) return void addProject(existing.path)
                   if (!choosingParent) return void addProject(listing.path)
@@ -443,12 +523,20 @@ export default function HostFolders() {
                 }}
               />
             )}
-            <T size={font.caption} tone="muted" numberOfLines={1} ellipsizeMode="head" style={{ textAlign: 'center' }}>
+            <T
+              size={font.caption}
+              tone="muted"
+              numberOfLines={refused ? 2 : 1}
+              ellipsizeMode={refused ? 'tail' : 'head'}
+              style={{ textAlign: 'center' }}
+            >
               {existing
                 ? say('Already cloned here. Add it as a project.')
-                : wanted
-                  ? say('Clones into {0}', { 0: childPath(listing.path, cloneName) })
-                  : listing.path}
+                : refused
+                  ? say('This is a system folder. Open a folder inside it to add as a project.')
+                  : wanted
+                    ? say('Clones into {0}', { 0: childPath(listing.path, cloneName) })
+                    : listing.path}
             </T>
           </ReadableColumn>
         </View>

@@ -56,6 +56,28 @@ export class SessionRegistry {
     return null
   }
 
+  /** Whether this chat, or one of its own sub-agents, may still write: its own changes are not settled yet. */
+  writing(id: string): boolean {
+    const root = this.host.rootOf(id)
+    for (const other of new Set([
+      ...this.live.keys(),
+      ...this.runners.keys(),
+      ...this.transitioning,
+      ...this.closing,
+      ...this.finalizing.keys(),
+    ]))
+      if (
+        this.host.rootOf(other) === root &&
+        (this.transitioning.has(other) ||
+          this.closing.has(other) ||
+          this.finalizing.has(other) ||
+          WRITING_STATES.includes(this.host.get(other).state) ||
+          this.pendingBackground(other))
+      )
+        return true
+    return false
+  }
+
   /** The process is still alive and has sub-agents or background tasks running after its turn ended. */
   pendingBackground(id: string): boolean {
     return (this.live.has(id) || this.runners.has(id)) && this.host.hasRunningTasks(id)

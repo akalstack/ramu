@@ -466,6 +466,11 @@ describe('projects from folders', () => {
     await expect(ws.addProjectFromFolder(join(tmp, 'code'), [])).rejects.toThrow('Choose at least one repository.')
   })
 
+  it.skipIf(process.platform === 'win32')('refuses the filesystem root as a project', async () => {
+    await expect(ws.addProjectFromFolder('/')).rejects.toThrow('/ is a system folder')
+    expect(ws.listProjects().some((project) => project.root === '/')).toBe(false)
+  })
+
   it('groups child repositories of a plain folder as a workspace and runs agents at its root', async () => {
     const before = { web: fingerprint(web), api: fingerprint(api) }
     mkdirSync(join(tmp, 'code', 'notes')) // not a repository

@@ -3,6 +3,7 @@ import { ImagePreview } from './ImagePreview'
 import { MessageSelectionMenuContext, TextMarkContext, nativeMarkdown } from './NativeMarkdown'
 import { markSource } from '../runtime/textMark'
 import { ContinuedCard } from './ContinueOnHost'
+import { CheckoutClashCard, CommandWaitNote } from './CheckoutClashCard'
 import { toolActivity } from '@ramu/shared/chat/toolActivity'
 import { thoughtLine } from '@ramu/shared/chat/thoughtLine'
 import { FileIcon } from './FileIcon'
@@ -14,21 +15,8 @@ import { changedFile } from '../runtime/diff'
 import { Helpers, ReportCard } from './Helpers'
 import { InteractiveContent, InteractiveOlderVersion } from './InteractiveContent'
 import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import {
-  ActionSheetIOS,
-  Alert,
-  Image,
-  Linking,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-  type TextStyle,
-} from 'react-native'
+import { ActionSheetIOS, Alert, Image, Linking, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
-import { readableRuns, readableText, type ReadableStyle } from '../runtime/transcript'
 import type { Attachment } from '@ramu/shared/types'
 import { useRouter } from 'expo-router'
 import { ABILITY_DONE, ABILITY_LABELS, isMediaAbility, type AbilityCall } from '@ramu/shared/providers/abilities'
@@ -66,14 +54,7 @@ import { showError } from '../runtime/toast'
 import { accountName } from '@ramu/shared/providers/providers'
 import { providerNames, type Chat, type ToolKind, type TranscriptItem } from '../runtime/types'
 import { useStore } from '../runtime/store'
-import {
-  Markdown,
-  MessageBlockPress,
-  MessageTextSelection,
-  nativeSelection,
-  ReferenceBadge,
-  ReferenceContext,
-} from './Markdown'
+import { Markdown, ReferenceBadge, ReferenceContext } from './Markdown'
 import { draftChip } from '@ramu/shared/chat/referenceChip'
 import { hasSentContext, sentContext, type SentReviewComment } from '@ramu/shared/chat/sentContext'
 import { terminalAttachmentLabel } from '@ramu/shared/chat/terminalContext'
@@ -172,150 +153,32 @@ export const MessageMenu = createContext<{
   edit(seq: number, text: string, files: Attachment[]): void
   undo(seq: number): void
   aside(text: string, from: 'user' | 'assistant'): void
-  /** The text selected in a message, for the bar over the message box; null when nothing is selected. */
-  select(selection: MessageSelection | null): void
   /** Scrolls the chat to a row, such as a document's newest version. */
   goTo?(itemId: string): void
 } | null>(null)
 
-export interface MessageSelection {
-  text: string
-  from: 'user' | 'assistant'
-  /** The rest of what the message offers: edit, undo. */
-  more(): void
-  done(): void
-}
-
 /**
- * A message opened for selecting, in place, where this app has no native text view: the system's own handles, loupe and
- * word snapping, which React Native's Text cannot report. It reads like the message (headings, bold, code and bullets
- * keep their look) and starts on the paragraph that was pressed. It is an input only for that: no keyboard, and its text
- * cannot change.
- */
-function SelectableMessage({
-  text,
-  block,
-  from,
-  more,
-  done,
-}: {
-  text: string
-  /** The paragraph that was long-pressed, selected first; without one, the whole message is. */
-  block: string | null
-  from: 'user' | 'assistant'
-  more(): void
-  done(): void
-}) {
-  const { c } = useTheme()
-  const menu = useContext(MessageMenu)
-  const runs = useMemo(() => readableRuns(text), [text])
-  const readable = useMemo(() => runs.map((run) => run.text).join(''), [runs])
-  const [range, setRange] = useState(() => {
-    const pressed = block ? readableText(block) : ''
-    const start = pressed ? readable.indexOf(pressed) : -1
-    return start < 0 ? { start: 0, end: readable.length } : { start, end: start + pressed.length }
-  })
-  const look: Record<ReadableStyle, TextStyle> = {
-    body: {},
-    strong: { fontWeight: '600', color: c.text },
-    em: { fontStyle: 'italic' },
-    code: { fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: font.body - 2 },
-    heading: { fontWeight: '700', color: c.text, fontSize: font.body + 2 },
-    marker: { color: c.muted },
-  }
-  const picked = readable.slice(range.start, range.end).trim()
-  const select = menu?.select
-  useEffect(() => {
-    select?.({ text: picked || readable, from, more, done })
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `more` and `done` are new each render; the text decides
-  }, [select, picked, readable, from])
-  useEffect(() => () => select?.(null), [select])
-  return (
-    <TextInput
-      autoFocus
-      multiline
-      scrollEnabled={false}
-      selection={range}
-      onSelectionChange={(event) => setRange(event.nativeEvent.selection)}
-      onBlur={done}
-      showSoftInputOnFocus={false}
-      contextMenuHidden
-      caretHidden
-      selectionColor={c.accent}
-      accessibilityLabel={readable}
-      style={{ color: c.body, fontSize: font.body, lineHeight: 22, padding: 0, textAlignVertical: 'top' }}
-    >
-      <Text>
-        {runs.map((run, index) => (
-          <Text key={index} style={look[run.style]}>
-            {run.text}
-          </Text>
-        ))}
-      </Text>
-    </TextInput>
-  )
-}
-
-/**
- * Selecting a message's text brings up the bar over the message box, which acts on the selection as on the desktop.
- * Where iOS has the native text view, the text is natively selectable: a long press picks a word and the handles move by
- * character. Elsewhere a long press opens the message for selecting in place. Either way "More" offers the whole
- * message's actions.
+ * Selecting a message's text uses the system's own selection in the native Markdown view, with Quote, New thread, Ask
+ * aside and More beside Copy, as on the desktop. "More" offers the whole message's actions. Where there is no native view
+ * (the web build), a long press opens those actions instead.
  */
 function MessageActions({
   text,
   from,
   seq,
   files,
-  markdown,
   children,
 }: {
   text: string
   from: 'user' | 'assistant'
   seq?: number
   files?: Attachment[]
-  /** The message is Markdown, which iOS draws as native selectable text. */
-  markdown?: boolean
   children: ReactNode
 }) {
   const menu = useContext(MessageMenu)
   const say = useSay()
   const latestMenu = useRef(menu)
   latestMenu.current = menu
-  // The message open for selecting, and the paragraph that was pressed to open it.
-  const [selecting, setSelecting] = useState<{ block: string | null } | null>(null)
-  // A native selection, by block, so clearing one block does not drop another's; `clears` remounts to clear them all.
-  const picked = useRef<string | null>(null)
-  const [clears, setClears] = useState(0)
-  const select = menu?.select
-  // The native Markdown view selects across the whole message and carries its own menu, as T3 Code's does.
-  const whole = nativeMarkdown && !!markdown
-  const native = !whole && nativeSelection && !!select && !!markdown
-  const report = useMemo(
-    () =>
-      native
-        ? (block: string, value: string | null) => {
-            if (value) {
-              picked.current = block
-              select({
-                text: value,
-                from,
-                more: () => openRef.current(),
-                done: () => {
-                  picked.current = null
-                  select(null)
-                  setClears((n) => n + 1)
-                },
-              })
-            } else if (picked.current === block) {
-              picked.current = null
-              select(null)
-            }
-          }
-        : null,
-    [native, select, from],
-  )
-  useEffect(() => () => void (picked.current && select?.(null)), [select])
   const openRef = useRef<() => void>(() => {})
   const open = () => {
     if (!text.trim()) return
@@ -360,46 +223,27 @@ function MessageActions({
       ])
   }
   openRef.current = open
-  const startSelecting = (block: string | null) => {
-    if (!text.trim()) return
-    tap()
-    if (menu) setSelecting({ block })
-    else open()
-  }
-  if (selecting)
+  if (!nativeMarkdown)
     return (
-      <SelectableMessage text={text} block={selecting.block} from={from} more={open} done={() => setSelecting(null)} />
-    )
-  if (whole)
-    return (
-      <MessageSelectionMenuContext.Provider
-        value={
-          menu
-            ? {
-                quote: (picked) => menu.quote(picked),
-                quoteNew: (picked) => menu.quoteNew(picked),
-                aside: menu.readOnly ? undefined : (picked) => latestMenu.current?.aside(picked, from),
-                more: () => openRef.current(),
-              }
-            : { quote: () => {}, quoteNew: () => {}, more: () => openRef.current() }
-        }
-      >
+      <Pressable onLongPress={open} delayLongPress={350} accessibilityHint={say('Long-press for message actions')}>
         {children}
-      </MessageSelectionMenuContext.Provider>
+      </Pressable>
     )
   return (
-    <Pressable
-      // On iOS a long press selects a word natively, so the message itself takes none; "More" in the bar has the rest.
-      onLongPress={native ? undefined : () => startSelecting(null)}
-      delayLongPress={350}
-      accessibilityHint={say('Long-press to select text')}
+    <MessageSelectionMenuContext.Provider
+      value={
+        menu
+          ? {
+              quote: (picked) => menu.quote(picked),
+              quoteNew: (picked) => menu.quoteNew(picked),
+              aside: menu.readOnly ? undefined : (picked) => latestMenu.current?.aside(picked, from),
+              more: () => openRef.current(),
+            }
+          : { quote: () => {}, quoteNew: () => {}, more: () => openRef.current() }
+      }
     >
-      <MessageTextSelection.Provider value={report}>
-        <MessageBlockPress.Provider value={native ? null : startSelecting}>
-          <View key={clears}>{children}</View>
-        </MessageBlockPress.Provider>
-      </MessageTextSelection.Provider>
-    </Pressable>
+      {children}
+    </MessageSelectionMenuContext.Provider>
   )
 }
 
@@ -748,9 +592,8 @@ function ErrorCard({ message, last, chat }: { message: string; last: boolean; ch
           <T size={font.control} weight="600">
             {say(title)}
           </T>
-          <T size={font.control} tone="muted">
-            {message}
-          </T>
+          {/* Drawn by the Markdown view so its words select with the same native menu as any reply. */}
+          <Markdown text={message} density="compact" muted />
           {canRetry ? (
             <Pressable
               accessibilityRole="button"
@@ -779,7 +622,7 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
     case 'user':
       if (item.from) return <ThreadMessageCard from={item.from} chat={chat} />
       return (
-        <MessageActions text={item.text} from="user" seq={item.seq} files={item.attachments} markdown>
+        <MessageActions text={item.text} from="user" seq={item.seq} files={item.attachments}>
           <UserBubble text={item.text} attachments={item.attachments} chat={chat} />
           {item.raw ? <SentContextChips raw={item.raw} computer={chat.computerId} /> : null}
         </MessageActions>
@@ -788,7 +631,7 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
       return <ErrorCard message={item.message} last={endedOnError(chat.items, item.id)} chat={chat} />
     case 'text':
       return (
-        <MessageActions text={item.text} from="assistant" markdown>
+        <MessageActions text={item.text} from="assistant">
           <Markdown text={item.text} streaming={meta?.streaming} fresh={meta?.fresh} />
           {meta?.footer && !meta.streaming ? <AnswerFooter at={item.at} text={item.text} /> : null}
         </MessageActions>
@@ -819,6 +662,10 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
       return <SettingsChangeCard computerId={chat.computerId} cardId={item.cardId} />
     case 'continued':
       return <ContinuedCard event={item.event} chat={chat} />
+    case 'checkout-clash':
+      return <CheckoutClashCard path={item.path} taskId={item.taskId} chat={chat} />
+    case 'command-wait':
+      return <CommandWaitNote taskId={item.taskId} chat={chat} />
     case 'tool':
       return <ToolRow item={item} />
     case 'tools':
@@ -982,7 +829,7 @@ function ThreadMessageCard({ from, chat }: { from: import('@ramu/shared/types').
             <Disclosure open={open} size={12} color={c.muted} />
           </Pressable>
           <Collapse open={open}>
-            <Markdown text={from.detail} />
+            <Markdown text={from.detail} density="compact" />
           </Collapse>
         </View>
       ) : null}

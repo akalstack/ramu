@@ -44,12 +44,18 @@ export function useCommitFlow({
     : status?.entries.filter((entry) => entry.unstaged && entry.unstaged !== 'unmerged').map((entry) => entry.path)
   const [message, setMessage] = useState('')
   const [draft, setDraft] = useState<CommitDraft | null>(null)
+  // Files another thread in this checkout wrote last stay out of "stage everything"; a host without the check stages all.
+  const ownPaths = async (paths: string[]) => {
+    const theirs = new Set(await invoke('git.otherThreadPaths', taskId, binding.repoId).catch(() => [] as string[]))
+    return paths.filter((path) => !theirs.has(path))
+  }
   const [generating, setGenerating] = useState(false)
   const draftMessage = async (includeBranch = false, stageAll = true) => {
     setGenerating(true)
     try {
       const value = await withGitBusy(taskId, binding.repoId, async () => {
-        if (stageAll && allPaths?.length) await invoke('git.stage', taskId, binding.repoId, allPaths)
+        const mine = stageAll && allPaths?.length ? await ownPaths(allPaths) : []
+        if (mine.length) await invoke('git.stage', taskId, binding.repoId, mine)
         return invoke('git.generateCommit', taskId, binding.repoId, settings, includeBranch)
       })
       setDraft(value)
@@ -104,7 +110,7 @@ export function useCommitFlow({
     if (branchOptions === null) return
     if (branchOptions?.newBranch || branchOptions?.autoBranch) requireSaved()
     // An amend rewrites the last commit with what is staged; it never takes unstaged edits.
-    if (action !== 'amend') stagePaths = allPaths ?? stagePaths
+    if (action !== 'amend') stagePaths = allPaths ? await ownPaths(allPaths) : stagePaths
     if (stagePaths?.length) await invoke('git.stage', taskId, binding.repoId, stagePaths)
     let text = message,
       fingerprint = draft?.fingerprint,

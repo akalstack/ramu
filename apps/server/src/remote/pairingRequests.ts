@@ -106,6 +106,13 @@ export class PairingRequests {
         403,
         'This host is not discoverable. Turn on Discoverable in its Remote access settings, or pair with its code.',
       )
+    // A device the account lets in reaches this host only at the addresses sealed into the answer. With none, it would
+    // be paired here yet unable to connect, and removing that stray pairing makes its next request ask the person.
+    if (peer.startsWith('account:') && this.options.addresses && !this.options.addresses().length)
+      throw new PairingError(
+        409,
+        'Other devices can’t reach this computer yet. On it, open Settings → Remote access and turn on Allow other devices or Ramu Link, then try again.',
+      )
     if (this.declined.has(peer)) throw new PairingError(429, 'The host declined. Try again in a minute.')
     // A new request from the same address replaces its unanswered one.
     for (const [id, request] of this.requests)

@@ -147,6 +147,25 @@ function CommitForm({
   const [scope, setScope] = useState<'staged' | 'all'>(hasStaged ? 'staged' : 'all')
   const inScope = (entry: GitStatusEntry) => scope === 'all' || stagedEntry(entry)
   const [unticked, setUnticked] = useState<Set<string>>(new Set())
+  // Files another thread in this checkout wrote last start unticked, so a commit takes only this thread's work.
+  const [others, setOthers] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    let cancelled = false
+    void host.invoke('git.otherThreadPaths', request.taskId, request.repoId).then(
+      (paths) => {
+        if (cancelled || !paths.length) return
+        const theirs = new Set(paths)
+        setOthers(theirs)
+        if (!hasStaged) setUnticked((current) => (current.size ? current : theirs))
+      },
+      // A host without this check commits as before.
+      () => {},
+    )
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- read once per opened popup
+  }, [request.taskId, request.repoId])
   const selected = entries.filter((entry) => inScope(entry) && !unticked.has(entry.path))
   const [message, setMessage] = useState(request.message)
   const canPublish = !!status.branch && !!status.remote && !status.operation
@@ -283,6 +302,9 @@ function CommitForm({
                       <span className="ml-1.5 text-caption text-muted-foreground">{entry.path.slice(0, slash)}</span>
                     )}
                   </span>
+                  {others.has(entry.path) && (
+                    <span className="flex-none text-caption text-muted-foreground">{t('Another thread')}</span>
+                  )}
                   <span className="flex-none text-caption font-semibold text-muted-foreground">
                     {LETTER[change ?? ''] ?? ''}
                   </span>

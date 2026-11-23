@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ClipboardPaste,
+  Copy,
   Grid2X2,
   Keyboard,
   KeyboardOff,
@@ -42,6 +43,7 @@ export function TerminalDock({
   onKey,
   onMoreKeys,
   onAddToChat,
+  onCopy,
   rail = DEFAULT_RAIL,
 }: {
   workspace: string
@@ -61,6 +63,8 @@ export function TerminalDock({
   onMoreKeys?(): void
   /** Puts the rows on screen into the thread's message box; only a thread's own terminal offers it. */
   onAddToChat?(): void
+  /** Offers what the terminal can copy: a command with its output, the screen, or text to select. */
+  onCopy(): void
   /** The keys on the quiet rail, in order; the person's own choice from the keys sheet. */
   rail?: readonly string[]
 }) {
@@ -174,6 +178,7 @@ export function TerminalDock({
           </View>
           <ChevronDown size={14} color={c.muted} />
         </Pressable>
+        {button(Copy, say('Copy from terminal'), onCopy, !hasShell)}
         {onAddToChat ? button(MessageSquarePlus, say('Add screen to chat'), onAddToChat, !hasShell) : null}
         {button(
           keyboardVisible ? KeyboardOff : Keyboard,

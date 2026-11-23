@@ -53,6 +53,7 @@ import { PairingCode } from './PairingCode'
 import { defaultPairUrl, pairingNetwork, pairingUrls, pairQrText } from './pairingOffer'
 import { usePairingOffer } from './usePairingOffer'
 import { AccountDevicesRow, AccountHostsList } from './AccountAccess'
+import { RenameDialog } from './RenameDialog'
 import { StayReachable } from './StayReachable'
 import { agentReachable, agentsOnEverywhere } from './agentHostLinks'
 import {
@@ -207,6 +208,7 @@ function ThisComputer() {
   const [confirm, setConfirm] = useState(false),
     [pairing, setPairing] = useState(false),
     [revoking, setRevoking] = useState<string | null>(null)
+  const [renamingDevice, setRenamingDevice] = useState<NetworkDevice | null>(null)
   const [config, stageConfig] = useStagedValue(
     'network.config',
     {
@@ -540,6 +542,7 @@ function ThisComputer() {
           device={device}
           invoke={changePermission}
           onRevoke={() => setRevoking(device.id)}
+          onRename={() => setRenamingDevice(device)}
           hostDays={status.deviceLifetime.days}
         />
       ))}
@@ -594,6 +597,16 @@ function ThisComputer() {
             )}
           </p>
         </ConfirmDialog>
+      )}
+      {renamingDevice && (
+        <RenameDialog
+          title={t('Rename {0}', { 0: renamingDevice.name })}
+          help={t('This host lists it under this name.')}
+          name={renamingDevice.name}
+          original={renamingDevice.pairedName ?? renamingDevice.name}
+          onSave={async (name) => setStatus(await invoke('network.renameDevice', renamingDevice.id, name))}
+          onClose={() => setRenamingDevice(null)}
+        />
       )}
       {revoking !== null && (
         <ConfirmDialog
@@ -852,6 +865,18 @@ function Computers({ state }: { state: ComputerList }) {
     [editing, setEditing] = useState<string | null>(null)
   const [forgetting, setForgetting] = useState<string | null>(null)
   const [inviting, setInviting] = useState<Computer | null>(null)
+  const [renaming, setRenaming] = useState<{ computer: Computer; name: string; original: string | null } | null>(null)
+  // This computer is renamed on its own service, for every device and host that sees it; another host is renamed
+  // here only, with its own chosen name one click away.
+  const rename = async (computer: Computer) => {
+    if (computer.local) {
+      const info = await invoke('host.name').catch(() => null)
+      setRenaming({ computer, name: info?.name ?? computer.name, original: info?.systemName ?? null })
+      return
+    }
+    const own = computer.status === 'connected' ? await invokeOn(computer.id, 'host.name').catch(() => null) : null
+    setRenaming({ computer, name: computer.name, original: own?.name ?? null })
+  }
   const others = state.computers.filter((computer) => !computer.local)
   const [agentHosts, setAgentHosts] = useState<AgentHostSummary[] | null>(null)
   const [everywhere, setEverywhere] = useState({ on: false, seq: 0 })
@@ -980,6 +1005,15 @@ function Computers({ state }: { state: ComputerList }) {
                     {t('Pair again')}
                   </Button>
                 )}
+                {computer.local && (
+                  <Menu
+                    label={t('More for {0}', { 0: computer.name })}
+                    icon={<MoreHorizontal size={15} />}
+                    align="end"
+                    disabled={busy}
+                    items={[{ key: 'rename', label: t('Rename this host…'), onSelect: () => void rename(computer) }]}
+                  />
+                )}
                 {!computer.local && (
                   <Menu
                     label={t('More for {0}', { 0: computer.name })}
@@ -987,6 +1021,7 @@ function Computers({ state }: { state: ComputerList }) {
                     align="end"
                     disabled={busy}
                     items={[
+                      { key: 'rename', label: t('Rename…'), onSelect: () => void rename(computer) },
                       { key: 'settings', label: t('Connection settings…'), onSelect: () => setEditing(computer.id) },
                       ...(computer.status === 'connected'
                         ? [
@@ -1067,6 +1102,28 @@ function Computers({ state }: { state: ComputerList }) {
         />
       )}
       {selected && <ComputerSettings key={selected.id} computer={selected} onClose={() => setEditing(null)} />}
+      {renaming && (
+        <RenameDialog
+          title={renaming.computer.local ? t('Rename this host') : t('Rename {0}', { 0: renaming.computer.name })}
+          help={
+            renaming.computer.local
+              ? t(
+                  'Phones and computers that pair with it, find it nearby or see it on your Ramu account show this name.',
+                )
+              : t('Saved on this device. The host keeps its own name.')
+          }
+          name={renaming.name}
+          original={renaming.original}
+          onSave={(name) =>
+            renaming.computer.local
+              ? invoke('network.renameHost', name)
+              : invoke('computers.update', renaming.computer.id, {
+                  name: name ?? renaming.original ?? renaming.computer.name,
+                })
+          }
+          onClose={() => setRenaming(null)}
+        />
+      )}
       {forgetting !== null && (
         <ConfirmDialog
           danger
@@ -1675,11 +1732,13 @@ function PairedDeviceRow({
   device,
   invoke,
   onRevoke,
+  onRename,
   hostDays,
 }: {
   device: NetworkDevice
   invoke: Parameters<typeof DevicePermissionList>[0]['invoke']
   onRevoke: () => void
+  onRename: () => void
   /** This host's default pairing lifetime, which a device follows unless it has its own. */
   hostDays: number | 'never'
 }) {
@@ -1728,9 +1787,14 @@ function PairedDeviceRow({
           <span className="text-caption text-muted-foreground">
             {`${device.expiresAt ? t('Expires {0}', { 0: new Date(device.expiresAt).toLocaleDateString() }) : t('Never expires')} · ${t('Paired {0}', { 0: new Date(device.createdAt).toLocaleDateString() })}`}
           </span>
-          <Button variant="secondary" size="sm" className="bg-fill hover:bg-fill-hover" onClick={onRevoke}>
-            {t('Revoke')}
-          </Button>
+          <span className="flex flex-none items-center gap-1.5">
+            <Button variant="ghost" size="sm" onClick={onRename}>
+              {t('Rename…')}
+            </Button>
+            <Button variant="secondary" size="sm" className="bg-fill hover:bg-fill-hover" onClick={onRevoke}>
+              {t('Revoke')}
+            </Button>
+          </span>
         </div>
       </CollapsibleContent>
     </Collapsible>

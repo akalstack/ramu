@@ -1,0 +1,100 @@
+diff --git a/ios/views/ENRMMarkdownTextView.m b/ios/views/ENRMMarkdownTextView.m
+index c790eb1896c04ee40456649a8b375558ad7a09f3..8a5ec2fc2ceade787d2a2e7257b1d4af4df69d72 100644
+--- a/ios/views/ENRMMarkdownTextView.m
++++ b/ios/views/ENRMMarkdownTextView.m
+@@ -4,11 +4,77 @@
+ #import "ENRMTextHitTest.h"
+ #import "LinkTapUtils.h"
+ #import "PasteboardUtils.h"
++#import <objc/runtime.h>
+ 
+ #if !TARGET_OS_OSX
+ @interface ENRMMarkdownTextView () <UIContextMenuInteractionDelegate>
+ @end
+ 
++@interface ENRMSelectionClearer : NSObject <UIGestureRecognizerDelegate>
++@end
++
++static NSHashTable<UITextView *> *ENRMSelectableTextViews(void)
++{
++  static NSHashTable<UITextView *> *views;
++  static dispatch_once_t once;
++  dispatch_once(&once, ^{ views = [NSHashTable weakObjectsHashTable]; });
++  return views;
++}
++
++static ENRMSelectionClearer *ENRMSharedSelectionClearer(void)
++{
++  static ENRMSelectionClearer *clearer;
++  static dispatch_once_t once;
++  dispatch_once(&once, ^{ clearer = [[ENRMSelectionClearer alloc] init]; });
++  return clearer;
++}
++
++@implementation ENRMSelectionClearer
++
++- (void)touched:(UIGestureRecognizer *)recognizer
++{
++  if (recognizer.state != UIGestureRecognizerStateEnded && recognizer.state != UIGestureRecognizerStateBegan)
++    return;
++  UIView *window = recognizer.view;
++  for (UITextView *textView in ENRMSelectableTextViews().allObjects) {
++    if (textView.window != window || textView.selectedRange.length == 0)
++      continue;
++    CGPoint point = [recognizer locationInView:textView];
++    if (CGRectContainsPoint(textView.bounds, point))
++      continue;
++    textView.selectedRange = NSMakeRange(0, 0);
++  }
++}
++
++- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
++    shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)otherGestureRecognizer
++{
++  return YES;
++}
++
++@end
++
++static void ENRMTrackSelectableTextView(UITextView *textView)
++{
++  [ENRMSelectableTextViews() addObject:textView];
++  UIWindow *window = textView.window;
++  static char installedKey;
++  if (!window || objc_getAssociatedObject(window, &installedKey))
++    return;
++  ENRMSelectionClearer *clearer = ENRMSharedSelectionClearer();
++  UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:clearer action:@selector(touched:)];
++  UILongPressGestureRecognizer *press =
++      [[UILongPressGestureRecognizer alloc] initWithTarget:clearer action:@selector(touched:)];
++  for (UIGestureRecognizer *recognizer in @[ tap, press ]) {
++    recognizer.cancelsTouchesInView = NO;
++    recognizer.delaysTouchesBegan = NO;
++    recognizer.delaysTouchesEnded = NO;
++    recognizer.delegate = clearer;
++    [window addGestureRecognizer:recognizer];
++  }
++  objc_setAssociatedObject(window, &installedKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++}
++
+ @implementation ENRMMarkdownTextView {
+   ENRMLinkMenuLift *_pillLift;
+   // The pill whose menu is being presented. It draws nothing for as long as its lifted image
+@@ -28,6 +94,17 @@ - (instancetype)initWithFrame:(CGRect)frame textContainer:(NSTextContainer *)tex
+   return self;
+ }
+ 
++/// A non-editable text view keeps its selection until something inside it is tapped, so a
++/// selection in one message stayed lit (with its handles) while the person tapped or selected
++/// elsewhere. One recognizer per window, which never claims the touch, clears every other view's
++/// selection when a tap or a new long press lands outside it.
++- (void)didMoveToWindow
++{
++  [super didMoveToWindow];
++  if (self.window)
++    ENRMTrackSelectableTextView(self);
++}
++
+ /// New text moves or replaces the pill under its lifted image.
+ - (void)setAttributedText:(NSAttributedString *)attributedText
+ {

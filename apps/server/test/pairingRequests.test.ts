@@ -233,3 +233,24 @@ it('a relayed request from a device the host lets in pairs on its own, never sho
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+it('refuses a relayed request while no other device can reach this host, so no pairing is left that cannot connect', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-pair-unreachable-'))
+  try {
+    const devices = new DeviceStore(join(dir, 'devices.json'))
+    const pairing = new PairingRequests({
+      devices,
+      hostId: 'host-1',
+      accepting: (peer) => peer.startsWith('account:'),
+      addresses: () => [],
+      autoApprove: () => 'owner',
+    })
+    const keys = pairKeys(random)
+    expect(() => pairing.begin('account:phone', { name: 'Phone', commit: pairCommit(keys.publicKey) })).toThrow(
+      /Allow other devices or Ramu Link/,
+    )
+    expect(devices.list()).toEqual([])
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})

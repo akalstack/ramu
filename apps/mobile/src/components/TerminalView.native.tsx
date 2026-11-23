@@ -7,6 +7,7 @@ import { WebView } from 'react-native-webview'
 import { terminalHtml } from '../assets/terminal'
 import type { TerminalViewProps } from './TerminalView'
 import { terminalLinkMessage } from '../runtime/terminalLinkMessage'
+import { terminalCopyMessage } from '../runtime/terminalCopy'
 import { useSay } from '../i18n'
 
 export default function TerminalView({
@@ -21,6 +22,9 @@ export default function TerminalView({
   fontSize,
   onFontSize,
   onLink,
+  captureAction,
+  onCapture,
+  pasteAction,
 }: TerminalViewProps) {
   const say = useSay()
   const [appActive, setAppActive] = useState(AppState.currentState === 'active')
@@ -32,6 +36,7 @@ export default function TerminalView({
   const [ready, setReady] = useState(false)
   const previous = useRef<TerminalOutputState>({ output: '' })
   const consumedKey = useRef<number | undefined>(undefined)
+  const consumedPaste = useRef<number | undefined>(undefined)
   const [gesture, setGesture] = useState<GestureDisplay | null>(null)
   const gestureActive = useRef(false)
   const [size, setSize] = useState({ width: 0, height: 0 })
@@ -72,6 +77,22 @@ export default function TerminalView({
     )
   }, [ready, fontSize])
   useEffect(() => {
+    if (!ready || !captureAction) return
+    const message = JSON.stringify({ kind: 'capture', id: captureAction.sequence })
+    view.current?.injectJavaScript(
+      `window.dispatchEvent(new MessageEvent('message',{data:${JSON.stringify(message)}}));true;`,
+    )
+  }, [ready, captureAction])
+  useEffect(() => {
+    if (!ready || !pasteAction || consumedPaste.current === pasteAction.sequence) return
+    consumedPaste.current = pasteAction.sequence
+    if (!enabled || !appActive) return
+    const message = JSON.stringify({ kind: 'paste', data: pasteAction.text })
+    view.current?.injectJavaScript(
+      `window.dispatchEvent(new MessageEvent('message',{data:${JSON.stringify(message)}}));true;`,
+    )
+  }, [ready, enabled, appActive, pasteAction])
+  useEffect(() => {
     if (!ready || !keyboardAction) return
     if (keyboardAction.visible) view.current?.requestFocus()
     const message = JSON.stringify({ kind: keyboardAction.visible ? 'focus' : 'blur' })
@@ -111,6 +132,8 @@ export default function TerminalView({
               onResize(value.cols, value.rows)
             const link = appActive ? terminalLinkMessage(value) : null
             if (link) onLink?.(link.kind, link.text)
+            const capture = appActive ? terminalCopyMessage(value) : null
+            if (capture) onCapture?.(capture)
           } catch {}
         }}
       />

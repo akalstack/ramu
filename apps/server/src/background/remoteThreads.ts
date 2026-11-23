@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto'
-import { hostname } from 'node:os'
 import { isTransportFailure } from '@ramu/client-runtime'
 import { clipText } from '@ramu/shared/text'
 import type { AgentSettings, StartedThread, ThreadReportOutcome } from '@ramu/shared/types'
 import type { Db } from '../db'
 import type { AgentService } from '../agent'
 import type { AgentHostService } from '../remote/agentHosts'
+import { hostDisplayName } from '../remote/hostName'
 
 /** How long a start waits for its host to come back before it is reported as failed. */
 export const PENDING_MS = 24 * 60 * 60_000
@@ -106,7 +106,7 @@ export class RemoteThreads {
     for (const request of requests) {
       const id = randomUUID()
       const title = request.thread.title?.trim() || clipText(request.thread.prompt.split('\n')[0]!.trim(), 60)
-      const body: RemoteRequest = { ...request, from: { ...from, host: hostname() } }
+      const body: RemoteRequest = { ...request, from: { ...from, host: hostDisplayName() } }
       this.db
         .prepare(
           "INSERT INTO remote_threads (id, host_id, title, source_task_id, source_session_id, state, request, created_at, retry_until) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)",

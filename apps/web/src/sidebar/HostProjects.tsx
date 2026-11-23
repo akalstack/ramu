@@ -22,6 +22,7 @@ import {
 import { NO_PROJECT, type Computer, type Project, type Task } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { useComputers, StatusDot, activityText, statusText } from '../workspace/computers'
+import { useRestartingHosts } from '../workspace/restartingHosts'
 import { rememberHostRows, useHostOverviews } from '../workspace/hostOverview'
 import { HostScope, useWorkspaceOf, useWorkspacesOf } from '../workspace/workspace'
 import { useHostSelection } from '../workspace/HostSelection'
@@ -43,6 +44,7 @@ import { useSidebarExpansion } from './projects/sidebarExpansion'
 import { EMBEDDED_THREAD_LIMIT, ThreadPreviewList, useThreadPreview } from './projects/ThreadPreviewList'
 import { hostRows } from './hostRows'
 import { hasOfflineCopy } from '../workspace/offlineCopy'
+import { PendingThreadsSection } from '../composer/WaitingThreads'
 import { canOpenOffline } from '../workspace/selectionRoute'
 
 /** One host's rows: from its own store once loaded (live, no polling), else from its last known overview. */
@@ -101,6 +103,7 @@ function HostGroup({ computer, current, grouped }: { computer: Computer; current
   const tree = useSidebarExpansion(computer.id)
   const { select } = useHostSelection()
   const addProject = useAddProject(computer.id)
+  const restarting = useRestartingHosts().has(computer.id)
   const open = !grouped || tree.isExpanded('host')
   const available = computer.status === 'connected'
   // Away, but kept here: its threads open from this device's copy, and new ones wait in the outbox.
@@ -130,7 +133,7 @@ function HostGroup({ computer, current, grouped }: { computer: Computer; current
             onClick={() => tree.setExpanded('host', !open)}
           >
             <ChevronDown size={12} className={`flex-none transition-transform ${open ? '' : '-rotate-90'}`} />
-            <span className="inline-flex flex-none items-center" title={activityText(computer)}>
+            <span className="inline-flex flex-none items-center" title={activityText(computer, restarting)}>
               <StatusDot status={computer.status} />
             </span>
             <span className="min-w-0 flex-1 truncate font-medium">{computer.name}</span>
@@ -263,6 +266,8 @@ function OtherHostProjects({ computer, embedded }: { computer: Computer; embedde
             {t('Some host activity could not be loaded.')}
           </p>
         ) : null}
+        {/* Threads started here while this host was away; each starts there once it is back. */}
+        <PendingThreadsSection hostId={computer.id} />
         {section('Pinned', 'section:pinned', pinned, { hidePin: true })}
         {!embedded && (
           <SectionHead

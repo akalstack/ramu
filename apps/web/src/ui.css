@@ -23,6 +23,7 @@
   --color-primary-hover: var(--primary-hover);
   --font-sans: var(--sans);
   --font-mono: var(--mono);
+  --text-micro: var(--font-micro);
   --text-caption: var(--font-caption);
   --text-control: var(--font-control);
   --text-body: var(--font-body);

@@ -16,6 +16,30 @@ describe('RPC result shapes', () => {
     expect(() => checkRpcResult(RPC_RESULTS, 'tasks.list', [])).not.toThrow()
   })
 
+  it('names the field an optional object got wrong, not that it expected nothing', () => {
+    const table: RpcResultShapes = {
+      methods: { 'demo.get': 4 },
+      shapes: [
+        { k: 'string' },
+        { k: 'undefined' },
+        { k: 'object', p: { mode: [0, 0], subagents: [0, 0] } },
+        { k: 'union', of: [1, 2] },
+        { k: 'object', p: { preferences: [3, 1] } },
+      ],
+    }
+    expect(() => checkRpcResult(table, 'demo.get', { preferences: { mode: 'a' } })).toThrow(
+      'result.preferences.subagents: missing',
+    )
+  })
+
+  it('leaves preferences, which hosts and apps of other versions read with defaults, unchecked', () => {
+    const method = RPC_RESULTS.methods['settings.app.snapshot']!
+    const shape = RPC_RESULTS.shapes[method]
+    expect(shape?.k).toBe('object')
+    const preferences = shape?.k === 'object' ? shape.p.preferences : undefined
+    expect(preferences && RPC_RESULTS.shapes[preferences[0]]?.k).toBe('any')
+  })
+
   it('accepts what JSON makes of a value and extra fields a newer host adds, and names the first wrong field', () => {
     const table: RpcResultShapes = {
       methods: { 'demo.get': 6 },

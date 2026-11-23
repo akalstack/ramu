@@ -5,10 +5,13 @@ import { AccountHostConnector } from '@ramu/shared/accountHosts'
 import { translate } from '@ramu/shared/i18n'
 import { accountUser, listedHosts } from '../runtime/account'
 import { useStore } from '../runtime/store'
-import { showToast } from '../runtime/toast'
+import { showError, showToast } from '../runtime/toast'
 
 const ADDED = 'ramu-account-hosts-added'
 let mounted: AccountHostConnector | null = null
+/** A host that lets the account in answers within a few seconds; one still waiting is asking the person there. */
+const ASK_HINT_MS = 4_000
+export const CONNECTING = 'Connecting to {name}… If it asks, allow this phone there when it shows {code}.'
 
 /** Adds the account's hosts now, as after signing in on the Account screen, rather than when the app next comes back. */
 export const connectAccountHosts = () => void mounted?.connect()
@@ -34,10 +37,30 @@ export function AccountHosts() {
       },
     },
     pair: async (host) => {
-      await latest.current.pairThroughAccount(host.name, host.id, () => {}, AbortSignal.timeout(60_000))
-      showToast(
-        translate(latest.current.language, 'Connected to {name} through your Ramu account.', { name: host.name }),
-      )
+      const say = (text: string, values: Record<string, string>) => translate(latest.current.language, text, values)
+      // A host that lets the account in still asks for a phone removed there before; say so only when it is waiting.
+      let asking: ReturnType<typeof setTimeout> | undefined
+      try {
+        await latest.current.pairThroughAccount(
+          host.name,
+          host.id,
+          (code) => {
+            asking = setTimeout(() => showToast(say(CONNECTING, { name: host.name, code })), ASK_HINT_MS)
+          },
+          AbortSignal.timeout(60_000),
+        )
+      } catch (error) {
+        showError(
+          say('Couldn’t connect to {name}: {reason}', {
+            name: host.name,
+            reason: error instanceof Error ? error.message : String(error),
+          }),
+        )
+        throw error
+      } finally {
+        clearTimeout(asking)
+      }
+      showToast(say('Connected to {name} through your Ramu account.', { name: host.name }))
     },
   })
   useEffect(() => {

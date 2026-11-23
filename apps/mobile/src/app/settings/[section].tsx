@@ -4,6 +4,7 @@ import { AccountSettings } from '../../components/AccountSettings'
 import { IdentitySettings } from '../../components/IdentitySettings'
 import { AbilitySummary } from '../../components/AbilitySummary'
 import { HostAddressSheet } from '../../components/HostAddressSheet'
+import { HostNames } from '../../components/HostNames'
 import { hostOfUrl, networkName } from '@ramu/shared/networkLabel'
 import { Alert, Linking, Platform, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -331,6 +332,8 @@ function Computers() {
       {pc ? (
         <>
           <PhonePermissions computerId={pc.id} />
+          <SectionLabel>{say('Names')}</SectionLabel>
+          <HostNames key={`HostNames:${pc.id}`} computer={pc} />
           <SectionLabel>{say('Connection')}</SectionLabel>
           <Card style={{ marginHorizontal: space.l }}>
             <Row style={{ paddingVertical: space.m }} onPress={() => retry(pc.id)}>
@@ -450,7 +453,8 @@ const desktopOnly: Partial<Record<SettingsSection, string>> = {
 
 export default function SettingsSectionPage() {
   const edge = useScrolledUnderBar()
-  const { section: param, target } = useLocalSearchParams<{ section: string; target?: string }>()
+  const { section: param, target, from } = useLocalSearchParams<{ section: string; target?: string; from?: string }>()
+  const router = useRouter()
   const section = sectionById(String(param))
   const { computers, selected, language, mayUse } = useStore()
   const host = useHostSettings(selected)
@@ -485,7 +489,11 @@ export default function SettingsSectionPage() {
         {id === 'notifications' ? <Notifications host={host} name={name} /> : null}
         {id === 'remote' ? <Computers /> : null}
         {id === 'about' ? <About /> : null}
-        {id === 'account' ? <AccountSettings /> : null}
+        {id === 'account' ? (
+          <AccountSettings
+            onConnected={from === 'onboarding' ? () => router.canGoBack() && router.back() : undefined}
+          />
+        ) : null}
         {id === 'providers' ? (
           <ProviderCompatibility key={`ProviderCompatibility:${selected}`} hostId={selected} locked={locked} />
         ) : null}

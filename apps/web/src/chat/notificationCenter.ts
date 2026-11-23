@@ -58,6 +58,8 @@ export const notices = {
 /** How far above the window's bottom edge each open status-bar popover reaches, by popover. */
 const panelReach = new Map<string, number>()
 let reach: number | null = null
+/** The open popovers' names, kept as one string so a snapshot only changes when the set does. */
+let openPanels = ''
 const panelListeners = new Set<() => void>()
 
 /**
@@ -68,22 +70,28 @@ export function setStatusPanelReach(panel: string, fromBottom: number | null) {
   if (fromBottom === null) panelReach.delete(panel)
   else panelReach.set(panel, Math.ceil(fromBottom))
   const next = panelReach.size ? Math.max(...panelReach.values()) : null
-  if (next === reach) return
+  const nextOpen = [...panelReach.keys()].sort().join(' ')
+  if (next === reach && nextOpen === openPanels) return
   reach = next
+  openPanels = nextOpen
   for (const listener of panelListeners) listener()
+}
+
+const subscribePanels = (listener: () => void) => {
+  panelListeners.add(listener)
+  return () => {
+    panelListeners.delete(listener)
+  }
 }
 
 /** Pixels above the window's bottom edge that toasts must keep clear, or `null` when no status popover is open. */
 export function useStatusPanelReach(): number | null {
-  return useSyncExternalStore(
-    (listener) => {
-      panelListeners.add(listener)
-      return () => {
-        panelListeners.delete(listener)
-      }
-    },
-    () => reach,
-  )
+  return useSyncExternalStore(subscribePanels, () => reach)
+}
+
+/** Whether that status-bar popover is open on screen. */
+export function useStatusPanelOpen(panel: string): boolean {
+  return useSyncExternalStore(subscribePanels, () => openPanels.split(' ').includes(panel))
 }
 
 /**
@@ -97,22 +105,27 @@ export function useStatusPanel(panel: string, open: boolean) {
       setStatusPanelReach(panel, null)
       return
     }
+    // The popup zooms and slides in, so its own box starts lower than where it settles; the positioner around it
+    // already sits at the final place.
+    const box = node.parentElement ?? node
     let frame = 0
     const measure = () => {
       cancelAnimationFrame(frame)
       // Positioning lands a frame after mount, so read on the next one.
       frame = requestAnimationFrame(() => {
-        const top = node.getBoundingClientRect().top
+        const top = box.getBoundingClientRect().top
         setStatusPanelReach(panel, top > 0 ? window.innerHeight - top : null)
       })
     }
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(node)
+    node.addEventListener('animationend', measure)
     window.addEventListener('resize', measure)
     return () => {
       cancelAnimationFrame(frame)
       observer.disconnect()
+      node.removeEventListener('animationend', measure)
       window.removeEventListener('resize', measure)
       setStatusPanelReach(panel, null)
     }

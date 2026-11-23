@@ -579,7 +579,7 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
               <FileDiff size={14} />
               {t('Files changed')}
               {!!fileCount.data?.files.length && (
-                <span className="min-w-4 rounded-full bg-fill px-1.5 text-[11px] leading-4 text-muted-foreground tabular-nums">
+                <span className="min-w-4 rounded-full bg-fill px-1.5 text-micro leading-4 text-muted-foreground tabular-nums">
                   {fileCount.data.files.length}
                   {fileCount.data.more ? '+' : ''}
                 </span>
@@ -600,7 +600,7 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
               <section className="flex flex-col gap-1">
                 <h3 className="m-0 text-control font-semibold">{t('Description')}</h3>
                 {/* Descriptions are often HTML (Dependabot's are): rendered sanitized, as the service shows them. */}
-                <PullRequestMarkdown className="text-body">{description.data}</PullRequestMarkdown>
+                <PullRequestMarkdown density="reply">{description.data}</PullRequestMarkdown>
               </section>
             )}
 
@@ -783,7 +783,7 @@ function BranchName({ name }: { name: string }) {
   return (
     <span
       title={name}
-      className="inline-flex min-w-0 max-w-[260px] items-center gap-1 rounded-(--radius-xs) bg-fill px-1.5 font-mono text-[11px] leading-5 text-foreground"
+      className="inline-flex min-w-0 max-w-[260px] items-center gap-1 rounded-(--radius-xs) bg-fill px-1.5 font-mono text-micro leading-5 text-foreground"
     >
       <GitBranch size={10} className="flex-none text-muted-foreground" aria-hidden="true" />
       <span className="truncate">{name}</span>

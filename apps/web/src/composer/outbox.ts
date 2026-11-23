@@ -1,6 +1,7 @@
 // Messages written while this window's computer is unreachable wait here, in this client's localStorage, and are
 // sent in order once it reconnects. They always go out as queued messages, so a late arrival never steers a running turn.
 import { useSyncExternalStore } from 'react'
+import { nextToSendAcross } from '@ramu/shared/outbox'
 import type { Attachment, FileContext } from '@ramu/shared/types'
 import { storeForHost } from '../hostStorage'
 import { ownHostId } from '../hosts'
@@ -73,20 +74,10 @@ export function createOutbox({
 
   /** Sends waiting messages oldest first. A failure holds back the rest of its chat so the order is kept. */
   const drain = async () => {
-    const blocked = new Set<string>()
     for (;;) {
       if (!connected()) return
-      let next: OutboxItem | undefined
-      for (const item of items) {
-        if (blocked.has(item.sessionId)) continue
-        if (item.state === 'waiting') {
-          next = item
-          break
-        }
-        blocked.add(item.sessionId)
-      }
-      if (!next) return
-      const sending = next
+      const sending = nextToSendAcross(items, (item) => item.sessionId)
+      if (!sending) return
       update(sending.id, { state: 'sending', error: undefined })
       try {
         await submit(sending)
@@ -98,7 +89,6 @@ export function createOutbox({
           return
         }
         update(sending.id, { state: 'failed', error: error instanceof Error ? error.message : String(error) })
-        blocked.add(sending.sessionId)
       }
     }
   }

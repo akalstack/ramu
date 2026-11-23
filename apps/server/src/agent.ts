@@ -91,6 +91,9 @@ function helperSettings(
   }
 }
 
+/** How long a branch switch waits for the threads in its checkout before giving up. */
+const WRITERS_WAIT_MS = 30 * 60_000
+
 export class AgentService {
   /** The collaborators that own the service's state; this class wires them together and exposes their public methods. */
   private readonly parts: Collaborators
@@ -108,6 +111,10 @@ export class AgentService {
         followup(sessionId: string): Promise<void>
         complete?(sessionId: string): Promise<void>
         validateFeedback?(reviewId: string): Promise<void>
+        /** Every tool call of a chat or its sub-agents, to tell apart threads writing in one checkout. */
+        observe?(sessionId: string, event: AgentEvent): void
+        /** Holds a command until no other thread's command runs in the checkout this chat shares. */
+        commandTurn?(sessionId: string, toolUseId: string, signal?: AbortSignal): Promise<void>
       }
     | undefined
   toolConnection: ((session: AgentSessionInfo) => McpConnection) | undefined
@@ -170,7 +177,6 @@ export class AgentService {
       get activeTools() {
         return parts.recorder.activeTools
       },
-      activeWriter: (...a) => parts.registry.activeWriter(...a),
       claudeAdvisorModel: (...a) => parts.advisor.claudeAdvisorModel(...a),
       advisorStep: (...a) => parts.advisor.advisorStep(...a),
       get agentCalls() {
@@ -394,6 +400,28 @@ export class AgentService {
     return this.parts.dispatcher.withWorkspaceReservation(covers, action)
   }
 
+  /**
+   * Lets the turns working in these checkouts finish while new ones wait, then runs `action` with the checkouts to
+   * itself: for what rewrites a whole checkout, such as switching its branch.
+   */
+  async whenWritersFinish<T>(covers: string[], action: () => Promise<T>, limitMs = WRITERS_WAIT_MS): Promise<T> {
+    const reservations = this.parts.dispatcher.workspaceReservations
+    if (covers.some((cwd) => reservations.has(cwd))) throw new Error('Wait for the workspace operation to finish')
+    covers.forEach((cwd) => reservations.add(cwd))
+    try {
+      const until = Date.now() + limitMs
+      while (this.activeWriter(covers)) {
+        if (Date.now() > until)
+          throw new Error('The threads in this checkout are still working. Try again when they finish.')
+        await new Promise((resolve) => setTimeout(resolve, 1_000))
+      }
+      return await action()
+    } finally {
+      covers.forEach((cwd) => reservations.delete(cwd))
+      this.parts.dispatcher.wakeWorkspaceQueue()
+    }
+  }
+
   interactivePublished(sessionId: string, reference: import('@ramu/shared/interactive').InteractiveReference): void {
     if (
       this.events(sessionId).some(
@@ -486,6 +514,14 @@ export class AgentService {
 
   recordFileRestore(id: string, userSeq: number, fileCount: number): void {
     this.record(id, { kind: 'file-restore', userSeq, fileCount })
+  }
+
+  recordCheckoutClash(id: string, path: string, taskId: string): void {
+    this.record(id, { kind: 'checkout-clash', path, taskId })
+  }
+
+  recordCommandWait(id: string, taskId: string | null): void {
+    this.record(id, { kind: 'command-wait', taskId })
   }
 
   stopAll(preserveRecovery = false): void {
@@ -789,6 +825,14 @@ export class AgentService {
 
   activeWriter(...args: Parameters<SessionRegistry['activeWriter']>) {
     return this.parts.registry.activeWriter(...args)
+  }
+
+  writing(...args: Parameters<SessionRegistry['writing']>) {
+    return this.parts.registry.writing(...args)
+  }
+
+  rootOf(...args: Parameters<SessionStore['rootOf']>) {
+    return this.parts.store.rootOf(...args)
   }
 
   startReviewed(...args: Parameters<SessionStarter['startReviewed']>) {

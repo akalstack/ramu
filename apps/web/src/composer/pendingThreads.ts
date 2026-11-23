@@ -75,6 +75,13 @@ export function createPendingThreads(store: Store | null) {
     remove(id: string) {
       write(items.filter((item) => item.id !== id))
     },
+    /** Takes a thread back before it starts, for editing. One being started right now can't be recalled. */
+    take(id: string): PendingThread | undefined {
+      const item = items.find((entry) => entry.id === id)
+      if (!item || item.state === 'sending') return undefined
+      write(items.filter((entry) => entry.id !== id))
+      return item
+    },
     /** To another host before it sends; its project there is chosen automatically, as Auto does. */
     move(id: string, hostId: string) {
       write(
@@ -102,9 +109,13 @@ export function pendingThreads() {
   return shared
 }
 
+/** A recalled first message goes back into the message box after whatever is already being written there. */
+export const withRecalled = (draft: string, recalled: string) =>
+  draft.trim() ? `${draft.trimEnd()}\n\n${recalled}` : recalled
+
 export function usePendingThreads(hostId?: string): PendingThread[] {
   const box = pendingThreads()
-  const all = useSyncExternalStore(box.subscribe, box.snapshot)
+  const all = useSyncExternalStore(box.subscribe, box.snapshot, box.snapshot)
   return hostId ? all.filter((item) => item.hostId === hostId) : all
 }
 

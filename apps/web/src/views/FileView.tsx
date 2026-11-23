@@ -492,15 +492,7 @@ function TextFileView({
               mode === 'edit' ? 'overflow-hidden' : 'overflow-auto p-[16px_24px_80px]',
             )}
           >
-            <div
-              className={
-                mode === 'edit'
-                  ? 'h-full min-h-0'
-                  : diagram
-                    ? 'select-text'
-                    : 'markdown-document max-w-[820px] m-[0_auto] select-text'
-              }
-            >
+            <div className={mode === 'edit' ? 'h-full min-h-0' : diagram ? 'select-text' : 'max-w-[820px] m-[0_auto]'}>
               {mode === 'edit' && !loading && editorRef.current?.getModel() ? (
                 <MarkdownEditor
                   model={editorRef.current.getModel()!}

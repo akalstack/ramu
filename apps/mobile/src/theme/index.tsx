@@ -70,8 +70,9 @@ const light: Palette = {
   text: '#111113',
   body: '#27272a',
   soft: '#3f3f46',
-  muted: '#6b6b73',
-  placeholder: '#a1a1a8',
+  // Small grey text stays at 4.5:1 or more on the page, on cards and on the grouped gray rows.
+  muted: '#5b5b63',
+  placeholder: '#8a8a92',
   primary: '#5b40ad',
   primaryInk: '#ffffff',
   accent: '#6a46c8',

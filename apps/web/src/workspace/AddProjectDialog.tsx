@@ -11,8 +11,11 @@ import {
   FolderGit2,
   FolderPlus,
   HardDrive,
+  House,
   Loader2,
   Lock,
+  Monitor,
+  PencilLine,
   X,
 } from 'lucide-react'
 import type { ForgeRepositorySummary } from '@ramu/shared/types'
@@ -22,7 +25,11 @@ import {
   cloneStartFolder,
   folderCrumbs,
   folderName as name,
+  placeLabel,
+  placesFromRoots,
+  typedFolderPath,
   type HostFolderListing,
+  type HostPlace,
 } from '@ramu/shared/workspace/hostFolders'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
@@ -254,16 +261,23 @@ async function cloneUrlOf(host: string, repository: string) {
   )
 }
 
+const PLACE_ICONS = { home: House, computer: Monitor, drive: HardDrive, project: FolderGit2 } as const
+
+/** The host's places, or its browse roots when it is too old to list places. */
+const placesOf = (host: string) =>
+  invokerFor(host)('folders.places').catch(() => invokerFor(host)('folders.roots').then(placesFromRoots))
+
 /**
- * Browses folders on the host the project is added to, since a native picker would open on this machine instead: a
- * path to step back along, Git repositories marked, a new folder named in place, or a repository cloned here. Choosing
+ * Browses folders on the host the project is added to, since a native picker would open on this machine instead: its
+ * home, root, drives and project folders to start from, a path to step back along or type, Git repositories marked, a
+ * new folder named in place, or a repository cloned here. Choosing
  * where a new project goes uses the same browser, opened where it goes now, without the clone. A repository asked for
  * by name (a pull request's) opens where the host's projects sit and clones straight into the folder chosen.
  */
 function HostFolderDialog() {
   useLanguage()
   const [request, setRequest] = useState<FolderPick | null>(null)
-  const [roots, setRoots] = useState<string[] | null>(null)
+  const [places, setPlaces] = useState<HostPlace[] | null>(null)
   const [listing, setListing] = useState<HostFolderListing | null>(null)
   const [error, setError] = useState('')
   const [searching, setSearching] = useState(false)
@@ -271,6 +285,8 @@ function HostFolderDialog() {
   const [opening, setOpening] = useState<string | null>(null)
   // The new folder's name while its row is open; null while it is closed.
   const [naming, setNaming] = useState<string | null>(null)
+  // A path being typed in place of the crumbs; null while they show.
+  const [typing, setTyping] = useState<string | null>(null)
   const cloneRun = useClone(request?.host ?? ownHostId())
   const browsing = useRef(0)
   const browse = (path: string, host = request?.host) => {
@@ -283,6 +299,7 @@ function HostFolderDialog() {
         if (mine !== browsing.current) return
         setListing(next)
         setNaming(null)
+        setTyping(null)
       })
       .catch((e) => mine === browsing.current && setError(errorText(e)))
       .finally(() => mine === browsing.current && setOpening(null))
@@ -292,22 +309,26 @@ function HostFolderDialog() {
       onFolderPick((next) => {
         browsing.current++
         setRequest(next)
-        setRoots(null)
+        setPlaces(null)
         setListing(null)
         setOpening(null)
         setSearching(false)
         setNaming(null)
+        setTyping(null)
         setError('')
         const start = next.purpose === 'parent' ? next.start : undefined
         // The folders are on the host the project is added to, which may not be the one on screen.
-        invokerFor(next.host)('folders.roots')
+        placesOf(next.host)
           .then((found) => {
-            setRoots(found)
-            // A folder that is gone or outside the roots falls back to the host's starting places.
+            setPlaces(found)
+            const usual = found.filter((place) => place.kind === 'home' || place.kind === 'project')
+            // A folder that is gone or outside the browse roots falls back to the host's places.
             const first =
               start ??
-              (next.purpose !== 'parent' && next.clone ? cloneStartFolder(found) : undefined) ??
-              (found.length === 1 ? found[0] : undefined)
+              (next.purpose !== 'parent' && next.clone
+                ? cloneStartFolder(usual.map((place) => place.path))
+                : undefined) ??
+              (found.length === 1 ? found[0]?.path : undefined)
             if (first) void browse(first, next.host)
           })
           .catch((e) => setError(errorText(e)))
@@ -328,7 +349,11 @@ function HostFolderDialog() {
       .then((path) => browse(path))
       .catch((e) => setError(errorText(e)))
   }
-  const crumbs = listing ? folderCrumbs(listing.path, roots ?? []) : []
+  const crumbs = listing ? folderCrumbs(listing.path, places?.map((place) => place.path) ?? []) : []
+  const goTo = () => {
+    const path = typedFolderPath(typing ?? '')
+    if (path) void browse(path)
+  }
   const parent = request.purpose === 'parent'
   const repository = request.purpose !== 'parent' ? request.clone : undefined
   const cloneName = repository ? cloneFolderName(repository) : ''
@@ -344,6 +369,8 @@ function HostFolderDialog() {
       setError(errorText(reason))
     }
   }
+  // A filesystem root or system folder can be browsed through, and a new project can go in it, but it is no project.
+  const refused = !parent && !repository && !!listing?.system
   const confirmLabel = parent
     ? t('Put it here')
     : repository
@@ -367,7 +394,7 @@ function HostFolderDialog() {
             : t('Choose a folder on the host')
       }
       confirmLabel={confirmLabel}
-      confirmDisabled={!listing || searching || busy || !!opening}
+      confirmDisabled={!listing || searching || busy || !!opening || refused}
       footerLeading={
         listing && !searching && !busy ? (
           <div className="mr-auto flex gap-1">
@@ -419,55 +446,103 @@ function HostFolderDialog() {
             </div>
           </div>
         )}
-        {/* Where you are, one click per step back up; Locations returns to the host's starting places. */}
-        <nav aria-label={t('Folder path')} className="mb-2 flex min-w-0 flex-wrap items-center gap-0.5 text-caption">
-          {(roots?.length ?? 0) > 1 || !listing ? (
-            <>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-1.5 text-muted-foreground"
-                aria-current={listing ? undefined : 'page'}
-                disabled={busy}
-                onClick={() => {
-                  browsing.current++
-                  setOpening(null)
-                  setListing(null)
-                }}
-              >
-                <HardDrive size={12} /> {t('Locations')}
-              </Button>
-              {listing && <ChevronRight size={12} className="flex-none text-muted-foreground opacity-60" />}
-            </>
-          ) : null}
-          {crumbs.map((crumb, index) => {
-            const last = index === crumbs.length - 1
-            return (
-              <span key={crumb.path} className="flex min-w-0 items-center gap-0.5">
-                {index > 0 && <ChevronRight size={12} className="flex-none text-muted-foreground opacity-60" />}
+        {/* Where you are, one click per step back up, or the whole path typed; Locations returns to the host's places. */}
+        {typing !== null ? (
+          <form
+            className="mb-2 flex items-center gap-1.5"
+            onSubmit={(event) => {
+              event.preventDefault()
+              goTo()
+            }}
+          >
+            <Input
+              autoFocus
+              value={typing}
+              placeholder={t('Folder path on the host, like ~/code or /Volumes/Drive')}
+              aria-label={t('Folder path')}
+              autoCapitalize="none"
+              spellCheck={false}
+              onChange={(event) => setTyping(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  event.stopPropagation()
+                  setTyping(null)
+                }
+              }}
+            />
+            <Button type="submit" variant="secondary" size="sm" disabled={!typedFolderPath(typing) || !!opening}>
+              {t('Go')}
+            </Button>
+            <Button type="button" variant="ghost" size="sm" aria-label={t('Cancel')} onClick={() => setTyping(null)}>
+              <X size={14} />
+            </Button>
+          </form>
+        ) : (
+          <nav aria-label={t('Folder path')} className="mb-2 flex min-w-0 flex-wrap items-center gap-0.5 text-caption">
+            {(places?.length ?? 0) > 1 || !listing ? (
+              <>
                 <Button
                   variant="ghost"
                   size="sm"
-                  title={crumb.path}
-                  aria-current={last ? 'page' : undefined}
+                  className="h-6 px-1.5 text-muted-foreground"
+                  aria-current={listing ? undefined : 'page'}
                   disabled={busy}
-                  className={`h-6 max-w-[180px] px-1.5 ${last ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}
-                  onClick={() => !last && void browse(crumb.path)}
+                  onClick={() => {
+                    browsing.current++
+                    setOpening(null)
+                    setListing(null)
+                  }}
                 >
-                  <span className="truncate">{crumb.name}</span>
+                  <HardDrive size={12} /> {t('Locations')}
                 </Button>
-              </span>
-            )
-          })}
-        </nav>
+                {listing && <ChevronRight size={12} className="flex-none text-muted-foreground opacity-60" />}
+              </>
+            ) : null}
+            {crumbs.map((crumb, index) => {
+              const last = index === crumbs.length - 1
+              return (
+                <span key={crumb.path} className="flex min-w-0 items-center gap-0.5">
+                  {index > 0 && <ChevronRight size={12} className="flex-none text-muted-foreground opacity-60" />}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    title={crumb.path}
+                    aria-current={last ? 'page' : undefined}
+                    disabled={busy}
+                    className={`h-6 max-w-[180px] px-1.5 ${last ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}
+                    onClick={() => !last && void browse(crumb.path)}
+                  >
+                    <span className="truncate">{crumb.name}</span>
+                  </Button>
+                </span>
+              )
+            })}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto h-6 px-1.5 text-muted-foreground"
+              title={t('Type a path')}
+              aria-label={t('Type a path')}
+              disabled={busy || !places}
+              onClick={() => setTyping(listing?.path ?? '')}
+            >
+              <PencilLine size={12} />
+            </Button>
+          </nav>
+        )}
         {error && (
           <p role="alert" className="m-[0_0_8px] text-caption text-bad">
             {error}
           </p>
         )}
+        {refused && (
+          <p className="m-[0_0_8px] text-caption text-muted-foreground">
+            {t('This is a system folder. Open a folder inside it to add as a project.')}
+          </p>
+        )}
         <div
           className="flex flex-col gap-0.5 max-h-[min(50vh,420px)] overflow-y-auto overscroll-contain"
-          aria-busy={!!opening || !roots}
+          aria-busy={!!opening || !places}
         >
           {naming !== null && listing && (
             <form
@@ -506,7 +581,7 @@ function HostFolderDialog() {
               </Button>
             </form>
           )}
-          {!roots && !error && (
+          {!places && !error && (
             <p className="m-0 flex items-center gap-2 p-[2px_6px] text-caption text-muted-foreground">
               <Loader2 size={13} className="animate-spin" /> {t('Loading folders…')}
             </p>
@@ -530,15 +605,28 @@ function HostFolderDialog() {
                   {rowStatus(folder.path)}
                 </RowButton>
               ))
-            : roots?.map((root) => (
-                <RowButton key={root} size="sm" title={root} disabled={busy} onClick={() => void browse(root)}>
-                  <HardDrive size={15} className="flex-none text-muted-foreground" />
-                  <span className="overflow-hidden text-ellipsis whitespace-nowrap">{name(root)}</span>
-                  {rowStatus(root) ?? (
-                    <span className="ml-auto truncate text-caption text-muted-foreground">{root}</span>
-                  )}
-                </RowButton>
-              ))}
+            : places?.map((place, index) => {
+                const Icon = PLACE_ICONS[place.kind]
+                const firstProject = place.kind === 'project' && places[index - 1]?.kind !== 'project'
+                return (
+                  <div key={place.path} className="flex flex-col">
+                    {firstProject && (
+                      <p className="m-[8px_0_2px] p-[0_6px] text-caption font-semibold text-muted-foreground">
+                        {t('Projects')}
+                      </p>
+                    )}
+                    <RowButton size="sm" title={place.path} disabled={busy} onClick={() => void browse(place.path)}>
+                      <Icon size={15} className="flex-none text-muted-foreground" />
+                      <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+                        {placeLabel(place, (text) => t(text))}
+                      </span>
+                      {rowStatus(place.path) ?? (
+                        <span className="ml-auto truncate text-caption text-muted-foreground">{place.path}</span>
+                      )}
+                    </RowButton>
+                  </div>
+                )
+              })}
           {listing && !listing.folders.length && (
             <p className="muted text-muted-foreground small text-caption m-0 p-[2px_6px]">{t('No folders here')}</p>
           )}

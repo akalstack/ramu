@@ -7,6 +7,9 @@ import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
 import type { RpcShape } from '../src/rpcResults'
 
+/** Types a host and a client of different versions are expected to disagree on, by design. */
+const SKEWED_TYPES = ['AppPreferences', 'ModelPreferences']
+
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 export const RESULTS_FILE = join(root, 'src', 'rpcResults.generated.ts')
 
@@ -74,6 +77,9 @@ export function rpcResultShapes(): { methods: Record<string, number>; shapes: Rp
       const name = type.getSymbol()?.getName()
       // Values JSON cannot carry exactly, and functions, are not checked.
       if (name && ['Date', 'Map', 'Set', 'Promise', 'Buffer', 'Uint8Array', 'ArrayBuffer'].includes(name)) return any
+      // Preferences gain fields every release and are read through the settings compatibility layer, which fills
+      // what an older or newer host leaves out; checking them strictly would close Settings over one new field.
+      if (name && SKEWED_TYPES.includes(name)) return any
       if (type.getCallSignatures().length) return any
       return objectShape(type, depth)
     }

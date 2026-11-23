@@ -30,7 +30,7 @@ export function InboxTabsList({ tabs }: { tabs: { id: InboxTab; label: string; c
         <TabsTrigger key={entry.id} value={entry.id} className="flex-none gap-1.5 px-0.5 text-control">
           {entry.label}
           {entry.count > 0 && (
-            <span className="min-w-4 rounded-full bg-fill px-1.5 text-[11px] leading-4 text-muted-foreground tabular-nums">
+            <span className="min-w-4 rounded-full bg-fill px-1.5 text-micro leading-4 text-muted-foreground tabular-nums">
               {entry.count}
             </span>
           )}

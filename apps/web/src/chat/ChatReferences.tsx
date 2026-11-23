@@ -1,7 +1,7 @@
 import { createContext, useContext, type ReactNode } from 'react'
-import Markdown, { defaultUrlTransform, type Components } from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { defaultUrlTransform, type Components } from 'react-markdown'
 import { chatMarkdownComponents } from './ChatMarkdown'
+import { MarkdownText } from './MarkdownText'
 import { ReferenceChipView } from './ReferenceChipView'
 import { draftChip, fileChip, skillChip } from '@ramu/shared/chat/referenceChip'
 import { parseThreadReference, SKILL_REFERENCE_PREFIX } from '@ramu/shared/chat/chatReferences'
@@ -89,7 +89,7 @@ const CHIP_LINK = 'ramu-chip:'
  * A sent message as Markdown, with its references still chips. Each chip goes through Markdown as a link to its place in
  * the message, so a reference inside a list or heading lands where it was written.
  */
-export function ReferenceText({ text, taskId }: { text: string; taskId?: string }) {
+export function ReferenceText({ text, taskId, className }: { text: string; taskId?: string; className?: string }) {
   const segments = composerDraft(text + ' ', useContext(ChatMentions)).segments
   const source = segments
     .map((part, index) => (part.kind === 'text' ? part.source : `[chip](${CHIP_LINK}${index})`))
@@ -117,12 +117,12 @@ export function ReferenceText({ text, taskId }: { text: string; taskId?: string 
     },
   }
   return (
-    <Markdown
-      remarkPlugins={[remarkGfm]}
+    <MarkdownText
+      className={className}
       components={components}
       urlTransform={(url) => (url.startsWith(CHIP_LINK) ? url : defaultUrlTransform(url))}
     >
       {source}
-    </Markdown>
+    </MarkdownText>
   )
 }

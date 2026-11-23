@@ -15,6 +15,17 @@ export interface ChangeFile {
   newSize?: number
   addedLines?: number
   removedLines?: number
+  /** Threads (by task id) that also changed this file during the turn, in the checkout they shared. */
+  sharedWith?: string[]
+  /** The person also saved this file in Ramu's editor during the turn, so undo leaves it to them. */
+  editedByYou?: true
+}
+/** Files that changed in a shared checkout during a turn but were written by another thread (`taskId`), or by no one Ramu could tell (`null`). */
+export interface ChangeElsewhere {
+  taskId: string | null
+  /** Saved by the person in Ramu's editor. */
+  byYou?: true
+  files: ChangeFile[]
 }
 /** Branch context for a saved run; the diff itself remains a before/after snapshot. */
 export interface ReviewBranchState {
@@ -77,6 +88,8 @@ export interface ChangeReview {
   reviewedAt?: number | null
   undoneAt?: number | null
   undoFileIds?: string[]
+  /** Changes in the shared checkout during this turn that this thread did not write; never undone or committed with it. */
+  elsewhere?: ChangeElsewhere[]
 }
 export interface UndoFile {
   fileId: string

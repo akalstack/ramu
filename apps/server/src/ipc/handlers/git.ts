@@ -353,12 +353,22 @@ export const registerGitHandlers: RegisterHandlers = (ctx) => {
       run: (t: string, r: string) => gitExclusive(ctx, t, r, (cwd) => git.abortOperation(cwd)),
     },
     'git.checkout': {
-      args: z.tuple([id, id, branchName]),
-      run: (t: string, r: string, branch: string) =>
-        gitExclusive(ctx, t, r, async (cwd) => {
-          assertNoActiveWriter(ctx, cwd, 'Stop the agent in this checkout before switching branches.')
-          return git.checkout(cwd, branch)
-        }),
+      args: z.tuple([id, id, branchName, z.object({ whenIdle: z.boolean().optional() }).strict().optional()]),
+      run: async (t: string, r: string, branch: string, options?: { whenIdle?: boolean }) => {
+        const switchBranch = () =>
+          gitExclusive(ctx, t, r, async (cwd) => {
+            assertNoActiveWriter(ctx, cwd, 'Stop the agent in this checkout before switching branches.')
+            return git.checkout(cwd, branch)
+          })
+        const cwd = gitCwdOf(t, r)
+        return options?.whenIdle && agents.activeWriter([cwd])
+          ? agents.whenWritersFinish([cwd], switchBranch)
+          : switchBranch()
+      },
+    },
+    'git.otherThreadPaths': {
+      args: z.tuple([id, id]),
+      run: (t: string, r: string) => ctx.reviews.otherThreadPaths(t, gitCwdOf(t, r)),
     },
   }
 }

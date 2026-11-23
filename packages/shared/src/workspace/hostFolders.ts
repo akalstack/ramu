@@ -13,7 +13,105 @@ export interface HostFolderListing {
   parent: string | null
   /** The listed folder is itself a Git repository. */
   repo?: boolean
+  /** A filesystem root or an operating-system folder, which the host refuses as a project. */
+  system?: boolean
   folders: HostFolder[]
+}
+
+/**
+ * A place the folder picker starts from, listed by the host: its home folder, the computer's root, each mounted drive
+ * and the folders of its projects. `name` is the host's own name for it (a volume's label, a project folder's name).
+ */
+export interface HostPlace {
+  kind: 'home' | 'computer' | 'drive' | 'project'
+  name: string
+  path: string
+}
+
+/** What the picker calls a place: the home folder by its role, the root by the boot volume's name when it has one. */
+export function placeLabel(place: HostPlace, say: (text: string) => string): string {
+  if (place.kind === 'home') return say('Home folder')
+  if (place.kind === 'computer' && /^[\\/]$/.test(place.name)) return say('Computer')
+  return place.name
+}
+
+/** The places of a host too old to list them: its browse roots, the first of which is its home folder. */
+export function placesFromRoots(roots: readonly string[]): HostPlace[] {
+  return roots.map((path, index) => ({ kind: index ? 'project' : 'home', name: folderName(path), path }))
+}
+
+/**
+ * A folder path as typed or pasted into the picker: spaces around it and the quotes a copied path often carries are
+ * dropped. Empty when nothing is left. The host resolves `~` and decides whether the folder exists.
+ */
+export function typedFolderPath(text: string): string {
+  const trimmed = text.trim()
+  const quoted = /^(["'])(.*)\1$/.exec(trimmed)
+  return (quoted ? quoted[2]! : trimmed).trim()
+}
+
+const trimSeparators = (path: string) => path.replace(/(?<=[^\\/:])[\\/]+$/, '')
+const SYSTEM_FOLDERS: Record<'darwin' | 'linux' | 'win32', readonly string[]> = {
+  darwin: [
+    '/Applications',
+    '/Library',
+    '/System',
+    '/Users',
+    '/Volumes',
+    '/bin',
+    '/cores',
+    '/dev',
+    '/etc',
+    '/opt',
+    '/private',
+    '/private/etc',
+    '/private/tmp',
+    '/private/var',
+    '/sbin',
+    '/tmp',
+    '/usr',
+    '/var',
+  ],
+  linux: [
+    '/bin',
+    '/boot',
+    '/dev',
+    '/etc',
+    '/home',
+    '/lib',
+    '/lib32',
+    '/lib64',
+    '/media',
+    '/mnt',
+    '/opt',
+    '/proc',
+    '/run',
+    '/run/media',
+    '/sbin',
+    '/srv',
+    '/sys',
+    '/tmp',
+    '/usr',
+    '/var',
+  ],
+  win32: ['\\Windows', '\\Program Files', '\\Program Files (x86)', '\\ProgramData', '\\Users'],
+}
+
+/**
+ * A folder an agent must never treat as a project: a filesystem or drive root, or an operating-system folder that
+ * holds other people's or the system's files. Folders inside them (a checkout under `/opt/src`) are fine.
+ */
+export function isSystemFolder(path: string, platform: string): boolean {
+  const target = trimSeparators(path)
+  if (/^([\\/]|[A-Za-z]:[\\/]?)$/.test(target)) return true
+  const caseless = platform === 'darwin' || platform === 'win32'
+  const same = (a: string, b: string) => (caseless ? a.toLowerCase() === b.toLowerCase() : a === b)
+  const list = platform === 'darwin' || platform === 'win32' ? SYSTEM_FOLDERS[platform] : SYSTEM_FOLDERS.linux
+  if (platform === 'win32') {
+    const rest = target.replace(/^[A-Za-z]:/, '').replaceAll('/', '\\')
+    return list.some((folder) => same(rest, folder))
+  }
+  return list.some((folder) => same(target, folder))
 }
 
 export interface FolderCrumb {

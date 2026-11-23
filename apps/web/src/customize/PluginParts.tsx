@@ -86,7 +86,7 @@ export function PluginParts({ contents }: { contents: PluginContents }) {
             items={contents.mcpServers}
             render={(server) => (
               <code
-                className="block truncate font-mono text-[11px]"
+                className="block truncate font-mono text-micro"
                 title={server.type === 'stdio' ? [server.command, ...server.args].join(' ') : server.url}
               >
                 {server.type === 'stdio' ? [server.command, ...server.args].join(' ') : server.url}
@@ -110,7 +110,7 @@ export function PluginParts({ contents }: { contents: PluginContents }) {
                 {contents.cli.reads.map((read) => (
                   <code
                     key={read}
-                    className="rounded-(--radius-xs) bg-fill px-1.5 py-0.5 font-mono text-[11px] text-soft"
+                    className="rounded-(--radius-xs) bg-fill px-1.5 py-0.5 font-mono text-micro text-soft"
                   >
                     {read}
                   </code>

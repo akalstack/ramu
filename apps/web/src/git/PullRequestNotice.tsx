@@ -141,7 +141,7 @@ export function PullRequestNotice({
 /** A failure's own words, kept for whoever needs them but quieter than the explanation above it. */
 export function RawError({ children }: { children: string }) {
   return (
-    <code className="block max-h-24 overflow-auto rounded-(--radius-xs) bg-fill px-1.5 py-1 font-mono text-[11px] leading-4 whitespace-pre-wrap text-muted-foreground [overflow-wrap:anywhere]">
+    <code className="block max-h-24 overflow-auto rounded-(--radius-xs) bg-fill px-1.5 py-1 font-mono text-micro leading-4 whitespace-pre-wrap text-muted-foreground [overflow-wrap:anywhere]">
       {children}
     </code>
   )

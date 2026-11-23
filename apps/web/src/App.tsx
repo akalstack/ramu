@@ -1,4 +1,5 @@
 import { ResourcesStatus } from './chat/ResourcesStatus'
+import { SwitchBranchDialog, switchBranch } from './git/SwitchBranchDialog'
 import { FinishThreadDialog } from './chat/FinishThreadDialog'
 import { receivePluginLink } from './settings/pluginLinks'
 import { PendingThreadDelivery } from './composer/WaitingThreads'
@@ -927,6 +928,7 @@ function Shell() {
         <SummaryHost />
         <CommitBranchDialog />
         <ProtectedSyncDialog />
+        <SwitchBranchDialog />
         <FinishThreadDialog />
         <CommitDialog />
         <CreatePullRequestHost />
@@ -1231,7 +1233,7 @@ function StatusBar({ usage }: { usage?: ReactNode }) {
             void openPublishRepository(taskId, repository.repoId, repository.repoName)
           }
           onBranchChange={(repository, branch) =>
-            void run(() => invoke('git.checkout', taskId, repository.repoId, branch), true, repository)
+            void run(() => switchBranch(invoke, taskId, repository.repoId, branch), true, repository)
           }
         />
       ) : (
@@ -1247,7 +1249,7 @@ function StatusBar({ usage }: { usage?: ReactNode }) {
             branches={branches}
             busy={busy || !ready}
             className="status-branch"
-            onChange={(branch) => void run(() => invoke('git.checkout', taskId, binding.repoId, branch), true)}
+            onChange={(branch) => void run(() => switchBranch(invoke, taskId, binding.repoId, branch), true)}
           />
           <SyncButton
             status={status}

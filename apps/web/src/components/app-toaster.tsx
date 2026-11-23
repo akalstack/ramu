@@ -1,6 +1,6 @@
 import { CircleCheck, Info, OctagonX, TriangleAlert } from 'lucide-react'
 import { Spinner } from '@/components/ui/spinner'
-import type { ReactNode } from 'react'
+import { useLayoutEffect, type ReactNode } from 'react'
 import { cn } from 'cn'
 import { Button } from './desktop-button'
 import {
@@ -36,8 +36,22 @@ const TYPE_ICON: Record<string, ReactNode> = {
   loading: <Spinner />,
 }
 
-function AppToastList({ closeLabel }: { closeLabel: string }) {
-  const { toasts } = useToastManager()
+/** The toasts an open panel already lists, to close; one still in progress (an update installing) stays. */
+export function listedToasts(
+  toasts: readonly { id: string; type?: string; transitionStatus?: 'starting' | 'ending' }[],
+  listed: ReadonlySet<string>,
+): string[] {
+  return toasts
+    .filter((item) => listed.has(item.id) && item.type !== 'loading' && item.transitionStatus !== 'ending')
+    .map((item) => item.id)
+}
+
+function AppToastList({ closeLabel, listed }: { closeLabel: string; listed: ReadonlySet<string> }) {
+  const { toasts, close } = useToastManager()
+  // Before paint, so a listed toast never lands on the panel that shows it.
+  useLayoutEffect(() => {
+    for (const id of listedToasts(toasts, listed)) close(id)
+  }, [toasts, listed, close])
   return toasts.map((item) => {
     const data = item.data as AppToastData | undefined
     const icon = data?.icon ?? (item.type ? TYPE_ICON[item.type] : null)
@@ -75,11 +89,14 @@ export function AppToaster({
   label,
   closeLabel,
   clearBottom,
+  listed,
 }: {
   label: string
   closeLabel: string
   /** Pixels above the bottom edge an open status-bar popover covers; toasts stack above it so neither hides the other. */
   clearBottom: number | null
+  /** Toast ids an open panel already lists; they close rather than show the same item twice. */
+  listed: ReadonlySet<string>
 }) {
   const bottom = clearBottom === null ? 36 : clearBottom + 8
   return (
@@ -92,7 +109,7 @@ export function AppToaster({
           )}
           style={{ bottom }}
         >
-          <AppToastList closeLabel={closeLabel} />
+          <AppToastList closeLabel={closeLabel} listed={listed} />
         </ToastViewport>
       </ToastPortal>
     </ToastProvider>

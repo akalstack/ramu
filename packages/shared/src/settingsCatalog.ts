@@ -181,7 +181,7 @@ export const SETTINGS_CATALOG: SettingsCatalogEntry[] = [
           section: 'about' as const,
           title: 'Auto-update Ramu',
           path: 'appAutoUpdate',
-          help: 'Download updates automatically, then restart when ready. Threads keep running.',
+          help: 'Download updates automatically, then restart on its own once nothing is running and you step away. Threads keep running.',
           words: 'app update github release download restart background service version',
         },
       ]
@@ -298,7 +298,8 @@ export const SETTINGS_CATALOG: SettingsCatalogEntry[] = [
     title: 'Suggest next message',
     path: 'suggestNextMessage',
     help: 'After a turn, show a likely next message in the empty message box. Tab uses it. Each one is a small extra request on your plan, made only for a thread you have open.',
-    words: 'predict prediction next prompt autocomplete ghost tab suggestion follow up',
+    words:
+      'predict prediction next prompt autocomplete ghost tab suggestion suggestions recommendation chips follow up',
   },
   {
     section: 'system',

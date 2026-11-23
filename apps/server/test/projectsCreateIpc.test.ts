@@ -63,7 +63,7 @@ it('accepts only a folder name and a known stack', () => {
   expect(parse({ name: 'shop', extra: true })).toBe(false)
 })
 
-it('creates the project in a chosen parent, but only inside the host browse roots', async () => {
+it('creates the project in any chosen parent the host can write, unless browse roots hold it', async () => {
   mkdirSync(join(home, 'clients'))
   const made = await create({ name: 'shop', parent: join(home, 'clients') })
   expect(made.path).toBe(join(home, 'clients', 'shop'))
@@ -71,8 +71,11 @@ it('creates the project in a chosen parent, but only inside the host browse root
   expect(await methods['projects.defaultParent']!.run()).toBe(join(home, 'clients'))
   const elsewhere = realpathSync(mkdtempSync(join(tmpdir(), 'ramu-elsewhere-')))
   try {
-    await expect(create({ name: 'shop', parent: elsewhere })).rejects.toThrow(/outside the host browse roots/)
+    expect((await create({ name: 'drive-app', parent: elsewhere })).path).toBe(join(elsewhere, 'drive-app'))
+    process.env.RAMU_BROWSE_ROOTS = home
+    await expect(create({ name: 'shop2', parent: elsewhere })).rejects.toThrow(/outside the host browse roots/)
   } finally {
+    delete process.env.RAMU_BROWSE_ROOTS
     rmSync(elsewhere, { recursive: true, force: true })
   }
 })

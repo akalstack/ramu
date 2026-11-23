@@ -218,8 +218,9 @@ export class ComputerRegistry {
   }
 
   /** The local computer's connection, which the app itself already holds. */
-  setLocalStatus(connected: boolean) {
-    this.local.status = connected ? 'connected' : 'offline'
+  /** A service the app is restarting on purpose reads as connecting, not offline, until it is back. */
+  setLocalStatus(connected: boolean, restarting = false) {
+    this.local.status = connected ? 'connected' : restarting ? 'connecting' : 'offline'
     if (connected) this.countSoon(LOCAL)
     else {
       this.clearCount(LOCAL)

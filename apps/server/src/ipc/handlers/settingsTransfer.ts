@@ -1,4 +1,3 @@
-import { hostname } from 'node:os'
 import { z } from 'zod'
 import { accountKindOf, normalizeIdentities, type IdentitySettings } from '@ramu/shared/identities'
 import {
@@ -15,6 +14,7 @@ import { TOOL_KINDS } from '@ramu/shared/toolSync'
 import { portableTools, receiveTools, toolsHere } from '../../toolSync'
 import { identityAccounts } from './identities'
 import type { HandlerContext, RegisterHandlers } from '../types'
+import { hostDisplayName } from '../../remote/hostName'
 
 const groups = z.array(z.enum(TRANSFER_GROUP_IDS as [TransferGroup, ...TransferGroup[]])).max(TRANSFER_GROUP_IDS.length)
 
@@ -42,7 +42,7 @@ export async function exportSettings(ctx: TransferSources, chosen: TransferGroup
     format: 'ramu-settings',
     version: 2,
     exportedAt: Date.now(),
-    host: hostname(),
+    host: hostDisplayName(),
     groups: chosen,
     preferences: portablePreferences(ctx.loadPreferences(), chosen),
   }

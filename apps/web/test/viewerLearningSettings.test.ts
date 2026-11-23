@@ -54,6 +54,7 @@ vi.mock('../src/settings/cards', () => ({
 vi.mock('../src/SearchInput', () => ({ SearchInput: 'SearchInput' }))
 vi.mock('../src/models/ModelSets', () => ({ useModelSets: () => ({}) }))
 vi.mock('../src/summaries/libraryFocus', () => ({ takeLibraryFocus: () => null }))
+vi.mock('../src/chat/MarkdownText', () => ({ MarkdownText: 'MarkdownText' }))
 vi.mock('../src/chat/Notifications', () => ({ notifyError: state.notify }))
 vi.mock('../src/i18n', () => ({ t: (text: string) => text }))
 vi.mock('../src/Menu', () => ({ Dropdown: 'Dropdown' }))

@@ -11,6 +11,7 @@ import { useHostRuntime, useWorkspace } from '../workspace/workspace'
 import { enterReviewFile } from '../git/ReviewDiff'
 import { useReviews, openReview } from '../git/reviews'
 import { DeferredReviewFile } from './DeferredReviewFile'
+import { ElsewhereChanges } from './ElsewhereChanges'
 import { LargeDiffBanner } from './LargeDiffBanner'
 import { isLargeDiff } from '@ramu/shared/largeDiff'
 import { ReviewBranchContext } from './ReviewBranchContext'
@@ -323,6 +324,13 @@ export function ChangeReviewTab({
                   </DeferredReviewFile>
                 ))}
               </div>
+              {review.elsewhere?.length ? (
+                <ElsewhereChanges
+                  groups={review.elsewhere}
+                  busy={busy}
+                  onClaim={(fileIds) => void act(() => invoke('reviews.claimElsewhere', review.id, fileIds))}
+                />
+              ) : null}
             </div>
           </div>
         </>

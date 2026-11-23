@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import Markdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import { BookmarkCheck } from 'lucide-react'
 import { checkpointMarkdown } from '@ramu/shared/chat/checkpointMarkdown'
-import { chatMarkdownComponents } from './ChatMarkdown'
+import { MarkdownText } from './MarkdownText'
 import { Button } from '@/components/desktop-button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ipcQueryKeyOn } from '../dataQueries'
@@ -14,7 +12,7 @@ import { useHost } from '../workspace/HostProvider'
 import { useHostRuntime } from '../workspace/workspace'
 import { t, useLanguage, formatLocale } from '../i18n'
 import { CopyButton } from '../views/agent/components/CopyButton'
-import { GHOST_TEXT_BUTTON_CLASS, MSG_CLASS } from '../views/agent/styles'
+import { GHOST_TEXT_BUTTON_CLASS } from '../views/agent/styles'
 
 /** "5 minutes ago", falling back to the date once it is more than a week old. */
 function savedAgo(at: number): string {
@@ -84,13 +82,9 @@ export function SessionCheckpointButton({ sessionId }: { sessionId: string }) {
               {t('This thread only. Newer messages and current files take priority over this summary.')}
             </DialogDescription>
           </DialogHeader>
-          <div
-            className={`${MSG_CLASS} assistant min-h-0 flex-1 overflow-auto px-5 py-4 text-control [&_h2]:mb-1.5 [&_h2]:mt-5 [&_h2]:text-control [&_h2]:font-semibold [&_h2]:text-foreground [&_h2:first-child]:mt-0 [&_li]:my-1`}
-          >
-            <Markdown remarkPlugins={[remarkGfm]} components={chatMarkdownComponents}>
-              {checkpointMarkdown(checkpoint.summary)}
-            </Markdown>
-          </div>
+          <MarkdownText className="min-h-0 flex-1 overflow-auto px-5 py-4">
+            {checkpointMarkdown(checkpoint.summary)}
+          </MarkdownText>
           <div className="flex flex-none items-center gap-2 px-4 py-2.5 [border-top:1px_solid_var(--line)]">
             <span className="flex-1 text-caption text-muted-foreground">{t('Copy to reuse it in another thread')}</span>
             <CopyButton text={checkpoint.summary} />

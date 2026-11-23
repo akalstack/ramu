@@ -219,14 +219,14 @@ function WriteRow({
           }}
         />
       ) : body ? (
-        <Markdown text={body} />
+        <Markdown text={body} density="compact" />
       ) : null}
       {lineComments.map((comment) => (
         <View key={comment.id} style={{ borderLeftWidth: 2, borderLeftColor: c.line, paddingLeft: space.s }}>
           <T size={font.caption} tone="muted">
             {comment.path}:{comment.line}
           </T>
-          <Markdown text={pullRequestWriteBody({ kind: 'line-comment', comment }) ?? ''} />
+          <Markdown text={pullRequestWriteBody({ kind: 'line-comment', comment }) ?? ''} density="compact" />
         </View>
       ))}
       {item.error ? (

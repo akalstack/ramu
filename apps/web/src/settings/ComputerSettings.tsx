@@ -85,7 +85,7 @@ export function ComputerSettings({
     try {
       setSetupStarted(false)
       if (status?.apps?.available && status.appPermissions === undefined) {
-        await ramu.invoke('background.restart')
+        await ramu.invoke('background.restartService', 'keep')
         await refresh()
         return
       }

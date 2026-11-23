@@ -357,7 +357,8 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
           path: 'suggestNextMessage',
           title: 'Suggest next message',
           help: 'After a turn, show a likely next message in the empty message box. Tab uses it. Each one is a small extra request on your plan, made only for a thread you have open.',
-          words: 'predict prediction next prompt autocomplete ghost tab suggestion follow up',
+          words:
+            'predict prediction next prompt autocomplete ghost tab suggestion suggestions recommendation chips follow up',
         },
         {
           kind: 'choice',

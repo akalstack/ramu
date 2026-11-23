@@ -55,7 +55,7 @@ interface GitCommitInfo {
   pushed: boolean
 }
 type GitStashInfo = GitStash
-import { draftCommit } from '../../../runtime/gitQuick'
+import { draftCommit, ownPaths } from '../../../runtime/gitQuick'
 import { commitBlock, gitGates, startingAction, type CommitAction } from '../../../runtime/gitGates'
 import { revisionParams, stashTitle } from '../../../runtime/gitRevision'
 import { ago, useSay } from '../../../i18n'
@@ -660,11 +660,16 @@ export default function SourceControl() {
       if (!chat || !binding) throw new Error(tr('Select a repository first.'))
       const onBranch = await chooseBranch()
       if (onBranch === null) return CANCELLED
-      if (!staged.length && unstaged.length)
-        await call(
-          'git.stage',
-          unstaged.map((f) => f.path),
-        )
+      const mine =
+        !staged.length && unstaged.length
+          ? await ownPaths(
+              store.invoke,
+              chat,
+              binding.repoId,
+              unstaged.map((f) => f.path),
+            )
+          : []
+      if (mine.length) await call('git.stage', mine)
       // Amending without a new message keeps the one the commit has; everything else drafts one.
       const reused = action === 'amend' && !message.trim() ? commits[0]?.subject : undefined
       const generated = !message.trim() && !reused ? await generate() : null
@@ -722,6 +727,38 @@ export default function SourceControl() {
     )
       return store.invoke(pc, method, task, repoId, argument!)
     return store.invoke(pc, method, task, repoId)
+  }
+  // A switch rewrites files under every thread in the checkout: while one works, it waits for them, holding new turns.
+  const switchTo = (target: string) => {
+    if (!chat || !binding) return
+    const switched = tr('Switched to {0}', { 0: target })
+    void store
+      .invoke(chat.computerId, 'files.writer', chat.taskId, binding.repoId)
+      .catch(() => ({ active: false }))
+      .then(({ active }) => {
+        if (!active) return void run(() => gitAction('git.checkout', target), switched)
+        Alert.alert(
+          tr('Switch when threads finish?'),
+          tr(
+            'Threads are working in this checkout. Ramu switches to {0} as soon as they finish, and new messages there wait until it has.',
+            { 0: target },
+          ),
+          [
+            { text: tr('Cancel'), style: 'cancel' },
+            {
+              text: tr('Switch when they finish'),
+              onPress: () =>
+                void run(
+                  () =>
+                    store.invoke(chat.computerId, 'git.checkout', chat.taskId, binding.repoId, target, {
+                      whenIdle: true,
+                    }),
+                  switched,
+                ),
+            },
+          ],
+        )
+      })
   }
   const openRevision = (
     revision: { oid: string; stash: boolean },
@@ -1523,7 +1560,7 @@ export default function SourceControl() {
               selected={b === branch}
               onPress={() => {
                 setSheet(null)
-                if (b !== branch) void run(() => gitAction('git.checkout', b), tr('Switched to {0}', { 0: b }))
+                if (b !== branch) switchTo(b)
               }}
             />
           ))}

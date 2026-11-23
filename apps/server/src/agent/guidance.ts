@@ -39,6 +39,9 @@ export interface GuidanceSections {
   noCredits?: boolean
 }
 
+/** Other threads may work in the same checkout at once; their uncommitted work must survive this agent's Git use. */
+const SHARED_CHECKOUT_GUIDE = `Other Ramu threads may be working in this same checkout at the same time, with uncommitted changes of their own. When you commit, stage only the files you changed (git add <paths>), never git add -A, git add ., or git commit -a, unless the user asks for everything. Do not stash, reset, clean, restore or switch branches over files you did not change; ask the user first.`
+
 /** The guidance appended to a chat's system prompt (or sent ahead of its first prompt) through the Ramu tool connection. */
 export function sessionGuidance(sections: GuidanceSections): string {
   const questions =
@@ -61,6 +64,7 @@ export function sessionGuidance(sections: GuidanceSections): string {
   else if (sections.nativeToolSearch) instructions += `\n\n${NATIVE_TOOL_DISCOVERY_INSTRUCTIONS}`
   if (sections.learning) instructions += `\n\n${sections.learning}`
   if (sections.browser) instructions += `\n\n${sections.browser}`
+  instructions += `\n\n${SHARED_CHECKOUT_GUIDE}`
   if (sections.noCredits) instructions += `\n\n${NO_AGENT_CREDITS_GUIDANCE}`
   if (sections.rules) instructions += `\n\n${sections.rules}`
   return instructions

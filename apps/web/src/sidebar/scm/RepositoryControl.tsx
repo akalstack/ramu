@@ -1,4 +1,5 @@
 import { OverlayScrollArea } from '@/components/overlay-scroll-area'
+import { switchBranch } from '../../git/SwitchBranchDialog'
 import { ContentSkeleton } from '@/components/content-skeleton'
 import { Minus, Plus } from 'lucide-react'
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
@@ -372,7 +373,7 @@ export function RepositoryControl({
             onCheckout={(branch) =>
               void actions.run(async () => {
                 actions.requireSaved()
-                await invoke('git.checkout', taskId, binding.repoId, branch)
+                await switchBranch(invoke, taskId, binding.repoId, branch)
               })
             }
             onUndo={requestUndo}

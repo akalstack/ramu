@@ -45,7 +45,9 @@ const en = {
   welcomeNearby: 'Find a computer nearby',
   welcomeAccount: 'Sign in with your Ramu account',
   welcomeManual: 'Enter address and code',
-  welcomeWhere: 'On your computer: Ramu setup, or Settings → Remote access → Pair a device.',
+  welcomeWhere: 'On your computer, click the phone button at the foot of Ramu’s sidebar, then scan its code.',
+  welcomeAccountHint:
+    'Signed in to a Ramu account on your computer? Sign in here with the same one and it connects on its own, at home or away.',
   welcomeLater: 'Look around first',
   onboardStepOf: 'Step {0} of {1}',
   onboardSkip: 'Skip',
@@ -612,7 +614,9 @@ const id: typeof en = {
   welcomeNearby: 'Cari komputer di sekitar',
   welcomeAccount: 'Masuk dengan akun Ramu',
   welcomeManual: 'Masukkan alamat dan kode',
-  welcomeWhere: 'Di komputermu: penyiapan Ramu, atau Pengaturan → Akses jarak jauh → Pasangkan perangkat.',
+  welcomeWhere: 'Di komputermu, klik tombol ponsel di bagian bawah sidebar Ramu, lalu pindai kodenya.',
+  welcomeAccountHint:
+    'Sudah masuk ke akun Ramu di komputermu? Masuk di sini dengan akun yang sama dan ponsel terhubung sendiri, di rumah atau di luar.',
   welcomeLater: 'Lihat-lihat dulu',
   onboardStepOf: 'Langkah {0} dari {1}',
   onboardSkip: 'Lewati',

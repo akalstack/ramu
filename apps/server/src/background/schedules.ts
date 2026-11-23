@@ -689,12 +689,6 @@ export class ScheduleService {
               })
           this.db.prepare('UPDATE schedule_runs SET task_id=? WHERE id=?').run(task.id, run.id)
           const scope = this.workspace.agentScope(task.id)
-          if (this.agents.activeWriter(scope.covers)) {
-            this.db
-              .prepare('UPDATE schedule_runs SET retry_at=?, error=? WHERE id=?')
-              .run(now + 30000, 'Waiting for the workspace agent', run.id)
-            continue
-          }
           await this.agents.validateSettings(s.settings)
           // Starting and recording the session are synchronous; no tick can claim this occurrence twice.
           const session = await this.agents.startReviewed(task.id, scope, fromWebhook?.prompt ?? s.prompt, s.settings)

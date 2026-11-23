@@ -344,7 +344,7 @@ export class GoalManager {
       this.host.isRecoveryPending(id) ||
       this.host.hasBlockingQuestions(id) ||
       this.host.hasRunningTasks(id) ||
-      this.host.workspaceBusy(session.covers, id)
+      this.host.workspaceBusy(session.covers)
     ) {
       this.scheduleGoal(id, 1000)
       return
@@ -402,7 +402,7 @@ export class GoalManager {
         revision !== (this.host.revisions.get(id) ?? 0) ||
         this.host.queued(id).length ||
         this.host.queuePaused(id) ||
-        this.host.workspaceBusy(session.covers, id)
+        this.host.workspaceBusy(session.covers)
       ) {
         this.scheduleGoal(id)
         return

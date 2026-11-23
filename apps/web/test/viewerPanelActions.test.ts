@@ -46,6 +46,7 @@ vi.mock('../src/views/agent/components/UserMessage', () => ({ UserBubble: () => 
 vi.mock('../src/views/agent/components/ToolGroup', () => ({ ToolGroup: () => null }))
 vi.mock('../src/views/agent/components/TurnDiff', () => ({ TurnDiff: () => null }))
 vi.mock('../src/chat/AgentContentView', () => ({ AgentContentView: () => null }))
+vi.mock('../src/chat/MarkdownText', () => ({ MarkdownText: () => null }))
 vi.mock('../src/models/ModelSets', () => ({ modelDisplayName: (name: string) => name }))
 vi.mock('../src/chat/AgentControls', () => ({ providerName: (name: string) => name }))
 vi.mock('../src/components/app-toaster', () => ({ notify: { add: vi.fn() } }))

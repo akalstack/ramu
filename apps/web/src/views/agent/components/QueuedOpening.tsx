@@ -8,9 +8,9 @@ import { visibleText } from '../lib/messages'
 import { UserBubble } from './UserMessage'
 
 /**
- * A new thread's first message while the host holds it, because another thread is working in the same checkout. It
- * reads as the opening message rather than leaving the thread empty, with why it waits and a way to that thread, where
- * the person can answer what holds it up. It joins the transcript as a sent message once the other thread is done.
+ * A new thread's first message while the host holds it: during an undo or other rewrite of its checkout, or, on a host
+ * that runs one thread per checkout, while another thread works there. It reads as the opening message rather than
+ * leaving the thread empty, with why it waits and a way to the thread it waits for. It joins the transcript once sent.
  */
 export function QueuedOpening({
   message,

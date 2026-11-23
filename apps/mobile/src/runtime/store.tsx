@@ -28,6 +28,7 @@ import { createWorkspaceTask, workspaceCreation } from './workspaces'
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Alert, AppState, NativeModules } from 'react-native'
 import { translate } from '@ramu/shared/i18n'
+import { showError } from './toast'
 import { fetch as nativeFetch } from 'expo/fetch'
 import { shareRows } from './shareRows'
 import * as Device from 'expo-device'
@@ -63,6 +64,7 @@ import {
   writeSendJournal,
 } from '../storage'
 import { remainingJournal, restoreOutbox } from './sendJournal'
+import { nextToSend } from '@ramu/shared/outbox'
 import { mapBounded } from '@ramu/shared/mapBounded'
 import { rebuildDelay, readsTranscript, type RefreshDepth } from './refreshDepth'
 import { renewalDue, renewCredential } from './tokenRenewal'
@@ -175,6 +177,8 @@ interface Store extends State {
   /** Turns a host's connection off without forgetting it, or back on. */
   setConnected(id: string, on: boolean): Promise<void>
   forget(id: string): Promise<void>
+  /** Renames a saved host on this phone only. */
+  rename(id: string, name: string): Promise<void>
   retry(id: string): void
   invoke<M extends keyof RamuMethods>(
     computerId: string,
@@ -1086,8 +1090,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         (ref.current.computers.find((c) => c.id === id)?.status === 'online' || connections.current.get(id)?.live) &&
         ref.current.computers.find((c) => c.id === id)?.access !== 'viewer'
       ) {
-        const item = ref.current.outbox.find((o) => o.computerId === id && o.state !== 'accepted')
-        if (!item || item.state === 'uncertain' || item.state === 'sending' || item.state === 'review') break
+        const item = nextToSend(
+          ref.current.outbox,
+          (o) => o.computerId === id,
+          (o) => o.state === 'accepted',
+        )
+        if (!item) break
         // While the first refresh after reconnecting still runs, only a follow-up on a thread this phone already has
         // may go out: a new thread or session is created against the refreshed lists.
         if (
@@ -1671,16 +1679,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (!addresses.length) throw new Error('The host paired but sent no address. Turn on network access there.')
       // The first address that answers; the host's identity is checked on every address as after any pairing.
       let url = addresses[0]!
+      let reached = false
       for (const address of addresses) {
         const answers = await expoFetch(`${address.replace(/\/$/, '')}/health`)
           .then(() => true)
           .catch(() => false)
         if (answers) {
           url = address.replace(/\/$/, '')
+          reached = true
           break
         }
       }
-      return savePairing(name, url, result)
+      const saved = await savePairing(name, url, result)
+      // Paired, yet every address is private to the host's own network (a cloud machine's, or home seen from 5G).
+      if (!reached)
+        showError(
+          translate(
+            ref.current.language,
+            'Paired with {name}, but this phone can’t reach it from here. Turn on Ramu Link on that computer, or join its network or VPN.',
+            { name },
+          ),
+        )
+      return saved
     },
     pairByRequest: async (name, address, allowHttp, onCode, signal) => {
       const url = normalizeAddress(address, allowHttp)
@@ -1780,6 +1800,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const saved = ref.current.computers.find((c) => c.id === id)
         if (saved) await connect(saved)
       }
+      await writeLocal({ ...ref.current, usage: undefined, catalogs: undefined, ready: undefined, error: undefined })
+    },
+    rename: async (id, name) => {
+      const clean = name.replace(/\s+/g, ' ').trim().slice(0, 60)
+      if (!clean) return
+      change((s) => ({ ...s, computers: s.computers.map((c) => (c.id === id ? { ...c, name: clean } : c)) }))
       await writeLocal({ ...ref.current, usage: undefined, catalogs: undefined, ready: undefined, error: undefined })
     },
     forget: async (id) => {

@@ -52,8 +52,18 @@ export function hostSocket(endpoint: RuntimeEndpoint, options: HostSocketOptions
       hosts.delete(k)
       for (const l of old.listeners) listeners.add(l)
     }
-  const presencePort = options.presencePort ?? held?.presencePort
-  const clientId = options.clientId ?? held?.clientId
+  return open(endpoint, listeners, {
+    presencePort: options.presencePort ?? held?.presencePort,
+    clientId: options.clientId ?? held?.clientId,
+  }).socket
+}
+
+function open(
+  endpoint: RuntimeEndpoint,
+  listeners: Set<HostListener>,
+  { presencePort, clientId }: { presencePort: number | undefined; clientId: string | undefined },
+  epoch: string | null = null,
+): Entry {
   const local = endpoint.kind === 'socket'
   const entry: Entry = {
     listeners,
@@ -63,6 +73,7 @@ export function hostSocket(endpoint: RuntimeEndpoint, options: HostSocketOptions
       url: local ? `ws+unix://${endpoint.path}` : endpoint.url,
       token: local ? '' : endpoint.token,
       factory: nodeSocketFactory,
+      epoch,
       // The service on this machine comes back quickly after a restart; a remote host backs off further.
       ...(local ? { maxBackoffMs: 2000 } : {}),
       headers: {
@@ -81,9 +92,9 @@ export function hostSocket(endpoint: RuntimeEndpoint, options: HostSocketOptions
       },
     }),
   }
-  hosts.set(key, entry)
+  hosts.set(keyOf(endpoint), entry)
   entry.socket.start()
-  return entry.socket
+  return entry
 }
 
 /** Hears a host's events and state until the returned function is called; the socket itself is shared and stays open. */
@@ -104,9 +115,17 @@ export function closeHostSockets() {
   hosts.clear()
 }
 
-/** Forgets one host's socket (closing it), for a one-shot caller whose connection attempt failed. */
+/**
+ * Forgets one host's socket (closing it), for a one-shot caller whose connection attempt failed. The service on this
+ * machine keeps its listeners on a fresh connection: the desktop's event stream must hear that service again once it
+ * is back, as after a restart, rather than wait on a socket nobody reopens.
+ */
 export function forgetHostSocket(endpoint: RuntimeEndpoint) {
   const key = keyOf(endpoint)
-  hosts.get(key)?.socket.close()
+  const held = hosts.get(key)
+  if (!held) return
+  held.socket.close()
   hosts.delete(key)
+  if (endpoint.kind === 'socket' && held.listeners.size)
+    open(endpoint, held.listeners, { presencePort: held.presencePort, clientId: held.clientId }, held.socket.runId)
 }

@@ -72,7 +72,7 @@ export function SkillFiles({
         }}
       >
         <FileIcon path={file.path} size={13} className="flex-none" />
-        <span className="min-w-0 flex-1 truncate font-mono text-[11px]" title={file.path}>
+        <span className="min-w-0 flex-1 truncate font-mono text-micro" title={file.path}>
           {label ?? file.path}
         </span>
         {changed?.has(file.path) && (

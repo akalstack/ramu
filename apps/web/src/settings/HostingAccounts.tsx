@@ -222,7 +222,7 @@ const STORE_FAILURE = /credential store is unavailable or locked/i
 
 /**
  * After a Ramu rebuild or update, a background service still running the old code is refused the keychain until it
- * restarts; the host asks before restarting, since that stops running agents.
+ * restarts; the desktop asks first when the restart would stop running agents.
  */
 function RestartService() {
   const invoke = useSettingsInvoke()
@@ -232,7 +232,9 @@ function RestartService() {
       <InlineAction
         onClick={() => {
           setError(null)
-          void Promise.resolve(invoke('background.restart')).catch((reason) => setError(errorText(reason)))
+          void Promise.resolve(invoke('background.restartService', 'keep')).catch((reason) =>
+            setError(errorText(reason)),
+          )
         }}
       >
         {t('Restart background service')}

@@ -20,6 +20,8 @@ import { DEFAULT_RAIL, parseRail, terminalKeyGroups, toggleRailKey } from '../ru
 import { STANDALONE, type Chat } from '../runtime/types'
 import { TerminalDock } from './TerminalDock'
 import { TerminalTabs } from './TerminalTabs'
+import { TerminalCopySheet } from './TerminalCopySheet'
+import type { TerminalCopyChoices } from '../runtime/terminalCopy'
 import { Button, Sheet, T, tap } from './ui'
 import { SheetGroup, SheetOption, SheetPanelGroup } from './SheetOptions'
 import { useSay } from '../i18n'
@@ -110,6 +112,9 @@ export function TerminalScreen({
   const activeId = useRef<string | undefined>(undefined)
   const focusId = useRef(focus)
   const keySequence = useRef(0)
+  const [captureAction, setCaptureAction] = useState<{ sequence: number }>()
+  const [copyChoices, setCopyChoices] = useState<TerminalCopyChoices | null>(null)
+  const [pasteAction, setPasteAction] = useState<{ sequence: number; text: string }>()
   const terminal = tabs[active]
   const computer = store.computers.find((c) => c.id === chat?.computerId)
   // Without the host's Terminals permission the screen offers a request instead of a shell the host would refuse.
@@ -315,7 +320,7 @@ export function TerminalScreen({
     if (label === 'paste' && /[\r\n]/.test(text))
       Alert.alert(say('Paste into host terminal?'), text.slice(0, 1000), [
         { text: say('Cancel'), style: 'cancel' },
-        { text: say('Paste'), onPress: () => void write('\x1b[200~' + text + '\x1b[201~') },
+        { text: say('Paste'), onPress: () => setPasteAction({ sequence: ++keySequence.current, text }) },
       ])
     else void write(text)
   }
@@ -406,6 +411,11 @@ export function TerminalScreen({
               enabled={!terminal.exited && connected}
               keyboardAction={keyboardAction}
               keyAction={keyAction}
+              captureAction={captureAction}
+              onCapture={(choices) => {
+                if (choices.id === captureAction?.sequence) setCopyChoices(choices)
+              }}
+              pasteAction={pasteAction}
               session={terminal.id}
               output={outputOwner === terminal.id ? output : ''}
               fontSize={terminalFontSize(store.drafts?.[TERMINAL_FONT_DEVICE_KEY])}
@@ -488,6 +498,13 @@ export function TerminalScreen({
               setKeyboardAction((old) => ({ sequence: old.sequence + 1, visible: false }))
               setSessionsOpen(true)
             }}
+            onCopy={() => {
+              keyboardBeforeSheet.current = keyboardVisible
+              setKeyboardVisible(false)
+              NativeKeyboard.dismiss()
+              setKeyboardAction((old) => ({ sequence: old.sequence + 1, visible: false }))
+              setCaptureAction({ sequence: ++keySequence.current })
+            }}
             onMoreKeys={() => {
               NativeKeyboard.dismiss()
               setKeyboardVisible(false)
@@ -539,6 +556,13 @@ export function TerminalScreen({
           {say('Shells keep running in their own workspace while you look at another.')}
         </T>
       </Sheet>
+      <TerminalCopySheet
+        choices={copyChoices}
+        onClose={() => {
+          setCopyChoices(null)
+          keepKeyboard(keyboardBeforeSheet.current)
+        }}
+      />
       <Sheet open={keysOpen} title={say('Terminal keys')} onClose={() => setKeysOpen(false)}>
         {rail.join() !== DEFAULT_RAIL.join() ? (
           <SheetGroup>

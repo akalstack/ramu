@@ -1,4 +1,5 @@
-import { pendingThreads } from './composer/pendingThreads'
+import { pendingThreads, withRecalled, type PendingThread } from './composer/pendingThreads'
+import { QueuedThreads } from './composer/WaitingThreads'
 import { startingThreads } from './workspace/startingThreads'
 import { LoadingDots } from '@/components/loading-dots'
 import { BranchNameEditor } from './workspace/BranchNameEditor'
@@ -52,7 +53,7 @@ import { errorText } from './workspace/TaskPane'
 import { useHostRuntime, useWorkspace } from './workspace/workspace'
 import { HomeFeed } from './Home'
 import { hostStorageFor } from './hostStorage'
-import { draftKey, draftStore, loadDraft, useDraftPersistence } from './composer/drafts'
+import { draftKey, draftStore, loadDraft, saveDraft, useDraftPersistence } from './composer/drafts'
 import { notifyError } from './chat/Notifications'
 import { useWorkspaceDraft } from './composer/useWorkspaceDraft'
 import { loadRouteChoice, saveRouteChoice, type RouteCandidate } from './composer/routeChoice'
@@ -318,6 +319,10 @@ export function NewThread({
   const hostSelection = useHostSelection()
   const currentHostName = useComputers()?.computers.find((c) => c.id === host.id)?.name ?? ''
   const repos = ws.repos[projectId] ?? []
+  // Away, the thread waits on this device and starts there once the host is back; a restarting host comes back too.
+  const queues = canOpenOffline(host.status)
+  // A copy of an away host may not list its repositories; the host checks them when the thread starts.
+  const needsRepository = !general && !repos.length && !queues
   const project = ws.projects.find((p) => p.id === projectId)
   const { initialSettings } = useModelSets()
   const agentDraft = useAgentDraft(scopeProject, initialSettings)
@@ -470,7 +475,7 @@ export function NewThread({
       throw new Error(t('Use a folder name of letters, digits, dots, dashes or underscores.'))
     // The agent reads this as the request to make a project; the person sees the same words in the thread.
     const agentPrompt = startsProject && !newName ? t('Start a new project: {0}', { '0': prompt.trim() }) : prompt
-    if (!general && !repos.length) throw new Error(t('Add a repository to this project first'))
+    if (needsRepository) throw new Error(t('Add a repository to this project first'))
     const messageTitle =
       title ||
       (context[0] ? titleFrom(t('Discuss {0}', { '0': context[0].path.split(/[\\/]/).pop() ?? context[0].path })) : '')
@@ -478,7 +483,7 @@ export function NewThread({
     if (newName && host.status !== 'connected')
       throw new Error(t('Creating a project needs the host. Send once it is back.'))
     // The host is away: the thread waits on this computer under an id made here, and starts there once it is back.
-    if (host.status !== 'connected') {
+    if (queues) {
       if (attachments.length) throw new Error(t('Attachments need the host. Remove them, or send once it is back.'))
       pendingThreads().add({
         hostId: host.id,
@@ -760,6 +765,25 @@ export function NewThread({
     }
   }
 
+  const queuedProjectName = (id: string | null) =>
+    id === null
+      ? t('Auto')
+      : id === NO_PROJECT
+        ? t('No project')
+        : (ws.projects.find((p) => p.id === id)?.name ?? t('No project'))
+  /** A waiting thread taken back: its first message returns to this box, on the project it was to start in. */
+  const editQueued = (item: PendingThread) => {
+    const destination = item.projectId ?? AUTO_PROJECT
+    if (destination === projectId) {
+      setPrompt((current) => withRecalled(current, item.prompt))
+      return
+    }
+    const key = draftKey.newChat(destination)
+    const store = draftStore(host.id)
+    saveDraft(key, withRecalled(loadDraft(key, store), item.prompt), store)
+    onProjectChange(destination)
+  }
+
   const projectOptions = [
     ...(preferences.autoProjectSelection || auto ? [{ value: AUTO_PROJECT, label: t('Auto') }] : []),
     { value: NO_PROJECT, label: t('No project') },
@@ -938,6 +962,12 @@ export function NewThread({
             location={projectParent}
           />
         )}
+        <QueuedThreads
+          hostId={host.id}
+          hostName={currentHostName}
+          projectName={queuedProjectName}
+          onEdit={editQueued}
+        />
         {pending && (
           <div className="flex flex-col items-end gap-2 px-1 pb-1" role="status" aria-live="polite">
             {pending.text && (
@@ -1097,13 +1127,15 @@ export function NewThread({
               setPrompt(v)
             }}
             onSubmit={send}
-            disabled={busy || (!general && !repos.length)}
+            disabled={busy || needsRepository}
             placeholder={
               startingNew
                 ? t('Describe what to build')
-                : general || repos.length
-                  ? t('Message the agent')
-                  : t('Add a repository to this project first')
+                : needsRepository
+                  ? t('Add a repository to this project first')
+                  : queues
+                    ? t('Message · starts when {0} is back', { '0': currentHostName })
+                    : t('Message the agent')
             }
             submitLabel={t('Start thread')}
           />

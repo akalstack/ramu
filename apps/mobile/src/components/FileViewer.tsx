@@ -680,7 +680,7 @@ export function FileViewer({
           ) : null}
           {state.kind === 'text' && markdown && preview ? (
             <ReferenceContext.Provider value={markdownActions}>
-              <Markdown text={state.raw} />
+              <Markdown text={state.raw} density="document" />
             </ReferenceContext.Provider>
           ) : null}
           {state.kind === 'text' && svg && !svgBroken && preview ? (

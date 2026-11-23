@@ -6,7 +6,8 @@ type ContextMenuItem = NonNullable<ComponentProps<typeof EnrichedMarkdownText>['
 import { localFileLink } from '@ramu/shared/workspace/fileLinks'
 import { useSay } from '../i18n'
 import { FILE_SCHEME, SKILL_SCHEME } from '../runtime/nativeMarkdownSource'
-import { font, useTheme } from '../theme'
+import { useTheme } from '../theme'
+import type { PhoneProse } from '../runtime/prose'
 import type { ReferenceActions } from './Markdown'
 
 /**
@@ -35,8 +36,6 @@ export const MessageSelectionMenuContext = createContext<MessageSelectionMenu | 
 /** The words a find or a quote led to in this row; its messages highlight them instead of the whole row lighting up. */
 export const TextMarkContext = createContext<readonly string[] | null>(null)
 
-const HEADING = [22, 19, 17, 16, 15, 15]
-
 /**
  * A whole message as one native text view, as T3 Code draws it: selection runs across paragraphs, lists, tables and code
  * with the system's handles and loupe, and the text keeps its formatting while selected.
@@ -46,6 +45,7 @@ export function NativeMarkdown({
   streaming,
   muted,
   marked,
+  prose,
   actions,
 }: {
   source: string
@@ -53,6 +53,8 @@ export function NativeMarkdown({
   muted?: boolean
   /** The source carries `==` highlight markers, so the parser reads them as highlights. */
   marked?: boolean
+  /** The shared reading scale, in points, for this message's density and the text size. */
+  prose: PhoneProse
   actions: ReferenceActions
 }) {
   const { c, scheme } = useTheme()
@@ -60,16 +62,26 @@ export function NativeMarkdown({
   const menu = useContext(MessageSelectionMenuContext)
   const style = useMemo<MarkdownStyle>(() => {
     const mono = Platform.OS === 'ios' ? 'Menlo' : 'monospace'
-    const body = { color: c.body, fontSize: font.body, lineHeight: 22, marginTop: 0, marginBottom: 10 }
+    const body = {
+      color: c.body,
+      fontSize: prose.size,
+      lineHeight: prose.lineHeight,
+      marginTop: 0,
+      marginBottom: prose.blockGap,
+    }
     const heading = (level: number) => ({
       ...body,
+      ...prose.headings[level - 1],
       color: c.text,
-      fontSize: HEADING[level - 1]!,
-      lineHeight: Math.round(HEADING[level - 1]! * 1.35),
-      fontWeight: '700',
-      marginTop: 6,
+      fontWeight: '600',
+      marginTop: Math.max(0, prose.headingGap - prose.blockGap),
     })
-    const block = { marginTop: 2, marginBottom: 12, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth }
+    const block = {
+      marginTop: 2,
+      marginBottom: prose.blockGap,
+      borderRadius: 10,
+      borderWidth: StyleSheet.hairlineWidth,
+    }
     const dark = scheme === 'dark'
     return {
       paragraph: body,
@@ -81,7 +93,7 @@ export function NativeMarkdown({
       h6: heading(6),
       strong: { color: c.text },
       link: { color: c.accent, underline: false },
-      code: { fontFamily: mono, fontSize: font.body - 2, color: c.text, backgroundColor: c.fill, borderColor: c.line },
+      code: { fontFamily: mono, fontSize: prose.code, color: c.text, backgroundColor: c.fill, borderColor: c.line },
       codeBlock: {
         ...body,
         ...block,
@@ -89,8 +101,8 @@ export function NativeMarkdown({
         backgroundColor: c.code,
         borderColor: c.line,
         fontFamily: mono,
-        fontSize: font.body - 2,
-        lineHeight: 19,
+        fontSize: prose.code,
+        lineHeight: prose.codeLineHeight,
         padding: 12,
         syntaxColors: dark
           ? {
@@ -118,9 +130,10 @@ export function NativeMarkdown({
               attribute: '#0550ae',
             },
       },
-      blockquote: { ...body, color: c.muted, borderColor: c.lineStrong, borderWidth: 2, gapWidth: 12 },
+      // A quote steps back in colour, not so far that it stops reading as text, as on the desktop.
+      blockquote: { ...body, color: c.soft, borderColor: c.lineStrong, borderWidth: 2, gapWidth: 12 },
       list: { ...body, bulletColor: c.muted, markerColor: c.muted, gapWidth: 12 },
-      thematicBreak: { color: c.line, height: 1, marginTop: 6, marginBottom: 12 },
+      thematicBreak: { color: c.line, height: 1, marginTop: 6, marginBottom: prose.blockGap },
       table: {
         ...body,
         ...block,
@@ -135,7 +148,7 @@ export function NativeMarkdown({
       taskList: { checkedColor: c.accent, checkedTextColor: c.body, borderColor: c.muted, checkedStrikethrough: false },
       highlight: { color: c.text, backgroundColor: c.mark },
     } as MarkdownStyle
-  }, [c, scheme])
+  }, [c, scheme, prose])
   const menuItems = useMemo<ContextMenuItem[] | undefined>(
     () =>
       menu

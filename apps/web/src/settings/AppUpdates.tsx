@@ -5,9 +5,16 @@ import { useEffect, useState } from 'react'
 import { Clock, Download, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/desktop-button'
 import { Switch } from '@/components/ui/switch'
-import { APP_AUTO_UPDATE, hoursUntil, serviceReportsOlderVersion, type AppUpdateStatus } from '@ramu/shared/updates'
+import {
+  APP_AUTO_UPDATE,
+  hoursUntil,
+  installsUnattended,
+  serviceReportsOlderVersion,
+  type AppUpdateStatus,
+} from '@ramu/shared/updates'
 import type { AppPreferences, BackgroundStatus } from '@ramu/shared/types'
 import { ramu } from '../ipc'
+import { allWorkspaceCheckpoints } from '../workspace/workspaceCheckpoint'
 import { notifyError } from '../chat/Notifications'
 import { t, useLanguage } from '../i18n'
 
@@ -32,11 +39,16 @@ export function AppUpdates({ value, onChange }: { value: AppPreferences; onChang
     }
   }, [invoke, on])
   const act = async (
-    method: 'updates.check' | 'updates.skipWait' | 'updates.download' | 'updates.restart' | 'background.restart',
+    method: 'updates.check' | 'updates.skipWait' | 'updates.download' | 'updates.restart' | 'background.restartService',
   ) => {
     setBusy(true)
     setError(null)
     try {
+      if (method === 'background.restartService') {
+        await invoke(method, 'keep')
+        setService(await invoke('background.status'))
+        return
+      }
       const result = await invoke(method)
       if (result && 'phase' in result) setState(result)
     } catch (reason) {
@@ -135,7 +147,9 @@ export function AppUpdates({ value, onChange }: { value: AppPreferences; onChang
           <span>
             <SettingsTitle>{t('Auto-update Ramu')}</SettingsTitle>
             <span className="muted text-muted-foreground block block small text-caption">
-              {t('Download updates automatically, then restart when ready. Threads keep running.')}
+              {t(
+                'Download updates automatically, then restart on its own once nothing is running and you step away. Threads keep running.',
+              )}
             </span>
           </span>
           <Switch
@@ -211,7 +225,7 @@ export function AppUpdates({ value, onChange }: { value: AppPreferences; onChang
           <span className="muted text-muted-foreground block block small text-caption">
             {service?.updateAvailable
               ? t(
-                  'Service update available. Restart app & service to apply it. Agents stop, and unfinished threads resume.',
+                  'Service update available. Restart the service to apply it. Agents stop, and unfinished threads resume.',
                 )
               : serviceReportsOlderVersion(service)
                 ? t(
@@ -225,9 +239,9 @@ export function AppUpdates({ value, onChange }: { value: AppPreferences; onChang
             variant="secondary"
             className="bg-fill hover:bg-fill-hover"
             disabled={working}
-            onClick={() => void act('background.restart')}
+            onClick={() => void act('background.restartService')}
           >
-            {t('Restart app & service')}
+            {t('Restart service')}
           </Button>
         )}
       </SettingsRow>
@@ -240,6 +254,39 @@ export function AppUpdates({ value, onChange }: { value: AppPreferences; onChang
   )
 }
 
+/** How long this window goes untouched before it offers the desktop to install a ready update on its own. */
+const UNATTENDED_AFTER_MS = 5 * 60_000
+const INPUT_EVENTS = ['pointerdown', 'keydown', 'wheel'] as const
+
+/**
+ * Installs a downloaded update once nobody is using Ramu. This window answers for what only it holds: every
+ * checkpoint saves its part (drafts, the workspace) and refuses while something cannot be kept, such as an unsaved
+ * file, an open terminal or an attachment still uploading. The desktop then checks Auto-update, that the computer
+ * itself is idle, and that no thread, terminal or command is running; anything busy waits for the next minute.
+ */
+function useInstallWhenIdle(state: AppUpdateStatus | null) {
+  const ready = !!state && installsUnattended(state)
+  useEffect(() => {
+    if (!ready) return
+    let lastInput = Date.now()
+    const touched = () => {
+      lastInput = Date.now()
+    }
+    for (const name of INPUT_EVENTS) window.addEventListener(name, touched, { capture: true, passive: true })
+    const timer = window.setInterval(() => {
+      if (Date.now() - lastInput < UNATTENDED_AFTER_MS) return
+      void (async () => {
+        const kept = await Promise.all(allWorkspaceCheckpoints().map((checkpoint) => checkpoint().catch(() => false)))
+        if (kept.every(Boolean)) await ramu.invoke('updates.restart', 'idle')
+      })().catch(() => {})
+    }, 60_000)
+    return () => {
+      window.clearInterval(timer)
+      for (const name of INPUT_EVENTS) window.removeEventListener(name, touched, { capture: true })
+    }
+  }, [ready])
+}
+
 /** One status-bar button for a newer release: Update downloads it, Restart applies it; threads keep running. */
 export function AppUpdateButton() {
   useLanguage()
@@ -249,6 +296,7 @@ export function AppUpdateButton() {
     void ramu.invoke('updates.status').then(setState, () => {})
     return ramu.on('updates:changed', setState)
   }, [])
+  useInstallWhenIdle(state)
   const release = state?.release
   if (!release) return null
   const run = async (method: 'updates.download' | 'updates.restart') => {
@@ -285,7 +333,10 @@ export function AppUpdateButton() {
         size="sm"
         className={className}
         disabled={!state.nativeReady || busy}
-        title={t('Ramu {0} is ready. Restart when it suits you. Threads keep running.', { '0': release.version })}
+        title={t(
+          'Ramu {0} is ready. It installs on its own once nothing is running and you step away, or restart now. Threads keep running.',
+          { '0': release.version },
+        )}
         onClick={() => void run('updates.restart')}
       >
         <RefreshCw size={13} />

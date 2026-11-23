@@ -19,6 +19,7 @@ import { Button, Card, Divider, Pill, Segmented, Sheet, T, tap } from '../../../
 import { SheetGroup, SheetOption, useSheetInputStyle } from '../../../components/SheetOptions'
 import { useOpenFile } from '../../../runtime/openFile'
 import { DiffLines } from '../../../components/DiffLines'
+import { ElsewhereChanges } from '../../../components/ElsewhereChanges'
 import { useSay } from '../../../i18n'
 
 function FileDiff({
@@ -453,6 +454,22 @@ export default function Changes() {
             onToggle={() => setOpen((o) => ({ ...o, [f.path]: !o[f.path] }))}
           />
         ))}
+        {chat &&
+        detail?.id === reviewId &&
+        (detail.elsewhere?.length || detail.files.some((f) => f.sharedWith?.length || f.editedByYou)) ? (
+          <ElsewhereChanges
+            chat={chat}
+            groups={detail.elsewhere ?? []}
+            shared={detail.files.filter((f) => f.sharedWith?.length || f.editedByYou)}
+            busy={busy}
+            onClaim={
+              store.computers.find((pc) => pc.id === chat.computerId)?.access === 'viewer'
+                ? undefined
+                : (fileIds) =>
+                    void action(() => store.invoke(chat.computerId, 'reviews.claimElsewhere', detail.id, fileIds))
+            }
+          />
+        ) : null}
       </ScrollView>
       {Platform.OS === 'ios' ? (
         // The system's floating bottom toolbar, as Settings and Search use, with native buttons.

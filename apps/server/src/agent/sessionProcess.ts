@@ -26,7 +26,7 @@ import type { QueryFn, PendingRequest } from './types'
 import { InputQueue, userEvent } from './inputQueue'
 import { errorMessage } from './util'
 import { helperRoleReadOnly } from '@ramu/shared/chat/helperRoles'
-import { alwaysAskHooks, claudeHooks, createCanUseTool, readOnlyBashHooks } from './permissions'
+import { alwaysAskHooks, claudeHooks, commandTurnHooks, createCanUseTool, readOnlyBashHooks } from './permissions'
 import { ramuFileHooks } from './ramuFiles'
 import { claudeLaunchOptions } from './claudeOptions'
 import { sessionGuidance } from './guidance'
@@ -98,6 +98,7 @@ export interface SessionProcessHost
   toolConnection(): AgentService['toolConnection']
   usage(): AgentService['usage']
   providerTitle(): AgentService['providerTitle']
+  reviewHooks(): AgentService['reviewHooks']
 }
 
 /** The provider process behind a session: launching it, halting it, interrupting it and failing it. */
@@ -106,6 +107,12 @@ export class SessionProcess {
     private readonly host: SessionProcessHost,
     private readonly db: Db,
   ) {}
+
+  /** Commands of a chat that records its changes take turns with other threads' in the checkout they share. */
+  private commandTurns(id: string) {
+    const turn = this.host.reviewHooks()?.commandTurn
+    return turn ? commandTurnHooks((toolUseId, signal) => turn(id, toolUseId, signal)) : undefined
+  }
 
   /** A digest of the servers each runner was launched with, to notice when its sources change under a running thread. */
   private readonly launchServers = new Map<string, string>()
@@ -583,6 +590,7 @@ export class SessionProcess {
             !s.parentId && this.host.preferencesSource() ? this.host.subagentHooks(id) : undefined,
             !readOnly && !connection?.restricted ? alwaysAskHooks(s, s.settings.access) : undefined,
             readOnly ? readOnlyBashHooks() : undefined,
+            readOnly ? undefined : this.commandTurns(id),
             ramuFileHooks(s),
           ),
         }),

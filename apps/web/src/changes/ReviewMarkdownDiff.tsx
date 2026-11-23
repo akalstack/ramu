@@ -1,23 +1,14 @@
 import { useMemo, useState } from 'react'
-import Markdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import type { ChangeFile } from '@ramu/shared/types'
 import { proseDiff, proseSections, type ProseBlock, type WordPart } from '@ramu/shared/review/proseDiff'
 import { Button } from '@/components/desktop-button'
-import { chatMarkdownComponents } from '../chat/ChatMarkdown'
-import { MSG_CLASS } from '../views/agent/styles'
+import { MarkdownText, proseProps } from '../chat/MarkdownText'
 import { t, useLanguage } from '../i18n'
 
-const HEADING_CLASS = ['', 'text-xl', 'text-lg', 'text-base', 'text-base', 'text-sm', 'text-sm']
+const HEADINGS = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'] as const
 
 function Block({ source }: { source: string }) {
-  return (
-    <div className={`${MSG_CLASS} assistant w-full [&>:first-child]:mt-0 [&>:last-child]:mb-0`}>
-      <Markdown remarkPlugins={[remarkGfm]} components={chatMarkdownComponents}>
-        {source}
-      </Markdown>
-    </div>
-  )
+  return <MarkdownText className="w-full">{source}</MarkdownText>
 }
 
 /** A reworded heading, paragraph or list item: its words in place, the ones that went struck in red, new ones in green. */
@@ -35,13 +26,19 @@ function Words({ block, words }: { block: ProseBlock; words: WordPart[] }) {
       </ins>
     ),
   )
-  if (block.kind === 'heading')
-    return <p className={`m-0 font-semibold text-foreground ${HEADING_CLASS[block.level ?? 1]}`}>{text}</p>
+  // Drawn in the same reading frame as the unchanged sections around it, so a reworded heading keeps its size.
+  const Heading = HEADINGS[(block.level ?? 1) - 1] ?? 'h6'
   return (
-    <p className="m-0 flex gap-2 text-chat leading-[1.6] [color:var(--text-body)]">
-      {block.kind === 'item' && <span className="flex-none text-muted-foreground">{block.marker}</span>}
-      <span className="min-w-0">{text}</span>
-    </p>
+    <div {...proseProps()}>
+      {block.kind === 'heading' ? (
+        <Heading>{text}</Heading>
+      ) : (
+        <p className="flex gap-2">
+          {block.kind === 'item' && <span className="flex-none text-muted-foreground">{block.marker}</span>}
+          <span className="min-w-0">{text}</span>
+        </p>
+      )}
+    </div>
   )
 }
 

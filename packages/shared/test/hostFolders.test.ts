@@ -6,7 +6,11 @@ import {
   folderCrumbs,
   folderName,
   isProjectFolder,
+  isSystemFolder,
+  placeLabel,
+  placesFromRoots,
   titleFolderName,
+  typedFolderPath,
 } from '../src/workspace/hostFolders'
 
 it('names a folder by its last part on POSIX and Windows hosts', () => {
@@ -77,5 +81,49 @@ describe('cloneStartFolder', () => {
   })
   it('reads Windows paths', () => {
     expect(cloneStartFolder(['C:\\Users\\me', 'C:\\Users\\me\\code\\app'])).toBe('C:\\Users\\me\\code')
+  })
+})
+
+describe('folder picker places', () => {
+  const say = (text: string) => `[${text}]`
+  it('names home by its role, the root by its boot volume when it has one, and drives by their own name', () => {
+    expect(placeLabel({ kind: 'home', name: 'ana', path: '/Users/ana' }, say)).toBe('[Home folder]')
+    expect(placeLabel({ kind: 'computer', name: '/', path: '/' }, say)).toBe('[Computer]')
+    expect(placeLabel({ kind: 'computer', name: 'Macintosh HD', path: '/' }, say)).toBe('Macintosh HD')
+    expect(placeLabel({ kind: 'drive', name: 'Drive', path: '/Volumes/Drive' }, say)).toBe('Drive')
+  })
+  it('reads an older host’s browse roots as its home folder, then its projects', () => {
+    expect(placesFromRoots(['/Users/ana', '/Users/ana/code/app'])).toEqual([
+      { kind: 'home', name: 'ana', path: '/Users/ana' },
+      { kind: 'project', name: 'app', path: '/Users/ana/code/app' },
+    ])
+  })
+  it('takes a typed or pasted path without the spaces and quotes around it', () => {
+    expect(typedFolderPath('  /Volumes/My Drive/ ')).toBe('/Volumes/My Drive/')
+    expect(typedFolderPath('"/Volumes/My Drive"')).toBe('/Volumes/My Drive')
+    expect(typedFolderPath("'~/code'")).toBe('~/code')
+    expect(typedFolderPath('  ')).toBe('')
+  })
+})
+
+describe('isSystemFolder', () => {
+  it('refuses filesystem and drive roots on every platform', () => {
+    expect(isSystemFolder('/', 'darwin')).toBe(true)
+    expect(isSystemFolder('/', 'linux')).toBe(true)
+    expect(isSystemFolder('C:\\', 'win32')).toBe(true)
+    expect(isSystemFolder('D:', 'win32')).toBe(true)
+  })
+  it('refuses operating-system folders but not the folders inside them', () => {
+    expect(isSystemFolder('/usr/', 'linux')).toBe(true)
+    expect(isSystemFolder('/media', 'linux')).toBe(true)
+    expect(isSystemFolder('/usr/local/src/app', 'linux')).toBe(false)
+    expect(isSystemFolder('/system', 'darwin')).toBe(true)
+    expect(isSystemFolder('/Volumes', 'darwin')).toBe(true)
+    expect(isSystemFolder('/Volumes/Drive', 'darwin')).toBe(false)
+    expect(isSystemFolder('c:\\windows', 'win32')).toBe(true)
+    expect(isSystemFolder('C:\\Users\\ana\\code', 'win32')).toBe(false)
+  })
+  it('compares case on Linux, where /System is just a folder', () => {
+    expect(isSystemFolder('/System', 'linux')).toBe(false)
   })
 })

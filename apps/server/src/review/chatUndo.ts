@@ -23,6 +23,9 @@ export function combineChatUndo(revisions: UndoRevision[]) {
       if (!root) throw new Error('A recorded working directory is unavailable.')
       const path = join(root.cwd, file.path)
       const prior = paths.get(path)
+      const shared = file.sharedWith?.length
+        ? 'Another thread also changed this file during these turns. Restore it by hand to keep its edits.'
+        : undefined
       if (!prior)
         paths.set(path, {
           first: file,
@@ -31,7 +34,9 @@ export function combineChatUndo(revisions: UndoRevision[]) {
           members: [{ reviewId: review.id, fileId: file.id }],
           ...(review.undoFileIds?.includes(file.id)
             ? { reason: 'This range contains changes already restored. Review this file manually.' }
-            : {}),
+            : shared
+              ? { reason: shared }
+              : {}),
         })
       else {
         const beforeExists = file.status !== 'added',
@@ -39,6 +44,7 @@ export function combineChatUndo(revisions: UndoRevision[]) {
         if (beforeExists !== afterExists || (beforeExists && file.oldContent !== prior.last.newContent))
           prior.reason = 'This file changed outside the captured runs. Restore it manually to preserve those edits.'
         if (file.binary || prior.last.binary) prior.reason = 'Binary or large files require manual review.'
+        if (shared) prior.reason = shared
         if (review.undoFileIds?.includes(file.id))
           prior.reason = 'This range contains changes already restored. Review this file manually.'
         prior.last = file

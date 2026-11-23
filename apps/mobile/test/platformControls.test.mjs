@@ -3,6 +3,7 @@ import * as hostConnection from '../src/runtime/hostConnection.ts'
 import * as toolActivity from '../../../packages/shared/src/chat/toolActivity.ts'
 import * as recentThreads from '../src/runtime/recentThreads.ts'
 import * as sendJournal from '../src/runtime/sendJournal.ts'
+import * as sharedOutbox from '../../../packages/shared/src/outbox.ts'
 import * as goalVerify from '../src/runtime/goalVerify.ts'
 import * as threadGroups from '../src/runtime/threadGroups.ts'
 import * as sideChat from '../src/runtime/sideChat.ts'
@@ -236,6 +237,7 @@ function load(file, os, overrides = {}, globals = {}) {
       if (id === '@ramu/shared/browserBridge') return browserBridge
       if (id === '@ramu/shared/chat/toolActivity') return toolActivity
       if (id === './sendJournal') return sendJournal
+      if (id === '@ramu/shared/outbox') return sharedOutbox
       if (id === '@ramu/shared/mapBounded') return { mapBounded: (items, _limit, run) => Promise.all(items.map(run)) }
       if (id === './goalVerify') return goalVerify
       if (id === '@ramu/shared/sync/streamSync')
@@ -5700,13 +5702,9 @@ for (const os of ['ios', 'android']) {
     const block = nodes(root).find((node) => node.type?.name === 'TranscriptBlock')
     const action = block.type(block.props)
     const render = () => hooks.render(() => action.type(action.props))
-    // A long press selects the text; the selection bar's More opens the rest of the message's actions.
-    const openMore = () => {
-      find(render(), 'Pressable').props.onLongPress()
-      const selecting = render()
-      selecting.props.more()
-      selecting.props.done()
-    }
+    // Without the native Markdown view (the web build), a long press opens the message's actions; in an app build the
+    // native selection menu's More opens the same sheet.
+    const openMore = () => find(render(), 'Pressable').props.onLongPress()
     openMore()
     assert.ok(sheets[0].options.includes('Edit from here'))
     menu = { ...menu, readOnly: true }
@@ -5719,6 +5717,69 @@ for (const os of ['ios', 'android']) {
     sheets[1].select(1)
     sheets[1].select(2)
     assert.deepEqual(calls, ['copy', 'quote', 'new'])
+    hooks.dispose()
+  })
+}
+
+for (const os of ['ios', 'android']) {
+  test(`${os} selecting message text uses the native menu, whose More opens the message's actions`, () => {
+    const calls = [],
+      sheets = [],
+      hooks = hookHarness()
+    const { createContext } = require('react')
+    const selectionMenu = createContext(null)
+    let menu = {
+      readOnly: false,
+      quote: (text) => calls.push(`quote:${text}`),
+      quoteNew: (text) => calls.push(`new:${text}`),
+      edit: () => calls.push('edit'),
+      undo: () => calls.push('undo'),
+      aside: (text, from) => calls.push(`aside:${text}:${from}`),
+    }
+    const component = load('components/Transcript.tsx', os, {
+      react: { ...require('react'), ...hooks.react, useContext: () => menu },
+      './ui': { ...components, tap() {} },
+      './NativeMarkdown': {
+        nativeMarkdown: true,
+        MessageSelectionMenuContext: selectionMenu,
+        TextMarkContext: createContext(null),
+      },
+      'react-native': {
+        ActionSheetIOS: {
+          showActionSheetWithOptions: (options, select) => sheets.push({ options: options.options, select }),
+        },
+        Alert: {
+          alert: (_title, _body, actions) =>
+            sheets.push({
+              options: actions.map((action) => action.text),
+              select: (index) => actions[index].onPress?.(),
+            }),
+        },
+      },
+      'expo-clipboard': { setStringAsync: async () => calls.push('copy') },
+    })
+    const root = component.TranscriptItemView({
+      item: { kind: 'user', seq: 7, text: 'Original request' },
+      chat: { id: 'chat' },
+    })
+    const block = nodes(root).find((node) => node.type?.name === 'TranscriptBlock')
+    const action = block.type(block.props)
+    const selecting = () => hooks.render(() => action.type(action.props))
+    const provided = selecting()
+    // No bar of its own: the message is wrapped only in the native menu's actions, with no long-press handler.
+    assert.equal(provided.type, selectionMenu.Provider)
+    assert.equal(
+      nodes(provided).find((node) => node.type === 'Pressable'),
+      undefined,
+    )
+    provided.props.value.quote('picked words')
+    provided.props.value.aside('picked words')
+    provided.props.value.more()
+    assert.deepEqual(calls, ['quote:picked words', 'aside:picked words:user'])
+    assert.ok(sheets[0].options.includes('Edit from here'))
+    // A viewer can still quote, but the menu offers no aside.
+    menu = { ...menu, readOnly: true }
+    assert.equal(selecting().props.value.aside, undefined)
     hooks.dispose()
   })
 }

@@ -307,7 +307,7 @@ export function PullRequestsPage() {
               <span
                 key={label}
                 title={label}
-                className="min-w-0 max-w-[96px] shrink-[2] truncate rounded-full bg-fill px-1.5 text-[11px] leading-4"
+                className="min-w-0 max-w-[96px] shrink-[2] truncate rounded-full bg-fill px-1.5 text-micro leading-4"
               >
                 {label}
               </span>
@@ -444,7 +444,7 @@ export function PullRequestsPage() {
                   <TabsTrigger key={entry} value={entry} className="flex-none gap-1.5 px-0.5 text-control">
                     {t(PULL_REQUEST_FILTER_LABEL[entry])}
                     {count(entry) > 0 && (
-                      <span className="min-w-4 rounded-full bg-fill px-1.5 text-[11px] leading-4 text-muted-foreground tabular-nums">
+                      <span className="min-w-4 rounded-full bg-fill px-1.5 text-micro leading-4 text-muted-foreground tabular-nums">
                         {count(entry)}
                       </span>
                     )}

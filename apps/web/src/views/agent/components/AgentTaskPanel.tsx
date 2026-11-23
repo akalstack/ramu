@@ -7,8 +7,7 @@ import { Button } from '@/components/desktop-button'
 import { ArrowLeft, Bot, Square, X } from 'lucide-react'
 import { visibleText } from '../lib/messages'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import Markdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { MarkdownText } from '../../../chat/MarkdownText'
 import type { AgentEvent } from '@ramu/shared/types'
 import { advisorTranscript, effectiveStatus, parseTaskMessage } from '@ramu/shared/chat/agentTasks'
 import type { AgentTask } from '@ramu/shared/types'
@@ -318,10 +317,12 @@ export function AgentTaskPanel({
                       block.event.text.trim() === task.summary!.trim(),
                   ))) && (
                 <div
-                  className={`agent-panel-report [&.error]:[border-color:color-mix(in_srgb,_var(--bad)_40%,_transparent)] [&_p]:m-0 p-[10px_12px] [border:1px_solid_transparent] rounded-(--radius-m) bg-raised${task.error ? ' error text-bad' : ''}`}
+                  className={`agent-panel-report [&.error]:[border-color:color-mix(in_srgb,_var(--bad)_40%,_transparent)] p-[10px_12px] [border:1px_solid_transparent] rounded-(--radius-m) bg-raised${task.error ? ' error text-bad' : ''}`}
                 >
                   <span className={PANEL_LABEL_CLASS}>{task.error ? translate('Error') : translate('Report')}</span>
-                  <Markdown remarkPlugins={[remarkGfm]}>{task.error ?? task.summary ?? ''}</Markdown>
+                  <MarkdownText density="compact" className={task.error ? 'text-bad' : undefined}>
+                    {task.error ?? task.summary ?? ''}
+                  </MarkdownText>
                 </div>
               )}
           </div>

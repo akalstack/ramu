@@ -1,9 +1,10 @@
-import Markdown, { type Components } from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import type { Components } from 'react-markdown'
 import { cn } from 'cn'
+import type { ProseDensity } from '@ramu/shared/prose'
 import { forgeCommentMarkdown } from '@ramu/shared/forgeMarkdown'
 import { previewRehypePlugins } from '@ramu/shared/workspace/markdownRendering'
 import { chatMarkdownComponents } from '../chat/ChatMarkdown'
+import { MarkdownText } from '../chat/MarkdownText'
 import { ChatCodePre } from '../chat/ChatCodeBlock'
 import { t } from '../i18n'
 
@@ -70,17 +71,24 @@ const components: Components = {
  * A pull request's description or comment as the hosting service shows it: GitHub-flavored Markdown with its HTML
  * sanitized, folded <details>, hidden comments left out, emoji shortcodes drawn and suggestions shown as changes.
  */
-export function PullRequestMarkdown({ children, className }: { children: string; className?: string }) {
+export function PullRequestMarkdown({
+  children,
+  density = 'compact',
+  className,
+}: {
+  children: string
+  /** A comment reads as a card; a description, which is the page's main text, as a reply. */
+  density?: ProseDensity
+  className?: string
+}) {
   return (
-    <div
-      className={cn(
-        'min-w-0 text-control text-soft [overflow-wrap:anywhere] [&_blockquote]:border-l-2 [&_blockquote]:border-line [&_blockquote]:pl-2.5 [&_p]:my-1.5 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&_ul]:my-1.5 [&_ul]:pl-5 [&_ol]:my-1.5 [&_ol]:pl-5 [&_li]:my-0.5 [&_h1]:my-2 [&_h1]:text-body [&_h1]:font-semibold [&_h2]:my-2 [&_h2]:text-body [&_h2]:font-semibold [&_h3]:my-1.5 [&_h3]:text-control [&_h3]:font-semibold [&_img]:max-w-full',
-        className,
-      )}
+    <MarkdownText
+      density={density}
+      className={cn('[overflow-wrap:anywhere]', className)}
+      rehypePlugins={previewRehypePlugins}
+      components={components}
     >
-      <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={previewRehypePlugins} components={components}>
-        {forgeCommentMarkdown(children)}
-      </Markdown>
-    </div>
+      {forgeCommentMarkdown(children)}
+    </MarkdownText>
   )
 }

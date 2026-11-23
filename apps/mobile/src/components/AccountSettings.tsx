@@ -7,7 +7,7 @@ import { translate } from '@ramu/shared/i18n'
 import * as account from '../runtime/account'
 import { secureRandom } from '../runtime/secureRandom'
 import { useStore } from '../runtime/store'
-import { connectAccountHosts } from './AccountHosts'
+import { CONNECTING, connectAccountHosts } from './AccountHosts'
 import { BrandIcon } from './Logos'
 import { font, space, useTheme, type Appearance, type TextSize } from '../theme'
 import { RowLabel, TextRow } from './SettingRows'
@@ -73,8 +73,15 @@ function SignInMarks() {
  * The Ramu account on this phone: sign in, approve a new host's request for the backup key after the numbers match,
  * back up and restore this phone's own preferences, and add a host listed in the account without a code.
  */
-export function AccountSettings() {
+export function AccountSettings({ onConnected }: { onConnected?: () => void } = {}) {
   const store = useStore()
+  const count = useRef(store.computers.length)
+  // Opened from the first-run steps: a host added through the account returns there, as the pair screen does.
+  useEffect(() => {
+    if (store.computers.length > count.current) onConnected?.()
+    count.current = store.computers.length
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- follows the number of hosts only
+  }, [store.computers.length])
   const theme = useTheme()
   const { c } = theme
   const t = (text: string, values?: Record<string, string | number>) => translate(store.language, text, values)
@@ -366,7 +373,7 @@ export function AccountSettings() {
                             setStatus(
                               host.trust === 'ask'
                                 ? t('Allow this phone on {name} when it shows {code}.', { name: host.name, code })
-                                : t('Connecting to {name}…', { name: host.name }),
+                                : t(CONNECTING, { name: host.name, code }),
                             ),
                           controller.signal,
                         )

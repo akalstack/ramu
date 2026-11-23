@@ -27,19 +27,15 @@ describe('chatMarkdownComponents', () => {
     expect(html).toContain('thead_th:last-child]:pr-10')
   })
 
-  it('draws task lists with disabled shadcn checkboxes and no bullets', () => {
+  it('draws task lists with disabled shadcn checkboxes, leaving list and quote looks to the reading frame', () => {
     const html = render('- [x] done\n- [ ] todo')
     expect(html.match(/data-slot="checkbox"/g)).toHaveLength(2)
-    expect(html).toContain('list-none')
-    expect(html).not.toContain('list-disc')
+    expect(html).toContain('class="contains-task-list"')
+    expect(render('- one\n- two')).toBe('<ul>\n<li>one</li>\n<li>two</li>\n</ul>')
+    expect(render('> quoted')).toBe('<blockquote>\n<p>quoted</p>\n</blockquote>')
   })
 
-  it('keeps bullets for ordinary lists', () => {
-    expect(render('- one\n- two')).toContain('list-disc')
-  })
-
-  it('draws rules as separators and quotes with a left border', () => {
+  it('draws rules as separators', () => {
     expect(render('a\n\n---\n\nb')).toContain('data-slot="separator"')
-    expect(render('> quoted')).toContain('border-l-2')
   })
 })

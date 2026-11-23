@@ -39,6 +39,8 @@ export interface RuntimeSocketOptions {
   onState?(state: SocketState): void
   /** The host's run identity changed: it restarted and every cursor held is void. */
   onRestart?(): void
+  /** The run an earlier socket to this host last saw, when this one replaces it, so a restart in between is still told. */
+  epoch?: string | null
   /**
    * Ask the host to hold back terminal output this client has not processed, and acknowledge each `term:data` chunk
    * once `onEvent` has returned. A `term:behind` event then means chunks were withheld: fetch `term.snapshot(id, since)`.
@@ -95,7 +97,14 @@ export class RuntimeSocket {
   private readonly waiters = new Set<() => void>()
   state: SocketState = 'closed'
 
-  constructor(private readonly options: RuntimeSocketOptions) {}
+  constructor(private readonly options: RuntimeSocketOptions) {
+    this.epoch = options.epoch ?? null
+  }
+
+  /** The host run this socket last connected to, or null before its first connection. */
+  get runId(): string | null {
+    return this.epoch
+  }
 
   private set(state: SocketState) {
     if (this.state === state) return

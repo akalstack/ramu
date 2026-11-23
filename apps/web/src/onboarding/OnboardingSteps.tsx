@@ -258,7 +258,7 @@ function Example({ label, stops, caption }: { label: string; stops: string[]; ca
         valueText={stops[index]}
         onValueChange={(value) => setIndex(value as number)}
       />
-      <div className="mt-1.5 flex justify-between gap-2 text-[11px] text-muted-foreground">
+      <div className="mt-1.5 flex justify-between gap-2 text-micro text-muted-foreground">
         <span className="truncate">{stops[0]}</span>
         <span className="truncate text-right">{stops[stops.length - 1]}</span>
       </div>

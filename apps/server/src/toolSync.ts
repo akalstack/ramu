@@ -4,7 +4,6 @@
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { hostname } from 'node:os'
 import { isAbsolute } from 'node:path'
 import { remoteKey } from '@ramu/shared/continuation'
 import type { SharedMcpManagement, SharedMcpToolChoice } from '@ramu/shared/mcp'
@@ -31,6 +30,7 @@ import type { AgentEvent, ManagedSkill } from '@ramu/shared/types'
 import { skillExportName } from './memory/skillFiles'
 import { findExecutable } from './providers/providerBinaries'
 import type { Workspace } from './workspace/workspace'
+import { hostDisplayName } from './remote/hostName'
 
 const WAITING_KEY = 'tool-sync-waiting'
 const AVAILABILITY_KEY = 'tool-sync-availability'
@@ -430,7 +430,7 @@ function syncHostId(workspace: Workspace) {
 /** This host as tool delivery sees it. */
 export const toolHost = (sources: ToolSources): ToolHost => ({
   hostId: syncHostId(sources.workspace),
-  hostName: hostname().replace(/\.local$/, ''),
+  hostName: hostDisplayName(),
   identities: (sources.identities?.settings().identities ?? []).map((identity) => identity.id),
   remotes: [...new Set(projectRemotes(sources.workspace).flatMap((project) => project.keys))],
 })

@@ -1,5 +1,5 @@
-import { createContext, isValidElement, useContext, useEffect, useId, useMemo, useState, type ReactNode } from 'react'
-import { Image, Linking, Platform, ScrollView, StyleSheet, Text, UIManager, View, type TextStyle } from 'react-native'
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Image, Linking, ScrollView, StyleSheet, Text, View, type TextStyle } from 'react-native'
 import { ReferenceBadge } from './ReferenceChip'
 export { ReferenceBadge } from './ReferenceChip'
 import { CodeBlock } from './Code'
@@ -8,16 +8,17 @@ import { parseBlocks, splitLongParagraph, type Block } from '../runtime/markdown
 import { chatReferences } from '@ramu/shared/chat/chatReferences'
 import { draftChip, skillChip } from '@ramu/shared/chat/referenceChip'
 import { inlineCodeFileLink, localFileLink } from '@ramu/shared/workspace/fileLinks'
-import { font, radius, space, useTheme } from '../theme'
-import { UITextView } from '@bsky.app/react-native-uitextview'
-import { selectedText, type TextRun } from '../runtime/selectedText'
+import { TEXT_SCALE, font, radius, useTheme } from '../theme'
+import type { ProseDensity } from '@ramu/shared/prose'
+import { phoneProse, type PhoneProse } from '../runtime/prose'
 import { ImagePreview } from './ImagePreview'
 import { NativeMarkdown, TextMarkContext, nativeMarkdown } from './NativeMarkdown'
 import { markSource } from '../runtime/textMark'
 import { markdownBlocks, nativeMarkdownSource, splitCodeFences } from '../runtime/nativeMarkdownSource'
 
-// Native markdown for agent replies: headings, lists, tasks, quotes, tables, rules, coloured code, emphasis and links.
-// Kept native: shared's react-markdown renderer depends on the DOM.
+// Markdown on the phone. The native Markdown view (NativeMarkdown) draws it in every app build, with native selection and
+// its menu; the block renderer below draws it where that view does not exist (the web build), from React Native parts,
+// since shared's react-markdown renderer depends on the DOM.
 
 /** What a tapped reference does. The chat screen provides it; without one, references still render as badges. */
 export interface ReferenceActions {
@@ -33,33 +34,12 @@ export const ReferenceContext = createContext<ReferenceActions>({
 })
 
 /**
- * Where a message hears what part of it is selected. Inside one, iOS draws each finished block as native selectable
- * text, so a long press picks a word and the handles move by character, as on the desktop. `block` tells blocks apart;
- * `text` is null once that block's selection is cleared.
+ * The reading scale of the Markdown being drawn. A nested block (a quote) keeps its message's scale; every message
+ * names its own density.
  */
-export const MessageTextSelection = createContext<((block: string, text: string | null) => void) | null>(null)
-
-/** Without the native text view: a long-pressed paragraph opens its message for selecting, starting on that paragraph. */
-export const MessageBlockPress = createContext<((block: string) => void) | null>(null)
-
-/**
- * Whether this app binary has the native text view behind word-by-word selection. Expo Go and builds made before it
- * was added do not, and drawing it there fails with "UnimplementedView"; those keep React Native's Text instead.
- */
-export const nativeSelection = (() => {
-  if (Platform.OS !== 'ios') return false
-  try {
-    return UIManager.hasViewManagerConfig('RNUITextView') && UIManager.hasViewManagerConfig('RNUITextViewChild')
-  } catch {
-    return false
-  }
-})()
-
-/**
- * Spans inside a block. Under a selectable block they join its native text; anywhere else this is React Native's own
- * Text, so one renderer serves both.
- */
-const Span = nativeSelection ? UITextView : Text
+const ProseContext = createContext<PhoneProse | null>(null)
+const DEFAULT_PROSE = phoneProse('reply', 1, font)
+const useProse = () => useContext(ProseContext) ?? DEFAULT_PROSE
 
 /** Plain prose with explicit references (`@file`, `$skill`) turned into badges. */
 function prose(text: string, actions: ReferenceActions) {
@@ -78,35 +58,22 @@ function prose(text: string, actions: ReferenceActions) {
   )
 }
 
-/** Snippets up to this length are drawn as one unbreakable pill; longer ones must wrap, so they stay text. */
-const PILL_MAX = 32
-
-/**
- * Inline code as on desktop: 0.88em mono in body color on a small rounded tint. A nested Text cannot round its
- * background and native platforms paint it across the whole line box, so short snippets are an inline View pill,
- * nudged down onto the text baseline. Long snippets wrap as plain mono text with no tint (no tall slabs).
- */
-/** Whether a snippet is drawn as an inline pill (one view) rather than as text. */
-const isPill = (code: string) => Platform.OS !== 'web' && code.length <= PILL_MAX && !code.includes('\n')
-
+/** Inline code as on desktop: smaller mono text in body colour on a small rounded tint. */
 function InlineCode({ code, c }: { code: string; c: ReturnType<typeof useTheme>['c'] }) {
-  const type = { fontFamily: font.mono, fontSize: font.control, color: c.text }
-  if (Platform.OS === 'web')
-    return (
-      <Text style={{ ...type, backgroundColor: c.fill, borderRadius: radius.xs, paddingHorizontal: 4 }}>{code}</Text>
-    )
-  if (!isPill(code)) return <Span style={type}>{code}</Span>
+  const prose = useProse()
   return (
-    <View
+    <Text
       style={{
+        fontFamily: font.mono,
+        fontSize: prose.code,
+        color: c.text,
         backgroundColor: c.fill,
         borderRadius: radius.xs,
-        paddingHorizontal: 5,
-        transform: [{ translateY: Platform.OS === 'ios' ? 3 : 2 }],
+        paddingHorizontal: 4,
       }}
     >
-      <Text style={{ ...type, lineHeight: 18 }}>{code}</Text>
-    </View>
+      {code}
+    </Text>
   )
 }
 
@@ -140,21 +107,21 @@ function inline(
       }
       if (((p.startsWith('**') && p.endsWith('**')) || (p.startsWith('__') && p.endsWith('__'))) && p.length > 4)
         return (
-          <Span key={k} style={{ fontWeight: '600', color: c.text }}>
+          <Text key={k} style={{ fontWeight: '600', color: c.text }}>
             {inline(p.slice(2, -2), k, c, actions)}
-          </Span>
+          </Text>
         )
       if (p.startsWith('~~') && p.endsWith('~~') && p.length > 4)
         return (
-          <Span key={k} style={{ textDecorationLine: 'line-through', color: c.muted }}>
+          <Text key={k} style={{ textDecorationLine: 'line-through', color: c.muted }}>
             {inline(p.slice(2, -2), k, c, actions)}
-          </Span>
+          </Text>
         )
       if (((/^\*[^*]/.test(p) && p.endsWith('*')) || (/^_[^_]/.test(p) && p.endsWith('_'))) && p.length > 2)
         return (
-          <Span key={k} style={{ fontStyle: 'italic' }}>
+          <Text key={k} style={{ fontStyle: 'italic' }}>
             {inline(p.slice(1, -1), k, c, actions)}
-          </Span>
+          </Text>
         )
       const link = p.match(/^\[([^\]]+)\]\(([^)\s]+)\)$/)
       const url = link ? link[2]! : /^<https?:\/\//.test(p) ? p.slice(1, -1) : /^https?:\/\//.test(p) ? p : null
@@ -170,14 +137,14 @@ function inline(
           )
         if (/^https?:\/\//i.test(url))
           return (
-            <Span
+            <Text
               key={k}
               onPress={() => actions.openUrl(url)}
               accessibilityRole="link"
               style={{ color: c.accent, textDecorationLine: 'underline' }}
             >
               {label}
-            </Span>
+            </Text>
           )
         return label
       }
@@ -185,46 +152,15 @@ function inline(
     })
 }
 
-/** What each rendered piece copies as, in on-screen order; inline views are one placeholder character natively. */
-function textRuns(node: ReactNode, out: TextRun[] = []): TextRun[] {
-  if (typeof node === 'string' || typeof node === 'number') out.push({ text: String(node) })
-  else if (Array.isArray(node)) for (const child of node) textRuns(child, out)
-  else if (isValidElement(node)) {
-    const props = node.props as { children?: ReactNode; code?: string; chip?: { label: string } }
-    if (node.type === InlineCode && props.code !== undefined)
-      out.push(isPill(props.code) ? { text: props.code, atom: true } : { text: props.code })
-    else if (node.type === ReferenceBadge && props.chip) out.push({ text: props.chip.label, atom: true })
-    else textRuns(props.children, out)
-  }
-  return out
-}
-
-/** `live`: the reply is still arriving, so the block stays plain text until it settles, then becomes selectable. */
-function Inline({ text, style, live }: { text: string; style?: TextStyle; live?: boolean }) {
+/** A block of text with its inline marks, references and links. On the web this is the browser's selectable text. */
+function Inline({ text, style }: { text: string; style?: TextStyle }) {
   const { c } = useTheme()
-  const report = useContext(MessageTextSelection)
-  const pressBlock = useContext(MessageBlockPress)
-  const block = useId()
   const actions = useContext(ReferenceContext)
-  const nodes = inline(text, 'i', c, actions)
-  const look = [{ color: c.body, fontSize: font.body, lineHeight: 22 }, style]
-  if (nativeSelection && report && !live)
-    return (
-      <UITextView
-        selectable
-        uiTextView
-        style={look}
-        onSelectionChange={({ nativeEvent: { start, end } }) =>
-          report(block, end > start ? selectedText(textRuns(nodes), start, end).trim() || null : null)
-        }
-      >
-        {nodes}
-      </UITextView>
-    )
+  const prose = useProse()
   return (
     // iOS dims pressable text while a finger rests on it, which flickers the reply as it scrolls; it keeps its colour.
-    <Text style={look} suppressHighlighting onLongPress={pressBlock && !live ? () => pressBlock(text) : undefined}>
-      {nodes}
+    <Text style={[{ color: c.body, fontSize: prose.size, lineHeight: prose.lineHeight }, style]} suppressHighlighting>
+      {inline(text, 'i', c, actions)}
     </Text>
   )
 }
@@ -272,10 +208,9 @@ function MarkdownImage({ src, alt }: { src: string; alt: string }) {
   )
 }
 
-const HEADING = [0, 22, 19, 17, 16, 15, 15]
-
-function BlockView({ block, live }: { block: Block; live?: boolean }) {
+function BlockView({ block }: { block: Block }) {
   const { c } = useTheme()
+  const prose = useProse()
   switch (block.kind) {
     case 'code':
       return <CodeBlock source={block.source} hint={block.lang} />
@@ -283,35 +218,32 @@ function BlockView({ block, live }: { block: Block; live?: boolean }) {
       return (
         <Inline
           text={block.text}
-          live={live}
+
           style={{
-            fontSize: HEADING[block.level],
-            lineHeight: HEADING[block.level]! + 6,
+            ...prose.headings[block.level - 1],
             fontWeight: '600',
             color: c.text,
-            marginTop: block.level <= 2 ? space.s : 0,
+            marginTop: Math.max(0, prose.headingGap - prose.blockGap),
           }}
         />
       )
     case 'image':
       return <MarkdownImage src={block.src} alt={block.alt} />
     case 'rule':
-      return (
-        <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.lineStrong, marginVertical: space.s }} />
-      )
+      return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.lineStrong }} />
     case 'quote':
       return (
-        <View style={{ borderLeftWidth: 3, borderLeftColor: c.lineStrong, paddingLeft: space.m }}>
+        <View style={{ borderLeftWidth: 2, borderLeftColor: c.lineStrong, paddingLeft: prose.size }}>
           <Markdown text={block.text} muted />
         </View>
       )
     case 'paragraph': {
       const pieces = splitLongParagraph(block.text)
-      if (pieces.length === 1) return <Inline text={block.text} live={live} />
+      if (pieces.length === 1) return <Inline text={block.text} />
       return (
         <View>
           {pieces.map((piece, index) => (
-            <Inline key={index} text={piece} live={live} />
+            <Inline key={index} text={piece} />
           ))}
         </View>
       )
@@ -319,7 +251,7 @@ function BlockView({ block, live }: { block: Block; live?: boolean }) {
     case 'list': {
       let counter = 0
       return (
-        <View style={{ gap: 4 }}>
+        <View style={{ gap: prose.itemGap }}>
           {block.items.map((item, index) => {
             counter = item.ordered
               ? index && block.items[index - 1]!.ordered && block.items[index - 1]!.depth === item.depth
@@ -341,8 +273,8 @@ function BlockView({ block, live }: { block: Block; live?: boolean }) {
                   style={{
                     width: item.ordered ? 26 : 18,
                     color: item.task && item.done ? c.ok : c.muted,
-                    fontSize: font.body,
-                    lineHeight: 22,
+                    fontSize: prose.size,
+                    lineHeight: prose.lineHeight,
                     fontVariant: ['tabular-nums'],
                   }}
                 >
@@ -351,7 +283,7 @@ function BlockView({ block, live }: { block: Block; live?: boolean }) {
                 <View style={{ flex: 1 }}>
                   <Inline
                     text={item.text}
-                    live={live}
+
                     style={item.task && item.done ? { color: c.muted, textDecorationLine: 'line-through' } : undefined}
                   />
                 </View>
@@ -409,8 +341,8 @@ function BlockView({ block, live }: { block: Block; live?: boolean }) {
                       style={{
                         width: widths[col],
                         flexGrow: 1,
-                        paddingHorizontal: space.s + 2,
-                        paddingVertical: space.s,
+                        paddingHorizontal: 10,
+                        paddingVertical: 8,
                         borderLeftWidth: col ? StyleSheet.hairlineWidth : 0,
                         borderLeftColor: c.line,
                       }}
@@ -418,8 +350,8 @@ function BlockView({ block, live }: { block: Block; live?: boolean }) {
                       <Inline
                         text={row[col] ?? ''}
                         style={{
-                          fontSize: font.control,
-                          lineHeight: 19,
+                          fontSize: prose.small,
+                          lineHeight: prose.smallLineHeight,
                           textAlign: block.align[col] ?? 'left',
                           ...(r === 0 ? { fontWeight: '600', color: c.text } : {}),
                         }}
@@ -471,6 +403,7 @@ function NativeParts({
   muted?: boolean
   actions: ReferenceActions
 }) {
+  const prose = useProse()
   const parts = useMemo(() => splitCodeFences(source), [source])
   const single = parts.length === 1 && parts[0]!.kind === 'text'
   const draw = (text: string, key?: number) => {
@@ -482,13 +415,14 @@ function NativeParts({
         marked={marked !== null}
         streaming={streaming}
         muted={muted}
+        prose={prose}
         actions={actions}
       />
     )
   }
   if (single || !parts.length) return draw(source)
   return (
-    <View style={{ gap: space.m }}>
+    <View style={{ gap: prose.blockGap }}>
       {parts.map((part, index) =>
         part.kind === 'code' ? (
           <CodeBlock key={index} source={part.source} hint={part.lang} />
@@ -504,11 +438,14 @@ function NativeParts({
 
 export function Markdown({
   text,
+  density,
   muted,
   streaming,
   fresh,
 }: {
   text: string
+  /** How it reads: a reply (the default), a card's text, or a whole Markdown file. A quote keeps its message's. */
+  density?: ProseDensity
   muted?: boolean
   /** The reply is still arriving: complete its cut-off last line for display, and fade each new block in. */
   streaming?: boolean
@@ -516,6 +453,12 @@ export function Markdown({
   fresh?: boolean
 }) {
   const actions = useContext(ReferenceContext)
+  const { textSize } = useTheme()
+  const inherited = useContext(ProseContext)
+  const prose = useMemo(
+    () => (density || !inherited ? phoneProse(density ?? 'reply', TEXT_SCALE[textSize], font) : inherited),
+    [density, textSize, inherited],
+  )
   const source = useMemo(() => (nativeMarkdown ? nativeMarkdownSource(text) : null), [text])
   const marks = useContext(TextMarkContext)
   const blocks = useMemo(
@@ -533,25 +476,27 @@ export function Markdown({
   const [settledCount] = useState(() =>
     fresh ? 0 : (nativeBlocks?.length ?? (source !== null ? markdownBlocks(source).length : blocks.length)),
   )
-  if (source !== null && nativeBlocks)
-    return (
-      <View>
-        {nativeBlocks.map((block, index) => (
-          <Arrive key={index} animate={index >= settledCount}>
-            <NativeParts source={block} streaming muted={muted} actions={actions} />
-          </Arrive>
-        ))}
-      </View>
-    )
-  if (source !== null)
-    return <NativeParts source={source} marks={streaming ? null : marks} muted={muted} actions={actions} />
   return (
-    <View style={{ gap: space.m, opacity: muted ? 0.8 : 1 }}>
-      {blocks.map((block, index) => (
-        <Arrive key={index} animate={Boolean(streaming) && index >= settledCount}>
-          <BlockView block={block} live={streaming} />
-        </Arrive>
-      ))}
-    </View>
+    <ProseContext.Provider value={prose}>
+      {source !== null && nativeBlocks ? (
+        <View>
+          {nativeBlocks.map((block, index) => (
+            <Arrive key={index} animate={index >= settledCount}>
+              <NativeParts source={block} streaming muted={muted} actions={actions} />
+            </Arrive>
+          ))}
+        </View>
+      ) : source !== null ? (
+        <NativeParts source={source} marks={streaming ? null : marks} muted={muted} actions={actions} />
+      ) : (
+        <View style={{ gap: prose.blockGap, opacity: muted ? 0.8 : 1 }}>
+          {blocks.map((block, index) => (
+            <Arrive key={index} animate={Boolean(streaming) && index >= settledCount}>
+              <BlockView block={block} />
+            </Arrive>
+          ))}
+        </View>
+      )}
+    </ProseContext.Provider>
   )
 }

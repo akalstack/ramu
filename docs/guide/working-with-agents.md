@@ -142,9 +142,20 @@ A quote, a tagged file or another reference in the message box opens when you pr
 
 With **Auto** as the destination, Home also weighs the projects on your other connected hosts. A request that belongs to one of them starts there, in that project's default checkout, and the thread opens. When more than one project could fit, Home asks. For work that spans several repositories, add them to one project: a folder that holds them all gives one thread every repository.
 
-## Continue in a new worktree
+## Threads sharing a checkout
 
-Threads on the same checkout take turns. A message to one waits in its queue while another thread works there, and the queue says which thread it's waiting for, on the desktop and the phone.
+Threads on the same checkout work at the same time, and each thread's **Changes** shows only what it wrote:
+
+- Ramu reads which files each agent edits from its edit tools. A command's writes (a formatter, a code generator, an install) belong to the thread that ran it: while two threads' turns overlap, Ramu watches the checkout, or, where the system can't watch a folder that large, reads its changed files before and after each command.
+- Claude Code's commands in one checkout take turns, so whatever a command writes has one author. A command held this way shows **Held a command until "…" finished its own** in the thread. It waits at most two minutes, and a command moved to the background no longer holds others back.
+- What another thread wrote shows below this thread's diff, folded, as **Changed by "…"** with **Open thread**. What you saved in Ramu's editor shows as **Changed by you**. A change nobody can be credited with, such as an edit in another app or a background command, shows as **Changed outside this thread**. None of them is undone, restored or committed with this thread's changes. **Add to this thread's changes** moves a **Changed by you** or **Changed outside this thread** group into the thread's own.
+- A file both threads edited stays in each thread's changes, marked **Also changed by "…"**, and one you also saved during the turn is marked **Also edited by you**. Undo and restore leave such a file for you to settle, so nobody's edits are thrown away.
+- When two threads edit the same file at once, both threads say so with **Open thread** and **Move to a new worktree**, which continues this thread in its own worktree.
+- **Commit** with nothing staged leaves out the files another thread in the checkout changed last. The commit window lists them unticked, marked **Another thread**, and ticking one adds it. Agents are told to stage only their own files too.
+
+Undoing a turn waits only for that thread to finish. Switching branches while threads work in the checkout asks first: **Switch when they finish** waits for them, and new messages there wait until it has switched. Creating a branch from another and merging still need every thread in the checkout to have stopped.
+
+## Continue in a new worktree
 
 **Continue in new thread** (thread menu) offers **In a new worktree, with the uncommitted changes** for a thread on the project's own checkout. On the phone, the thread's menu has **Continue in new thread** (same checkout, opening the new thread) and **Continue in a new worktree**. The new thread starts on a new branch in its own worktree with this conversation and a copy of every uncommitted change, new files included, so your checkout is free for other work. The original thread and its checkout stay as they are, and the two threads are linked. An agent can do the same when you ask it to move the work off your checkout. Outside Full access it asks first.
 
@@ -153,6 +164,14 @@ Threads on the same checkout take turns. A message to one waits in its queue whi
 **Continue on ‹host›** (thread menu) copies a stopped thread to another connected host, or up to four with **Also on**. The sheet shows the branch it starts from, what stays behind (uncommitted files, unpushed commits), the project there and the model. It matches the project by Git remote, or clones it there. **Change…** picks the folder the clone goes in. The conversation travels with secrets removed, and files never do. Plugins, skills and MCP servers the thread used (servers it called, skills it opened, plugin command lines it ran) that the other host lacks are listed as **Not on ‹host›**, and **Install there** sends them for review on that host ([On your other hosts](plugins.md#on-your-other-hosts)). Both threads stay linked, and **Bring back result** queues the other thread's latest reply in the original.
 
 Hosts whose platform or description (**Settings → Threads → Describe this host**) the request mentions are listed first.
+
+## Copy and paste in a terminal
+
+Select text with the mouse and press ⌘C on a Mac. On Windows and Linux, Ctrl+C copies while text is selected and interrupts the running command when nothing is, and Ctrl+Shift+C always copies. ⌘V, Ctrl+Shift+V, or Ctrl+V on Windows, pastes. A program that asks for bracketed paste, such as your shell, gets the pasted text as one paste rather than as typed commands. Right-click for **Copy**, **Paste** and **Select all**.
+
+Right-click a command's output and choose **Copy command and output** to copy that command with everything it printed, without selecting it. Ramu finds where each command starts from the prompt marks your shell prints with shell integration (OSC 133, as set up for iTerm2, VS Code, WezTerm or Ghostty). Without them, each command you press Enter on in that window starts a new block, and the prompt waiting for your next command is left out. Output from before the terminal was shown again, such as after Ramu restarts, has no blocks unless the shell marked its prompts.
+
+On the phone, the **Copy** button in the terminal's bar copies one of the last five commands with its output, the rows on screen, or the text you select from recent output with the phone's own selection handles. **Paste into terminal** on the key rail pastes the clipboard, and asks first when the text has more than one line.
 
 ## Terminal output in a message
 

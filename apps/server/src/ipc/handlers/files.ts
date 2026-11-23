@@ -217,7 +217,11 @@ export const registerFileHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id, id, relPath, z.string().max(files.MAX_EDITABLE_BYTES), z.string().max(128).nullable()]),
       run: (taskId: string, repoId: string, path: string, content: string, baseHash: string | null) => {
         const cwd = editorCwdOf(taskId, repoId, path)
-        return lock.run(`file:${cwd}/${path}`, () => files.writeText(cwd, path, content, baseHash))
+        return lock.run(`file:${cwd}/${path}`, async () => {
+          const saved = await files.writeText(cwd, path, content, baseHash)
+          if (saved.ok) ctx.reviews.personWrote(join(cwd, path))
+          return saved
+        })
       },
     },
     'files.resolveLink': {

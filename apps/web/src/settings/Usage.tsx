@@ -302,7 +302,7 @@ function WindowMeter({ reading }: { reading: UsageReading }) {
         <span className={cn('flex-none tabular-nums', toneText[tone])}>{usageStatusText(reading)}</span>
       </div>
       {usagePercent(reading) !== null && <UsageBar reading={reading} tone={tone} />}
-      {reset && <span className="truncate text-[11px] leading-4 text-muted-foreground">{reset}</span>}
+      {reset && <span className="truncate text-micro leading-4 text-muted-foreground">{reset}</span>}
     </div>
   )
 }

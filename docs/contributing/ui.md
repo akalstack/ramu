@@ -20,6 +20,20 @@ The desktop renderer (`apps/web`) uses shadcn/ui on Base UI, Tailwind 4 and Ramu
 - Brand marks: `ProviderIcon` for agent providers, `DeviceIcon` for operating systems and `BrandIcon` (`components/brand-icon.tsx`) for forges, hosting platforms and services, typed by `BrandId` in `packages/shared/src/brands.ts`. A mark sits beside the brand's name, never instead of it. Add a mark to `apps/web/src/assets/brands/` with its source in its `SOURCES.md`, then run `node apps/mobile/scripts/gen-assets.mjs` so the phone gets it too.
 - Settings wait for **Save changes**. Settings stored outside app preferences stage through `useStagedValue` (`settings/stagedChanges.tsx`). Lists use `SettingsCard` and `usePaged`.
 
+## Reading text
+
+Every block of Markdown or long-form text reads on one scale, `packages/shared/src/prose.ts`, on both apps. Pick a density and let the shared renderer do the rest:
+
+| Density | Use |
+| --- | --- |
+| `reply` (default) | Agent answers and anything read like one: user messages, reports, summaries, checkpoints, review diffs, a pull request's description |
+| `compact` | Text inside a card or row: thinking, comments, task results, tool output, learned notes |
+| `document` | A whole Markdown file, with larger headings and rules under h1 and h2 |
+
+- Desktop: render with `MarkdownText` (`apps/web/src/chat/MarkdownText.tsx`). It sets the text in `.ramu-prose` (`apps/web/src/prose.css`) and draws tables, code, rules and task boxes with `chatMarkdownComponents`. Override only what the surface needs (links, images, plugins). Text that `MarkdownText` does not draw, such as the Markdown editor or a hand-drawn diff, spreads `proseProps(density)`. Set a surface's size or colour with a utility on `className`. Don't restyle paragraphs, lists or headings per surface.
+- Phone: render with `Markdown` (`apps/mobile/src/components/Markdown.tsx`) and its `density` prop. The scale follows the in-app text size. The app's native Markdown view draws it with native selection and the Quote, New thread, Ask aside and More menu. A message's text goes through it, never through a selection UI of its own.
+- Type tokens: `text-micro` (counts and badges), `text-caption`, `text-control`, `text-body`, `text-chat`, `text-heading` and `text-hero` follow the font size setting. Don't hard-code pixel sizes. `--prose-measure` caps reading lines at about 72 characters, while code and tables keep the full column.
+
 ## Motion
 
 `packages/shared/src/chat/presentation.ts` is the shared reference for desktop and phone: 180 ms, a 4-point rise and one easing curve. New blocks fade and rise. History, pagination and recycled rows don't animate. System and in-app Reduce Motion turn it all off.

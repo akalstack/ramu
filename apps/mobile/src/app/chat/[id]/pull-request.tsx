@@ -925,7 +925,7 @@ export default function PullRequestScreen() {
                       <T size={font.control} weight="600" tone="muted">
                         {say('Description')}
                       </T>
-                      <PullRequestMarkdown text={description} />
+                      <PullRequestMarkdown text={description} density="reply" />
                     </View>
                   ) : null}
 

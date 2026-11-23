@@ -2,10 +2,11 @@ import { Button } from '@/components/desktop-button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { ArrowUpRight, Brain, MessageSquare, Sparkles } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
-import Markdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import type { Components } from 'react-markdown'
 import { DateTime } from 'luxon'
 import type { LibrarySummary } from '@ramu/shared/types'
+import { chatMarkdownComponents } from '../chat/ChatMarkdown'
+import { MarkdownText } from '../chat/MarkdownText'
 import { Composer } from '../composer/Composer'
 import { errorText } from '../lib/errors'
 import { t, useLanguage } from '../i18n'
@@ -19,6 +20,9 @@ import { closeSummary, type SummaryCall } from './openSummary'
 import { CHANGE_LABELS, DISMISS_LABEL, groupItems } from './summaryLogic'
 
 /** A summary, its linked items, and at the bottom a message box that starts a review chat about it. Read-only itself. */
+/** A summary names what was learned; its links lead nowhere on this screen, so they read as plain words. */
+const SUMMARY_COMPONENTS: Components = { ...chatMarkdownComponents, a: ({ children }) => <span>{children}</span> }
+
 export function SummaryView({ id, call, host }: { id: string; call: SummaryCall; host: string }) {
   useLanguage()
   const { select } = useHostSelection()
@@ -86,11 +90,7 @@ export function SummaryView({ id, call, host }: { id: string; call: SummaryCall;
           {!summary && !error && <p className="muted text-muted-foreground">{t('Loading…')}</p>}
           {summary && (
             <>
-              <div className="summary-text text-body leading-[1.55] [&_h3]:mt-4 [&_h3]:mb-1 [&_h3]:text-control [&_h3]:font-semibold [&_li]:ml-4 [&_li]:list-disc [&_p]:m-[0_0_8px]">
-                <Markdown remarkPlugins={[remarkGfm]} components={{ a: ({ children }) => <span>{children}</span> }}>
-                  {summary.text}
-                </Markdown>
-              </div>
+              <MarkdownText components={SUMMARY_COMPONENTS}>{summary.text}</MarkdownText>
               {summary.changedByYou && (
                 <p className="muted text-muted-foreground small text-caption mt-2">{summary.changedByYou}</p>
               )}

@@ -1077,7 +1077,7 @@ export const AgentView = memo(function AgentView({
                         focus={questionFocus}
                       />
                     )}
-                    {hostOffline && <HostWaitNote name={hostName} />}
+                    {hostOffline && <HostWaitNote name={hostName} hostId={host.id} />}
                     {providerWait && (
                       <ProviderWaitNote retry={limitRetry} autoResume={autoResume} readOnly={viewOnly} />
                     )}

@@ -183,7 +183,7 @@ function WriteRow({
           className="min-h-24"
         />
       ) : (
-        body && <PullRequestMarkdown className="text-control">{body}</PullRequestMarkdown>
+        body && <PullRequestMarkdown>{body}</PullRequestMarkdown>
       )}
       {lineComments.map((comment) => (
         <div key={comment.id} className="border-l-2 border-line pl-2">

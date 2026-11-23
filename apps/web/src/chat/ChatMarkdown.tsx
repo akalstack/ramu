@@ -52,8 +52,8 @@ function CopyableTable({ children }: { children: ReactNode }) {
 }
 
 /**
- * Markdown elements drawn with shadcn parts, shared by every chat surface that renders agent text: tables, rules,
- * task-list boxes, quotes and the code frame. Plain text styles (paragraphs, lists, headings) stay with the surface.
+ * Markdown elements drawn with shadcn parts, shared by every surface that renders Markdown: tables, rules, task-list
+ * boxes and the code frame. Text, lists, quotes and headings take their look from the reading frame (`prose.css`).
  */
 export const chatMarkdownComponents: Components = {
   ...chatCodeComponents,
@@ -72,11 +72,6 @@ export const chatMarkdownComponents: Components = {
     </TableCell>
   ),
   hr: () => <Separator className="my-4 h-px" />,
-  blockquote: ({ children }) => (
-    <blockquote className="mx-0 my-3 border-l-2 border-border pl-4 text-muted-foreground [&>p]:my-0">
-      {children}
-    </blockquote>
-  ),
   input: ({ type, checked, className }) =>
     type === 'checkbox' ? (
       <Checkbox
@@ -90,15 +85,4 @@ export const chatMarkdownComponents: Components = {
     ) : (
       <input type={type} checked={checked} disabled className={className} />
     ),
-  ul: ({ children, className }) => (
-    <ul
-      className={cn(
-        className?.includes('contains-task-list')
-          ? 'list-none pl-0! [&_li]:flex [&_li]:items-center [&_li]:gap-2'
-          : 'list-disc pl-5',
-      )}
-    >
-      {children}
-    </ul>
-  ),
 }

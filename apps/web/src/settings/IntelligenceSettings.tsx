@@ -1,6 +1,5 @@
 import { PRIMARY_ACTION_CLASS } from '@/components/button-classes'
-import Markdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { MarkdownText } from '../chat/MarkdownText'
 import { MovedToCustomize } from '../customize/openCustomize'
 import { ListCount, ListEmpty, ListToolbar, useListView } from './ListView'
 import { Badge } from '@/components/ui/badge'
@@ -669,9 +668,5 @@ function proposalSummary(proposal: string): string | null {
 
 /** Learned text is Markdown the model wrote; it reads as formatted text, not as raw headings and backticks. */
 function ProposalText({ text }: { text: string }) {
-  return (
-    <div className="text-caption [&_:is(h1,h2,h3,h4)]:mt-2 [&_:is(h1,h2,h3,h4)]:mb-1 [&_:is(h1,h2,h3,h4)]:text-[length:1em] [&_:is(h1,h2,h3,h4)]:font-semibold [&_p]:my-1 [&_ul]:my-1 [&_ul]:pl-4 [&_ul]:list-disc [&_li]:my-0.5 [&_:not(pre)>code]:rounded-(--radius-xs) [&_:not(pre)>code]:bg-fill [&_:not(pre)>code]:px-1 [&_:not(pre)>code]:text-[length:0.92em]">
-      <Markdown remarkPlugins={[remarkGfm]}>{text}</Markdown>
-    </div>
-  )
+  return <MarkdownText density="compact">{text}</MarkdownText>
 }

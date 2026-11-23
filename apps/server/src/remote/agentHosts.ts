@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import { hostname } from 'node:os'
 import { forgetHostSocket, runtimeInvoke, runtimePair, runtimeRenew } from '@ramu/client-runtime'
 import type { AgentHostSummary } from '@ramu/shared/types'
 import { HostCredentialStore, type HostCredentialScope } from '../credentials/store'
 import type { Workspace } from '../workspace/workspace'
+import { hostDisplayName } from './hostName'
 
 const KEY = 'agent-hosts'
 /** Renew a pairing's token this long before it would expire. */
@@ -77,7 +77,7 @@ export class AgentHostService {
     const label = name?.trim().slice(0, 80) || new URL(trimmed).hostname
     if (this.list().some((host) => host.name.toLowerCase() === label.toLowerCase()))
       throw new Error(`A host named ${label} is already added. Choose another name.`)
-    const paired = await runtimePair(trimmed, code.trim(), `${hostname()} (agents)`, 'host')
+    const paired = await runtimePair(trimmed, code.trim(), `${hostDisplayName()} (agents)`, 'host')
     const index = this.index()
     const host = {
       id: randomUUID(),

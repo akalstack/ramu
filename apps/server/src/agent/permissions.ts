@@ -52,6 +52,30 @@ export function alwaysAskHooks(scope: CommandScope, access: AgentSettings['acces
   }
 }
 
+/**
+ * Holds each command until no other thread's command runs in the checkout this chat shares, so whatever it writes
+ * belongs to one thread. It never decides the call: a hold that fails lets the command go ahead.
+ */
+export function commandTurnHooks(
+  turn: (toolUseId: string, signal: AbortSignal) => Promise<void>,
+): NonNullable<Options['hooks']> {
+  return {
+    PreToolUse: [
+      {
+        matcher: 'Bash',
+        hooks: [
+          async (input, toolUseId, { signal }) => {
+            if (input.hook_event_name !== 'PreToolUse') return {}
+            const id = toolUseId ?? input.tool_use_id
+            if (id) await turn(id, signal).catch(() => {})
+            return {}
+          },
+        ],
+      },
+    ],
+  }
+}
+
 /** Several hook sets as one: each event keeps every set's matchers. */
 export function claudeHooks(...sets: (Options['hooks'] | undefined)[]): Options['hooks'] {
   const merged: NonNullable<Options['hooks']> = {}

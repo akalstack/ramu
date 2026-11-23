@@ -107,6 +107,10 @@ export const registerReviewHandlers: RegisterHandlers = (ctx) => {
       run: (token: string, fileIds: string[]) =>
         lockCheckouts(ctx, reviews.covers(reviews.undoReviewId(token)), () => reviews.undoApply(token, fileIds)),
     },
+    'reviews.claimElsewhere': {
+      args: z.tuple([id, idList]),
+      run: (reviewId: string, fileIds: string[]) => reviews.claimElsewhere(reviewId, fileIds),
+    },
     'reviews.chatUndoPreview': {
       args: z.tuple([id, z.number().int().min(1)]),
       run: (s: string, seq: number) => lockCheckouts(ctx, agents.get(s).covers, () => reviews.chatUndoPreview(s, seq)),

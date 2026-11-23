@@ -98,7 +98,7 @@ import { allowedConnections, DUPLICATE_CHOICE_KEY, type DuplicateChoices } from 
 import { createServer, type ServerResponse } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
 import { chmodSync, mkdirSync, readFileSync, unlinkSync, writeFileSync, rmSync, statSync } from 'node:fs'
-import { homedir, hostname } from 'node:os'
+import { homedir } from 'node:os'
 import { NoticeInbox } from './background/notices'
 import { join } from 'node:path'
 import { randomBytes, randomUUID } from 'node:crypto'
@@ -150,6 +150,8 @@ import { parseTunnelChoice, TunnelManager } from './remote/tunnel'
 import { LinkClient } from './remote/ramuLink'
 import { LINK_URL } from '@ramu/shared/ramuLink'
 import { HostAdvertiser, advertisedInterfaces, discoveryName, readDiscoveryHostId } from './remote/discovery'
+import { HostName, hostNameInput, useHostName } from './remote/hostName'
+import { cleanDiscoveryName } from '@ramu/shared/discovery/contract'
 import {
   candidateUrls,
   localAddresses,
@@ -219,6 +221,8 @@ mkdirSync(userData, { recursive: true })
 // Network clients present their own device token (see `ramu pair`).
 const devices = new DeviceStore(config.devicesPath, config.deviceLifetimeMs)
 const hostId = readDiscoveryHostId(join(userData, 'discovery.json'))
+const hostNames = new HostName(join(userData, 'host-name.json'))
+useHostName(hostNames)
 const pairingRequests: PairingRequests = new PairingRequests({
   devices,
   hostId,
@@ -285,7 +289,7 @@ const stopPresenceNetwork = runtimeNetwork.subscribe(() => {
   void advertiser.refresh().catch(() => {})
 })
 // Nearby discovery: advertises the bound listener only while access and Discoverable are both on.
-const advertiser = new HostAdvertiser({ hostId })
+const advertiser = new HostAdvertiser({ hostId, name: () => hostNames.display() })
 // `--listen` / RAMU_LISTEN wins and cannot be changed from Settings. Otherwise Settings decides, and applies without a restart.
 let network: NetworkSetting = config.listen
   ? {
@@ -844,6 +848,8 @@ agents.reviewHooks = {
   followup: (sessionId) => reviews!.beforeFollowup(sessionId),
   complete: (sessionId) => reviews!.complete(sessionId),
   validateFeedback: (reviewId) => reviews!.requireOriginalCheckout(reviewId),
+  observe: (sessionId, event) => reviews!.observe(sessionId, event),
+  commandTurn: (sessionId, toolUseId, signal) => reviews!.commandTurn(sessionId, toolUseId, signal),
 }
 const recaps = new RecapService(db, workspace, agents, changed, () => void mobilePush.deliverDigest().catch(() => {}))
 const memory = new MemoryService(db, workspace, agents, () => send('memory:changed', {}), join(userData, 'memory'))
@@ -1285,7 +1291,7 @@ plugins.start()
 const account: AccountService = new AccountService({
   getState: (key, fallback) => workspace.getAppState(key, fallback),
   setState: (key, value) => workspace.setAppState(key, value),
-  hostName: () => hostname(),
+  hostName: () => hostNames.display(),
   hostId,
   // A backup carries every portable group but the notes, which stay where they were written.
   exportSettings: () =>
@@ -1328,7 +1334,7 @@ const account: AccountService = new AccountService({
 account.start()
 ramuLink = new LinkClient({
   hostId,
-  hostName: () => hostname(),
+  hostName: () => hostNames.display(),
   bearer: () => account.bearer(),
   getState: (key, fallback) => workspace.getAppState(key, fallback),
   setState: (key, value) => workspace.setAppState(key, value),
@@ -1457,7 +1463,7 @@ const dispatcher = createDispatcher(
     browserDevice: () => (origin.getStore()?.network ? origin.getStore()?.deviceId : 'local'),
     callerName: () => {
       const caller = origin.getStore()
-      if (!caller?.network) return hostname().replace(/\.local$/, '')
+      if (!caller?.network) return hostNames.display()
       return devices.list().find((device) => device.id === caller.deviceId)?.name
     },
     browserGrantEligible: (id) => devices.list().some((device) => device.id === id && device.role !== 'viewer'),
@@ -1673,6 +1679,14 @@ async function performInvoke(
     value = { code: devices.agentPairingCode(device.id) }
     // The earlier agent pairing it replaced must not keep an open connection.
     dropRevoked()
+  } else if (method === 'device.rename') {
+    // A paired device names itself as this host lists it; this computer has its own name instead.
+    if (!device) throw new Error('Rename this host under Settings → Remote access.')
+    devices.rename(device.id, hostNameInput.parse(args?.[0] ?? null))
+    value = undefined
+  } else if (method === 'host.name') {
+    const self = device ? devices.list().find((entry) => entry.id === device.id) : undefined
+    value = { ...hostNames.info(), ...(self ? { device: { name: self.name, renamed: !!self.pairedName } } : {}) }
   } else if (method === 'device.describe') {
     // This computer itself needs no description; a paired device tells what it runs on, bounded and checked.
     if (device) devices.describe(device.id, deviceOsSchema.parse(args?.[0]))
@@ -1790,7 +1804,7 @@ async function performInvoke(
   } else if (method === 'background.status')
     value = {
       running: true,
-      hostname: hostname(),
+      hostname: hostNames.display(),
       platform: process.platform,
       pid: process.pid,
       startedAt,
@@ -2569,7 +2583,7 @@ function networkStatus() {
     discovery: {
       discoverable: network.discoverable,
       ...advertiser.status(),
-      name: discoveryName(),
+      name: cleanDiscoveryName(hostNames.display()) || discoveryName(),
     },
     host: network.host,
     port: network.port,
@@ -2745,6 +2759,21 @@ async function networkMethod(method: string, args: unknown[]) {
     if (days !== 'default' && !validLifetime(days)) throw new Error('Choose 1 to 3650 days, or never')
     devices.setDeviceLifetime(deviceId, days === 'default' ? undefined : (days as number | 'never'))
     return networkStatus()
+  }
+  if (method === 'network.renameDevice') {
+    const deviceId = z.string().min(1).max(100).parse(args[0])
+    devices.rename(deviceId, hostNameInput.parse(args[1] ?? null))
+    return networkStatus()
+  }
+  if (method === 'network.renameHost') {
+    hostNames.set(hostNameInput.parse(args[0] ?? null))
+    // Devices nearby and the Ramu account learn the new name at once.
+    void advertiser.refresh().catch(() => {})
+    void account
+      .status()
+      .then((listing) => (listing.listed ? account.setListed(true, listing.trust) : undefined))
+      .catch(() => {})
+    return hostNames.info()
   }
   if (method === 'network.setDeviceLifetime') {
     const days = args[0]

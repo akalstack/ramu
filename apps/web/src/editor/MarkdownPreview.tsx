@@ -1,7 +1,7 @@
-import { lazy, Suspense } from 'react'
-const MermaidBlock = lazy(() => import('../chat/MermaidBlock').then((m) => ({ default: m.MermaidBlock })))
 import { useEffect, useMemo, useState, type ComponentProps } from 'react'
-import Markdown from 'react-markdown'
+import type { Components } from 'react-markdown'
+import { chatMarkdownComponents } from '../chat/ChatMarkdown'
+import { MarkdownText } from '../chat/MarkdownText'
 import { useHost } from '../workspace/HostProvider'
 import { markdownLinkTarget, previewImagePath, type MarkdownLinkTarget } from '@ramu/shared/workspace/fileLinks'
 import {
@@ -10,7 +10,6 @@ import {
   previewRemarkRehypeOptions,
   previewUrlTransform,
 } from '@ramu/shared/workspace/markdownRendering'
-import './markdown-document.css'
 
 type Context = { taskId: string; repoId: string; path: string }
 
@@ -79,30 +78,11 @@ export function MarkdownPreview({
   path,
   onOpenLink,
 }: Context & { text: string; onOpenLink: (target: MarkdownLinkTarget) => void }) {
-  const components = useMemo<ComponentProps<typeof Markdown>['components']>(() => {
+  const components = useMemo<Components>(() => {
     const context = { taskId, repoId, path }
+    // Code, Mermaid diagrams, tables and task lists as everywhere else; images and links resolve against the file.
     return {
-      pre: ({ node, children }) => {
-        const code = node?.children.find((child) => child.type === 'element' && child.tagName === 'code')
-        if (
-          code?.type !== 'element' ||
-          !Array.isArray(code.properties.className) ||
-          !code.properties.className.includes('language-mermaid')
-        )
-          return <pre>{children}</pre>
-        const source = code.children.map((child) => (child.type === 'text' ? child.value : '')).join('')
-        return (
-          <Suspense
-            fallback={
-              <pre>
-                <code>{source}</code>
-              </pre>
-            }
-          >
-            <MermaidBlock source={source} />
-          </Suspense>
-        )
-      },
+      ...chatMarkdownComponents,
       img: ({ node: _node, ...props }) => <PreviewImage {...props} context={context} />,
       source: ({ node: _node, ...props }) => <PreviewSource {...props} context={context} />,
       a: ({ href, children }) => (
@@ -128,7 +108,8 @@ export function MarkdownPreview({
     }
   }, [taskId, repoId, path, onOpenLink])
   return (
-    <Markdown
+    <MarkdownText
+      density="document"
       remarkPlugins={previewRemarkPlugins}
       rehypePlugins={previewRehypePlugins}
       remarkRehypeOptions={previewRemarkRehypeOptions}
@@ -136,6 +117,6 @@ export function MarkdownPreview({
       components={components}
     >
       {text}
-    </Markdown>
+    </MarkdownText>
   )
 }

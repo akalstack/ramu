@@ -10,6 +10,7 @@ import {
   RENEWAL_PENDING_MS,
 } from '../src/remote/devices'
 import { candidateUrls } from '../src/remote/network'
+import { HostName, systemHostName } from '../src/remote/hostName'
 
 const dirs: string[] = []
 afterEach(() => {
@@ -365,4 +366,28 @@ it('gives a phone or tablet no Agents permission: it only connects to hosts and 
   // A computer keeps it.
   expect(devices.allows(laptop, 'agents')).toBe(true)
   expect(devices.agentPairingCode(laptop)).toMatch(/^[A-Z2-9]{5}-[A-Z2-9]{5}$/)
+})
+
+it('renames a paired device and gives it back the name it paired with', () => {
+  const { devices } = store()
+  const { device } = devices.redeem(devices.createCode().code, 'iPhone')!
+  expect(devices.rename(device.id, '  Work phone ')).toMatchObject({ name: 'Work phone', pairedName: 'iPhone' })
+  // Renaming again keeps the name it paired with to go back to.
+  expect(devices.rename(device.id, 'Pocket')).toMatchObject({ name: 'Pocket', pairedName: 'iPhone' })
+  const back = devices.rename(device.id, null)
+  expect(back.name).toBe('iPhone')
+  expect(back).not.toHaveProperty('pairedName')
+  expect(() => devices.rename('gone', 'x')).toThrow(/no longer paired/)
+})
+
+it('names this host as chosen, and goes back to the computer’s own name', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu host name '))
+  dirs.push(dir)
+  const names = new HostName(join(dir, 'host-name.json'))
+  expect(names.info()).toEqual({ name: systemHostName(), systemName: systemHostName(), custom: false })
+  names.set('  Studio\nMac  ')
+  // A fresh reader sees the saved choice, cleaned to one line.
+  expect(new HostName(join(dir, 'host-name.json')).info()).toMatchObject({ name: 'Studio Mac', custom: true })
+  names.set('   ')
+  expect(names.display()).toBe(systemHostName())
 })

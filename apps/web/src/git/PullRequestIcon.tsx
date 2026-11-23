@@ -131,7 +131,7 @@ export function StageChip({ stage, className }: { stage: PullRequestStage; class
   return (
     <span
       className={cn(
-        'inline-flex flex-none items-center gap-1 rounded-full px-1.5 text-[11px] leading-[18px] font-medium whitespace-nowrap',
+        'inline-flex flex-none items-center gap-1 rounded-full px-1.5 text-micro leading-[18px] font-medium whitespace-nowrap',
         TONE_PILL[PULL_REQUEST_STAGE_TONE[stage]],
         className,
       )}

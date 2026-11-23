@@ -88,6 +88,10 @@ export type TranscriptItem = (
   | { kind: 'settings-change'; id: string; cardId: string }
   /** This thread continues on another host. */
   | { kind: 'continued'; id: string; event: import('@ramu/shared/continuation').ContinuedEvent }
+  /** Another thread edited the same file in this checkout during the turn. */
+  | { kind: 'checkout-clash'; id: string; path: string; taskId: string }
+  /** A command held until another thread's command in this checkout finished. */
+  | { kind: 'command-wait'; id: string; taskId: string }
   | { kind: 'text'; id: string; text: string }
   /** Reasoning the provider shared: live while it streams, then folded to "Thought" as on the desktop. */
   | { kind: 'thinking'; id: string; text: string }

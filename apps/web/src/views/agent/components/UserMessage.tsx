@@ -16,8 +16,6 @@ import {
 import { sentInteractiveAttachments } from '@ramu/shared/interactive'
 import { sentTerminalAttachments } from '@ramu/shared/chat/terminalContext'
 import { TerminalAttachmentChip } from '../../../chat/TerminalAttachmentChip'
-import Markdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import type { AgentEvent, AgentTask, Attachment } from '@ramu/shared/types'
 import { ChatActivityButton } from '../../../chat/ChatActivity'
 import {
@@ -40,13 +38,13 @@ import { CopyButton } from './CopyButton'
 import { UserBubble } from '../../../chat/UserBubble'
 export { UserBubble } from '../../../chat/UserBubble'
 import { Message, MessageContent, MessageHeader } from '@/components/ui/message'
-import { chatMarkdownComponents } from '../../../chat/ChatMarkdown'
+import { MarkdownText } from '../../../chat/MarkdownText'
 import { MessageActions } from './MessageActions'
 import { useSentRise } from '../../../chat/ChatMotion'
-import { CARET_CLASS, ICON_BUTTON_CLASS, MSG_CLASS } from '../styles'
+import { CARET_CLASS, ICON_BUTTON_CLASS } from '../styles'
 
 /** Soft line breaks stay as typed; the spacing around blocks comes from Markdown instead of the bubble's pre-wrap. */
-const USER_MARKDOWN_CLASS = `${MSG_CLASS} assistant whitespace-normal [&_p]:whitespace-pre-wrap`
+const USER_MARKDOWN_CLASS = 'whitespace-normal [&_p]:whitespace-pre-wrap'
 
 /** Review comments that went out with a message, as small cards under it. */
 function SentComments({ comments }: { comments: ReturnType<typeof sentComments> }) {
@@ -244,15 +242,11 @@ export function UserMessage({
     >
       {relay ? (
         <UserBubble>
-          <div className={USER_MARKDOWN_CLASS}>
-            <ReferenceText text={relay.body} taskId={taskId} />
-          </div>
+          <ReferenceText text={relay.body} taskId={taskId} className={USER_MARKDOWN_CLASS} />
         </UserBubble>
       ) : text ? (
         <UserBubble>
-          <div className={USER_MARKDOWN_CLASS}>
-            <ReferenceText text={text} taskId={taskId} />
-          </div>
+          <ReferenceText text={text} taskId={taskId} className={USER_MARKDOWN_CLASS} />
         </UserBubble>
       ) : null}
       {comments.length > 0 && <SentComments comments={comments} />}
@@ -334,18 +328,16 @@ function TaskReport({
         {agent && <ChevronRight size={14} className={CARET_CLASS} />}
       </Button>
       <div className="flex flex-col items-start px-3 pb-2 pl-[50px]">
-        <div
+        <MarkdownText
           ref={body}
-          className={`${MSG_CLASS} assistant w-full text-soft [&>:first-child]:mt-0 ${
+          className={`msg assistant w-full text-soft ${
             expanded
               ? ''
               : `max-h-[7.5rem] overflow-hidden ${long ? '[mask-image:linear-gradient(to_bottom,black_55%,transparent)]' : ''}`
           }`}
         >
-          <Markdown remarkPlugins={[remarkGfm]} components={chatMarkdownComponents}>
-            {report.body}
-          </Markdown>
-        </div>
+          {report.body}
+        </MarkdownText>
         {long && (
           <Button
             variant="ghost"

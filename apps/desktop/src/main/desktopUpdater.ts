@@ -8,7 +8,8 @@ import type { AppUpdateStatus } from '@ramu/shared/updates'
 import { newerVersion } from '@ramu/shared/version'
 
 /** The detached service stages GitHub assets; Electron verifies and installs them.
- * This object never restarts the daemon and never calls quitAndInstall automatically. */
+ * This object never restarts the daemon, and installs only when told to: by the person, or by the unattended check
+ * (`mayInstallUnattended`) once nothing is running. */
 export class DesktopUpdater {
   private server?: Server
   private preparing?: Promise<void>

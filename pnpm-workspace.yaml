@@ -32,6 +32,7 @@ allowBuilds:
   node-pty: true
   react-native-enriched-markdown: true
 patchedDependencies:
+  react-native-enriched-markdown@1.2.0: patches/react-native-enriched-markdown@1.2.0.patch
   react-native-screens@4.30.1: patches/react-native-screens@4.30.1.patch
 # Patched transitive versions (pnpm audit).
 overrides:

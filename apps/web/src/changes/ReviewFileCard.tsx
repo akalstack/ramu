@@ -198,6 +198,23 @@ export function ReviewFileCard({
           />
         </div>
         <LineStats files={[file]} />
+        {file.sharedWith?.length ? (
+          <span
+            className="whitespace-nowrap text-caption text-muted-foreground"
+            title={t('Not undone with this turn, so the other thread keeps its edits.')}
+          >
+            {t('Also changed by “{0}”', {
+              0: file.sharedWith.map((id) => ws.task(id)?.title ?? t('Another thread')).join(', '),
+            })}
+          </span>
+        ) : file.editedByYou ? (
+          <span
+            className="whitespace-nowrap text-caption text-muted-foreground"
+            title={t('Not undone with this turn, so your edits stay.')}
+          >
+            {t('Also edited by you')}
+          </span>
+        ) : null}
         {comments.filter((c) => c.state !== 'resolved').length > 0 && (
           <span
             className={DISCUSSION_COUNT_CLASS}

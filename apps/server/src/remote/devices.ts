@@ -50,6 +50,8 @@ export interface DeviceInfo {
   os?: import('@ramu/shared/types').DeviceOs
   /** The agent pairing that follows this device's Agents permission. */
   agentHost?: { id: string; maxAccess: HostAccess }
+  /** The name the device gave itself when it paired, kept once it was renamed so the rename can be undone. */
+  pairedName?: string
 }
 export type HostAccess = 'edits' | 'auto' | 'full'
 export const isHostAccess = (value: unknown): value is HostAccess =>
@@ -176,6 +178,24 @@ export class DeviceStore {
     const lifetime = this.lifetimeFor(file, record)
     record.expiresAt = lifetime === null ? null : (record.lastSeenAt ?? record.createdAt) + lifetime
     this.write(file)
+  }
+
+  /** Renames a paired device, or with `null` gives it back the name it paired with. */
+  rename(id: string, name: string | null): DeviceInfo {
+    const file = this.read()
+    const record = file.devices.find((entry) => entry.id === id)
+    if (!record) throw new Error('That device is no longer paired')
+    const original = record.pairedName ?? record.name
+    const chosen = name === null ? '' : cleanName(name)
+    if (name === null || chosen === original || chosen === 'Unnamed device') {
+      record.name = original
+      delete record.pairedName
+    } else {
+      record.pairedName = original
+      record.name = chosen
+    }
+    this.write(file)
+    return this.list().find((entry) => entry.id === id)!
   }
 
   /** What a device says it runs on; written only when it changed, since devices describe themselves on every connect. */
@@ -669,8 +689,10 @@ const strip = ({
   maxAccess,
   lifetimeDays,
   os,
+  pairedName,
 }: DeviceRecord): DeviceInfo => ({
   ...(permissions ? { permissions } : {}),
+  ...(pairedName ? { pairedName } : {}),
   ...(lifetimeDays !== undefined ? { lifetimeDays } : {}),
   ...(os ? { os } : {}),
   ...(blocked?.length ? { blocked } : {}),

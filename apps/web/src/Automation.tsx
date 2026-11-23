@@ -33,6 +33,8 @@ import { useAppSettings } from './settings/AppSettings'
 import { useHostRuntime, useWorkspace, useWorkspacesOf } from './workspace/workspace'
 import { HostProvider, useHost } from './workspace/HostProvider'
 import { useComputers } from './workspace/computers'
+import { useRestartingHosts } from './workspace/restartingHosts'
+import { ownHostId } from './hosts'
 import { invokerFor } from './ipc'
 import { storeForHost } from './hostStorage'
 import { usePaged } from './settings/cards'
@@ -944,21 +946,26 @@ export function BackgroundControls({ compact = false, onInstalled }: { compact?:
   }
   // Only the desktop can install a login item, and only for its own host on macOS or Linux with systemd.
   const loginSupported = !!status?.loginSupported
+  // Keep running is reported only for this computer's own service, the one this app can restart.
+  const own = status?.keepRunning !== undefined
+  const restarting = useRestartingHosts().has(ownHostId()) && own
   // Running is the normal state and the status bar already shows when it is not; only a stopped service needs a prompt here.
   if (compact)
     return connected ? null : (
       <span className="inline-flex items-center gap-2 text-control text-muted-foreground" role="status">
-        <span className="size-1.5 rounded-full bg-(--warn)" />
-        {t('Background service stopped')}
-        <Button
-          variant="secondary"
-          size="sm"
-          className="bg-fill hover:bg-fill-hover"
-          disabled={busy}
-          onClick={() => void act(() => invoke('background.start'))}
-        >
-          {t('Start')}
-        </Button>
+        <span className={`size-1.5 rounded-full ${restarting ? 'animate-pulse bg-muted-foreground' : 'bg-(--warn)'}`} />
+        {restarting ? t('Restarting…') : t('Background service stopped')}
+        {!restarting && (
+          <Button
+            variant="secondary"
+            size="sm"
+            className="bg-fill hover:bg-fill-hover"
+            disabled={busy}
+            onClick={() => void act(() => invoke('background.start'))}
+          >
+            {t('Start')}
+          </Button>
+        )}
       </span>
     )
   return (
@@ -972,17 +979,36 @@ export function BackgroundControls({ compact = false, onInstalled }: { compact?:
               : t('Threads and schedules keep running when Ramu closes. The host must stay awake.')}
           </span>
           <span className="muted text-muted-foreground block block small text-caption">
-            {connected ? t('Running · PID {0}', { '0': status?.pid ?? '…' }) : t('Stopped')}
+            {restarting
+              ? t('Restarting…')
+              : connected
+                ? t('Running · PID {0}', { '0': status?.pid ?? '…' })
+                : t('Stopped')}
           </span>
         </span>
-        <Button
-          variant="secondary"
-          className="bg-fill hover:bg-fill-hover"
-          disabled={busy}
-          onClick={() => void act(() => invoke(connected ? 'background.stop' : 'background.start'))}
-        >
-          {connected ? t('Stop') : t('Start')}
-        </Button>
+        {/* Restart is the one action: stopping from here would leave nothing running to reconnect to. To keep it from
+            running, turn off Keep running when Ramu closes, or use `ramu stop` in a terminal. */}
+        {restarting || (connected && own) ? (
+          <Button
+            variant="secondary"
+            className="bg-fill hover:bg-fill-hover"
+            disabled={busy || restarting}
+            onClick={() => void act(() => invoke('background.restartService', 'keep'))}
+          >
+            {t('Restart service')}
+          </Button>
+        ) : (
+          !connected && (
+            <Button
+              variant="secondary"
+              className="bg-fill hover:bg-fill-hover"
+              disabled={busy}
+              onClick={() => void act(() => invoke('background.start'))}
+            >
+              {t('Start')}
+            </Button>
+          )
+        )}
       </SettingsRow>
       {status?.keepRunning !== undefined && (
         <SettingsRow className="settings-toggle">

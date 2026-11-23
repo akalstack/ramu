@@ -429,6 +429,10 @@ type AgentEventBody =
       steered?: true
     }
   | { kind: 'file-restore'; userSeq: number; fileCount: number }
+  /** Another thread (`taskId`) edited `path` in this checkout during the same turn; each keeps only what it wrote. */
+  | { kind: 'checkout-clash'; path: string; taskId: string }
+  /** A command held until another thread's (`taskId`) command in this checkout finished; `null` when it went ahead. */
+  | { kind: 'command-wait'; taskId: string | null }
   /** Recorded on a helper's session when it runs a custom agent, so its read-only choice holds across restarts. */
   | { kind: 'custom-agent'; name: string; readOnly: boolean }
   /** Recorded on a helper's session when the agent gave it a role, so a read-only role holds across restarts. */

@@ -1,6 +1,7 @@
 import { ThreadMessageCard, ThreadsStartedCard } from './StartedThreads'
 import { LocalInlineAction } from '@/components/inline-action'
 import { ContinuedCard } from './ContinuedCard'
+import { CheckoutClashCard, CommandWaitNote } from './CheckoutClashCard'
 import { AbilityRow } from './AbilityRow'
 import { ThemeCard } from '../../../theme/ThemeCard'
 import { InlineUiCard } from '../../../chat/InlineUiCard'
@@ -303,6 +304,10 @@ export function EventRow({
       )
     case 'continued':
       return <ContinuedCard event={e} sessionId={sessionId} taskId={taskId} />
+    case 'checkout-clash':
+      return <CheckoutClashCard event={e} sessionId={sessionId} readOnly={readOnly} />
+    case 'command-wait':
+      return e.taskId ? <CommandWaitNote taskId={e.taskId} /> : null
     case 'file-restore':
       return (
         <div className={TURN_END_CLASS} role="status">
