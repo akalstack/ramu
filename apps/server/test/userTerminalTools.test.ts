@@ -63,15 +63,18 @@ it.skipIf(process.platform === 'win32')(
       { timeout: 10_000 },
     )
     // Colors, a redrawn progress line and a token-looking value, the way real tool output prints them.
-    terminals.write(
-      shell.id,
-      `printf '\\033[31mfailed\\033[0m: build\\nprogress 10%%\\rprogress 100%%\\nGITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz0123456789\\n'\r`,
-    )
+    const command = `printf '\\033[31mfailed\\033[0m: build\\nprogress 10%%\\rprogress 100%%\\nGITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz0123456789\\n'\r`
+    // On a slow machine the shell can print its prompt before it reads input, and drops what came first: type again.
+    let typedAt = 0
     await vi.waitFor(
       async () => {
+        if (Date.now() - typedAt > 3_000) {
+          typedAt = Date.now()
+          terminals.write(shell.id, command)
+        }
         expect((await call('terminal_read')).json().output).toContain('failed: build')
       },
-      { timeout: 10_000 },
+      { timeout: 20_000, interval: 250 },
     )
     const read = (await call('terminal_read')).json()
     expect(read.id).toBe(shell.id)

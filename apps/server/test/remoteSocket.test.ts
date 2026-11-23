@@ -195,7 +195,8 @@ const events = (frames: SocketServerFrame[]) =>
 it('thins a keyed channel while leaving every other channel alone for a client that asks for everything', async () => {
   const { connect, sinks } = await start()
   const { ws, frames, until } = connect()
-  await until(() => sinks.size === 1)
+  // The host can hear the connection before this end has finished opening it.
+  await until(() => sinks.size === 1 && ws.readyState === ws.OPEN)
   ws.send(
     encodeSocketFrame({
       t: 'subscribe',
