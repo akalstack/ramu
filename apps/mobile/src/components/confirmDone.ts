@@ -23,11 +23,8 @@ export async function confirmDone(
   const impact = combinedImpact(
     await Promise.all(
       threads.map(({ computerId, taskId }) =>
-        // A host that cannot say (an older one) is marked done as before, without asking.
-        invoke(computerId, 'tasks.doneImpact', taskId).then(
-          (result) => result ?? NOTHING_RUNNING,
-          () => NOTHING_RUNNING,
-        ),
+        // A host that cannot answer is marked done without asking.
+        invoke(computerId, 'tasks.doneImpact', taskId).catch(() => NOTHING_RUNNING),
       ),
     ),
   )

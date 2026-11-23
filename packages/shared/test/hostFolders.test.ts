@@ -8,7 +8,6 @@ import {
   isProjectFolder,
   isSystemFolder,
   placeLabel,
-  placesFromRoots,
   titleFolderName,
   typedFolderPath,
 } from '../src/workspace/hostFolders'
@@ -91,12 +90,6 @@ describe('folder picker places', () => {
     expect(placeLabel({ kind: 'computer', name: '/', path: '/' }, say)).toBe('[Computer]')
     expect(placeLabel({ kind: 'computer', name: 'Macintosh HD', path: '/' }, say)).toBe('Macintosh HD')
     expect(placeLabel({ kind: 'drive', name: 'Drive', path: '/Volumes/Drive' }, say)).toBe('Drive')
-  })
-  it('reads an older host’s browse roots as its home folder, then its projects', () => {
-    expect(placesFromRoots(['/Users/ana', '/Users/ana/code/app'])).toEqual([
-      { kind: 'home', name: 'ana', path: '/Users/ana' },
-      { kind: 'project', name: 'app', path: '/Users/ana/code/app' },
-    ])
   })
   it('takes a typed or pasted path without the spaces and quotes around it', () => {
     expect(typedFolderPath('  /Volumes/My Drive/ ')).toBe('/Volumes/My Drive/')

@@ -105,9 +105,9 @@ it('keeps a limit hold out of the history in its merged shape, and still shows a
   expect(types(goal(), hold, goal())).toEqual(['set'])
   // Same status, different holder: the user pausing a held goal is a turning point.
   expect(types(goal(), hold, goal({ status: 'paused', pausedBy: 'user' }))).toEqual(['set', 'paused'])
-  // The user resuming their own pause is shown; a user pause with no reason (an older event) still counts.
+  // The user resuming their own pause is shown; a user pause with no reason still counts.
   expect(types(goal(), goal({ status: 'paused' }), goal())).toEqual(['set', 'paused', 'resumed'])
-  // A goal from an older host moves into the merged shape without a row either way.
+  // A limit hold followed by another hold adds no row either way.
   expect(types(goal(), goal({ status: 'paused', pausedBy: 'provider-limit' }), hold)).toEqual(['set'])
 })
 

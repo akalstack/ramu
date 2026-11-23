@@ -2,7 +2,7 @@ import { animateThreadListChange } from '../workspace/threadListMotion'
 import { useEffect, useRef, useState } from 'react'
 import type { BackgroundTerminalInfo } from '@ramu/shared/api'
 import type { Task } from '@ramu/shared/types'
-import { readRemovalCommands, removalReview, removalError } from '@ramu/shared/chat/taskRemoval'
+import { readRemovalCommands, removalReview } from '@ramu/shared/chat/taskRemoval'
 import { Button } from '@/components/desktop-button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog } from '../Menu'
@@ -98,7 +98,7 @@ export function DeleteThreadDialog({
             if (latest.current === approvedScope) await onDeleted()
           } catch (reason) {
             if (latest.current !== approvedScope) return
-            setError(t(removalError(reason)))
+            setError(t(errorText(reason)))
             // Refresh the visible commands, but deletion always needs another explicit click.
             setAttempt((value) => value + 1)
           } finally {

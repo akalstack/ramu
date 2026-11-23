@@ -88,8 +88,7 @@ it('labels the new turning points apart from a usage limit and a pause', () => {
     { kind: 'goal', goal: goal({ status: 'paused', pausedBy: 'provider-limit' }) },
   ])
   expect([...types.values()].map((change) => change.type)).toEqual(['set'])
-  // The merged status: a limit hold and a user pause share `paused`, and still read differently (old hosts say waiting-provider).
-  expect(goalLabel(goal({ status: 'paused', pausedBy: 'provider-limit' }))).toBe('Limit reached')
+  // A limit hold and a user pause share `paused`, and still read differently.
   expect(goalLabel(goal({ status: 'paused', pausedBy: 'provider-limit' }))).toBe('Limit reached')
   expect(goalLabel(goal({ status: 'paused', pausedBy: 'user' }))).toBe('Goal paused')
   expect(goalLabel(goal({ status: 'paused' }))).toBe('Goal paused')

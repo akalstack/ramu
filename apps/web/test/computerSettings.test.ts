@@ -82,13 +82,6 @@ it('shows a completed permission state without offering a setup action', () => {
   expect(html).toContain('App control')
 })
 
-it('offers a service restart when an older host omits permission status', () => {
-  state.status = { ...state.status, apps: { available: true }, appPermissions: undefined }
-  const html = renderToStaticMarkup(createElement(ComputerSettings, { hostId: 'local' }))
-  expect(html).toContain('Restart service</button>')
-  expect(html).not.toContain('Set up permissions</button>')
-})
-
 it('retries an unreadable permission snapshot without offering onboarding', () => {
   state.status = { ...state.status, apps: { available: true }, appPermissions: null }
   const html = renderToStaticMarkup(createElement(ComputerSettings, { hostId: 'local' }))

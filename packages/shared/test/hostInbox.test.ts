@@ -373,11 +373,9 @@ it('orders the Brief: requests, failures, limits, then recaps, and counts failur
   expect(seen.completed.map((entry) => entry.taskId)).toContain('failed')
 })
 
-it('opens retired or unknown tabs on the Brief, and the retired Recaps tab on Completed', () => {
+it('opens unknown tabs on the Brief', () => {
   expect(inboxTabOf('all')).toBe('brief')
-  expect(inboxTabOf('needs-you')).toBe('brief')
-  // Recap notifications and saved tabs land where each finished thread now shows its newest recap.
-  expect(inboxTabOf('recaps')).toBe('completed')
+  expect(inboxTabOf('completed')).toBe('completed')
 })
 
 it('counts finished threads since the last visit', () => {

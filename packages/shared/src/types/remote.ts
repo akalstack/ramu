@@ -146,10 +146,10 @@ export interface NetworkStatus {
   reachable: boolean
   /**
    * The https:// address of a tunnel the person runs to this host, offered to paired devices and webhook senders first.
-   * `command-line` means --public-url set it. Absent from hosts without the setting.
+   * `command-line` means --public-url set it.
    */
   publicAddress?: { url: string | null; source: 'settings' | 'command-line' }
-  /** A tunnel Ramu runs for this host, and which tools are installed for it. Absent from hosts without the option. */
+  /** A tunnel Ramu runs for this host, and which tools are installed for it. */
   tunnel?: {
     choice: TunnelChoice | null
     state: 'off' | 'starting' | 'running' | 'failed' | 'missing'

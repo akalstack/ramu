@@ -883,7 +883,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 ),
                 queue: queue?.kind === 'queue' ? queue.messages : [],
                 queuePaused: queue?.kind === 'queue' ? !!queue.paused : false,
-                queueWaitingFor: queue?.kind === 'queue' ? queue.waitingFor : undefined,
                 goal,
                 // A worktree's own branch, or the branch its checkout has out; a current-checkout thread has none of its own.
                 branch: bindings[0]?.taskBranch ?? bindings[0]?.checkedOut ?? '',

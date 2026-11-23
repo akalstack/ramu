@@ -10,7 +10,7 @@ import type { RamuMethods } from '@ramu/shared/api'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/desktop-button'
-import { invokeOn, ramu } from '../ipc'
+import { invokeOn } from '../ipc'
 import { t, useLanguage } from '../i18n'
 import { KeepAwakeSettings } from './KeepAwakeSettings'
 import type { DraftProps } from './ToggleRow'
@@ -84,11 +84,6 @@ export function ComputerSettings({
     setError('')
     try {
       setSetupStarted(false)
-      if (status?.apps?.available && status.appPermissions === undefined) {
-        await ramu.invoke('background.restartService', 'keep')
-        await refresh()
-        return
-      }
       if (status?.apps?.available && status.appPermissions === null && !status.appUpdate?.updateAvailable) {
         await refresh()
         return
@@ -142,8 +137,6 @@ export function ComputerSettings({
                 t('Setting up…')
               ) : status.appUpdate?.updateAvailable ? (
                 t('Update')
-              ) : status.apps.available && status.appPermissions === undefined ? (
-                t('Restart service')
               ) : status.appPermissions?.allGranted ? (
                 <>
                   <Check size={14} />

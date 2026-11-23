@@ -85,7 +85,9 @@ beforeEach(() => {
   state.task.workspaceId = null
   state.task.goalState = null
   state.task.doneAt = null
-  state.invoke.mockResolvedValue(undefined)
+  state.invoke.mockImplementation(async (method: string) =>
+    method === 'tasks.doneImpact' ? { commands: 0, helpers: 0, computer: false, browserTabs: 0 } : undefined,
+  )
 })
 
 it('marks a completed inbox thread done without archiving or closing it', async () => {
@@ -114,6 +116,7 @@ it('reopens a thread that is already marked done', async () => {
 it('reports a failed mark-done action without removing the thread', async () => {
   state.invoke.mockImplementation(async (method: string) => {
     if (method === 'tasks.done') throw new Error('Cannot mark done')
+    if (method === 'tasks.doneImpact') return { commands: 0, helpers: 0, computer: false, browserTabs: 0 }
   })
   render()
   click()

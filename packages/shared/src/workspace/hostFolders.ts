@@ -35,11 +35,6 @@ export function placeLabel(place: HostPlace, say: (text: string) => string): str
   return place.name
 }
 
-/** The places of a host too old to list them: its browse roots, the first of which is its home folder. */
-export function placesFromRoots(roots: readonly string[]): HostPlace[] {
-  return roots.map((path, index) => ({ kind: index ? 'project' : 'home', name: folderName(path), path }))
-}
-
 /**
  * A folder path as typed or pasted into the picker: spaces around it and the quotes a copied path often carries are
  * dropped. Empty when nothing is left. The host resolves `~` and decides whether the folder exists.

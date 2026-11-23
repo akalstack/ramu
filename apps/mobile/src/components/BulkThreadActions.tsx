@@ -1,6 +1,6 @@
 import { translate } from '@ramu/shared/i18n'
 import { confirmDone } from './confirmDone'
-import { readRemovalCommands, removalError } from '@ramu/shared/chat/taskRemoval'
+import { readRemovalCommands } from '@ramu/shared/chat/taskRemoval'
 import { useRef } from 'react'
 import { Alert } from 'react-native'
 import { useStore } from '../runtime/store'
@@ -105,7 +105,7 @@ export function useBulkThreadActions() {
             threadSelection.clear()
             void each(latest.current, plain, (chat) =>
               latest.current.invoke(chat.computerId, 'tasks.delete', chat.taskId, false).catch((error: unknown) => {
-                throw new Error(say(removalError(error)))
+                throw new Error(say(error instanceof Error ? error.message : String(error)))
               }),
             )
           },

@@ -87,10 +87,6 @@ export class HostFolders {
     running.cancel()
     return true
   }
-  async roots(): Promise<string[]> {
-    const roots = (await this.confinement()) ?? [homedir(), ...this.projectRoots()]
-    return [...new Set(await Promise.all(roots.map((root) => realpath(root))))]
-  }
   /**
    * `RAMU_BROWSE_ROOTS` holds the folder calls to those folders. Without it they reach every folder the host's user can
    * read, as a native folder dialog on the host would; the device asking is already an owner of this host.

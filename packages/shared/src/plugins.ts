@@ -574,10 +574,7 @@ export const indexEntry = z.object({
           stacks: z.array(z.enum(STACK_IDS)).optional(),
           /** The service's own plugin in Claude's directory that this one pairs with. */
           companion: z.string().regex(PLUGIN_NAME).optional(),
-          /**
-           * The service's own plugin in its own marketplace. A Ramu version from before this field skips it, where it
-           * would read a plain `companion` as a plugin in Claude's directory.
-           */
+          /** The service's own plugin in its own marketplace. */
           companionFrom: COMPANION_FROM.optional(),
           adds: z
             .object({

@@ -227,8 +227,6 @@ export interface Chat extends Task {
   queue: QueuedMessage[]
   /** The host holds queued messages until resumed (after a stop or an error), as on the desktop. */
   queuePaused?: boolean
-  /** The task whose turn in the same checkout this thread's queued messages wait for. */
-  queueWaitingFor?: string
   goal: ChatGoal | null
   branch: string
   /** Created while its computer was offline; it exists only on the phone until the outbox sends it. */

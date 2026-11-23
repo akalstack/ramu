@@ -14,8 +14,8 @@ describe('Ramu tool calls', () => {
       args: { query: 'tabs' },
     })
     expect(ramuTool({ name: 'memory_search', summary: 'ramu', input: '{"query":"tabs"}' })?.name).toBe('memory_search')
-    expect(ramuTool(use('ramu_skill_read', { id: 's1' }))?.name).toBe('skill_read')
-    expect(ramuTool(use('ramu_tools_skill_read', { id: 's1' }))?.name).toBe('skill_read')
+    expect(ramuTool(use('ramu_skill_inspect', { id: 's1' }))?.name).toBe('skill_inspect')
+    expect(ramuTool(use('ramu_tools_skill_inspect', { id: 's1' }))?.name).toBe('skill_inspect')
     expect(ramuTool(use('memory_search', { query: 'x' }))).toBeNull()
     expect(ramuTool(use('mcp__other__memory_search'))).toBeNull()
     expect(ramuTool(use('mcp__ramu__made_up'))).toBeNull()
@@ -102,7 +102,7 @@ describe('Ramu tool calls', () => {
     ])
       expect(ramuToolHasOwnUi(use(`mcp__ramu__${name}`)), name).toBe(true)
     expect(ramuToolHasOwnUi(use('mcp__ramu__tool_invoke', { name: 'schedule_create', arguments: {} }))).toBe(true)
-    for (const name of ['memory_save', 'skill_read', 'schedule_list', 'tool_search', 'message_parent'])
+    for (const name of ['memory_save', 'skill_inspect', 'schedule_list', 'tool_search', 'message_parent'])
       expect(ramuToolHasOwnUi(use(`mcp__ramu__${name}`)), name).toBe(false)
     expect(ramuToolHasOwnUi(use('Bash', { command: 'ls' }))).toBe(false)
   })
@@ -115,13 +115,10 @@ describe('Ramu tool calls', () => {
       }),
     ).toMatchObject({ done: 'Saved memory', running: 'Saving memory', subject: '“Tabs”', icon: 'brain' })
     expect(
-      describeRamuTool({ name: 'skill_read', args: { id: 's1' } }, JSON.stringify({ name: 'Release steps' })).subject,
+      describeRamuTool({ name: 'skill_inspect', args: { id: 's1' } }, JSON.stringify({ name: 'Release steps' }))
+        .subject,
     ).toBe('“Release steps”')
     expect(describeRamuTool({ name: 'schedule_pause', args: { paused: false } }).done).toBe('Resumed a schedule')
-    expect(describeRamuTool({ name: 'rtk_run', args: { arguments: ['git', 'status'] } })).toMatchObject({
-      icon: 'terminal',
-      subject: 'rtk git status',
-    })
     expect(describeRamuTool({ name: 'memory_read', args: { id: 'm1' } }, 'not json').subject).toBeUndefined()
   })
 

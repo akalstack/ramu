@@ -17,8 +17,6 @@ export function appControlHelp(status: Status | null): string {
     return `Open Computer Use ${status.appUpdate.installedVersion} is installed. Update to the tested version ${status.appUpdate.supportedVersion}.`
   if (!apps.available) return apps.detail ?? 'App control is not available on this host.'
   const version = status.appVersion ? ` Open Computer Use ${status.appVersion}.` : ''
-  if (status.appPermissions === undefined)
-    return `Installed.${version} Restart the background service to check permissions.`
   if (!status.appPermissions)
     return `Installed.${version} Permission status could not be checked. Try again to read the current permissions.`
   if (!status.appPermissions.allGranted) {

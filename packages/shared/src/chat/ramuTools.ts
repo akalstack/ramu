@@ -49,15 +49,10 @@ const KNOWN = new Set([
   'skill_update',
   'skill_archive',
   'skill_restore',
-  // No provider is given these anymore; they stay so transcripts recorded earlier still render.
-  'skill_search',
-  'skill_read',
   'session_recall',
   'session_search',
-  'skill_resolve',
   'review_reply',
   'change_review_reply',
-  'review_add_note',
   'schedule_create',
   'schedule_update',
   'schedule_list',
@@ -76,7 +71,6 @@ const KNOWN = new Set([
   'message_parent',
   'ask_parent',
   'answer_subagent',
-  'rtk_run',
   'background_terminal_launch',
   'background_terminal_list',
   'background_terminal_inspect',
@@ -424,24 +418,14 @@ export function describeRamuTool(call: RamuToolCall, result?: string): RamuToolR
       return reply('Restored skill', 'Restoring skill', 'sparkles', quote(text(data.name)), [
         { label: 'Why', value: text(args.reason) ?? '' },
       ])
-    case 'skill_search':
-      return reply('Searched skills', 'Searching skills', 'sparkles', quote(query))
-    case 'skill_read':
-      return reply('Read skill', 'Reading skill', 'sparkles', quote(text(data.name)))
     case 'session_search':
       return reply('Searched previous threads', 'Searching previous threads', 'search', quote(text(args.query)))
-    case 'skill_resolve':
-      return reply('Selected compatible skills', 'Selecting compatible skills', 'sparkles')
     case 'session_recall':
       return reply('Recalled earlier messages', 'Recalling earlier messages', 'book')
     case 'review_reply':
     case 'change_review_reply':
       return reply('Replied in review', 'Replying in review', 'review', undefined, [
         { label: 'Reply', value: text(args.reply) ?? text(args.body) ?? text(args.text) ?? text(args.message) ?? '' },
-      ])
-    case 'review_add_note':
-      return reply('Added a review note', 'Adding a review note', 'review', undefined, [
-        { label: 'Note', value: text(args.body) ?? text(args.text) ?? text(args.note) ?? '' },
       ])
     case 'schedule_list':
       return reply('Listed schedules', 'Listing schedules', 'calendar')
@@ -501,13 +485,6 @@ export function describeRamuTool(call: RamuToolCall, result?: string): RamuToolR
       return reply('Asked the advisor', 'Asking the advisor', 'message')
     case 'wait_for_advice':
       return reply('Waited for advice', 'Waiting for advice', 'message')
-    case 'rtk_run':
-      return reply(
-        'Ran',
-        'Running',
-        'terminal',
-        Array.isArray(args.arguments) ? clip(`rtk ${args.arguments.map(String).join(' ')}`) : undefined,
-      )
     case 'background_terminal_launch':
       return reply('Started in the background', 'Starting in the background', 'terminal', command(args.command))
     case 'background_terminal_list':

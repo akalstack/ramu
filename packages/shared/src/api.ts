@@ -449,7 +449,7 @@ export interface RamuMethods extends ArtifactMethods {
     /** The pinned Open Computer Use release this host runs. */
     appVersion?: string
     /** Runtime permission snapshot; null when it cannot be checked. */
-    appPermissions?: { allGranted: boolean; accessibilityTrusted: boolean; screenCaptureGranted: boolean } | null
+    appPermissions: { allGranted: boolean; accessibilityTrusted: boolean; screenCaptureGranted: boolean } | null
     appUpdate?: {
       installedVersion: string | null
       supportedVersion: string
@@ -509,7 +509,7 @@ export interface RamuMethods extends ArtifactMethods {
     /** Whether the browser agents use right now is this host's Chromium (false: the connected desktop's native one). */
     selected?: boolean
     /** A paired device can see and control the browser agents use here: the host Chromium or the attached desktop's. */
-    viewable?: boolean
+    viewable: boolean
     location?: 'execution-host-chromium'
     reason?: string
   }
@@ -1179,7 +1179,6 @@ export interface RamuMethods extends ArtifactMethods {
   'threads.continueInWorktree'(sessionId: string, settings?: AgentSettings): StartedThread
   /** Labels the original thread once its continuation has started. */
   'threads.noteContinued'(taskId: string, event: import('./continuation').ContinuedEvent): void
-  'folders.roots'(): string[]
   /** Where the folder picker starts: home, the computer's root, each mounted drive, then project folders. */
   'folders.places'(): HostPlace[]
   /** One folder's subfolders. `path` is absolute, or starts with `~` for the host's home folder. */

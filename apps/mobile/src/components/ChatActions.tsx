@@ -4,7 +4,7 @@ import { threadStatus, titleSourceNote } from '@ramu/shared/chat/threadStatus'
 import { threadOriginLabel } from '@ramu/shared/workspace/threadOrigin'
 import { runsBy } from '../runtime/groupRuns'
 import { translate } from '@ramu/shared/i18n'
-import { readRemovalCommands, removalReview, removalError } from '@ramu/shared/chat/taskRemoval'
+import { readRemovalCommands, removalReview } from '@ramu/shared/chat/taskRemoval'
 import { useEffect, useRef, useState } from 'react'
 import { Alert, TextInput, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
@@ -82,7 +82,7 @@ export async function confirmChatDeletion(
         await store.refresh(chat.computerId)
         done?.()
       } catch (error) {
-        Alert.alert(t('Could not update thread'), t(removalError(error)))
+        Alert.alert(t('Could not update thread'), t(error instanceof Error ? error.message : String(error)))
       }
     }
     const host = store.computers.find((computer) => computer.id === chat.computerId)?.name ?? chat.computerId

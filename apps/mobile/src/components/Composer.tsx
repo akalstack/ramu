@@ -490,7 +490,6 @@ export function GoalQueueTray({
   goal,
   queue,
   paused: queuePaused,
-  waitingFor,
   onResumeQueue,
   onToggleGoal,
   onClearGoal,
@@ -506,8 +505,6 @@ export function GoalQueueTray({
   goal: ChatGoal | null
   queue: QueuedMessage[]
   paused?: boolean
-  /** The title of the thread whose turn in the same checkout the queue waits for. */
-  waitingFor?: string
   onResumeQueue?: () => void
   onToggleGoal?: () => void
   onClearGoal?: () => void
@@ -574,14 +571,6 @@ export function GoalQueueTray({
       {goal && onVerifyGoal ? (
         <GoalVerifySheet open={verifying} goal={goal} onClose={() => setVerifying(false)} onSave={onVerifyGoal} />
       ) : null}
-      {!queuePaused && waitingFor && queue.length ? (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}>
-          <Clock size={14} color={c.soft} strokeWidth={1.8} />
-          <T size={font.control} tone="soft" style={{ flex: 1 }}>
-            {say('Waiting for “{0}” in the same checkout', { 0: waitingFor })}
-          </T>
-        </View>
-      ) : null}
       {queuePaused && queue.length ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}>
           <Pause size={14} color={c.warn} strokeWidth={1.8} />
@@ -617,11 +606,9 @@ export function GoalQueueTray({
       {queue.map((q, index) => {
         // While a turn runs the quick action steers (it waits for active tools and keeps the turn); idle, it sends.
         const steerable = running && !!onSteer && q.mode !== 'steer'
-        // The host lets one thread write in a checkout at a time, so sending while another one works there would fail.
-        const sendable = !!onSendNow && (running || !waitingFor || !!queuePaused)
         const actions = [
           ...(steerable ? [{ id: 'steer', title: t.steer, image: 'arrow.turn.down.right' }] : []),
-          ...(sendable
+          ...(onSendNow
             ? [{ id: 'send', title: say(running ? 'Stop turn and send now' : 'Send now'), image: 'paperplane' }]
             : []),
           ...(onEdit ? [{ id: 'edit', title: say('Edit message'), image: 'pencil' }] : []),
@@ -674,8 +661,8 @@ export function GoalQueueTray({
                 tone="muted"
                 onPress={() => onSteer?.(q.id)}
               />
-            ) : sendable && !running ? (
-              <IconButton icon={Send} label={say('Send now')} size={28} tone="muted" onPress={() => onSendNow!(q.id)} />
+            ) : onSendNow && !running ? (
+              <IconButton icon={Send} label={say('Send now')} size={28} tone="muted" onPress={() => onSendNow(q.id)} />
             ) : null}
             <IconButton icon={X} label={say('Remove')} size={28} tone="muted" onPress={() => onRemove?.(q.id)} />
           </View>
@@ -692,7 +679,6 @@ export function Composer({
   onSend,
   onStop,
   queuePaused,
-  queueWaitingFor,
   onResumeQueue,
   goal = null,
   queue = [],
@@ -755,7 +741,6 @@ export function Composer({
   goal?: ChatGoal | null
   queue?: QueuedMessage[]
   queuePaused?: boolean
-  queueWaitingFor?: string
   onResumeQueue?: () => void
   onToggleGoal?: () => void
   onClearGoal?: () => void
@@ -1219,7 +1204,6 @@ export function Composer({
           goal={goal}
           queue={queue}
           paused={queuePaused}
-          waitingFor={queueWaitingFor}
           onResumeQueue={onResumeQueue}
           onToggleGoal={onToggleGoal}
           onClearGoal={onClearGoal}

@@ -25,6 +25,7 @@ it('explains why computer use is unavailable', () => {
       apps: null,
       keepAwake: true,
       globalPointer: false,
+      appPermissions: null,
     }),
   ).toBe('Allow Screen Recording.')
   expect(
@@ -34,6 +35,7 @@ it('explains why computer use is unavailable', () => {
       apps: null,
       keepAwake: true,
       globalPointer: false,
+      appPermissions: null,
     }),
   ).toMatch(/Studio/)
 })

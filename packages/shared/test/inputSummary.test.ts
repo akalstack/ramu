@@ -70,7 +70,7 @@ it('bounds excerpts and counts all pending requests when merging sessions', () =
   })
   expect(mergeInputSummaries([null, undefined])).toBeNull()
 })
-it('retains older-host generic input and clears resolved summaries without claiming a goal is finished', () => {
+it('retains generic input and clears resolved summaries without claiming a goal is finished', () => {
   expect(threadStatus({ status: 'needs-input' }, false)?.kind).toBe('input')
   expect(threadStatus({ status: 'idle', inputSummary: inputSummary([question], 's') }, false)?.kind).toBe('input')
   expect(threadStatus({ status: 'idle', inputSummary: null }, true, { status: 'active' })?.kind).toBe('goal')
@@ -83,7 +83,7 @@ it('refreshes summaries for async input and resolution without refetching on str
   expect(changesThreadSummary({ kind: 'text', text: 'token' })).toBe(false)
 })
 
-it('splits pending counts by kind, and leaves non-approvals unclassified for an older host', () => {
+it('splits pending counts by kind', () => {
   expect(describeInputCounts({ count: 4, approvals: 1, connectors: 1, requests: [] })).toEqual({
     approvals: 1,
     questions: 2,

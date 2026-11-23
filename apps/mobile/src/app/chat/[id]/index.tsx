@@ -699,26 +699,13 @@ function ChatView({ id }: { id: string }) {
   }, [pageRows, store.language])
   // New rows fade in on their own (`fresh` below). A screen-wide layout animation is not used here: it left the list's
   // row positions behind their measured sizes, drawing a tall message over the reply under it.
-  // The thread whose turn in the same checkout this thread's queued messages wait for.
-  const waitingThread = chat?.queueWaitingFor
-    ? store.chats.find((other) => other.computerId === chat.computerId && other.taskId === chat.queueWaitingFor)
-    : undefined
   const renderRow = ({ item }: { item: ListRow; index: number }) => {
     const key = rowKey(item)
     const fresh = !seen.current.has(key)
     seen.current.add(key)
     if (item.kind === 'steering')
       return <SteeringBubble chatId={chat!.id} message={item.message} readOnly={viewOnly || offline} />
-    if (item.kind === 'opening')
-      return (
-        <QueuedOpening
-          message={item.message}
-          waitingFor={chat!.queuePaused ? undefined : waitingThread?.title}
-          onOpenWaiting={
-            waitingThread ? () => router.push({ pathname: '/chat/[id]', params: { id: waitingThread.id } }) : undefined
-          }
-        />
-      )
+    if (item.kind === 'opening') return <QueuedOpening message={item.message} />
     if (item.kind === 'pending')
       return (
         <SentArrive identity={key} start={fresh && item.outbox.createdAt >= openedAt.current}>
@@ -1865,7 +1852,6 @@ function ChatView({ id }: { id: string }) {
                         goal={chat.goal}
                         queue={chat.queue?.filter((message) => message.mode !== 'steer')}
                         queuePaused={chat.queuePaused}
-                        queueWaitingFor={waitingThread?.title}
                         onResumeQueue={
                           chat.sessionId
                             ? () =>

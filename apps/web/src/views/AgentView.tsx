@@ -169,7 +169,6 @@ export const AgentView = memo(function AgentView({
     liveText,
     queued,
     queuePaused,
-    queueWaitingFor,
     hydrating,
     syncing,
     error,
@@ -987,20 +986,12 @@ export const AgentView = memo(function AgentView({
                                 />
                               </MessageScrollerItem>
                             )}
-                          {/* A new thread whose first message waits on another thread still reads as started. */}
+                          {/* A new thread whose first message the host holds still reads as started. */}
                           {!hydrating &&
                             !events.some((event) => event.kind === 'user') &&
                             trayQueued.map((message) => (
                               <MessageScrollerItem key={message.id} messageId={`queued-opening-${message.id}`}>
-                                <QueuedOpening
-                                  message={message}
-                                  waitingFor={
-                                    queueWaitingFor && !queuePaused
-                                      ? (workspace.task(queueWaitingFor)?.title ?? null)
-                                      : null
-                                  }
-                                  onOpenWaiting={queueWaitingFor ? () => ws.openTask(queueWaitingFor) : undefined}
-                                />
+                                <QueuedOpening message={message} />
                               </MessageScrollerItem>
                             ))}
                           {steering.map((message) => (
@@ -1125,7 +1116,6 @@ export const AgentView = memo(function AgentView({
                           readOnly={viewOnly}
                           pending={pending}
                           paused={queuePaused}
-                          waitingFor={queueWaitingFor ? (workspace.task(queueWaitingFor)?.title ?? null) : null}
                           hostName={hostName}
                           hostOffline={hostOffline}
                           busyAgent={busyAgent}

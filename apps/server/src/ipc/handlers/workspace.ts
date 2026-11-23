@@ -322,7 +322,6 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
       },
     },
     'projects.defaultParent': { args: z.tuple([]), run: () => workspace.newProjectParent() },
-    'folders.roots': { args: z.tuple([]), run: () => hostFolders.roots() },
     'folders.places': { args: z.tuple([]), run: () => hostFolders.places() },
     'folders.list': { args: z.tuple([z.string().max(4096)]), run: (path: string) => hostFolders.list(path) },
     'folders.create': {

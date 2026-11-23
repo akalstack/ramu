@@ -129,7 +129,7 @@ export function InlineChip({
   useEffect(() => {
     if (!open || !skills || skill) return
     let live = true
-    // A host that can't list skills leaves the chip's own text, as before.
+    // A host that can't list skills leaves the chip's own text.
     void skills().then(
       (list) => live && setSkill(list.find((entry) => entry.name === chip.label) ?? null),
       () => {},

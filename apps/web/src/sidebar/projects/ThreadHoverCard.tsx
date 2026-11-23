@@ -88,7 +88,7 @@ export function ThreadHoverCard(props: CardProps) {
 }
 
 /** Mounted only while the card is open, so nothing is fetched for rows nobody is looking at. */
-/** Approvals, questions and connector requests, or the older-host split that only knows approvals versus the rest. */
+/** Approvals, questions and connector requests. */
 function inputCountText(summary: NonNullable<Task['inputSummary']>): string {
   const counts = describeInputCounts(summary)
   return [

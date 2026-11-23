@@ -636,8 +636,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Ini menghapus thread dari host. Pilih apakah worktree-nya disimpan. Branch tetap disimpan.',
   'Could not update thread': 'Tidak dapat memperbarui thread',
   'Delete and remove worktree': 'Hapus thread beserta worktree',
-  'Update Ramu on this host to review background commands before deleting.':
-    'Perbarui Ramu di host ini untuk meninjau perintah latar belakang sebelum menghapus.',
 
   'Showing the most recent terminal output. Older output was truncated.':
     'Menampilkan output terminal terbaru. Output yang lebih lama dipotong.',
@@ -3554,8 +3552,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Recalling earlier messages': 'Mengingat pesan sebelumnya',
   'Replied in review': 'Membalas di review',
   'Replying in review': 'Membalas di review',
-  'Added a review note': 'Menambah catatan review',
-  'Adding a review note': 'Menambah catatan review',
   'Listed schedules': 'Melihat jadwal',
   'Listing schedules': 'Melihat jadwal',
   'Resumed a schedule': 'Melanjutkan jadwal',
@@ -4269,8 +4265,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Host eksekusi yang dipilih tidak punya penghubung browser yang diizinkan ke desktop ini.',
   'The desktop browser is not connected to the execution service.':
     'Browser desktop tidak terhubung ke layanan eksekusi.',
-  'Update Ramu on this desktop to use integrated browser tools.':
-    'Perbarui Ramu di desktop ini untuk memakai alat browser terintegrasi.',
   'Applies on the selected execution host. Integrated browser tools currently need Full access and an open Ramu desktop on that host. Changes apply on the next provider launch.':
     'Berlaku di host eksekusi yang dipilih. Alat browser terintegrasi butuh Akses penuh dan desktop Ramu yang terbuka di host itu. Perubahan berlaku saat provider dijalankan lagi.',
   'Default shares website sign-ins on this desktop. Temporary keeps this run separate and is cleared when the run ends.':
@@ -4940,8 +4934,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'System default': 'Bawaan sistem',
   'No browser is running for this thread yet. Open Ramu on the computer, or turn on Host browser in Settings → Browser.':
     'Belum ada browser yang berjalan untuk thread ini. Buka Ramu di komputer, atau aktifkan Browser host di Pengaturan → Browser.',
-  'Could not check the host browser. Update Ramu on the host and try again.':
-    'Tidak dapat memeriksa browser host. Perbarui Ramu di host lalu coba lagi.',
+  'Could not check the host browser. Try again.': 'Tidak dapat memeriksa browser host. Coba lagi.',
   'OAuth client ID (optional)': 'ID klien OAuth (opsional)',
   'Only for servers that do not register apps automatically. Use the ID the service issued for Ramu.':
     'Hanya untuk server yang tidak mendaftarkan aplikasi otomatis. Pakai ID yang diberikan layanan untuk Ramu.',
@@ -5584,7 +5577,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Send invitation': 'Kirim undangan',
   'This computer has no address another host can reach yet.':
     'Komputer ini belum punya alamat yang bisa dijangkau host lain.',
-  'Update Ramu on {0} to use this.': 'Perbarui Ramu di {0} untuk memakai ini.',
   '{0} invites this computer to connect back, so you can open its threads, files and terminals from here too. It joins Hosts you use, and you can forget it any time.':
     '{0} mengundang komputer ini untuk menyambung balik, jadi kamu juga bisa membuka thread, file, dan terminalnya dari sini. Host itu masuk ke Host yang kamu pakai, dan kamu bisa melupakannya kapan saja.',
   '{0} will be able to open this computer’s threads, files and terminals, with full access. Ramu asks on {0} first, and nothing connects until its owner accepts.':
@@ -7841,7 +7833,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Nothing to paste. If the clipboard has text, allow Ramu to paste in Settings → Ramu → Paste from Other Apps.':
     'Tidak ada yang bisa ditempel. Kalau clipboard berisi teks, izinkan Ramu menempel di Pengaturan → Ramu → Tempel dari App Lain.',
   '… {0} unchanged lines …': '… {0} baris tidak berubah …',
-  'Waiting for “{0}” in the same checkout': 'Menunggu “{0}” di checkout yang sama',
   'Hold to choose how to send': 'Tahan untuk memilih cara mengirim',
   'Hold to choose an earlier screen': 'Tahan untuk memilih layar sebelumnya',
   'This repository has no remote to push to': 'Repositori ini tidak punya remote untuk push',

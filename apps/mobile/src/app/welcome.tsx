@@ -342,7 +342,7 @@ function ConnectedStep({
       (user) => live && setSignedIn(!!user),
       () => live && setSignedIn(false),
     )
-    // A host too old to report its tunnel to a phone is set up on the computer.
+    // A host that does not share its tunnel with this phone is set up on the computer.
     void store.invoke(computerId, 'network.link').then(
       (status) => live && setTunnel(status.tunnel ?? null),
       () => live && setTunnel(null),

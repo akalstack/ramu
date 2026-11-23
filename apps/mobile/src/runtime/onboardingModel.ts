@@ -63,7 +63,7 @@ type HostTunnel = {
 
 /**
  * Chooses the Connected step's offer from how the phone reaches the host and what the host reports about its tunnel.
- * A host that does not report it (an older host, or one that keeps network settings to itself) is set up there.
+ * A host that does not report it (one that keeps network settings to itself) is set up there.
  */
 export function reachPlan(address: string, tunnel: HostTunnel | null | undefined, signedIn: boolean): ReachPlan {
   const route = connectedRoute(address)

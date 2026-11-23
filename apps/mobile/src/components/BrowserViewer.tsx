@@ -333,7 +333,7 @@ export function BrowserViewer({
       if (focus.editable) keyboard.current?.open(focus.kind)
       else keyboard.current?.close()
     } catch {
-      // Hosts from before keyboard support: Paste in the menu still types into the page.
+      // Without an answer the keyboard stays as it is; Paste in the menu still types into the page.
     }
   }
   const input = (input: BrowserHumanInput) => {

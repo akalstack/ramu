@@ -386,7 +386,9 @@ test('the phone opens its host browser directly inside the menu screen', async (
     isOnline: () => true,
     mayUse: () => true,
     invoke: async (_host, method) =>
-      method === 'hostBrowser.status' ? { engine: 'auto', available: false } : { available: true, tabs: [] },
+      method === 'hostBrowser.status'
+        ? { engine: 'auto', available: false, viewable: true }
+        : { available: true, tabs: [] },
   }
   const { BrowserActivity } = load('components/BrowserActivity.tsx', 'ios', {
     react: hooks.react,
@@ -5231,7 +5233,7 @@ test('tool activity shortcuts follow actual tabs and sessions and ignore late re
     isOnline: () => true,
     mayUse: () => true,
     invoke: async (_host, method) => {
-      if (method === 'hostBrowser.status') return { engine: 'auto', available: true }
+      if (method === 'hostBrowser.status') return { engine: 'auto', available: true, viewable: true }
       if (method === 'hostBrowser.list') return browser ? [{ id: 'tab' }] : []
       if (method === 'computer.session') return computer ? { target: { id: 'app:Chrome' } } : null
       if (method === 'agent.context') return computer ? { percent: 31 } : null
@@ -9266,7 +9268,7 @@ for (const selected of [true, false]) {
       saved = []
     const store = hostStore(
       {
-        'hostBrowser.status': () => ({ available: true, engine: 'auto', selected }),
+        'hostBrowser.status': () => ({ available: true, engine: 'auto', selected, viewable: true }),
         'hostBrowser.profiles': () => ({
           profiles: [
             { id: 'default', name: 'Default', builtin: true },

@@ -27,7 +27,6 @@ import {
   folderCrumbs,
   folderName,
   placeLabel,
-  placesFromRoots,
   typedFolderPath,
   type CloneStep,
   type HostFolderListing,
@@ -147,24 +146,20 @@ export default function HostFolders() {
   const loadPlaces = () => {
     setError(null)
     setPlaces(null)
-    // A host too old to list places still has its browse roots.
-    store
-      .invoke(computerId, 'folders.places')
-      .catch(() => store.invoke(computerId, 'folders.roots').then(placesFromRoots))
-      .then(
-        (found) => {
-          setPlaces(found)
-          const usual = found.filter((place) => place.kind === 'home' || place.kind === 'project')
-          // Where the project would go now opens first; a clone opens where the host's projects sit; one place to
-          // browse needs no choosing.
-          const first =
-            (choosingParent && params.start) ||
-            (wanted ? cloneStartFolder(usual.map((place) => place.path)) : undefined) ||
-            (found.length === 1 ? found[0]?.path : undefined)
-          if (first) browse(first)
-        },
-        (e: unknown) => setError({ text: errorText(e), retry: loadPlaces }),
-      )
+    store.invoke(computerId, 'folders.places').then(
+      (found) => {
+        setPlaces(found)
+        const usual = found.filter((place) => place.kind === 'home' || place.kind === 'project')
+        // Where the project would go now opens first; a clone opens where the host's projects sit; one place to
+        // browse needs no choosing.
+        const first =
+          (choosingParent && params.start) ||
+          (wanted ? cloneStartFolder(usual.map((place) => place.path)) : undefined) ||
+          (found.length === 1 ? found[0]?.path : undefined)
+        if (first) browse(first)
+      },
+      (e: unknown) => setError({ text: errorText(e), retry: loadPlaces }),
+    )
   }
   useEffect(() => {
     loadPlaces()

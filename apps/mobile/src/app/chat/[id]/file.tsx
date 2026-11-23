@@ -2,7 +2,7 @@ import { useLocalSearchParams } from 'expo-router'
 import { useChat } from '../../../runtime/store'
 import { readRevision } from '../../../runtime/gitRevision'
 import { FileViewer } from '../../../components/FileViewer'
-/** Compatibility route for existing transcript and Source Control links. */
+/** A thread's file, opened from the transcript or Source Control. */
 export default function ThreadFile() {
   const { id, repoId, path, line, mode, oid, stash } = useLocalSearchParams<{
     id: string

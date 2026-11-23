@@ -22,7 +22,7 @@ export function HostNames({ computer }: { computer: Computer }) {
   useEffect(() => {
     if (!online) return
     let live = true
-    // A host too old to say its name keeps the phone's rows only.
+    // Without an answer the phone's rows stay as they are.
     void store.invoke(computer.id, 'host.name').then(
       (value) => live && setInfo(value),
       () => {},

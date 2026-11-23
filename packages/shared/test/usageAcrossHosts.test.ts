@@ -103,6 +103,8 @@ it('adds each host’s activity, marks unpriced turns and names hosts it could n
     turns,
     costUsd,
     unpriced,
+    tokens: 0,
+    untokened: 0,
   })
   const total = activityAcrossHosts([
     { host: 'Mac', rows: [row(3, 1.5)] },
@@ -116,21 +118,20 @@ it('adds each host’s activity, marks unpriced turns and names hosts it could n
   ])
 })
 
-it('adds tokens where turns report them and names hosts whose turns do not, including older hosts', async () => {
+it('adds tokens where turns report them and names hosts whose turns do not', async () => {
   const { activityAcrossHosts } = await import('../src/usageAcrossHosts')
-  const row = (turns: number, tokens?: number, untokened?: number) => ({
+  const row = (turns: number, tokens: number, untokened: number) => ({
     day: '2026-11-02',
     provider: 'codex' as const,
     turns,
     costUsd: 0,
     unpriced: turns,
-    ...(tokens === undefined ? {} : { tokens, untokened }),
+    tokens,
+    untokened,
   })
   const total = activityAcrossHosts([
     { host: 'Mac', rows: [row(3, 12_000, 0)] },
     { host: 'vps', rows: [row(2, 500, 1)] },
-    // A host from before token counts sends neither field.
-    { host: 'old', rows: [row(4)] },
   ])
-  expect(total).toMatchObject({ turns: 9, tokens: 12_500, untokenedOn: ['vps', 'old'] })
+  expect(total).toMatchObject({ turns: 5, tokens: 12_500, untokenedOn: ['vps'] })
 })

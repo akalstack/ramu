@@ -68,8 +68,4 @@ test('an acknowledged message never holds its host’s queue for good', () => {
   // Its history entry never appeared, or its thread left this phone: after the hold it is dropped.
   assert.deepEqual(reconcileDelivered([item], [chat()], later), [])
   assert.deepEqual(reconcileDelivered([item], [], later), [])
-  // One saved before acknowledgements carried a time no longer holds anything.
-  const { acceptedAt: _ignored, ...old } = item
-  assert.equal(holdsQueue(old), false)
-  assert.deepEqual(reconcileDelivered([old], [chat()]), [])
 })

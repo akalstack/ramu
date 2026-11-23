@@ -13,7 +13,7 @@ const COVERED = '-mr-[5px] [mask-image:radial-gradient(circle_at_13px_50%,transp
 /**
  * The agents that have worked in a thread as an overlapping stack, oldest first, with the one leading now last: on top,
  * whole and in its colours, the earlier ones (a handoff, a helper on another provider) grey and tucked behind it. Agents beyond the
- * stack's room show as "+N"; the label and tooltip name all of them. A host that predates the list shows none.
+ * stack's room show as "+N"; the label and tooltip name all of them.
  */
 export function AgentStack({ task }: { task: Task }) {
   const all = task.providers ?? []

@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import type { BackgroundTerminalInfo } from '../src/api'
-import { readRemovalCommands, removalCommands, removalReview, removalError } from '../src/chat/taskRemoval'
+import { readRemovalCommands, removalCommands, removalReview } from '../src/chat/taskRemoval'
 const row = (id: string, state: BackgroundTerminalInfo['state']) => ({ id, state }) as BackgroundTerminalInfo
 it('reviews live and uncertain ownership while excluding settled history', () => {
   const rows = [
@@ -29,10 +29,4 @@ it('refuses a command list that belongs to another thread', async () => {
   await expect(
     readRemovalCommands(async () => [{ ...row('wrong', 'running'), taskId: 'other' }], 'thread'),
   ).rejects.toThrow(/scope changed/)
-})
-it('explains a host that cannot accept reviewed deletion without retrying a less protected request', () => {
-  expect(removalError(new Error('This value has too many items (2 at most).'))).toBe(
-    'Update Ramu on this host to review background commands before deleting.',
-  )
-  expect(removalError(new Error('Command is still stopping'))).toBe('Command is still stopping')
 })

@@ -103,10 +103,10 @@ export interface ActivityRow {
   costUsd: number
   /** Turns whose provider reported no cost; they are never counted as free. */
   unpriced: number
-  /** Input and output tokens; absent from hosts that predate token counts. */
-  tokens?: number
+  /** Input and output tokens. */
+  tokens: number
   /** Turns whose provider reported no tokens; never counted as zero. */
-  untokened?: number
+  untokened: number
 }
 
 export interface ActivityTotal {
@@ -142,10 +142,9 @@ export function activityAcrossHosts(
     }
     const turns = rows.reduce((sum, row) => sum + row.turns, 0)
     const costUsd = rows.reduce((sum, row) => sum + row.costUsd, 0)
-    const tokens = rows.reduce((sum, row) => sum + (row.tokens ?? 0), 0)
+    const tokens = rows.reduce((sum, row) => sum + row.tokens, 0)
     if (rows.some((row) => row.unpriced > 0)) total.unpricedOn.push(host)
-    // A host that predates token counts reports none for every turn.
-    if (rows.some((row) => (row.untokened ?? row.turns) > 0)) total.untokenedOn.push(host)
+    if (rows.some((row) => row.untokened > 0)) total.untokenedOn.push(host)
     total.turns += turns
     total.costUsd += costUsd
     total.tokens += tokens

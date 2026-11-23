@@ -114,15 +114,12 @@ function HostQueuedRow({
   supportsSteering,
   configuring,
   reorderDisabled,
-  waitingFor,
   act,
   onRecall,
 }: {
   message: QueuedMessage
   sessionId: string
   busyAgent: boolean
-  /** Another thread is writing in this checkout, which the host lets only one thread do: sending now would fail. */
-  waitingFor: string | null
   supportsSteering: boolean
   configuring: boolean
   reorderDisabled: boolean
@@ -141,14 +138,11 @@ function HostQueuedRow({
   const sendNow = () => void act(() => invoke('agent.sendQueuedNow', sessionId, message.id))
   // Waiting for tools to finish is the wrong call when the turn is heading the wrong way; this stops it instead.
   const interruptAndSend = () => void act(() => invoke('agent.sendQueuedNow', sessionId, message.id, true))
-  const blocked = !busyAgent && !!waitingFor
-  const sendTip = blocked
-    ? translate('Waiting for “{0}” in the same checkout', { '0': waitingFor })
-    : !busyAgent
-      ? translate('Send now')
-      : supportsSteering
-        ? translate('Send after active tools finish')
-        : translate("This provider can't steer a running turn")
+  const sendTip = !busyAgent
+    ? translate('Send now')
+    : supportsSteering
+      ? translate('Send after active tools finish')
+      : translate("This provider can't steer a running turn")
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: message.id,
     disabled: configuring || reorderDisabled,
@@ -186,7 +180,7 @@ function HostQueuedRow({
           size="icon-xs"
           className={`${ICON_BUTTON_CLASS} queued-steer gap-[5px] text-soft disabled:pointer-events-none`}
           aria-label={busyAgent ? translate('Steer') : translate('Send now')}
-          disabled={configuring || blocked || (busyAgent && !supportsSteering)}
+          disabled={configuring || (busyAgent && !supportsSteering)}
           onClick={sendNow}
         >
           {busyAgent ? <CornerDownRight size={14} /> : <Send size={14} />}
@@ -282,7 +276,6 @@ export function QueuedMessages({
   queued,
   pending,
   paused,
-  waitingFor = null,
   hostName,
   hostOffline,
   busyAgent,
@@ -296,8 +289,6 @@ export function QueuedMessages({
   queued: QueuedMessage[]
   pending: OutboxItem[]
   paused: boolean
-  /** The title of the thread whose turn in the same checkout these messages wait for. */
-  waitingFor?: string | null
   hostName: string
   hostOffline: boolean
   busyAgent: boolean
@@ -330,27 +321,21 @@ export function QueuedMessages({
       count={queued.length + pending.length}
       icon={<ListOrdered />}
       actions={
-        !paused && waitingFor ? (
-          <span className="text-muted-foreground text-caption">
-            {translate('Waiting for “{0}” in the same checkout', { '0': waitingFor })}
-          </span>
-        ) : (
-          paused && (
-            <>
-              <span className="text-muted-foreground text-caption">{translate('Paused')}</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className={GHOST_TEXT_BUTTON_CLASS}
-                disabled={readOnly || configuring}
-                onClick={() => {
-                  if (!readOnly) void act(() => invoke('agent.resumeQueue', sessionId))
-                }}
-              >
-                {translate('Resume messages')}
-              </Button>
-            </>
-          )
+        paused && (
+          <>
+            <span className="text-muted-foreground text-caption">{translate('Paused')}</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={GHOST_TEXT_BUTTON_CLASS}
+              disabled={readOnly || configuring}
+              onClick={() => {
+                if (!readOnly) void act(() => invoke('agent.resumeQueue', sessionId))
+              }}
+            >
+              {translate('Resume messages')}
+            </Button>
+          </>
         )
       }
     >
@@ -366,7 +351,6 @@ export function QueuedMessages({
                 supportsSteering={supportsSteering}
                 configuring={configuring || readOnly}
                 reorderDisabled={readOnly || queued.length < 2}
-                waitingFor={paused ? null : waitingFor}
                 act={act}
                 onRecall={onRecall}
               />

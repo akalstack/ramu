@@ -145,8 +145,7 @@ export function BrowserSettings({ draft, onChange, busy }: DraftProps) {
             : await ramu.invoke('browser.runtimeStatus', selectedHost)
         if (active && mine === revision) setReadiness(next)
       } catch {
-        if (active && mine === revision)
-          setReadiness({ available: false, reason: 'Update Ramu on this desktop to use integrated browser tools.' })
+        if (active && mine === revision) setReadiness({ available: false, reason: 'Integrated browser unavailable' })
       }
     }
     void read()

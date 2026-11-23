@@ -27,11 +27,8 @@ function confirmFinish(impact: ThreadDoneImpact): Promise<boolean> {
 export async function finishThreads(invoke: typeof ramu.invoke, taskIds: string[]): Promise<boolean> {
   const impacts = await Promise.all(
     taskIds.map((taskId) =>
-      // A host that cannot say (an older one) is marked done as before, without asking.
-      invoke('tasks.doneImpact', taskId).then(
-        (impact) => impact ?? NOTHING_RUNNING,
-        () => NOTHING_RUNNING,
-      ),
+      // A host that cannot answer is marked done without asking.
+      invoke('tasks.doneImpact', taskId).catch(() => NOTHING_RUNNING),
     ),
   )
   const impact = combinedImpact(impacts)

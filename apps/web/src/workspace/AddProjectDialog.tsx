@@ -26,7 +26,6 @@ import {
   folderCrumbs,
   folderName as name,
   placeLabel,
-  placesFromRoots,
   typedFolderPath,
   type HostFolderListing,
   type HostPlace,
@@ -263,9 +262,8 @@ async function cloneUrlOf(host: string, repository: string) {
 
 const PLACE_ICONS = { home: House, computer: Monitor, drive: HardDrive, project: FolderGit2 } as const
 
-/** The host's places, or its browse roots when it is too old to list places. */
-const placesOf = (host: string) =>
-  invokerFor(host)('folders.places').catch(() => invokerFor(host)('folders.roots').then(placesFromRoots))
+/** The host's places. */
+const placesOf = (host: string) => invokerFor(host)('folders.places')
 
 /**
  * Browses folders on the host the project is added to, since a native picker would open on this machine instead: its

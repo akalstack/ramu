@@ -74,7 +74,6 @@ export function useAgentStream(sessionId: string, visible = true) {
     () => new Map([...(initial?.rows ?? [])].map(([seq, item]) => [item.event, seq])),
   )
   const [queuePaused, setQueuePaused] = useState(() => !!latestQueue(initial?.events ?? [])?.paused)
-  const [queueWaitingFor, setQueueWaitingFor] = useState(() => latestQueue(initial?.events ?? [])?.waitingFor ?? null)
   const [queued, setQueued] = useState<QueuedMessage[]>(() => latestQueue(initial?.events ?? [])?.messages ?? [])
   const [hydrating, setHydrating] = useState(() => !initial)
   // After the connection dropped, a read from the host is catching this chat up while the rows already here stay on
@@ -125,7 +124,6 @@ export function useAgentStream(sessionId: string, visible = true) {
       if (queue) {
         setQueued(queue.messages)
         setQueuePaused(!!queue.paused)
-        setQueueWaitingFor(queue.waitingFor ?? null)
       }
       holdTranscript(host, sessionId, { rows: stored, cursor })
       kept.keep(host, sessionId, { rows: stored })
@@ -182,7 +180,6 @@ export function useAgentStream(sessionId: string, visible = true) {
     const queue = latestQueue(cached?.events ?? [])
     setQueued(queue?.messages ?? [])
     setQueuePaused(!!queue?.paused)
-    setQueueWaitingFor(queue?.waitingFor ?? null)
     setLiveText(null)
     catchUp.current = () => void hydrate().catch(() => {})
     if (!cached) void showTail()
@@ -254,7 +251,6 @@ export function useAgentStream(sessionId: string, visible = true) {
     liveText,
     queued,
     queuePaused,
-    queueWaitingFor,
     hydrating,
     syncing,
     error,

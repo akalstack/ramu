@@ -23,7 +23,7 @@ export function useThreadBrowserTabs(chat: Chat | undefined) {
     const load = async () => {
       try {
         const status = await io.current.invoke(host, 'hostBrowser.status').catch(() => null)
-        const live = !!(status?.viewable ?? status?.engine)
+        const live = !!status?.viewable
         const listed = live
           ? await io.current.invoke(host, 'hostBrowser.list', task)
           : (await io.current.invoke(host, 'browser.activity', task)).tabs

@@ -14,7 +14,7 @@ export async function commitSettings(invoke: Invoke, chat: GitChat) {
 
 /**
  * Leaves out files another thread in the same checkout wrote last, so "stage everything" takes only this thread's
- * work. A host without the check stages them all, as before.
+ * work. When the check fails, every path is staged.
  */
 export async function ownPaths(invoke: Invoke, chat: GitChat, repoId: string, paths: string[]) {
   const theirs = new Set(

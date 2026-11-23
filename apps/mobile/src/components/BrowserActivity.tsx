@@ -47,7 +47,7 @@ export function BrowserActivity({
       .invoke(chat.computerId, 'hostBrowser.status')
       .then((status) => {
         if (!active) return
-        const viewable = status.viewable ?? (!!status.engine || status.available)
+        const viewable = status.viewable
         setHosted(viewable)
         setHostManaged(!!status.engine)
         setHostReason(
@@ -59,7 +59,7 @@ export function BrowserActivity({
       .catch(() => {
         if (!active) return
         setHosted(false)
-        setHostReason('Could not check the host browser. Update Ramu on the host and try again.')
+        setHostReason('Could not check the host browser. Try again.')
       })
     void io.current.invoke(chat.computerId, 'browser.activity', chat.taskId).then(
       (result) => {

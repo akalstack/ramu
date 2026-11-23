@@ -13,12 +13,6 @@ export const removalReview = (commands: BackgroundTerminalInfo[]): TaskRemovalRe
   backgroundIds: removalCommands(commands).map((command) => command.id),
   forgetUnknown: commands.some((command) => command.state === 'unknown'),
 })
-export function removalError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error)
-  return /This value has too many items \(2 at most\)\./.test(message)
-    ? 'Update Ramu on this host to review background commands before deleting.'
-    : message
-}
 
 /** Connection errors cannot. */
 export async function readRemovalCommands(

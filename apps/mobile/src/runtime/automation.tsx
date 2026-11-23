@@ -59,7 +59,6 @@ interface AutomationStore {
    * Resolves once the host has answered; the card is already gone by then.
    */
   actRecap(computerId: string, item: RecapItem, action: RecapAction, until?: number): Promise<void>
-  /** Whether this host takes a chosen snooze time. An older one snoozes for a day whatever is asked, so the menu is not offered. */
   readSummary(computerId: string, id: string): Promise<LibrarySummary>
   dismissSummary(computerId: string, id: string): Promise<void>
   runSummaries(computerId: string): Promise<void>

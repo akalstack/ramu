@@ -1164,8 +1164,7 @@ function InviteBackDialog({ computer, from, onClose }: { computer: Computer; fro
       })
       setSent(true)
     } catch (reason) {
-      const message = errorText(reason)
-      setError(/unknown method/i.test(message) ? t('Update Ramu on {0} to use this.', { 0: computer.name }) : message)
+      setError(errorText(reason))
     } finally {
       setBusy(false)
     }

@@ -9,12 +9,9 @@ import type { LowMemory } from './resources'
 export type InboxTab = 'brief' | 'running' | 'learned' | 'completed'
 export const INBOX_TABS: InboxTab[] = ['brief', 'running', 'learned', 'completed']
 
-/**
- * A saved or linked tab, or the Brief when it is unknown, as the retired All and Waiting tabs now are. The retired
- * Recaps tab opens Completed, where each finished thread shows its newest recap, so recap notifications still land.
- */
+/** A saved or linked tab, or the Brief when it is unknown. */
 export const inboxTabOf = (value: unknown): InboxTab =>
-  value === 'recaps' ? 'completed' : INBOX_TABS.includes(value as InboxTab) ? (value as InboxTab) : 'brief'
+  INBOX_TABS.includes(value as InboxTab) ? (value as InboxTab) : 'brief'
 
 /** The few fields of a chat the Inbox cares about; the app's `Chat` satisfies it. */
 export interface InboxChat {

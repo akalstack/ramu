@@ -8,7 +8,7 @@ const task = (patch: Partial<Parameters<typeof threadStatus>[0]> = {}) => ({
 })
 
 describe('threadStatus', () => {
-  it('distinguishes a stopped execution from failure and unread completion without changing older hosts', () => {
+  it('distinguishes a stopped execution from failure and unread completion', () => {
     expect(threadStatus(task({ executionState: 'stopped' }), true)).toMatchObject({
       kind: 'stopped',
       full: 'Agent stopped',
@@ -83,7 +83,7 @@ describe('threadStatus with a goal', () => {
   })
 })
 
-describe('threadStatus request and older-host context', () => {
+describe('threadStatus request context', () => {
   const inputSummary = (approvals: number, count: number) => ({ count, approvals }) as never
 
   it('puts an approval ahead of a question and ahead of live work', () => {
@@ -95,7 +95,7 @@ describe('threadStatus request and older-host context', () => {
     expect(threadStatus(task({ inputSummary: inputSummary(0, 0) }), false)).toBeNull()
   })
 
-  it('treats a missing or null goal from an older host as unknown, not as a finished thread', () => {
+  it('treats a missing or null goal as unknown, not as a finished thread', () => {
     expect(threadStatus(task({ status: 'running' }), false, undefined)?.kind).toBe('working')
     expect(threadStatus(task({ status: 'running' }), false, null)?.kind).toBe('working')
     expect(threadStatus(task(), false, undefined)).toBeNull()
@@ -124,6 +124,6 @@ it('says where a title came from and whether Ramu may still change it', () => {
   expect(titleSourceNote('manual')).toBe('Named by you. Ramu will not rename it.')
   expect(titleSourceNote('provider')).toContain('provider')
   expect(titleSourceNote('prompt')).toContain('first message')
-  // Older hosts do not say.
+  // A title with no recorded source.
   expect(titleSourceNote(undefined)).toBeNull()
 })

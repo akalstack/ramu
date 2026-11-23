@@ -158,7 +158,7 @@ function CommitForm({
         setOthers(theirs)
         if (!hasStaged) setUnticked((current) => (current.size ? current : theirs))
       },
-      // A host without this check commits as before.
+      // When the check fails, every file starts ticked.
       () => {},
     )
     return () => {

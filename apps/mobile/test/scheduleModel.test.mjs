@@ -116,7 +116,7 @@ test('runs of one schedule list newest first', () => {
   )
 })
 
-test('schedule writes require an online non-viewer host while older hosts retain server-authorized actions', async () => {
+test('schedule writes require an online non-viewer host, leaving an unreported role to the host', async () => {
   const { scheduleWriteProblem, VIEW_ONLY_SCHEDULE_NOTICE } = await import('../src/runtime/scheduleModel.ts')
   assert.equal(scheduleWriteProblem({ status: 'online', access: 'owner' }, 'en'), null)
   assert.equal(scheduleWriteProblem({ status: 'online' }, 'en'), null)

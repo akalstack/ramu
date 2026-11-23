@@ -94,8 +94,7 @@ const heldGoal = (patch: Record<string, unknown>) => ({
   ...patch,
 })
 
-it('does not say a turn is done while its goal waits out a usage limit, in the merged or the older shape', async () => {
-  expect(await turnEnds(heldGoal({ status: 'paused', pausedBy: 'provider-limit' }))).not.toHaveBeenCalled()
+it('does not say a turn is done while its goal waits out a usage limit', async () => {
   expect(await turnEnds(heldGoal({ status: 'paused', pausedBy: 'provider-limit' }))).not.toHaveBeenCalled()
   expect(await turnEnds(heldGoal({ status: 'active' }))).not.toHaveBeenCalled()
 })

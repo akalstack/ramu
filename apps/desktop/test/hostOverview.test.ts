@@ -2,9 +2,9 @@ import { expect, it, vi } from 'vitest'
 import { HostOverviewQueue, readHostOverview } from '../src/main/hostOverview'
 import { HostNavigation } from '../src/main/hostNavigation'
 
-it('keeps successful sections when an older host lacks summaries, and respects disabled recaps', async () => {
+it('keeps successful sections when one fails, and respects disabled recaps', async () => {
   const invoke = vi.fn(async (method: string) => {
-    if (method === 'summaries.get') throw new Error('Unknown method')
+    if (method === 'summaries.get') throw new Error('Memory is unavailable')
     if (method === 'settings.app.get') return { recapsEnabled: false }
     if (method === 'tasks.list') return [{ id: 'remote-task' }]
     return []
@@ -12,7 +12,7 @@ it('keeps successful sections when an older host lacks summaries, and respects d
   const data = await readHostOverview(invoke)
   expect(data.tasks).toEqual([{ id: 'remote-task' }])
   expect(data.recaps).toEqual([])
-  expect(data.errors).toEqual(['summaries: Unknown method'])
+  expect(data.errors).toEqual(['summaries: Memory is unavailable'])
   expect(invoke).not.toHaveBeenCalledWith('recaps.get')
 })
 

@@ -419,8 +419,6 @@ type AgentEventBody =
       kind: 'queue'
       messages: QueuedMessage[]
       paused?: boolean
-      /** The thread whose turn holds the shared checkout, while these messages wait for it to finish. */
-      waitingFor?: string
     }
   | {
       kind: 'user'
