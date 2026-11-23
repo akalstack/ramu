@@ -122,7 +122,8 @@ export function HostsInbox() {
           key={JSON.stringify([computerId, item.id])}
           item={item}
           where={where(computerId, item.taskId)}
-          attention
+          // Only a recap that asks for a decision is drawn as one, with Mark done and Snooze; an update just reads.
+          attention={item.group === 'attention'}
           disabled={!available(computerId)}
           onOpen={() => select(computerId, { kind: 'task', taskId: item.taskId, sessionId: item.sessionId })}
           act={(action, until) => void actRecap(computerId, item.id, action, until)}

@@ -51,10 +51,18 @@ test('recaps for threads that no longer exist are dropped, per host', () => {
   assert.equal(out.recent.length, 1)
 })
 
-test('recaps split into attention, since your last visit, and earlier', () => {
-  const chats = [{ taskId: 'a', computerId: 'pc' }]
+test('recaps split into attention, since your last visit, and earlier, one recent recap per thread', () => {
+  const chats = [
+    { taskId: 'a', computerId: 'pc' },
+    { taskId: 'b', computerId: 'pc' },
+  ]
   const out = splitRecaps(
-    [recap('a', { group: 'attention' }), recap('a', { updatedAt: NOW - 10 }), recap('a', { updatedAt: NOW - 5 * DAY })],
+    [
+      recap('a', { group: 'attention' }),
+      recap('a', { updatedAt: NOW - 10 }),
+      recap('a', { updatedAt: NOW - 20 }),
+      recap('b', { updatedAt: NOW - 5 * DAY }),
+    ],
     chats,
     NOW - DAY,
     NOW,
@@ -64,7 +72,7 @@ test('recaps split into attention, since your last visit, and earlier', () => {
   assert.equal(out.earlier.length, 1)
 })
 
-test('needs-you counts waiting threads plus attention recaps, and ignores archived and outbox threads', () => {
+test('needs-you counts each thread once, holds recaps of threads already asking, and ignores archived and outbox threads', () => {
   const waiting = chat({ status: 'needs-input' })
   const model = build({
     chats: [
@@ -77,7 +85,9 @@ test('needs-you counts waiting threads plus attention recaps, and ignores archiv
   })
   assert.equal(model.waiting.length, 1)
   assert.equal(model.running.length, 1)
-  assert.equal(model.needsYou, 2)
+  // The waiting thread's recap waits until the thread settles, so the thread counts once.
+  assert.equal(model.attention.length, 0)
+  assert.equal(model.needsYou, 1)
 })
 
 test('recaps are hidden for a host that turned them off', () => {

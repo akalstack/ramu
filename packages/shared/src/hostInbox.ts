@@ -174,7 +174,16 @@ export function splitRecaps(
     )
     .sort((a, b) => b.item.updatedAt - a.item.updatedAt)
   const attention = live.filter((r) => r.item.group === 'attention')
-  const recent = live.filter((r) => r.item.group === 'recent')
+  // A thread's newest recap tells its story so far; its earlier ones are history it has moved past, so each thread
+  // keeps one recent row instead of filling Recaps with every step.
+  const seen = new Set<string>()
+  const recent = live.filter((r) => {
+    if (r.item.group !== 'recent') return false
+    const thread = `${r.computerId}:${r.item.taskId}`
+    if (seen.has(thread)) return false
+    seen.add(thread)
+    return true
+  })
   const sinceVisit = recent.filter((r) => r.item.updatedAt > visit)
   return { attention, recent, sinceVisit, earlier: recent.filter((r) => !sinceVisit.includes(r)) }
 }
@@ -236,8 +245,13 @@ export function buildInbox(input: {
     .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
   const lowMemory = (input.lowMemory ?? []).filter((entry) => inScope(entry.computerId))
   const enabled = input.recapsEnabled ?? (() => true)
+  // A thread still working, or already asking for something, is followed live: its recap waits until it settles,
+  // so one busy thread does not fill the Brief with decisions the work is still overtaking.
+  const busy = new Set([...waiting, ...running].map((chat) => `${chat.computerId}:${chat.taskId}`))
   const recaps = splitRecaps(
-    input.recaps.filter((r) => inScope(r.computerId) && enabled(r.computerId)),
+    input.recaps.filter(
+      (r) => inScope(r.computerId) && enabled(r.computerId) && !busy.has(`${r.computerId}:${r.item.taskId}`),
+    ),
     live,
     input.visit ?? 0,
     now,
@@ -281,8 +295,16 @@ export function buildInbox(input: {
     unreadSummaries: summaries.filter((s) => s.summary.status === 'unread').length,
     completed,
     days,
-    /** What the badge counts: waiting threads, failures not yet looked at, low hosts and recaps that need a decision. */
-    needsYou: waiting.length + failed.length + pullRequests.length + lowMemory.length + recaps.attention.length,
+    /**
+     * What the badge counts: each thread that needs you once, whatever the reasons (waiting, a failure not yet looked
+     * at, a pull request, recaps that need a decision), and each low host.
+     */
+    needsYou:
+      new Set(
+        [...waiting, ...failed, ...pullRequests]
+          .map((chat) => `${chat.computerId}:${chat.taskId}`)
+          .concat(recaps.attention.map((r) => `${r.computerId}:${r.item.taskId}`)),
+      ).size + lowMemory.length,
     empty:
       !waiting.length &&
       !failed.length &&
@@ -302,12 +324,22 @@ export interface InboxLowMemory {
   low: LowMemory
 }
 
-export type BriefRow =
+/** `more` counts the thread's other reasons, shown behind its most urgent one. */
+export type BriefRow = (
   | { kind: 'failure'; chat: InboxChat }
   | { kind: 'pull-request'; chat: InboxChat }
   | { kind: 'blocker'; chat: InboxChat; blocker: InboxBlocker }
   | { kind: 'low-memory'; memory: InboxLowMemory }
   | { kind: 'recap'; recap: InboxRecap }
+) & { more?: number }
+
+/** The thread a Brief row is about, so one thread takes one row. */
+const briefThread = (row: BriefRow): string | null =>
+  row.kind === 'low-memory'
+    ? null
+    : row.kind === 'recap'
+      ? `${row.recap.computerId}:${row.recap.item.taskId}`
+      : `${row.chat.computerId}:${row.chat.taskId}`
 
 /** Rows the Brief shows before **See all**, so the first screen always holds what matters most. */
 export const BRIEF_ROWS = 5
@@ -337,8 +369,23 @@ export function briefRows(
     ...model.lowMemory.map((memory): BriefRow => ({ kind: 'low-memory', memory })),
     ...model.attention.map((recap): BriefRow => ({ kind: 'recap', recap })),
   ]
-  // Array sorting is stable, so each kind keeps its newest-first order.
-  return rows.sort((a, b) => briefRank(a) - briefRank(b))
+  // Array sorting is stable, so each kind keeps its newest-first order. Each thread then keeps only its most urgent
+  // row, which counts the rest, so a thread with an approval, a failure and recaps reads as one thing to do.
+  const shown = new Map<string, BriefRow>()
+  return rows
+    .sort((a, b) => briefRank(a) - briefRank(b))
+    .flatMap((row) => {
+      const thread = briefThread(row)
+      if (thread === null) return [row]
+      const first = shown.get(thread)
+      if (first) {
+        first.more = (first.more ?? 0) + 1
+        return []
+      }
+      const own = { ...row }
+      shown.set(thread, own)
+      return [own]
+    })
 }
 
 /** How serious a Brief row is, and which mark it carries, so desktop and phone draw the same row the same way. */

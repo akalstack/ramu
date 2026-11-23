@@ -76,12 +76,14 @@ it('prefers a refreshed mobile goal over a stale task summary, including an expl
 })
 
 it('filters every inbox section and badge by the owning host even when resource IDs collide', () => {
-  const chats = [chat('a'), chat('b')]
+  // Each host has a thread waiting on the person and a settled one whose recap needs a decision.
+  const settled = (computerId: string): InboxChat => ({ ...chat(computerId, 'recapped'), status: 'idle' })
+  const chats = [chat('a'), chat('b'), settled('a'), settled('b')]
   const recaps = ['a', 'b'].map((computerId) => ({
     computerId,
     item: {
       id: 'same',
-      taskId: 'same',
+      taskId: 'recapped',
       group: 'attention',
       status: 'open',
       updatedAt: now,
@@ -102,7 +104,7 @@ it('filters every inbox section and badge by the owning host even when resource 
   expect(filtered.waiting.map((c) => c.computerId)).toEqual(['b'])
   expect(filtered.attention.map((r) => r.computerId)).toEqual(['b'])
   expect(filtered.summaries.map((s) => s.computerId)).toEqual(['b'])
-  expect(chats).toHaveLength(2)
+  expect(chats).toHaveLength(4)
 })
 
 it('applies host filtering before learned/completed limits and day grouping', () => {
@@ -356,14 +358,15 @@ it('orders the Brief: requests, failures, limits, then recaps, and counts failur
   const item = { id: 'r', taskId: 'failed', group: 'attention', status: 'open', updatedAt: now } as InboxRecap['item']
   const input = { chats: [blocked, failed, approval], recaps: [{ computerId: 'b', item }], summaries: [], now }
   const model = buildInbox(input)
-  expect(briefRows(model).map((row) => row.kind + (row.kind === 'blocker' ? `:${row.chat.taskId}` : ''))).toEqual([
-    'blocker:approval',
-    'failure',
-    'blocker:goal',
-    'recap',
-  ])
-  expect(model.needsYou).toBe(4)
+  // The failed thread's recap folds into its failure row: one row, and one count, per thread.
+  expect(
+    briefRows(model).map(
+      (row) => row.kind + (row.kind === 'blocker' ? `:${row.chat.taskId}` : '') + (row.more ? `+${row.more}` : ''),
+    ),
+  ).toEqual(['blocker:approval', 'failure+1', 'blocker:goal'])
+  expect(model.needsYou).toBe(3)
   const seen = buildInbox({ ...input, failureSeen: (entry) => entry.taskId === 'failed' })
+  // A seen failure stops asking, but its recap still needs a decision, so the thread still counts once.
   expect(seen.needsYou).toBe(3)
   expect(seen.failed).toEqual([])
   // Seen failures still belong in finished work; only the ask goes away.
@@ -422,4 +425,37 @@ it('marks each Brief row by how serious it is, the same on every device', () => 
     tone: 'bad',
   })
   expect(look({ kind: 'blocker', chat: chat('host'), blocker: { kind: 'goal-paused' } }).tone).toBe('warn')
+})
+
+it('keeps a working thread to its live state: its recaps wait until it settles', () => {
+  const working: InboxChat = { ...chat('a', 'busy'), status: 'running' }
+  const recaps = ['one', 'two', 'three'].map((id) => ({
+    computerId: 'a',
+    item: { id, taskId: 'busy', group: 'attention', status: 'open', updatedAt: now } as InboxRecap['item'],
+  }))
+  const model = buildInbox({ chats: [working], recaps, summaries: [], now })
+  expect(briefRows(model)).toEqual([])
+  expect(model.attention).toEqual([])
+  expect(model.needsYou).toBe(0)
+  const settled = buildInbox({ chats: [{ ...working, status: 'idle' }], recaps, summaries: [], now })
+  // Settled, its three decisions are one Brief row that counts the other two.
+  expect(briefRows(settled).map((row) => [row.kind, row.more])).toEqual([['recap', 2]])
+  expect(settled.needsYou).toBe(1)
+})
+
+it('keeps one recent recap per thread, its newest, while decisions stay one per item', () => {
+  const idle: InboxChat = { ...chat('a', 'long'), status: 'idle' }
+  const recap = (id: string, group: 'recent' | 'attention', updatedAt: number) => ({
+    computerId: 'a',
+    item: { id, taskId: 'long', group, status: 'open', updatedAt } as InboxRecap['item'],
+  })
+  const model = buildInbox({
+    chats: [idle],
+    recaps: [recap('old', 'recent', now - 20), recap('new', 'recent', now - 10), recap('ask', 'attention', now)],
+    summaries: [],
+    visit: now - 100,
+    now,
+  })
+  expect(model.recent.map((r) => r.item.id)).toEqual(['new'])
+  expect(model.attention.map((r) => r.item.id)).toEqual(['ask'])
 })

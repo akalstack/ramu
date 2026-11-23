@@ -179,6 +179,8 @@ function BriefRowView({
       meta={
         <>
           <span className={TONE_TEXT[look.tone]}>{content.detail}</span>
+          {/* The thread's other reasons, which its own page shows once this one is handled. */}
+          {row.more ? ` · ${t('+{0} more', { 0: row.more })}` : ''}
           {where && ` · ${where}`}
         </>
       }

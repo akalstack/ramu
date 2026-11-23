@@ -209,6 +209,7 @@ function BriefRowView({ row, divider, where }: { row: BriefRow; divider: boolean
             <T size={font.caption} tone={look.tone === 'neutral' ? 'muted' : look.tone}>
               {detail}
             </T>
+            {row.more ? ` · ${say('+{0} more', { 0: row.more })}` : ''}
             {place ? ` · ${place}` : ''}
           </T>
         </View>
