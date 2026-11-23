@@ -39,6 +39,11 @@ export const STORES = [
   },
 ]
 
+/* Google Play has the Android app in closed testing: joining the Google Group lets an account opt in on Play, and
+   only then does the store page offer the install. */
+export const ANDROID_TESTERS_GROUP = 'https://groups.google.com/g/akalstack-ramu'
+export const ANDROID_TESTING_OPT_IN = `https://play.google.com/apps/testing/${PACKAGE}`
+
 export type Provider = { id: string; name: string; logo: string; signIn: string }
 
 export const PROVIDERS: Provider[] = [

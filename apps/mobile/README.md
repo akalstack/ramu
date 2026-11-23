@@ -2,6 +2,8 @@
 
 The iOS and Android app for a Ramu host. The host runs your agents, providers, Git and terminals, and the phone connects to it directly over HTTPS or a LAN or VPN you trust. Get it on [Google Play](https://play.google.com/store/apps/details?id=com.akalstack.ramu) or the [App Store](https://apps.apple.com/app/id6836786013), or build it from source (see [Development](#development)).
 
+**Android is in closed testing.** To install from Google Play, join the [akalstack-ramu Google Group](https://groups.google.com/g/akalstack-ramu), then [become a tester](https://play.google.com/apps/testing/com.akalstack.ramu) with the same Google account. The Play page then offers the install, and updates arrive as usual.
+
 ## Connect a phone
 
 1. Start Ramu on the host (`pnpm build`, then the desktop app or `ramu serve`). Its setup shows a pairing QR code; later, **Settings → Remote access → Pair a device** shows one. Headless: `ramu serve --listen 0.0.0.0:7788 --private-network`, then `ramu pair`. Read [remote access](../../docs/security-model.md#remote-access) first.

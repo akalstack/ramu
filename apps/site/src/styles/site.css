@@ -592,6 +592,23 @@ main > section {
   height: 46px;
   width: auto;
 }
+.stores-android {
+  max-width: 460px;
+  margin-top: 10px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.stores-android a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.download .stores-android,
+.pair-install .stores-android {
+  margin-inline: auto;
+  text-align: center;
+}
 .stores-note {
   margin-top: 12px;
   font-size: 12.5px;

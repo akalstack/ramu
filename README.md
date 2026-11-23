@@ -105,6 +105,8 @@ For the phone, install the app and choose **Connect phone** on your computer, th
 <a href="https://apps.apple.com/app/id6836786013"><img src="apps/site/public/badges/app-store.svg" alt="Download on the App Store" height="44" /></a>&nbsp;
 <a href="https://play.google.com/store/apps/details?id=com.akalstack.ramu"><img src="apps/site/public/badges/google-play.png" alt="Get it on Google Play" height="44" /></a>
 
+Android is in closed testing: join the [akalstack-ramu Google Group](https://groups.google.com/g/akalstack-ramu), then [become a tester on Google Play](https://play.google.com/apps/testing/com.akalstack.ramu) with the same Google account, and install.
+
 | Platform | Builds                                     |
 | -------- | ------------------------------------------ |
 | macOS    | arm64, x64                                 |
