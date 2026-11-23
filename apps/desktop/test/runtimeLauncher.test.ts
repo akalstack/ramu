@@ -1,5 +1,8 @@
 import { expect, it } from 'vitest'
-import { pinnedRuntime, systemdUnit } from '../src/main/runtimeLauncher'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { keepRunningPreferred, pinnedRuntime, setKeepRunningPreferred, systemdUnit } from '../src/main/runtimeLauncher'
 
 it('does not snapshot a development Electron.app with a daemon outside its bundle', () => {
   const dir = '/tmp/ramu-user-data'
@@ -169,5 +172,18 @@ it('reports a service that exits during startup at once instead of waiting out t
     expect(Date.now() - started).toBeLessThan(5_000)
   } finally {
     rmSync(directory, { recursive: true, force: true })
+  }
+})
+
+it('keeps the service running after the app closes unless the person turned that off', () => {
+  const userData = mkdtempSync(join(tmpdir(), 'ramu-keep-'))
+  try {
+    expect(keepRunningPreferred(userData)).toBe(true)
+    setKeepRunningPreferred(userData, false)
+    expect(keepRunningPreferred(userData)).toBe(false)
+    setKeepRunningPreferred(userData, true)
+    expect(keepRunningPreferred(userData)).toBe(true)
+  } finally {
+    rmSync(userData, { recursive: true, force: true })
   }
 })

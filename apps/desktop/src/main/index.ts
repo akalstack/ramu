@@ -106,6 +106,8 @@ import {
   loginEnabled,
   loginPreferred,
   loginSupported,
+  keepRunningPreferred,
+  setKeepRunningPreferred,
 } from './runtimeLauncher'
 import { commandTarget, terminalCommand } from './terminalCommand'
 
@@ -286,10 +288,29 @@ async function main() {
     app.isPackaged &&
     !process.env.RAMU_USER_DATA &&
     loginSupported() &&
+    keepRunningPreferred(userData) &&
     loginPreferred(userData) !== false &&
     !loginEnabled(userData)
   )
     await setLoginService(true)
+  // With Keep running when Ramu closes off, quitting stops the service first, then quits. Quit waits for it, briefly:
+  // a service that does not answer is left to stop on its own rather than holding the app open.
+  let quitHeld = false,
+    serviceStopped = false
+  app.on('before-quit', (event) => {
+    if (serviceStopped || keepRunningPreferred(userData)) return
+    event.preventDefault()
+    if (quitHeld) return
+    quitHeld = true
+    const stopService = runtimeInvoke(runtime, 'background.stop').then(() => waitForRuntimeExit(runtime, 8_000))
+    void Promise.race([stopService, new Promise((resolve) => setTimeout(resolve, 10_000))])
+      .catch(() => {})
+      .finally(() => {
+        serviceStopped = true
+        quitHeld = false
+        app.quit()
+      })
+  })
 
   // Dictation: main owns the microphone permission, the single recording lease and the local recognizer.
   const voice = new DesktopVoice({
@@ -1460,7 +1481,16 @@ async function main() {
       computers.update(args[0], args[1] as Parameters<typeof computers.update>[1])
       return computers.list(self)
     }
-    if (remote && ['background.start', 'background.login', 'background.restart'].includes(method))
+    if (
+      remote &&
+      [
+        'background.start',
+        'background.login',
+        'background.restart',
+        'background.keepRunning',
+        'background.restartService',
+      ].includes(method)
+    )
       throw new Error(t('Not available while connected to another host'))
     if (method === 'background.start') {
       await ensureRuntime(userData, daemonPath)
@@ -1468,7 +1498,31 @@ async function main() {
     }
     if (method === 'background.login') {
       if (typeof args[0] !== 'boolean') throw new Error('Invalid startup setting')
+      // A login service would bring back a service the person asked to stop with the app.
+      if (args[0] && !keepRunningPreferred(userData)) throw new Error(t('Turn on Keep running when Ramu closes first.'))
       return setLoginService(args[0])
+    }
+    if (method === 'background.keepRunning') {
+      if (typeof args[0] !== 'boolean') throw new Error('Invalid background setting')
+      setKeepRunningPreferred(userData, args[0])
+      if (!args[0] && loginEnabled(userData)) await setLoginService(false)
+      return
+    }
+    if (method === 'background.restartService') {
+      const then = args[0] === 'reload' ? 'reload' : 'keep'
+      const choice = await dialog.showMessageBox(win, {
+        type: 'question',
+        message: t('Restart the background service?'),
+        detail: t('Stops running agents. Unfinished threads resume if restart recovery is enabled.'),
+        buttons: [t('Restart now'), t('Later')],
+        defaultId: 1,
+        cancelId: 1,
+      })
+      if (choice.response !== 0) return
+      await restartRuntime()
+      // The window reconnects on its own; a reload also starts the page fresh.
+      if (then === 'reload') win.webContents.reload()
+      return
     }
     if (method === 'background.status') {
       const status = await runtimeInvoke(target, method)
@@ -1476,6 +1530,7 @@ async function main() {
         ...status,
         loginEnabled: !remote && loginEnabled(userData),
         loginSupported: !remote && canStartAtLogin,
+        ...(remote ? {} : { keepRunning: keepRunningPreferred(userData) }),
         bundledVersion: app.getVersion(),
         bundledBuild: runtimeBuild(daemonPath),
         updateAvailable: !remote && status.build !== runtimeBuild(daemonPath),
@@ -1580,6 +1635,8 @@ async function main() {
   const networkWake = () => refreshRuntimeNetwork(true)
   powerMonitor.on('resume', networkWake)
   app.on('before-quit', () => {
+    // Quitting waits while the service stops first; cleanup runs on the quit that follows.
+    if (quitHeld) return
     powerMonitor.removeListener('resume', networkWake)
     nearby.stop()
     desktopUpdater.close()

@@ -531,6 +531,22 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
       run: () => window.location.reload(),
     },
     {
+      id: 'app.reload-window-and-service',
+      title: t('Reload window and background service'),
+      category: t('Application'),
+      run: () =>
+        void invoke('background.restartService', 'reload').catch((e) =>
+          notifyError(errorText(e), t('Restart service')),
+        ),
+    },
+    {
+      id: 'app.restart-service-only',
+      title: t('Restart background service'),
+      category: t('Application'),
+      run: () =>
+        void invoke('background.restartService', 'keep').catch((e) => notifyError(errorText(e), t('Restart service'))),
+    },
+    {
       id: 'app.restart',
       title: t('Restart Ramu'),
       category: t('Application'),

@@ -2,6 +2,10 @@
 
 The desktop app connects to a local service that owns threads, terminals and schedules. Closing the window leaves them running, and reopening reconnects. The host must stay awake. **Settings → Background** controls the service and starting at login. Updates are under **Settings → About**.
 
+**Keep running when Ramu closes** is on by default. Turned off, the service runs only while the app is open: quitting Ramu stops it, so running threads stop, schedules wait and paired devices can't connect until you open Ramu again. **Start at login** needs it on, and turning it off turns starting at login off too.
+
+The command palette (Cmd/Ctrl+Shift+P, or `>` in Cmd/Ctrl+P) offers **Reload window**, **Reload window and background service**, and **Restart background service**, which leaves the window as it is and reconnects it. Restarting the service asks first, since it stops running agents; unfinished threads resume when restart recovery is on.
+
 ## Messages while an agent works
 
 Enter uses your Steer or Queue choice, and Cmd/Ctrl+Enter uses the other. **Steer** adds your message to the running turn. **Queue** waits for the turn to end. A steered message waits for running tools to finish. To redirect the agent sooner, choose **Stop turn and send now** from a queued message's menu, or tap its send button on the phone. The turn stops, that message starts the next one, and the rest of the queue follows. Agents can ask questions and keep working on independent parts while they wait for your answer.

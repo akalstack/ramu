@@ -977,6 +977,10 @@ export interface RamuMethods extends ArtifactMethods {
   'background.restart'(): void
   'background.keepAwake'(): { enabled: boolean; active: boolean; supported: boolean; error: string | null }
   'background.login'(enabled: boolean): { firstInstall: boolean }
+  /** Whether this computer's service outlives the desktop app; off also turns off starting at login. Desktop only. */
+  'background.keepRunning'(enabled: boolean): void
+  /** Restarts this computer's service, then keeps the window as it is or reloads it, after a confirmation. Desktop only. */
+  'background.restartService'(then: 'keep' | 'reload'): void
   /** The `ramu` command for terminals on this computer. The desktop answers these; they never reach a host. */
   'terminalCommand.status'(): import('./types').TerminalCommandStatus
   'terminalCommand.install'(): import('./types').TerminalCommandStatus

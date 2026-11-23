@@ -297,6 +297,18 @@ export function unloadLoginService(userData: string) {
     execFileSync('/bin/launchctl', ['bootout', `gui/${process.getuid!()}/${label}`], { stdio: 'ignore' })
   } catch {}
 }
+/** Whether the service keeps running after the app closes; on unless the person turned it off. */
+export function keepRunningPreferred(userData: string): boolean {
+  try {
+    return JSON.parse(readFileSync(join(userData, 'background-keep-running.json'), 'utf8')) !== false
+  } catch {
+    return true
+  }
+}
+export function setKeepRunningPreferred(userData: string, enabled: boolean): void {
+  writeFileSync(join(userData, 'background-keep-running.json'), JSON.stringify(enabled), { mode: 0o600 })
+}
+
 export function loginPreferred(userData: string): boolean | null {
   try {
     return JSON.parse(readFileSync(join(userData, 'background-startup.json'), 'utf8')) === true

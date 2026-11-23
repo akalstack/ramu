@@ -967,7 +967,9 @@ export function BackgroundControls({ compact = false, onInstalled }: { compact?:
         <span>
           <strong>{t('Background service')}</strong>
           <span className="muted text-muted-foreground block block small text-caption">
-            {t('Threads and schedules keep running when Ramu closes. The host must stay awake.')}
+            {status?.keepRunning === false
+              ? t('Runs while Ramu is open, and stops when you close it.')
+              : t('Threads and schedules keep running when Ramu closes. The host must stay awake.')}
           </span>
           <span className="muted text-muted-foreground block block small text-caption">
             {connected ? t('Running · PID {0}', { '0': status?.pid ?? '…' }) : t('Stopped')}
@@ -982,18 +984,40 @@ export function BackgroundControls({ compact = false, onInstalled }: { compact?:
           {connected ? t('Stop') : t('Start')}
         </Button>
       </SettingsRow>
+      {status?.keepRunning !== undefined && (
+        <SettingsRow className="settings-toggle">
+          <span>
+            <strong>{t('Keep running when Ramu closes')}</strong>
+            <span className="muted text-muted-foreground small text-caption block block">
+              {status.keepRunning
+                ? t('Threads, schedules and your paired devices keep working after you close Ramu.')
+                : t(
+                    'Closing Ramu stops the service: running threads stop, schedules wait, and paired devices can’t connect until you open Ramu again.',
+                  )}
+            </span>
+          </span>
+          <Switch
+            aria-label={t('Keep running when Ramu closes')}
+            checked={status.keepRunning}
+            disabled={busy}
+            onCheckedChange={(checked) => void act(() => invoke('background.keepRunning', checked))}
+          />
+        </SettingsRow>
+      )}
       {loginSupported && (
         <SettingsRow className="settings-toggle">
           <span>
             <strong>{t('Start at login')}</strong>
             <span className="muted text-muted-foreground small text-caption block block">
-              {t('Start the background service when you sign in.')}
+              {status?.keepRunning === false
+                ? t('Needs Keep running when Ramu closes.')
+                : t('Start the background service when you sign in.')}
             </span>
           </span>
           <Switch
             aria-label={t('Start at login')}
             checked={status?.loginEnabled ?? false}
-            disabled={busy || !connected}
+            disabled={busy || !connected || status?.keepRunning === false}
             onCheckedChange={(checked) =>
               void act(async () => {
                 const result = await invoke('background.login', checked)

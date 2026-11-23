@@ -12,6 +12,11 @@ export interface BackgroundStatus {
   loginEnabled?: boolean
   /** Whether this computer can start the service at login; the desktop adds it for its own host. */
   loginSupported?: boolean
+  /**
+   * Whether the service keeps running after the desktop app closes (the default); off, closing the app stops it. The
+   * desktop adds it for its own host.
+   */
+  keepRunning?: boolean
   version?: string
   build?: string
   bundledVersion?: string
