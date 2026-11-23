@@ -50,6 +50,7 @@ const SINGLE_ENVIRONMENT_SECTIONS: readonly string[] = [
   'identities',
   'account',
   'system',
+  'about',
   'remote',
 ]
 /** Remote access describes the current environment; it is not selectable. */

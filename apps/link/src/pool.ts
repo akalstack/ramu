@@ -43,13 +43,15 @@ export interface Waiting {
 
 /** Synchronous storage, as a Durable Object's SQLite gives it. */
 export interface Store {
-  slotOf(userId: string): Slot | null
+  slotOf(userId: string, hostId: string): Slot | null
+  /** An account's slots, oldest first. */
+  slotsOf(userId: string): Slot[]
   slots(): Slot[]
   putSlot(slot: Slot): void
-  deleteSlot(userId: string): void
+  deleteSlot(userId: string, hostId: string): void
   waiting(): Waiting[]
   putWaiting(entry: Waiting): void
-  deleteWaiting(userId: string): void
+  deleteWaiting(userId: string, hostId: string): void
   session(hash: string, now: number): string | null
   putSession(hash: string, userId: string, expiresAt: number): void
   downSince(tunnelId: string): number | null
@@ -60,7 +62,7 @@ export interface Store {
 
 export type Admission =
   | { kind: 'slot'; slot: Slot }
-  | { kind: 'taken'; hostName: string }
+  | { kind: 'taken'; hosts: { hostId: string; hostName: string }[] }
   | { kind: 'admit' }
   | { kind: 'wait'; position: number }
 
@@ -73,20 +75,32 @@ export function online(store: Store): number {
 }
 
 /**
- * Whether a host may come online. Capacity counts hosts online at once, so an account keeps its address while its host
- * is off and only needs room again to reconnect. The waitlist is first come, first served, for newcomers and returning
- * hosts alike: a waiting host comes online once the free room reaches its place, and anyone else only when the free
- * room outnumbers everyone waiting. A host already online, or one paused for its traffic (which gets no tunnel), always
- * gets its slot back.
+ * Whether a host may come online. An account keeps a link for up to `perAccount` hosts (the devices it connects from
+ * do not count); a further host is told which hold them. Capacity counts hosts online at once, so an account keeps its
+ * addresses while its hosts are off and only needs room again to reconnect. The waitlist is first come, first served,
+ * for newcomers and returning hosts alike: a waiting host comes online once the free room reaches its place, and anyone
+ * else only when the free room outnumbers everyone waiting. A host already online, or one paused for its traffic (which
+ * gets no tunnel), always gets its slot back.
  */
-export function admission(store: Store, userId: string, hostId: string, capacity: number, now: number): Admission {
-  const held = store.slotOf(userId)
-  if (held && held.hostId !== hostId) return { kind: 'taken', hostName: held.hostName }
+export function admission(
+  store: Store,
+  userId: string,
+  hostId: string,
+  capacity: number,
+  now: number,
+  perAccount: number = LINK_LIMITS.hostsPerAccount,
+): Admission {
+  const held = store.slotOf(userId, hostId)
+  if (!held) {
+    const mine = store.slotsOf(userId)
+    if (mine.length >= perAccount)
+      return { kind: 'taken', hosts: mine.map((slot) => ({ hostId: slot.hostId, hostName: slot.hostName })) }
+  }
   if (held && (held.tunnelId !== null || (held.suspendedUntil !== null && held.suspendedUntil > now)))
     return { kind: 'slot', slot: held }
   const free = capacity - online(store)
   const queue = store.waiting()
-  const index = queue.findIndex((entry) => entry.userId === userId)
+  const index = queue.findIndex((entry) => entry.userId === userId && entry.hostId === hostId)
   const admitted = index >= 0 ? index < free : free > queue.length
   if (!admitted) return { kind: 'wait', position: index >= 0 ? index + 1 : queue.length + 1 }
   return held ? { kind: 'slot', slot: held } : { kind: 'admit' }
@@ -194,8 +208,8 @@ export function judgeTunnels(store: Store, tunnels: ListedTunnel[], now: number)
 }
 
 export interface IdleVerdict {
-  warn: string[]
-  release: string[]
+  warn: Slot[]
+  release: Slot[]
 }
 
 /** Slots whose address no device has used: warned at idleWarnDays, released at idleReleaseDays. */
@@ -203,8 +217,8 @@ export function judgeIdle(store: Store, now: number): IdleVerdict {
   const verdict: IdleVerdict = { warn: [], release: [] }
   for (const slot of store.slots()) {
     const idle = now - slot.lastSeenAt
-    if (idle >= LINK_LIMITS.idleReleaseDays * DAY_MS) verdict.release.push(slot.userId)
-    else if (idle >= LINK_LIMITS.idleWarnDays * DAY_MS && slot.warnedAt === null) verdict.warn.push(slot.userId)
+    if (idle >= LINK_LIMITS.idleReleaseDays * DAY_MS) verdict.release.push(slot)
+    else if (idle >= LINK_LIMITS.idleWarnDays * DAY_MS && slot.warnedAt === null) verdict.warn.push(slot)
   }
   return verdict
 }
@@ -217,7 +231,7 @@ export function promoteWaiting(store: Store, capacity: number, now: number): { p
   let dropped = 0
   for (const entry of store.waiting())
     if (entry.promotedAt !== null && now - entry.promotedAt >= PROMOTION_EXPIRES_MS) {
-      store.deleteWaiting(entry.userId)
+      store.deleteWaiting(entry.userId, entry.hostId)
       dropped++
     }
   const free = Math.max(0, capacity - online(store))

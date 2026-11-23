@@ -128,7 +128,7 @@ const REACH_LABEL: Record<ReachMode, string> = {
 }
 const REACH_HELP: Record<ReachMode, string> = {
   off: 'Devices reach this host on your network or VPN. Choose a tunnel to reach it from anywhere.',
-  link: 'A free address from Ramu that stays the same, for one computer per Ramu account. Ramu runs cloudflared for it. Cloudflare can read the traffic; every call still needs a paired device.',
+  link: 'A free address from Ramu that stays the same, for up to 3 computers per Ramu account; your phones and other devices don’t count. Ramu runs cloudflared for it. Cloudflare can read the traffic; every call still needs a paired device.',
   quick:
     'Ramu starts a Cloudflare quick tunnel. No account needed. The address changes each time Ramu starts, so it suits trying things out. Cloudflare can read the traffic.',
   tailscale:
@@ -486,6 +486,11 @@ function ThisComputer() {
               onChoose={chooseRoute}
               onRelease={() =>
                 void invoke('network.releaseLink')
+                  .then(setStatus)
+                  .catch((error: unknown) => notifyError(errorText(error), t('Remote access')))
+              }
+              onReleaseOther={(hostId) =>
+                invoke('network.releaseOtherLink', hostId)
                   .then(setStatus)
                   .catch((error: unknown) => notifyError(errorText(error), t('Remote access')))
               }

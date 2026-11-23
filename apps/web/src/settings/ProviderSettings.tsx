@@ -41,7 +41,7 @@ export function ProviderSettings({
   value: AppPreferences
   onChange: (value: AppPreferences) => void
   /** Opens another Settings page, used by Update Ramu. */
-  onOpenSection?: (section: 'system') => void
+  onOpenSection?: (section: 'about') => void
 }) {
   const invoke = useSettingsInvoke()
   const on = useSettingsEvents()
@@ -459,7 +459,7 @@ export function ProviderSettings({
               stale={stale && !!status}
               checking={checking.has(provider)}
               onCheckAgain={() => void refresh(false, false, [provider])}
-              onUpdateRamu={onOpenSection ? () => onOpenSection('system') : undefined}
+              onUpdateRamu={onOpenSection ? () => onOpenSection('about') : undefined}
               onBrowse={() => void browse(provider)}
               models={
                 <ProviderModels

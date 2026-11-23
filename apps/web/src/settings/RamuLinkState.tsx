@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { LINK_LIMITS, linkUsageLevel, recommendRoutes, type RouteKind, type RouteOption } from '@ramu/shared/ramuLink'
 import type { NetworkStatus } from '@ramu/shared/types'
 import { formatSize } from '@ramu/shared/formatSize'
@@ -95,6 +96,59 @@ function OtherRoutes({ status, onChoose }: { status: NetworkStatus; onChoose: (r
 }
 
 /**
+ * Every one of the account's links is taken: which hosts hold them, each with Give back here, so this host takes the
+ * freed one without a trip to the other computer. A relay too old to name them all names one.
+ */
+function LinkHolders({
+  link,
+  onReleaseOther,
+}: {
+  link: NonNullable<NonNullable<NetworkStatus['tunnel']>['link']>
+  onReleaseOther: (hostId: string) => Promise<unknown>
+}) {
+  const [releasing, setReleasing] = useState<string | null>(null)
+  const holders = link.holders ?? []
+  if (!holders.length)
+    return (
+      <p className={line} role="status">
+        {t(
+          'Your Ramu account’s link is used by {0}. Give it back there (Settings → Remote access), or use another way here.',
+          { 0: link.takenBy ?? t('another computer') },
+        )}
+      </p>
+    )
+  return (
+    <div className="mb-3 flex flex-col gap-2" role="group" aria-label={t('Hosts using your Ramu Links')}>
+      <p className="muted text-muted-foreground small text-caption m-0" role="status">
+        {t(
+          'Your Ramu account has a link for {0} hosts, and all are in use. Give one back to use it here; that host keeps working on your network and VPN.',
+          { 0: LINK_LIMITS.hostsPerAccount },
+        )}
+      </p>
+      {holders.map((holder) => (
+        <div
+          key={holder.hostId}
+          className="flex items-center justify-between gap-3 rounded-(--radius-m) bg-fill px-3 py-2"
+        >
+          <span className="min-w-0 truncate text-body font-medium">{holder.name}</span>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={releasing !== null}
+            onClick={() => {
+              setReleasing(holder.hostId)
+              void onReleaseOther(holder.hostId).finally(() => setReleasing(null))
+            }}
+          >
+            {releasing === holder.hostId ? t('Giving back…') : t('Give back and use here')}
+          </Button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/**
  * Ramu Link's state under the tunnel choice: the address and this month's use while it runs, and otherwise why not
  * (full, paused, on another host, signed out) with what to do about it. `staged` is a choice not saved yet: a full pool
  * says so before saving, which would join the waitlist.
@@ -104,11 +158,14 @@ export function RamuLinkState({
   staged,
   onChoose,
   onRelease,
+  onReleaseOther,
 }: {
   status: NetworkStatus
   staged: boolean
   onChoose: (route: RouteChoice) => void
   onRelease: () => void
+  /** Gives back the link another of the account's hosts holds, so this one can take it. */
+  onReleaseOther: (hostId: string) => Promise<unknown>
 }) {
   const tunnel = status.tunnel
   if (!tunnel) return null
@@ -174,14 +231,7 @@ export function RamuLinkState({
   if (link.state === 'taken')
     return (
       <>
-        <p className={line} role="status">
-          {t(
-            'Your Ramu account’s link is used by {0}. Give it back there (Settings → Remote access), or use another way here.',
-            {
-              0: link.takenBy ?? t('another computer'),
-            },
-          )}
-        </p>
+        <LinkHolders link={link} onReleaseOther={onReleaseOther} />
         <OtherRoutes status={status} onChoose={onChoose} />
       </>
     )
@@ -213,11 +263,10 @@ export function RamuLinkState({
         <p className={`${line} m-0`}>{t('Connecting to Ramu Link…')}</p>
       )}
       <p className={`${line} m-0 ${level === 'ok' ? '' : 'text-warn'}`}>
-        {t('{0} of {1} this month · {2} of {3} devices connected through it', {
+        {t('{0} of {1} this month · {2} connected through it now', {
           0: formatSize(usage),
           1: formatSize(LINK_LIMITS.monthlyBytes),
-          2: link.devices,
-          3: LINK_LIMITS.devices,
+          2: link.devices === 1 ? t('1 device') : t('{0} devices', { 0: link.devices }),
         })}
       </p>
       {link.releasesAt ? (

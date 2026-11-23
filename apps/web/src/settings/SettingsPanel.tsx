@@ -47,6 +47,7 @@ import { AgentSetup, type SetupView } from './AgentSetup'
 import { PluginSettings } from './Plugins'
 import { IdentitySettings } from './Identities'
 import { AccountSettings } from './AccountSettings'
+import { AboutSettings } from './AboutSettings'
 import { SettingsTransfer } from './SettingsTransfer'
 
 const SETUP_TABS: Record<string, SetupView> = {
@@ -259,6 +260,7 @@ export function SettingsPanel({
                   </>
                 )}
                 {page === 'system' && <SystemSettings {...draftProps} />}
+                {page === 'about' && <AboutSettings {...draftProps} />}
                 {page === 'appearance' && (
                   <AppearanceSettings {...draftProps} sizesReset={sizesReset} onResetSizes={() => setReset('sizes')} />
                 )}

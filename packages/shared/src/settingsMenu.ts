@@ -29,7 +29,9 @@ export const SETTINGS_MENU = [
   { id: 'identities', label: 'Identities', group: 'Access & host', phone: true },
   { id: 'remote', label: 'Remote access', group: 'Access & host', phone: true },
   { id: 'account', label: 'Account', group: 'Access & host', phone: true },
-  { id: 'system', label: 'Background & updates', group: 'Access & host', phone: true },
+  { id: 'system', label: 'Background', group: 'Access & host', phone: true },
+  // The phone has its own About page, about the phone, so the host's never shows there.
+  { id: 'about', label: 'About', group: 'Access & host', phone: true },
 ] as const satisfies readonly { id: string; label: string; group: SettingsMenuGroup; phone: boolean }[]
 
 export type SettingsMenuId = (typeof SETTINGS_MENU)[number]['id']

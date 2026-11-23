@@ -113,7 +113,7 @@ export function createRelay(deps: RelayDeps) {
 
   async function release(slot: Slot) {
     await removeTunnel(slot)
-    store.deleteSlot(slot.userId)
+    store.deleteSlot(slot.userId, slot.hostId)
   }
 
   /** Makes sure an admitted host has a tunnel to its loopback port and a CNAME, and hands it the token. */
@@ -158,14 +158,22 @@ export function createRelay(deps: RelayDeps) {
       const now = deps.now()
       const decision = admission(store, userId, hostId, deps.capacity, now)
       if (decision.kind === 'taken')
-        return json({ state: 'taken', hostName: decision.hostName } satisfies LinkReply, 409)
+        return json(
+          {
+            state: 'taken',
+            // The first holder alone, for hosts that read one name.
+            hostName: decision.hosts[0]?.hostName ?? '',
+            hosts: decision.hosts.map((held) => ({ hostId: held.hostId, name: held.hostName })),
+          } satisfies LinkReply,
+          409,
+        )
       if (decision.kind === 'wait') {
-        if (!store.waiting().some((entry) => entry.userId === userId))
+        if (!store.waiting().some((entry) => entry.userId === userId && entry.hostId === hostId))
           store.putWaiting({ userId, hostId, hostName: name, since: now, promotedAt: null })
         return json({ state: 'waitlisted', position: decision.position, capacity: deps.capacity } satisfies LinkReply)
       }
       let slot = decision.kind === 'slot' ? decision.slot : null
-      store.deleteWaiting(userId)
+      store.deleteWaiting(userId, hostId)
       if (!slot) {
         slot = newSlot(userId, hostId, name, deps.slug(), now)
         store.putSlot(slot)
@@ -199,11 +207,11 @@ export function createRelay(deps: RelayDeps) {
     if (!hostId) return refuse('invalid-request', 400)
     const owner = userId
     return serial(owner, async () => {
-      const slot = store.slotOf(owner)
-      const mine = slot?.hostId === hostId ? slot : null
+      // Any of the account's hosts may be named, so a slot can be given back from another of its hosts.
+      const mine = store.slotOf(owner, hostId)
       if (request.method === 'DELETE' && parts.length === 3) {
         if (mine) await release(mine)
-        store.deleteWaiting(owner)
+        store.deleteWaiting(owner, hostId)
         return new Response(null, { status: 204 })
       }
       if (!mine) return refuse('no-link', 404)
@@ -251,13 +259,13 @@ export function createRelay(deps: RelayDeps) {
       console.error('link: tunnel sweep failed', (error as Error).message)
     }
     const idle = judgeIdle(store, started)
-    for (const userId of idle.warn) {
-      const slot = store.slotOf(userId)
+    for (const warned of idle.warn) {
+      const slot = store.slotOf(warned.userId, warned.hostId)
       if (slot) store.putSlot({ ...slot, warnedAt: started })
       summary.warned++
     }
-    for (const userId of idle.release) {
-      const slot = store.slotOf(userId)
+    for (const idleSlot of idle.release) {
+      const slot = store.slotOf(idleSlot.userId, idleSlot.hostId)
       if (!slot || !budget()) continue
       try {
         await release(slot)

@@ -24,7 +24,11 @@ it('lets a host back online under its address while there is room, and in line b
   expect(admission(store, 'off', 'host-off', 1, 0)).toEqual({ kind: 'wait', position: 1 })
   store.putWaiting({ userId: 'w', hostId: 'host-w', hostName: 'W', since: 1, promotedAt: null })
   expect(admission(store, 'off', 'host-off', 2, 0)).toEqual({ kind: 'wait', position: 2 })
-  expect(admission(store, 'off', 'host-other', 2, 0)).toEqual({ kind: 'taken', hostName: 'Off' })
+  expect(admission(store, 'off', 'host-other', 2, 0, 1)).toEqual({
+    kind: 'taken',
+    hosts: [{ hostId: 'host-off', hostName: 'Off' }],
+  })
+  expect(admission(store, 'off', 'host-other', 3, 0, 2).kind).toBe('admit')
   // Paused for its traffic, it gets its slot back to hear why, with no tunnel.
   const paused = { ...off, suspendedUntil: 10 }
   store.putSlot(paused)

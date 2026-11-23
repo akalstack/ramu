@@ -1,6 +1,6 @@
 # Background work
 
-The desktop app connects to a local service that owns threads, terminals and schedules. Closing the window leaves them running, and reopening reconnects. The host must stay awake. **Settings → Background & updates** controls the service and starting at login.
+The desktop app connects to a local service that owns threads, terminals and schedules. Closing the window leaves them running, and reopening reconnects. The host must stay awake. **Settings → Background** controls the service and starting at login. Updates are under **Settings → About**.
 
 ## Messages while an agent works
 

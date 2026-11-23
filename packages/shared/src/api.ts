@@ -1024,6 +1024,11 @@ export interface RamuMethods extends ArtifactMethods {
   'network.setTunnel'(choice: TunnelChoice | null): NetworkStatus
   /** Gives this host's Ramu Link slot back (or leaves the waitlist) and stops the link if it is the choice. Host only. */
   'network.releaseLink'(): NetworkStatus
+  /**
+   * When every one of the account's Ramu Links is taken, gives back the one another of its hosts holds, then takes this
+   * host's own. Host only.
+   */
+  'network.releaseOtherLink'(hostId: string): NetworkStatus
   /** How this host is reached from anywhere (its tunnel and Ramu Link), for a paired device such as a phone. */
   'network.link'(): { tunnel: NetworkStatus['tunnel'] | null }
   /** Turns on Ramu Link for this host; a paired device needs the settings permission. */

@@ -27,6 +27,7 @@ import {
   Target,
   Puzzle,
   CircleUserRound,
+  Info,
   UsersRound,
   X,
   type LucideIcon,
@@ -62,6 +63,7 @@ const SECTION_ICONS: Record<SettingsMenuId, LucideIcon> = {
   workflows: Target,
   memory: Brain,
   system: CalendarClock,
+  about: Info,
   remote: MonitorSmartphone,
 }
 

@@ -221,7 +221,13 @@ export class LinkClient {
       this.waitTimer.unref?.()
     } else if (reply.state === 'suspended')
       this.set({ ...base, state: 'suspended', until: reply.until, usage: reply.usage })
-    else if (reply.state === 'taken') this.set({ ...base, state: 'taken', takenBy: reply.hostName })
+    else if (reply.state === 'taken')
+      this.set({
+        ...base,
+        state: 'taken',
+        takenBy: reply.hostName,
+        holders: reply.hosts ?? [],
+      })
     // An expired account session: signing in again here fixes it.
     else if (reply.reason === 'signed-out') this.set({ ...base, state: 'signed-out' })
     else {
@@ -280,6 +286,21 @@ export class LinkClient {
     await this.call(this.current.relay, 'DELETE', `/v1/links/${this.host.hostId}/online`).catch(() => {})
   }
 
+  /**
+   * Gives back the link another of the account's hosts holds, from here, when every one is taken; then asks for this
+   * host's own. Only a host the relay named as holding one, so a mistyped id never releases anything.
+   */
+  async releaseOther(hostId: string): Promise<void> {
+    const holder = this.current.holders?.find((held) => held.hostId === hostId)
+    if (this.current.state !== 'taken' || !holder) throw new Error('That host does not hold one of your links')
+    const { status } = await this.call(this.current.relay, 'DELETE', `/v1/links/${hostId}`)
+    if (status !== 204) throw new Error(`Ramu Link answered ${status}`)
+    if (this.asked) {
+      clearTimeout(this.waitTimer)
+      await this.retry(this.asked.relay, this.asked.target)
+    }
+  }
+
   /** Gives the slot back, or leaves the waitlist. */
   async release(): Promise<void> {
     clearTimeout(this.waitTimer)
@@ -313,17 +334,15 @@ export class LinkClient {
   }
 
   /**
-   * Whether `deviceId` may use the link for a new connection: up to the limit at once, and any device already connected.
-   * A device reaching the host through the link also resets the relay's idle clock, at most hourly.
+   * A paired device connected through the link. Any number may: the month's traffic is the link's only limit. It also
+   * resets the relay's idle clock, at most hourly.
    */
-  admit(deviceId: string): boolean {
-    if (!this.connected.has(deviceId) && this.connected.size >= LINK_LIMITS.devices) return false
+  arrived(deviceId: string): void {
     this.connected.add(deviceId)
     if (Date.now() - this.lastSeen > SEEN_MS && this.current.state === 'active') {
       this.lastSeen = Date.now()
       void this.call(this.current.relay, 'POST', `/v1/links/${this.host.hostId}/seen`).catch(() => {})
     }
-    return true
   }
 
   /** A device's last connection through the link closed. */

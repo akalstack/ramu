@@ -8,13 +8,15 @@ export function memoryStore(): Store {
   const down = new Map<string, number>()
   const meta = new Map<string, number>()
   return {
-    slotOf: (userId) => slots.get(userId) ?? null,
+    slotOf: (userId, hostId) => slots.get(`${userId}/${hostId}`) ?? null,
+    slotsOf: (userId) =>
+      [...slots.values()].filter((slot) => slot.userId === userId).sort((a, b) => a.createdAt - b.createdAt),
     slots: () => [...slots.values()],
-    putSlot: (slot) => void slots.set(slot.userId, slot),
-    deleteSlot: (userId) => void slots.delete(userId),
+    putSlot: (slot) => void slots.set(`${slot.userId}/${slot.hostId}`, slot),
+    deleteSlot: (userId, hostId) => void slots.delete(`${userId}/${hostId}`),
     waiting: () => [...waiting.values()].sort((a, b) => a.since - b.since),
-    putWaiting: (entry) => void waiting.set(entry.userId, entry),
-    deleteWaiting: (userId) => void waiting.delete(userId),
+    putWaiting: (entry) => void waiting.set(`${entry.userId}/${entry.hostId}`, entry),
+    deleteWaiting: (userId, hostId) => void waiting.delete(`${userId}/${hostId}`),
     session: (hash, now) => {
       const entry = sessions.get(hash)
       return entry && entry.expiresAt > now ? entry.userId : null

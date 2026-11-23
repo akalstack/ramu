@@ -7,10 +7,8 @@ export const LINK_URL = 'https://ramu-link.akalstack.com'
 export const LINK_ZONE = 'akalstack.com'
 
 export const LINK_LIMITS = {
-  /** Hosts one account keeps a link for. */
-  hostsPerAccount: 1,
-  /** Devices connected through one link at the same time; LAN, VPN and SSH connections do not count. */
-  devices: 5,
+  /** Hosts one account keeps a link for, each with its own address. Phones and computers that connect do not count. */
+  hostsPerAccount: 3,
   /** Traffic through one link in a calendar month (UTC). */
   monthlyBytes: 10 * 1024 ** 3,
   /** The share of the monthly traffic at which the host warns. */
@@ -29,7 +27,7 @@ export type LinkState =
   | 'active' // a slot and a tunnel: the address answers
   | 'waitlisted' // every slot is taken; the host asks again and takes the next free one
   | 'suspended' // over the monthly traffic, until `until`
-  | 'taken' // this account's slot belongs to another of its hosts
+  | 'taken' // the account's links all belong to its other hosts
   | 'signed-out' // the link needs a Ramu account on this host
   | 'unavailable' // the relay could not be reached or refused for another reason
 
@@ -47,8 +45,20 @@ export type LinkReply =
     }
   | { state: 'waitlisted'; position: number; capacity: number }
   | { state: 'suspended'; until: number; usage: LinkUsage }
-  | { state: 'taken'; hostName: string }
+  | {
+      state: 'taken'
+      /** The first host holding one, for hosts that read a single name. */
+      hostName: string
+      /** Every host holding one of the account's links; missing from relays older than several per account. */
+      hosts?: LinkHolder[]
+    }
   | { state: 'unavailable'; reason: string }
+
+/** One of the account's hosts holding a link. */
+export interface LinkHolder {
+  hostId: string
+  name: string
+}
 
 export interface LinkUsage {
   /** Bytes through the link this month, as the relay last counted them. */
@@ -86,6 +96,8 @@ export interface LinkStatus {
   devices: number
   /** The other host holding this account's slot, when `taken`. */
   takenBy: string | null
+  /** Every host holding one of the account's links, when `taken`, so one can be given back from here. */
+  holders?: LinkHolder[]
   reason: string | null
 }
 

@@ -1,15 +1,17 @@
 // The Store over a Durable Object's SQLite. One object holds every slot, so allocation needs no cross-object locking.
 import type { Slot, Store, Waiting } from './pool'
 
+// Slots and the waitlist are keyed by account and host, since one account keeps a link for several hosts.
 const SCHEMA = [
-  `CREATE TABLE IF NOT EXISTS slots (
-    user_id TEXT PRIMARY KEY, host_id TEXT NOT NULL, host_name TEXT NOT NULL, slug TEXT NOT NULL UNIQUE,
+  `CREATE TABLE IF NOT EXISTS host_slots (
+    user_id TEXT NOT NULL, host_id TEXT NOT NULL, host_name TEXT NOT NULL, slug TEXT NOT NULL UNIQUE,
     tunnel_id TEXT, dns_record_id TEXT, port INTEGER NOT NULL, https INTEGER NOT NULL, created_at INTEGER NOT NULL,
     last_seen_at INTEGER NOT NULL, seen_reported_at INTEGER NOT NULL, last_online_at INTEGER NOT NULL,
-    warned_at INTEGER, suspended_until INTEGER, bytes INTEGER NOT NULL, counted_at INTEGER NOT NULL)`,
-  `CREATE TABLE IF NOT EXISTS waitlist (
-    user_id TEXT PRIMARY KEY, host_id TEXT NOT NULL, host_name TEXT NOT NULL, since INTEGER NOT NULL,
-    promoted_at INTEGER)`,
+    warned_at INTEGER, suspended_until INTEGER, bytes INTEGER NOT NULL, counted_at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, host_id))`,
+  `CREATE TABLE IF NOT EXISTS host_waitlist (
+    user_id TEXT NOT NULL, host_id TEXT NOT NULL, host_name TEXT NOT NULL, since INTEGER NOT NULL,
+    promoted_at INTEGER, PRIMARY KEY (user_id, host_id))`,
   `CREATE TABLE IF NOT EXISTS sessions (hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS down_since (tunnel_id TEXT PRIMARY KEY, since INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value INTEGER NOT NULL)`,
@@ -67,19 +69,43 @@ const waitingOf = (row: WaitingRow): Waiting => ({
   promotedAt: row.promoted_at,
 })
 
+/** Moves slots and the waitlist from the one-host-per-account tables, once, then drops those. */
+function migrate(sql: SqlStorage) {
+  const has = (name: string) =>
+    sql.exec<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?", name).toArray()
+      .length > 0
+  if (has('slots')) {
+    sql.exec('INSERT OR IGNORE INTO host_slots SELECT * FROM slots')
+    sql.exec('DROP TABLE slots')
+  }
+  if (has('waitlist')) {
+    sql.exec('INSERT OR IGNORE INTO host_waitlist SELECT * FROM waitlist')
+    sql.exec('DROP TABLE waitlist')
+  }
+}
+
 export function sqlStore(sql: SqlStorage): Store {
   for (const statement of SCHEMA) sql.exec(statement)
+  migrate(sql)
   return {
-    slotOf(userId) {
-      const row = sql.exec<SlotRow>('SELECT * FROM slots WHERE user_id = ?', userId).toArray()[0]
+    slotOf(userId, hostId) {
+      const row = sql
+        .exec<SlotRow>('SELECT * FROM host_slots WHERE user_id = ? AND host_id = ?', userId, hostId)
+        .toArray()[0]
       return row ? slotOf(row) : null
     },
+    slotsOf(userId) {
+      return sql
+        .exec<SlotRow>('SELECT * FROM host_slots WHERE user_id = ? ORDER BY created_at', userId)
+        .toArray()
+        .map(slotOf)
+    },
     slots() {
-      return sql.exec<SlotRow>('SELECT * FROM slots').toArray().map(slotOf)
+      return sql.exec<SlotRow>('SELECT * FROM host_slots').toArray().map(slotOf)
     },
     putSlot(slot) {
       sql.exec(
-        `INSERT OR REPLACE INTO slots VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT OR REPLACE INTO host_slots VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         slot.userId,
         slot.hostId,
         slot.hostName,
@@ -98,15 +124,18 @@ export function sqlStore(sql: SqlStorage): Store {
         slot.countedAt,
       )
     },
-    deleteSlot(userId) {
-      sql.exec('DELETE FROM slots WHERE user_id = ?', userId)
+    deleteSlot(userId, hostId) {
+      sql.exec('DELETE FROM host_slots WHERE user_id = ? AND host_id = ?', userId, hostId)
     },
     waiting() {
-      return sql.exec<WaitingRow>('SELECT * FROM waitlist ORDER BY since, user_id').toArray().map(waitingOf)
+      return sql
+        .exec<WaitingRow>('SELECT * FROM host_waitlist ORDER BY since, user_id, host_id')
+        .toArray()
+        .map(waitingOf)
     },
     putWaiting(entry) {
       sql.exec(
-        'INSERT OR REPLACE INTO waitlist VALUES (?, ?, ?, ?, ?)',
+        'INSERT OR REPLACE INTO host_waitlist VALUES (?, ?, ?, ?, ?)',
         entry.userId,
         entry.hostId,
         entry.hostName,
@@ -114,8 +143,8 @@ export function sqlStore(sql: SqlStorage): Store {
         entry.promotedAt,
       )
     },
-    deleteWaiting(userId) {
-      sql.exec('DELETE FROM waitlist WHERE user_id = ?', userId)
+    deleteWaiting(userId, hostId) {
+      sql.exec('DELETE FROM host_waitlist WHERE user_id = ? AND host_id = ?', userId, hostId)
     },
     session(hash, now) {
       sql.exec('DELETE FROM sessions WHERE expires_at <= ?', now)

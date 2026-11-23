@@ -44,6 +44,10 @@ An optional `ramu.json` at a project's root (or `.ramu/config.json`) shares team
 - **Abilities** override **Settings → Models → Abilities** for threads in this project, ability by ability: `"auto"`, `"off"`, or one provider and model (an empty model uses the one its check ran on). An ability turned off here is refused with this file named as the reason ([Abilities](working-with-agents.md#abilities)).
 - **Stack** says how to run, build and test the project. New threads in the project read it, so the agent uses these commands without being told. A project Ramu creates gets it filled in. `"migrate"` (an argument list, such as `["npx", "prisma", "migrate", "deploy"]`) runs against the production database before each production deploy ([Migrations first](deploy.md#migrations-first)). `"healthPath"` (such as `"/api/health"`) is the path the uptime watch checks on the live address ([Live address and uptime](deploy.md#live-address-and-uptime)).
 
+## About
+
+**Settings → About** names the Ramu version on the selected host, with **What's new** for its release notes. It holds the host's updates (checking, waiting a day, installing automatically), links to the documentation, **Report a problem** (a GitHub issue with the version and system filled in), **Share an idea** and the source code, the local diagnostics below, and the license. The phone's own **About** shows its version and the same links.
+
 ## Local diagnostics
 
 See [Diagnostics](diagnostics.md).

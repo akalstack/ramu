@@ -91,14 +91,43 @@ it('stops a signed-out session at once, and serves housekeeping from the cache m
   }
 })
 
-it('refuses a missing session, a bad body and a second host on the same account', async () => {
+it('refuses a missing session and a bad body', async () => {
   const relay = relayWith(2)
   expect((await ask(relay, 'token-nobody', host('mac'))).status).toBe(401)
   expect((await ask(relay, 'token-alice', { hostId: 'mac', name: 'x', port: 99999, https: false })).status).toBe(400)
   expect((await ask(relay, 'token-alice', { ...host('../etc') })).status).toBe(400)
-  await ask(relay, 'token-alice', host('mac'))
-  const other = await ask(relay, 'token-alice', host('linux'))
-  expect(other).toEqual({ status: 409, body: { state: 'taken', hostName: 'mac-name' } })
+})
+
+it('keeps a link for three hosts per account, each with its own address, and names them to a fourth', async () => {
+  const relay = relayWith(10)
+  const hostnames = []
+  for (const id of ['mac', 'linux', 'server']) {
+    const reply = await ask(relay, 'token-alice', host(id))
+    expect(reply.body).toMatchObject({ state: 'active' })
+    hostnames.push((reply.body as { hostname: string }).hostname)
+  }
+  expect(new Set(hostnames).size).toBe(3)
+  const fourth = await ask(relay, 'token-alice', host('laptop'))
+  expect(fourth).toEqual({
+    status: 409,
+    body: {
+      state: 'taken',
+      hostName: 'mac-name',
+      hosts: [
+        { hostId: 'mac', name: 'mac-name' },
+        { hostId: 'linux', name: 'linux-name' },
+        { hostId: 'server', name: 'server-name' },
+      ],
+    },
+  })
+  // Another account is unaffected, and giving one back from the fourth host makes room for it.
+  expect((await ask(relay, 'token-bob', host('b'))).body).toMatchObject({ state: 'active' })
+  expect((await send(relay, 'token-alice', 'DELETE', '/v1/links/server')).status).toBe(204)
+  expect(store.slotOf('alice', 'server')).toBeNull()
+  expect((await ask(relay, 'token-alice', host('laptop'))).body).toMatchObject({ state: 'active' })
+  // Bob cannot give back Alice's slot by naming her host.
+  expect((await send(relay, 'token-bob', 'DELETE', '/v1/links/mac')).status).toBe(204)
+  expect(store.slotOf('alice', 'mac')).not.toBeNull()
 })
 
 it('waitlists when full and admits in order as slots free', async () => {
@@ -146,7 +175,7 @@ it('keeps an offline host’s address without a tunnel or DNS record, so only ho
   expect(pool).toEqual({ capacity: 1, used: 1, waiting: 0 })
   // Back while the relay is full, Alice waits in line and keeps her address.
   expect((await ask(relay, 'token-alice', host('mac'))).body).toEqual({ state: 'waitlisted', position: 1, capacity: 1 })
-  expect(store.slotOf('alice')).toMatchObject({ slug: 'slug1', tunnelId: null })
+  expect(store.slotOf('alice', 'mac')).toMatchObject({ slug: 'slug1', tunnelId: null })
   expect((await send(relay, 'token-bob', 'DELETE', '/v1/links/b/online')).status).toBe(204)
   expect((await ask(relay, 'token-alice', host('mac'))).body).toMatchObject({
     state: 'active',
@@ -182,11 +211,11 @@ it('sweeps tunnels down past the limit, never-connected ones and orphans, leavin
   expect(cf.calls).toContain('delete tunnel-3')
   expect(cf.calls).toContain('delete stray')
   expect(cf.calls).not.toContain('delete mine')
-  expect(store.slotOf('alice')!.tunnelId).toBe('tunnel-1')
+  expect(store.slotOf('alice', 'a')!.tunnelId).toBe('tunnel-1')
   now += LINK_LIMITS.offlineReleaseMs
   expect((await relay.sweep()).deleted).toBe(1)
   expect(cf.calls).toContain('delete tunnel-1')
-  expect(store.slotOf('alice')).toMatchObject({ tunnelId: null, slug: 'slug1' })
+  expect(store.slotOf('alice', 'a')).toMatchObject({ tunnelId: null, slug: 'slug1' })
 })
 
 it('warns about and then releases an address no device used, unless the host reports use', async () => {
@@ -197,12 +226,12 @@ it('warns about and then releases an address no device used, unless the host rep
   expect((await send(relay, 'token-bob', 'POST', '/v1/links/b/seen')).status).toBe(204)
   const warned = await relay.sweep()
   expect(warned.warned).toBe(1)
-  expect(store.slotOf('alice')!.warnedAt).toBe(now)
+  expect(store.slotOf('alice', 'a')!.warnedAt).toBe(now)
   now += (LINK_LIMITS.idleReleaseDays - LINK_LIMITS.idleWarnDays) * DAY
   const released = await relay.sweep()
   expect(released.released).toBe(1)
-  expect(store.slotOf('alice')).toBeNull()
-  expect(store.slotOf('bob')).not.toBeNull()
+  expect(store.slotOf('alice', 'a')).toBeNull()
+  expect(store.slotOf('bob', 'b')).not.toBeNull()
 })
 
 it('suspends a host over the month traffic until the next month, then lets it back', async () => {

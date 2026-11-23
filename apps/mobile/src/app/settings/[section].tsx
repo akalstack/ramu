@@ -5,10 +5,10 @@ import { IdentitySettings } from '../../components/IdentitySettings'
 import { AbilitySummary } from '../../components/AbilitySummary'
 import { HostAddressSheet } from '../../components/HostAddressSheet'
 import { hostOfUrl, networkName } from '@ramu/shared/networkLabel'
-import { Alert, Platform, View } from 'react-native'
+import { Alert, Linking, Platform, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import Constants from 'expo-constants'
-import { Check, ChevronRight, Plus, RefreshCw } from 'lucide-react-native'
+import { Check, ChevronRight, ExternalLink, Plus, RefreshCw } from 'lucide-react-native'
 import { font, space, useTheme, type Appearance, type TextSize } from '../../theme'
 import { useStore, type Language } from '../../runtime/store'
 import { sectionById, type SettingsSection } from '../../runtime/settingsModel'
@@ -357,21 +357,46 @@ function Computers() {
   )
 }
 
+const REPO = 'https://github.com/akalstack/ramu'
+
+/** This phone's Ramu: its version, then where to read more, ask or report, each opening in the browser. */
 function About() {
   const say = useSay()
+  const { c } = useTheme()
+  const version = Constants.expoConfig?.version ?? '0.1.0'
+  const links: { title: string; help: string; url: string }[] = [
+    { title: 'What’s new', help: 'Release notes for this version.', url: `${REPO}/releases/tag/v${version}` },
+    { title: 'Documentation', help: 'Guides to every feature.', url: `${REPO}/tree/main/docs/guide` },
+    {
+      title: 'Report a problem',
+      help: 'Opens an issue with this version filled in.',
+      url: `${REPO}/issues/new?${new URLSearchParams({
+        template: 'bug_report.yml',
+        environment: `Ramu ${version} on ${Platform.OS === 'ios' ? 'iOS' : 'Android'} ${String(Platform.Version)}`,
+      })}`,
+    },
+    { title: 'Source code', help: 'Ramu is open source, under the MIT License.', url: REPO },
+  ]
   return (
     <>
       <SectionLabel>Ramu</SectionLabel>
       <Card style={{ marginHorizontal: space.l }}>
         <Row>
           <T style={{ flex: 1 }}>{say('Version')}</T>
-          <T tone="muted">{Constants.expoConfig?.version ?? '0.1.0'} · alpha</T>
+          <T tone="muted">{version} · alpha</T>
         </Row>
-        <Divider inset={space.l} />
-        <Row>
-          <T style={{ flex: 1 }}>{say('Data')}</T>
-          <T tone="muted">{say('Live workspace')}</T>
-        </Row>
+      </Card>
+      <SectionLabel>{say('Help & feedback')}</SectionLabel>
+      <Card style={{ marginHorizontal: space.l }}>
+        {links.map((link, index) => (
+          <View key={link.title}>
+            {index ? <Divider inset={space.l} /> : null}
+            <Row onPress={() => void Linking.openURL(link.url)}>
+              <RowLabel title={say(link.title)} help={say(link.help)} />
+              <ExternalLink size={16} color={c.muted} />
+            </Row>
+          </View>
+        ))}
       </Card>
     </>
   )

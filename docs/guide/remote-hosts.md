@@ -49,7 +49,7 @@ pnpm server serve --listen 0.0.0.0:7788 --private-network
 ramu pair
 ```
 
-On a computer with the desktop app, you don't need a checkout for these commands: **Install** next to **Terminal command** in **Settings → Background & updates**, or on the last setup step, puts `ramu` in `~/.local/bin` and adds that folder to your shell's PATH (zsh, bash or fish) when it isn't there yet. The command runs the CLI inside the app with the app's own runtime, so it needs no Node.js and always matches the app and its background service. `ramu up` from it relies on the app's service instead of installing another. It follows the app when you move it, and **Remove** deletes only a `ramu` that Ramu wrote. An AppImage, or a Mac app opened straight from Downloads, can't offer it because its path changes each launch.
+On a computer with the desktop app, you don't need a checkout for these commands: **Install** next to **Terminal command** in **Settings → Background**, or on the last setup step, puts `ramu` in `~/.local/bin` and adds that folder to your shell's PATH (zsh, bash or fish) when it isn't there yet. The command runs the CLI inside the app with the app's own runtime, so it needs no Node.js and always matches the app and its background service. `ramu up` from it relies on the app's service instead of installing another. It follows the app when you move it, and **Remove** deletes only a `ramu` that Ramu wrote. An AppImage, or a Mac app opened straight from Downloads, can't offer it because its path changes each launch.
 
 | Command | What it does |
 | --- | --- |
@@ -84,9 +84,9 @@ A private network (Tailscale, NetBird, ZeroTier or WireGuard) is the simplest ch
 
 Ramu Link gives a host a free `https://ramu-….akalstack.com` address that stays the same and works from any network, with nothing to install but what Ramu runs for you. Choose **Ramu Link** under **Settings → Remote access → From anywhere → Reach from anywhere**, or run `ramu tunnel link` on a headless host. It needs the [Ramu account](account.md) on that host and `cloudflared` (Settings shows how to install it).
 
-- **One computer per account.** A second computer on the same account says which one holds the link; **Give the slot back** there (or `ramu tunnel release`) frees it.
+- **Three computers per account,** each with its own address. Your phones and other devices that connect don't count. A fourth computer lists the three that hold one, each with **Give back and use here**: that computer keeps working on your network and VPN, and this one takes the link. **Give the slot back** on a computer (or `ramu tunnel release`) frees its own.
 - **While it's on:** the address shows under the choice, with this month's traffic and how many devices are connected through it. Pairing links and the addresses paired devices learn put it first. At home, devices still use the network or VPN address when it answers.
-- **Limits:** 5 devices connected through the link at once (devices on your network, VPN or SSH don't count) and 10 GB a month. Past the limit the link pauses until the 1st of the next month; your network, VPN and other tunnels keep working.
+- **Limits:** 10 GB a month per link; any number of devices may connect through it. Past the limit the link pauses until the 1st of the next month; your network, VPN and other tunnels keep working.
 - **Unused links are freed.** A link no paired device has reached for 28 days is released; Settings shows the date. A restarted host reconnects straight away, and a host that's off keeps its address. Ramu Link's room counts computers online at once, so a host that's off takes none; one that comes back while it's full waits in line like a new one, under the same address.
 - **It needs `cloudflared`** on the host. When it's missing, Settings says so with the command to install it, and starts the link by itself once it's installed. Ramu finds tools in Homebrew's and your own bin folders as well as the PATH, so one installed while Ramu runs is picked up without a restart. The same goes for `tailscale` and `ngrok`.
 - **When it's full,** Settings says so before you save, and saving puts the computer on the waitlist: it switches to Ramu Link on its own once room frees. Meanwhile Settings lists what this computer can use instead, best first: Tailscale when installed, [your own relay](#your-own-relay), the quick tunnel when `cloudflared` is here, ngrok when installed, or installing Tailscale. Each has **Use this**. The same happens when the link is paused for traffic or held by another computer.
@@ -125,7 +125,7 @@ Restart=on-failure
 WantedBy=default.target
 ```
 
-The desktop app installs its own background service with **Settings → Background & updates → Start at login**: a LaunchAgent on macOS, a systemd user service on Linux. **Keep host awake** stops the host suspending from idle while the service runs (`caffeinate` on macOS, a `systemd-inhibit` sleep lock on Linux); **Plugged in only** lets a laptop sleep on battery.
+The desktop app installs its own background service with **Settings → Background → Start at login**: a LaunchAgent on macOS, a systemd user service on Linux. **Keep host awake** stops the host suspending from idle while the service runs (`caffeinate` on macOS, a `systemd-inhibit` sleep lock on Linux); **Plugged in only** lets a laptop sleep on battery.
 
 ### Keeping hosts up to date
 

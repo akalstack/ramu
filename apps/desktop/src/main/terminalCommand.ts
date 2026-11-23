@@ -35,7 +35,7 @@ const sh = (text: string) => `'${text.replace(/'/g, `'\\''`)}'`
 
 export function launcher(target: { executable: string; cli: string }, userData: string): string {
   return `#!/bin/sh
-${MARKER} Remove it in Settings > Background & updates.
+${MARKER} Remove it in Settings > Background.
 app=${sh(target.executable)}
 if [ ! -x "$app" ]; then
   echo "ramu: Ramu is no longer at $app. Open Ramu and install the terminal command again in Settings." >&2

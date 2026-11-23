@@ -266,7 +266,7 @@ function Shell() {
       window.dispatchEvent(
         new CustomEvent('ramu:settings', {
           detail:
-            action === 'check-updates' ? { section: 'system', target: 'Check app updates' } : { section: 'appearance' },
+            action === 'check-updates' ? { section: 'about', target: 'Check app updates' } : { section: 'appearance' },
         }),
       )
       if (action === 'check-updates')

@@ -248,7 +248,7 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
       category: t('Preferences'),
       run: async () => {
         window.dispatchEvent(
-          new CustomEvent('ramu:settings', { detail: { section: 'system', target: 'Check app updates' } }),
+          new CustomEvent('ramu:settings', { detail: { section: 'about', target: 'Check app updates' } }),
         )
         await invoke('updates.check')
       },

@@ -148,7 +148,7 @@ import { clientAddress, type PublicTunnel } from './remote/clientAddress'
 import { PhoneForwards, phoneForwardPeer, phoneForwardTarget } from './remote/phoneForward'
 import { parseTunnelChoice, TunnelManager } from './remote/tunnel'
 import { LinkClient } from './remote/ramuLink'
-import { LINK_LIMITS, LINK_URL } from '@ramu/shared/ramuLink'
+import { LINK_URL } from '@ramu/shared/ramuLink'
 import { HostAdvertiser, advertisedInterfaces, discoveryName, readDiscoveryHostId } from './remote/discovery'
 import {
   candidateUrls,
@@ -2429,20 +2429,13 @@ let sockets: ReturnType<typeof serveSockets> | null = null
 // The WebSocket is one more transport for the same calls and events: it registers for the same broadcast as an SSE
 // stream and runs every call through `performInvoke`, so authorization and keyed-mutation recovery are shared.
 const streamDevices = new Map<object, string>()
-/** Streams that arrived through Ramu Link, and their device, for the link's device limit. */
+/** Streams that arrived through Ramu Link, and their device, for the count Settings shows. */
 const linkStreams = new Map<object, string>()
 const socketHost: SocketHost = {
   accept: async (req, res) => {
     const device = await remoteAccess.accept(req, res)
-    if (!device || !ramuLink?.routed(req.headers.host) || ramuLink.admit(device.id)) return device
-    res.statusCode = 429
-    res.setHeader('Content-Type', 'application/json')
-    res.end(
-      JSON.stringify({
-        error: `This host's Ramu Link already has ${LINK_LIMITS.devices} devices connected. Close Ramu on one of them, or connect on the same network.`,
-      }),
-    )
-    return undefined
+    if (device && ramuLink?.routed(req.headers.host)) ramuLink.arrived(device.id)
+    return device
   },
   invoke: async (device, request, req) => {
     try {
@@ -2608,6 +2601,11 @@ async function networkMethod(method: string, args: unknown[]) {
       writeNetworkSetting(config.networkPath, network)
       syncTunnel()
     }
+    return networkStatus()
+  }
+  if (method === 'network.releaseOtherLink') {
+    const hostId = z.string().min(1).max(100).parse(args[0])
+    await ramuLink?.releaseOther(hostId)
     return networkStatus()
   }
   if (method === 'network.setHostAccess') {

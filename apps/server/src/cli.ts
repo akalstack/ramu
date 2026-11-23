@@ -25,8 +25,10 @@ function linkLine(link: LinkStatus): string {
     return `Ramu Link is full right now. This host is number ${link.position ?? '?'} in line and switches on its own when a slot frees.`
   if (link.state === 'suspended')
     return `Ramu Link reached this month's traffic limit and is paused until ${new Date(link.until ?? 0).toLocaleDateString()}.`
-  if (link.state === 'taken')
-    return `Your Ramu account's link is used by ${link.takenBy ?? 'another host'}. Release it there first.`
+  if (link.state === 'taken') {
+    const holders = link.holders?.length ? link.holders.map((held) => held.name).join(', ') : link.takenBy
+    return `Your Ramu account's links are all in use (${holders ?? 'another host'}). Run ramu tunnel release on one of them, or give one back in Settings → Remote access on a desktop.`
+  }
   if (link.state === 'signed-out')
     return 'Ramu Link needs the Ramu account. Run ramu account login, then ramu tunnel link.'
   return `Ramu Link is unavailable${link.reason ? `: ${link.reason}` : ''}.`
@@ -774,7 +776,7 @@ async function up() {
     fail('Install Ramu first so its service has a lasting home: npm install --global @akalstack/ramu, then ramu up.')
   // The app's command runs the app's own runtime; the app keeps its service running, so it never installs a second one.
   if (!running && process.env.RAMU_TERMINAL_COMMAND === '1')
-    fail('Open Ramu, or turn on Start at login in Settings > Background & updates, then run ramu up again.')
+    fail('Open Ramu, or turn on Start at login in Settings > Background, then run ramu up again.')
   if (!running) {
     if (!(await ask('Ramu is not running. Keep it running in the background on this computer?', true)))
       fail('Start it with ramu serve, then run ramu up again.')

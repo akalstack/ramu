@@ -13,7 +13,7 @@ describe('settings menu', () => {
     expect(pages('Personal')).toEqual(['appearance', 'chats', 'editor', 'shortcuts'])
     expect(pages('Agents')).toEqual(['providers', 'models', 'agent-setup', 'plugins', 'workflows', 'memory'])
     expect(pages('Agent tools')).toEqual(['browser', 'computer', 'devices', 'git'])
-    expect(pages('Access & host')).toEqual(['access', 'identities', 'remote', 'account', 'system'])
+    expect(pages('Access & host')).toEqual(['access', 'identities', 'remote', 'account', 'system', 'about'])
   })
 
   it('gives test devices a page of their own and keeps lists and merged pages out of the menu', () => {

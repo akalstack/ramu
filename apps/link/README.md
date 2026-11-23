@@ -7,8 +7,9 @@ through its tunnel, never through this Worker.
 
 ## How it works
 
-- **One slot per account.** A Ramu account session (checked with the account service, cached for five minutes by its
-  hash) gets one slot for one host. A second host on the same account is told which host holds it.
+- **Three slots per account.** A Ramu account session (checked with the account service, cached for five minutes by
+  its hash) gets a slot, with its own address, for each of up to three hosts; the devices that connect to them do not
+  count. A fourth host is told which hosts hold them, and any of the account's hosts may give back another's slot.
 - **Tunnels and DNS records exist only while hosts are online.** Cloudflare allows 1,000 tunnels per account, idle
   ones included, so a host's tunnel and its CNAME are deleted on a clean shutdown or after 10 minutes down, and made
   again under the same address when the host returns.
@@ -33,9 +34,9 @@ All bodies are JSON of at most 4 KB. Host requests carry `Authorization: Bearer 
 | Request | Answer |
 | --- | --- |
 | `GET /v1/pool` | `{ capacity, used, waiting }`, where `used` is hosts online; cached for a minute |
-| `POST /v1/links` with `{ hostId, name, port, https }` | `active` (200) with `hostname`, `token`, `releasesAt` and `usage`; `waitlisted` (200) with `position`; `taken` (409); `suspended` (403) with `until`; `unavailable` (400, 401, 429 or 503) with a `reason` |
+| `POST /v1/links` with `{ hostId, name, port, https }` | `active` (200) with `hostname`, `token`, `releasesAt` and `usage`; `waitlisted` (200) with `position`; `taken` (409) with `hosts`, the account's hosts holding its slots; `suspended` (403) with `until`; `unavailable` (400, 401, 429 or 503) with a `reason` |
 | `DELETE /v1/links/:hostId/online` | 204: the tunnel and its DNS record are deleted, the slot and address kept |
-| `DELETE /v1/links/:hostId` | 204: the slot is released, or the host leaves the waitlist |
+| `DELETE /v1/links/:hostId` | 204: that host's slot is released, or it leaves the waitlist; any of the account's hosts may name another |
 | `POST /v1/links/:hostId/seen` | 204: a paired device used the link; counted at most once an hour |
 
 `POST /v1/links` is safe to repeat: it makes the tunnel and DNS record only when missing, and updates the tunnel's

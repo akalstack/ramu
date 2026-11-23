@@ -165,23 +165,49 @@ it('asks the relay as soon as this host signs in, instead of waiting for the nex
   expect(link.status().state).toBe('active')
 })
 
-it('lets five devices use the link at once, reports use at most hourly, and releases the slot', async () => {
+it('lets any number of devices use the link, counts them, reports use at most hourly, and releases the slot', async () => {
   const { calls, fetcher } = relay([
     { state: 'active', hostname: 'ramu-abc.akalstack.com', token: 't', releasesAt: 1, usage },
   ])
   const { link } = client(fetcher)
   await link.lease(LINK_URL, 'http://127.0.0.1:7788')
-  for (let i = 0; i < LINK_LIMITS.devices; i++) expect(link.admit(`d${i}`)).toBe(true)
-  expect(link.admit('d-extra')).toBe(false)
-  expect(link.admit('d0')).toBe(true)
+  for (let i = 0; i < 8; i++) link.arrived(`d${i}`)
+  link.arrived('d0')
+  expect(link.status().devices).toBe(8)
   link.leave('d1')
-  expect(link.admit('d-extra')).toBe(true)
+  expect(link.status().devices).toBe(7)
   await vi.waitFor(() => expect(calls.filter((call) => call.path.endsWith('/seen'))).toHaveLength(1))
   expect(link.routed('RAMU-ABC.akalstack.com:443')).toBe(true)
   expect(link.routed('192.168.1.5:7788')).toBe(false)
   await link.release()
   expect(calls.at(-1)).toMatchObject({ method: 'DELETE', path: '/v1/links/host-1' })
   expect(link.status()).toMatchObject({ hostname: null })
+})
+
+it('names every host holding the account’s links, and gives one back from here to take this host’s own', async () => {
+  const { calls, fetcher } = relay([
+    {
+      state: 'taken',
+      hostName: 'Studio',
+      hosts: [
+        { hostId: 'studio', name: 'Studio' },
+        { hostId: 'office', name: 'Office' },
+        { hostId: 'server', name: 'Server' },
+      ],
+    },
+    { state: 'active', hostname: 'ramu-new.akalstack.com', token: 't', releasesAt: 5, usage },
+  ])
+  const { link } = client(fetcher)
+  const leased = vi.fn()
+  link.onLease = leased
+  await link.lease(LINK_URL, 'http://127.0.0.1:7788')
+  expect(link.status()).toMatchObject({ state: 'taken', takenBy: 'Studio' })
+  expect(link.status().holders?.map((held) => held.name)).toEqual(['Studio', 'Office', 'Server'])
+  await expect(link.releaseOther('host-1')).rejects.toThrow(/does not hold/)
+  await link.releaseOther('office')
+  expect(calls.some((call) => call.method === 'DELETE' && call.path === '/v1/links/office')).toBe(true)
+  expect(leased).toHaveBeenCalledWith({ token: 't', url: 'https://ramu-new.akalstack.com' })
+  expect(link.status().state).toBe('active')
 })
 
 it('reads the pool once in a while and accepts only a well-formed answer', async () => {

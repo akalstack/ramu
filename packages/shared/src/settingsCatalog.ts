@@ -117,7 +117,7 @@ export const SETTINGS_CATALOG: SettingsCatalogEntry[] = [
     words: 'work personal client account git author email profile login company',
   },
   {
-    section: 'system',
+    section: 'about',
     title: 'Keep local crash reports',
     path: 'localCrashReports',
     help: 'Off by default. Keeps sanitized service errors and Electron crash dumps on this device, never uploaded. Restart Ramu to apply. Native dumps may hold process memory and are left out of copied diagnostics.',
@@ -178,7 +178,7 @@ export const SETTINGS_CATALOG: SettingsCatalogEntry[] = [
   ...(APP_AUTO_UPDATE
     ? [
         {
-          section: 'system' as const,
+          section: 'about' as const,
           title: 'Auto-update Ramu',
           path: 'appAutoUpdate',
           help: 'Download updates automatically, then restart when ready. Threads keep running.',
@@ -322,6 +322,11 @@ export const SETTINGS_CATALOG: SettingsCatalogEntry[] = [
     words: 'sleep awake caffeinate power battery background installed login',
   },
   { section: 'system', title: 'Background service', words: 'daemon login startup' },
+  { section: 'about', title: 'About Ramu', words: 'version release notes what is new website about' },
+  { section: 'about', title: 'Report a problem', words: 'bug issue feedback github support help' },
+  { section: 'about', title: 'Documentation', words: 'docs guide help manual' },
+  { section: 'about', title: 'Copy sanitized diagnostics', words: 'diagnostics logs crash export support' },
+  { section: 'about', title: 'License', words: 'mit open source legal' },
   {
     section: 'appearance',
     title: 'Language',
@@ -557,14 +562,14 @@ export const SETTINGS_CATALOG: SettingsCatalogEntry[] = [
     words: 'battery power plugged in',
   },
   {
-    section: 'system',
+    section: 'about',
     title: 'Wait a day before offering updates',
     path: 'updateWait',
     help: 'New provider CLI and Ramu releases are offered once they have been out 24 hours, so a bad release is usually pulled before it reaches you. You can still install one now.',
     words: 'security supply chain delay cooldown release age 24 hours compromised',
   },
   {
-    section: 'system',
+    section: 'about',
     title: 'Check app updates',
     path: 'appUpdateChecks',
     help: 'The background service checks while Ramu is closed.',
