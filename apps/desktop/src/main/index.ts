@@ -578,7 +578,7 @@ async function main() {
     contents.on('will-navigate', (e, url) => {
       if (url !== contents.getURL()) e.preventDefault()
     })
-    contents.setWindowOpenHandler(({ url, frameName }) => {
+    contents.setWindowOpenHandler(({ url, frameName, disposition }) => {
       // A deck's presenter notes: a blank window the app fills itself, on the display the full-screen deck is not on.
       if (url === 'about:blank' && frameName === 'ramu-presenter' && contents === win.webContents) {
         const deck = screen.getDisplayMatching(win.getBounds()).id
@@ -598,6 +598,13 @@ async function main() {
         }
       }
       if (!isWebLink(url)) return { action: 'deny' }
+      // Cmd-click (Ctrl-click elsewhere) asks for a background tab: it always opens in the person's own browser,
+      // whatever clicked links do by default, as a quick way past Ramu's own views. A plain click on a link reports a
+      // foreground tab, so only the background one is the modifier.
+      if (disposition === 'background-tab') {
+        void shell.openExternal(url)
+        return { action: 'deny' }
+      }
       // A pull request opens in Ramu's own view when the person keeps that choice; the window falls back to an
       // ordinary link when Ramu does not list it.
       if (

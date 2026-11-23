@@ -122,6 +122,9 @@ import {
   WorkspaceProvider,
 } from './workspace/workspace'
 
+/** How long a clicked pull request link waits to learn whether Ramu lists it before it opens as a link. */
+const PULL_REQUEST_LOOKUP_MS = 1500
+
 export function App({ onReady }: { onReady?: () => void }) {
   useLanguage()
 
@@ -411,11 +414,21 @@ function Shell() {
             ws.openView(taskId, { kind: 'browser', url })
           else void ramu.invoke('app.openExternal', url).catch(() => {})
         }
-        void (async () => {
-          if (await listed(false)) return showPullRequest(ws, url, false)
-          if (await listed(true)) return showPullRequest(ws, url, true)
-          asLink()
-        })().catch(asLink)
+        // Listing every pull request can take seconds on a large forge, and a click must not hang on it: open and
+        // closed are asked together, and with no answer soon the link opens as an ordinary one instead.
+        let settled = false
+        const finish = (open: () => void) => {
+          if (settled) return
+          settled = true
+          open()
+        }
+        const timer = setTimeout(() => finish(asLink), PULL_REQUEST_LOOKUP_MS)
+        void Promise.all([listed(false), listed(true)])
+          .then(([open, closed]) =>
+            finish(() => (open ? showPullRequest(ws, url, false) : closed ? showPullRequest(ws, url, true) : asLink())),
+          )
+          .catch(() => finish(asLink))
+          .finally(() => clearTimeout(timer))
       }),
     [ws, activeHost],
   )
