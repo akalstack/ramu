@@ -16,7 +16,6 @@ import { StepSlider } from '@/components/step-slider'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { accessModes } from '../chat/AgentControls'
-import { Dropdown } from '../Menu'
 import { invoke, ramu } from '../ipc'
 import { t } from '../i18n'
 import { errorText } from '../lib/errors'
@@ -24,7 +23,7 @@ import { effortDisplayName, modelDisplayName, modelStepName, useModelSets } from
 import { ProviderIcon } from '../models/ProviderIcon'
 import { runProviderCommand } from '../models/ProviderSetupTerminal'
 import { useAppSettings } from '../settings/AppSettings'
-import { choosableEfforts, initialChoice, onboardingModels, withModel, type DefaultModelChoice } from './defaultModel'
+import { choosableEfforts, onboardingModels, withModel, type DefaultModelChoice } from './defaultModel'
 import { FEWEST_TOKENS, TOKEN_FEATURES, sameChoices, type TokenChoices } from './tokenChoices'
 import { Group, Row } from './parts'
 import { AccountSignIn } from './SignInRows'
@@ -37,10 +36,21 @@ import { antigravityKeyName } from '@ramu/shared/providers/environment'
 
 export function AgentsStep({
   statuses,
+  enabled,
+  onEnabled,
+  lead,
+  canLead,
+  onLead,
   onRefresh,
   onError,
 }: {
   statuses: ProviderStatus[] | null
+  enabled(provider: AgentProvider): boolean
+  onEnabled(provider: AgentProvider, on: boolean): void
+  /** The agent new threads start on, marked when more than one can run. */
+  lead?: AgentProvider
+  canLead(provider: AgentProvider): boolean
+  onLead(provider: AgentProvider): void
   onRefresh(): Promise<void>
   onError(message: string): void
 }) {
@@ -83,42 +93,71 @@ export function AgentsStep({
         </p>
       ) : (
         <Group>
-          {statuses.map((status) => (
-            <Row
-              key={status.provider}
-              title={
-                <>
-                  <ProviderIcon provider={status.provider} size={15} />
-                  {providerName(status.provider)}
-                </>
-              }
-              help={
-                status.installed
-                  ? status.signIn?.default?.signedIn
-                    ? t('Signed in')
-                    : t('Installed')
-                  : t('Not installed')
-              }
-            >
-              {status.installed ? (
-                status.signIn?.default?.signedIn ? (
-                  <Check size={16} className="text-brand" aria-label={t('Signed in')} />
-                ) : (
-                  <Button variant="secondary" onClick={() => void signIn(status)}>
-                    {t('Sign in')}
+          {statuses.map((status) => {
+            const on = enabled(status.provider)
+            // At least one agent stays on, as in Settings › Providers.
+            const lastOn = on && statuses.filter((entry) => enabled(entry.provider)).length === 1
+            return (
+              <Row
+                key={status.provider}
+                title={
+                  <>
+                    <ProviderIcon provider={status.provider} size={15} className={on ? '' : 'opacity-40'} />
+                    <span className={on ? '' : 'text-muted-foreground'}>{providerName(status.provider)}</span>
+                    {lead === status.provider && (
+                      <Badge variant="secondary" className="font-normal">
+                        {t('Default')}
+                      </Badge>
+                    )}
+                  </>
+                }
+                help={
+                  !on
+                    ? t('Off: Ramu does not start it or show its models')
+                    : status.installed
+                      ? status.signIn?.default?.signedIn
+                        ? t('Signed in')
+                        : t('Installed')
+                      : t('Not installed')
+                }
+              >
+                {lead && lead !== status.provider && on && canLead(status.provider) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    title={t('Start new threads on {0}', { 0: providerName(status.provider) })}
+                    onClick={() => onLead(status.provider)}
+                  >
+                    {t('Make default')}
                   </Button>
-                )
-              ) : (
-                <Button
-                  variant="ghost"
-                  onClick={() => void ramu.invoke('app.openExternal', status.docsUrl).catch(() => {})}
-                >
-                  {t('Setup instructions')}
-                  <ExternalLink size={13} />
-                </Button>
-              )}
-            </Row>
-          ))}
+                )}
+                {!on ? null : status.installed ? (
+                  status.signIn?.default?.signedIn ? (
+                    <Check size={16} className="text-brand" aria-label={t('Signed in')} />
+                  ) : (
+                    <Button variant="secondary" onClick={() => void signIn(status)}>
+                      {t('Sign in')}
+                    </Button>
+                  )
+                ) : (
+                  <Button
+                    variant="ghost"
+                    onClick={() => void ramu.invoke('app.openExternal', status.docsUrl).catch(() => {})}
+                  >
+                    {t('Setup instructions')}
+                    <ExternalLink size={13} />
+                  </Button>
+                )}
+                <Switch
+                  aria-label={t('Use {0}', { 0: providerName(status.provider) })}
+                  title={lastOn ? t('At least one agent stays on') : undefined}
+                  checked={on}
+                  disabled={lastOn}
+                  onCheckedChange={(checked) => onEnabled(status.provider, checked)}
+                />
+              </Row>
+            )
+          })}
         </Group>
       )}
       <div className="flex flex-wrap items-center gap-3">
@@ -310,13 +349,13 @@ function Choice({
   )
 }
 
-/** The model new threads start on, from the providers that can run here. */
+/** One provider's model, its recommended one preselected; with no provider ready, how to get models. */
 export function ModelChoiceStep({
-  providers,
+  provider,
   choice,
   onChoice,
 }: {
-  providers: AgentProvider[]
+  provider?: AgentProvider
   choice: DefaultModelChoice
   onChoice(choice: DefaultModelChoice): void
 }) {
@@ -324,23 +363,9 @@ export function ModelChoiceStep({
   const { visibleModels } = useAppSettings().preferences
   const [checking, setChecking] = useState(false)
   const all = catalogs.flatMap((catalog) => catalog.models)
-  const offered = providers.filter((provider) => all.some((model) => model.provider === provider))
-  const models = onboardingModels(all, choice.provider, visibleModels)
+  const models = provider ? onboardingModels(all, provider, visibleModels) : []
   return (
     <div className="flex flex-col gap-3">
-      {offered.length > 1 && (
-        <div>
-          <Dropdown
-            label={t('Provider')}
-            value={choice.provider}
-            options={offered.map((provider) => ({ value: provider, label: providerName(provider) }))}
-            onChange={(value) => {
-              const provider = offered.find((entry) => entry === value)
-              if (provider) onChoice(initialChoice(choice, provider, all))
-            }}
-          />
-        </div>
-      )}
       {models.length ? (
         <div
           role="radiogroup"
@@ -353,7 +378,6 @@ export function ModelChoiceStep({
               selected={model.id === choice.model}
               title={
                 <>
-                  <ProviderIcon provider={model.provider} size={14} />
                   {modelDisplayName(model.name)}
                   {model.isDefault && (
                     <Badge variant="secondary" className="font-normal">

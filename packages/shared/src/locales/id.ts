@@ -8027,4 +8027,18 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Your next project goes in the same place unless you change it.':
     'Proyek berikutnya ditaruh di tempat yang sama kecuali kamu mengubahnya.',
   'This card could not be read.': 'Kartu ini tidak bisa dibaca.',
+  'Choose your {0} model': 'Pilih model {0}',
+  'Choose how hard {0} thinks': 'Pilih seberapa keras {0} berpikir',
+  'Kept with your models, so any thread can switch to it. Change it later in Settings.':
+    'Disimpan bersama modelmu, jadi thread mana pun bisa beralih ke sini. Ubah nanti di Pengaturan.',
+  'Kept with this model. The model bar changes it for one thread.':
+    'Disimpan bersama model ini. Bilah model mengubahnya untuk satu thread.',
+  'Off: Ramu does not start it or show its models': 'Mati: Ramu tidak menjalankannya atau menampilkan modelnya',
+  'Start new threads on {0}': 'Mulai thread baru dengan {0}',
+  'At least one agent stays on': 'Setidaknya satu agent tetap menyala',
+  'Open Agent setup': 'Buka Pengaturan agent',
+  'Skills from each agent’s own folders, and sharing them with your other agents, are in Settings → Agent setup.':
+    'Skill dari folder milik tiap agent, dan cara membaginya ke agent lain, ada di Pengaturan → Pengaturan agent.',
+  'MCP servers from each agent’s own config, and sharing them with your other agents, are in Settings → Agent setup.':
+    'Server MCP dari konfigurasi milik tiap agent, dan cara membaginya ke agent lain, ada di Pengaturan → Pengaturan agent.',
 }

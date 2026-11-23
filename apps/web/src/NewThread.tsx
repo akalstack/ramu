@@ -807,7 +807,7 @@ export function NewThread({
                 <Button
                   variant="secondary"
                   size="sm"
-                  className="bg-fill hover:bg-fill-hover"
+                  className="rounded-full bg-fill hover:bg-fill-hover"
                   disabled={addProject.busy}
                   onClick={() => void addProject.add()}
                 >
@@ -817,7 +817,7 @@ export function NewThread({
                 <Button
                   variant="secondary"
                   size="sm"
-                  className="bg-fill hover:bg-fill-hover"
+                  className="rounded-full bg-fill hover:bg-fill-hover"
                   aria-pressed={startingNew}
                   onClick={() => setStartingNew((on) => !on)}
                 >

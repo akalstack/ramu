@@ -1,5 +1,6 @@
 import { Check } from 'lucide-react'
 import { AGENT_PROVIDERS, providerName } from '@ramu/shared/providers/providers'
+import { ProviderIcon } from '../models/ProviderIcon'
 import type { AgentProvider, Project } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { cn } from 'cn'
@@ -76,6 +77,7 @@ export function UseFor({
                 }
               >
                 {on && <Check size={12} aria-hidden />}
+                <ProviderIcon provider={provider} size={12} className={on ? '' : 'opacity-50'} />
                 {providerName(provider)}
               </Button>
             )

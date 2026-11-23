@@ -1,3 +1,4 @@
+import { Plug } from 'lucide-react'
 import { Button } from '@/components/desktop-button'
 import { t, useLanguage } from '../i18n'
 
@@ -33,6 +34,40 @@ export function MovedToCustomize({ section, text }: { section: CustomizeSection;
       <span className="text-control text-soft">{text}</span>
       <Button size="sm" variant="secondary" onClick={() => openCustomize(section)}>
         {t('Open Customize')}
+      </Button>
+    </div>
+  )
+}
+
+/** Opens Settings › Agent setup on the tab matching a Customize section. */
+export function openAgentSetup(section: CustomizeSection) {
+  window.dispatchEvent(
+    new CustomEvent('ramu:settings', {
+      detail: { section: 'agent-setup', target: section === 'skills' ? 'Skills' : 'MCP servers' },
+    }),
+  )
+}
+
+/**
+ * The way back from Customize to Settings › Agent setup, where each provider's own skill and MCP files are listed and
+ * shared with the other agents: one line and the way there.
+ */
+export function SharedInAgentSetup({ section }: { section: CustomizeSection }) {
+  useLanguage()
+  return (
+    <div className="mt-6 flex items-center justify-between gap-3 rounded-(--radius-m) bg-fill px-3 py-2.5">
+      <span className="text-control text-soft">
+        {section === 'skills'
+          ? t(
+              'Skills from each agent’s own folders, and sharing them with your other agents, are in Settings → Agent setup.',
+            )
+          : t(
+              'MCP servers from each agent’s own config, and sharing them with your other agents, are in Settings → Agent setup.',
+            )}
+      </span>
+      <Button size="sm" variant="secondary" className="flex-none" onClick={() => openAgentSetup(section)}>
+        <Plug size={13} />
+        {t('Open Agent setup')}
       </Button>
     </div>
   )

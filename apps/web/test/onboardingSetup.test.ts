@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { recommendedSets, isGeneratedModelSet } from '@ramu/shared/providers/modelDefaults'
 import type { AgentModel, ModelPreferences } from '@ramu/shared/types'
 import {
+  activeProviders,
   choosableEfforts,
   onboardingModels,
-  shownChoice,
+  providerChoice,
   withDefaultModel,
   withModel,
+  withModelStep,
 } from '../src/onboarding/defaultModel'
+import { setupSteps, stepIndex } from '../src/onboarding/flow'
 import { identitiesToAdd, identityDrafts, workDraft } from '../src/onboarding/identitySetup'
 
 const model = (id: string, efforts: AgentModel['efforts'], extra: Partial<AgentModel> = {}): AgentModel => ({
@@ -63,20 +66,40 @@ describe('onboarding default model', () => {
     expect(withModel(haiku, 'high').effort).toBeNull()
   })
 
-  it('starts from the saved default, or an installed provider’s default when the saved one cannot run here', () => {
+  it('starts each provider on the saved default when it is that provider’s, else on its recommended model', () => {
     const saved = { provider: 'claude-code' as const, model: 'opus', effort: 'max' as const }
-    expect(shownChoice(saved, ['claude-code'], models)).toEqual(saved)
-    expect(shownChoice({ ...saved, model: '' }, ['claude-code'], models)).toEqual({
+    expect(providerChoice(saved, 'claude-code', models)).toEqual(saved)
+    expect(providerChoice({ ...saved, model: '' }, 'claude-code', models)).toEqual({
       provider: 'claude-code',
       model: 'sonnet',
       effort: 'medium',
     })
     const codex = model('gpt', ['low', 'high'], { provider: 'codex', isDefault: true, defaultEffort: 'low' })
-    expect(shownChoice(saved, ['codex'], [...models, codex])).toEqual({
+    expect(providerChoice(saved, 'codex', [...models, codex])).toEqual({
       provider: 'codex',
       model: 'gpt',
       effort: 'low',
     })
+    // What the person picked wins, unless that model is gone.
+    const picked = { provider: 'codex' as const, model: 'gpt', effort: 'high' as const }
+    expect(providerChoice(saved, 'codex', [...models, codex], picked)).toBe(picked)
+    expect(providerChoice(saved, 'codex', [...models, codex], { ...picked, model: 'gone' }).model).toBe('gpt')
+  })
+
+  it('asks about each installed provider with models, the one new threads start on first', () => {
+    const codex = model('gpt', ['low'], { provider: 'codex' })
+    const all = [...models, codex]
+    expect(activeProviders(['claude-code', 'codex', 'cursor'], all, 'codex')).toEqual(['codex', 'claude-code'])
+    expect(activeProviders(['claude-code', 'codex'], all, 'cursor')).toEqual(['claude-code', 'codex'])
+    expect(activeProviders([], all, 'codex')).toEqual([])
+  })
+
+  it('adds another provider’s choice as a step without moving where new threads start', () => {
+    const before = preferences()
+    const next = withModelStep(before, { provider: 'codex', model: 'gpt', effort: 'low' }, 'GPT Low')
+    expect(next.defaultStepId).toBe('s-low')
+    expect(next.sets[0]!.steps.at(-1)).toMatchObject({ provider: 'codex', model: 'gpt', name: 'GPT Low' })
+    expect(withModelStep(before, { provider: 'claude-code', model: 'opus', effort: 'high' }, 'x')).toBe(before)
   })
 
   it('selects a matching step instead of adding one, and changes nothing when it is already the default', () => {
@@ -112,6 +135,32 @@ describe('onboarding default model', () => {
   it('saves nothing before a model is known', () => {
     const before = preferences()
     expect(withDefaultModel(before, { provider: 'codex', model: '', effort: null }, '')).toBe(before)
+  })
+})
+
+describe('onboarding steps', () => {
+  const kinds = (steps: ReturnType<typeof setupSteps>) => steps.map((step) => step.id)
+
+  it('repeats the model and effort steps for each provider, skipping an effort step with nothing to choose', () => {
+    const steps = setupSteps(['codex', 'claude-code'], (provider) => provider === 'codex')
+    expect(kinds(steps).slice(0, 6)).toEqual([
+      'agents',
+      'mode',
+      'model:codex',
+      'effort:codex',
+      'model:claude-code',
+      'tokens',
+    ])
+    expect(kinds(setupSteps([], () => true)).slice(0, 4)).toEqual(['agents', 'mode', 'model', 'tokens'])
+  })
+
+  it('lands a step that is gone on the one after it', () => {
+    const steps = setupSteps(['codex', 'claude-code'], () => false)
+    expect(steps[stepIndex(steps, 'model:claude-code')]!.id).toBe('model:claude-code')
+    expect(steps[stepIndex(steps, 'effort:codex')]!.id).toBe('model:claude-code')
+    expect(steps[stepIndex(steps, 'effort:claude-code')]!.id).toBe('tokens')
+    expect(steps[stepIndex(steps, 'model:cursor')]!.id).toBe('tokens')
+    expect(stepIndex(steps, 'unknown')).toBe(0)
   })
 })
 

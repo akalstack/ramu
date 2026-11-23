@@ -25,11 +25,7 @@ export const choosableEfforts = (model: AgentModel | undefined) =>
     : []
 
 /** Where onboarding starts: the saved default when its provider can run here, else that provider's own default. */
-export function initialChoice(
-  saved: DefaultModelChoice,
-  provider: AgentProvider,
-  models: AgentModel[],
-): DefaultModelChoice {
+function initialChoice(saved: DefaultModelChoice, provider: AgentProvider, models: AgentModel[]): DefaultModelChoice {
   const own = models.filter((model) => model.provider === provider)
   const kept =
     saved.provider === provider
@@ -41,20 +37,31 @@ export function initialChoice(
 }
 
 /**
- * The choice as onboarding shows it: a saved default on a provider not installed here moves to one that is (preferring
- * one with models), and "the provider's default model" names the model it means.
+ * The providers onboarding sets a model for, in the order it asks: installed, turned on and offering models, with the
+ * one new threads start on first.
  */
-export function shownChoice(
-  choice: DefaultModelChoice,
+export function activeProviders(
   installed: AgentProvider[],
   models: AgentModel[],
+  lead: AgentProvider,
+): AgentProvider[] {
+  const offered = installed.filter((provider) => models.some((model) => model.provider === provider))
+  return offered.includes(lead) ? [lead, ...offered.filter((provider) => provider !== lead)] : offered
+}
+
+/**
+ * A provider's choice as onboarding shows it: what the person picked for it, else the saved default when it is this
+ * provider's, else the provider's recommended model at its recommended effort.
+ */
+export function providerChoice(
+  saved: DefaultModelChoice,
+  provider: AgentProvider,
+  models: AgentModel[],
+  picked?: DefaultModelChoice,
 ): DefaultModelChoice {
-  if (installed.length && !installed.includes(choice.provider)) {
-    const provider = installed.find((entry) => models.some((model) => model.provider === entry)) ?? installed[0]!
-    return initialChoice(choice, provider, models)
-  }
-  const known = models.some((model) => model.provider === choice.provider && model.id === choice.model)
-  return known ? choice : initialChoice(choice, choice.provider, models)
+  const known = (choice: DefaultModelChoice | undefined) =>
+    choice?.provider === provider && models.some((model) => model.provider === provider && model.id === choice.model)
+  return picked && known(picked) ? picked : initialChoice(saved, provider, models)
 }
 
 /** Switching model keeps the effort when the new model supports it, else takes the model's own default. */
@@ -70,28 +77,28 @@ const sameStep = (step: ModelStep, choice: DefaultModelChoice) =>
   step.provider === choice.provider && step.model === choice.model && step.effort === choice.effort
 
 /**
- * Makes the choice the step new threads start on. An existing step is selected as it is, so the automatic set keeps
- * following the catalog; otherwise the choice joins the default set beside the same model's other efforts, keeping the
- * slider ordered from light to thorough. Returns the same object when nothing changes.
+ * Where the choice sits in the sets: an existing step as it is, so the automatic set keeps following the catalog;
+ * otherwise a new step beside the same model's other efforts in the default set, keeping the slider ordered from light
+ * to thorough, or a new set when that one is full and `allowNewSet` says so.
  */
-export function withDefaultModel(
+function placeStep(
   preferences: ModelPreferences,
   choice: DefaultModelChoice,
   name: string,
-): ModelPreferences {
-  if (!choice.model) return preferences
+  allowNewSet: boolean,
+): { preferences: ModelPreferences; setId: string; stepId: string } | null {
+  if (!choice.model) return null
   const current = preferences.sets.find((set) => set.id === preferences.defaultSetId) ?? preferences.sets[0]
   const ordered = current ? [current, ...preferences.sets.filter((set) => set !== current)] : preferences.sets
   for (const set of ordered) {
     const found = set.steps.find((step) => sameStep(step, choice))
-    if (!found) continue
-    if (set.id === preferences.defaultSetId && found.id === preferences.defaultStepId) return preferences
-    return { ...preferences, defaultSetId: set.id, defaultStepId: found.id }
+    if (found) return { preferences, setId: set.id, stepId: found.id }
   }
   const step: ModelStep = { id: crypto.randomUUID(), name: name.slice(0, 260), ...choice }
   if (!current || current.steps.length >= MAX_SET_STEPS) {
+    if (!allowNewSet) return null
     const set = { id: crypto.randomUUID(), name: name.slice(0, 80), steps: [step] }
-    return { ...preferences, sets: [...preferences.sets, set], defaultSetId: set.id, defaultStepId: step.id }
+    return { preferences: { ...preferences, sets: [...preferences.sets, set] }, setId: set.id, stepId: step.id }
   }
   const rank = (effort: ReasoningEffort | null) => (effort ? LADDER.indexOf(effort) : -1)
   const siblings = current.steps.flatMap((entry, index) =>
@@ -102,9 +109,32 @@ export function withDefaultModel(
   const steps = [...current.steps.slice(0, at), step, ...current.steps.slice(at)]
   const { generated: _generated, ...rest } = current
   return {
-    ...preferences,
-    sets: preferences.sets.map((set) => (set === current ? { ...rest, steps } : set)),
-    defaultSetId: current.id,
-    defaultStepId: step.id,
+    preferences: { ...preferences, sets: preferences.sets.map((set) => (set === current ? { ...rest, steps } : set)) },
+    setId: current.id,
+    stepId: step.id,
   }
+}
+
+/** Makes the choice the step new threads start on. Returns the same object when nothing changes. */
+export function withDefaultModel(
+  preferences: ModelPreferences,
+  choice: DefaultModelChoice,
+  name: string,
+): ModelPreferences {
+  const placed = placeStep(preferences, choice, name, true)
+  if (!placed) return preferences
+  if (placed.setId === preferences.defaultSetId && placed.stepId === preferences.defaultStepId) return preferences
+  return { ...placed.preferences, defaultSetId: placed.setId, defaultStepId: placed.stepId }
+}
+
+/**
+ * Keeps another provider's choice one move away: a step in the default set, leaving where new threads start alone.
+ * A full set is left as it is. Returns the same object when nothing changes.
+ */
+export function withModelStep(
+  preferences: ModelPreferences,
+  choice: DefaultModelChoice,
+  name: string,
+): ModelPreferences {
+  return placeStep(preferences, choice, name, false)?.preferences ?? preferences
 }

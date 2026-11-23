@@ -4,6 +4,8 @@ import type { Query } from '@anthropic-ai/claude-agent-sdk'
 import { providerName } from '@ramu/shared/providers/providers'
 import type { AgentProvider, ProviderCatalog } from '@ramu/shared/types'
 import { acpModels } from '../providers/acp'
+import { providerAdapter } from '../providers/adapters'
+import { providerEnvironment } from '../providers/providerBinaries'
 import { cursorModels } from '../providers/cursor'
 import { codexModels } from '../providers/codex'
 import { InputQueue } from './inputQueue'
@@ -15,6 +17,18 @@ import { errorMessage, timeout } from './util'
 export interface CatalogSource {
   providerOff(provider: AgentProvider): boolean
   providerQuery: QueryFn
+}
+
+/**
+ * Discovery runs when the app starts. Antigravity's runtime opens Google's sign-in page by itself when it starts without
+ * a login, so models are listed only once it has one; until then the catalog says to sign in.
+ */
+async function signedInAcpModels(provider: 'antigravity') {
+  const state = await providerAdapter(provider)
+    .signInState('', providerEnvironment(provider))
+    .catch(() => ({ signedIn: false }))
+  if (!state.signedIn) throw new Error(`Sign in to ${providerName(provider)} to see its models.`)
+  return acpModels(provider)
 }
 
 /** Fixed catalogs for the fake-agent test mode. */
@@ -107,7 +121,7 @@ export function discoverCatalogs({ providerOff, providerQuery }: CatalogSource):
       (e): ProviderCatalog => ({ provider: 'cursor', models: [], error: errorMessage(e) }),
     ),
     ...(['antigravity'] as const).map((provider) =>
-      (providerOff(provider) ? Promise.resolve([]) : acpModels(provider)).then(
+      (providerOff(provider) ? Promise.resolve([]) : signedInAcpModels(provider)).then(
         (models): ProviderCatalog => ({ provider, models }),
         (e): ProviderCatalog => ({ provider, models: [], error: errorMessage(e) }),
       ),

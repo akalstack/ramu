@@ -1,11 +1,17 @@
 import { useEffect, useState } from 'react'
-import { BookOpen, Puzzle, Server } from 'lucide-react'
+import { BookOpen, Plug, Puzzle, Server } from 'lucide-react'
 import { RowButton } from '@/components/row-button'
 import { t, useLanguage } from '../i18n'
 import { McpSection } from './McpSection'
 import { PluginsSection } from './PluginsSection'
 import { SkillsSection } from './SkillsSection'
-import { CUSTOMIZE_EVENT, type CustomizeSection, type CustomizeTarget } from './openCustomize'
+import {
+  CUSTOMIZE_EVENT,
+  SharedInAgentSetup,
+  openAgentSetup,
+  type CustomizeSection,
+  type CustomizeTarget,
+} from './openCustomize'
 
 const SECTIONS: { id: CustomizeSection; label: string; Icon: typeof Puzzle }[] = [
   { id: 'plugins', label: 'Plugins', Icon: Puzzle },
@@ -57,12 +63,25 @@ export function CustomizePage({ initial = { section: 'plugins' } }: { initial?: 
             <span className="truncate max-[760px]:sr-only">{t(label)}</span>
           </RowButton>
         ))}
+        {/* Each provider's own skills and MCP servers, and sharing them across agents, stay in Settings; this is the way there. */}
+        <div className="mt-auto border-t border-line pt-2">
+          <RowButton
+            size="sm"
+            title={t('Agent setup')}
+            className="gap-2.5 rounded-(--radius-s) px-2"
+            onClick={() => openAgentSetup(section)}
+          >
+            <Plug size={15} className="flex-none" aria-hidden />
+            <span className="truncate max-[760px]:sr-only">{t('Agent setup')}</span>
+          </RowButton>
+        </div>
       </nav>
       <div className="@container min-h-0 min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-[920px] px-6 py-6">
           {section === 'plugins' && <PluginsSection open={item} install={install} />}
           {section === 'skills' && <SkillsSection onOpenPlugins={() => setSection('plugins')} />}
           {section === 'mcp' && <McpSection open={item} />}
+          {section !== 'plugins' && <SharedInAgentSetup section={section} />}
         </div>
       </div>
     </div>

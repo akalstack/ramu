@@ -84,7 +84,8 @@ function TrayButton({
         gap: 6,
         height: 32,
         paddingHorizontal: space.s + 2,
-        borderRadius: radius.s,
+        // Pills, like everything in and around the composer, as on the desktop.
+        borderRadius: radius.full,
         backgroundColor: pressed ? c.pressed : prompt ? c.accentWash : 'transparent',
       })}
     >

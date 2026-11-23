@@ -43,11 +43,17 @@ import { inResetSection, resetSection } from './resetDefaults'
 import { ShortcutsSettings, type Shortcut } from './ShortcutsSettings'
 import { SystemSettings } from './SystemSettings'
 import { ToggleRow } from './ToggleRow'
-import { AgentSetup } from './AgentSetup'
+import { AgentSetup, type SetupView } from './AgentSetup'
 import { PluginSettings } from './Plugins'
 import { IdentitySettings } from './Identities'
 import { AccountSettings } from './AccountSettings'
 import { SettingsTransfer } from './SettingsTransfer'
+
+const SETUP_TABS: Record<string, SetupView> = {
+  'Environment variables': 'environment',
+  'MCP servers': 'mcp',
+  Skills: 'skills',
+}
 
 export function SettingsPanel({
   onClose,
@@ -96,11 +102,11 @@ export function SettingsPanel({
       .map((field) => field.path) ?? []
   const modelsChanged = !sameValue(draft, scope.models)
   const environment = useProviderEnvironment(scope, page === 'agent-setup')
-  // Search lands on the Environment variables tab of Agent setup; a new object each time, as `jump` is.
-  const setupTab = useMemo(
-    () => (jump?.title === 'Environment variables' ? { view: 'environment' as const } : undefined),
-    [jump],
-  )
+  // Search and Customize land on a tab of Agent setup by its title; a new object each time, as `jump` is.
+  const setupTab = useMemo(() => {
+    const view = jump && SETUP_TABS[jump.title]
+    return view ? { view } : undefined
+  }, [jump])
   const settingsChanged = paths.length > 0 || modelsChanged || scope.edited.size > 0
   const [staged, setStaged] = useState<StagedChanges>(new Map())
   const stage = useCallback(

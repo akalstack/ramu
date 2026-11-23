@@ -10,6 +10,7 @@ import {
   type SharedMcpToolChoice,
 } from '@ramu/shared/mcp'
 import { AGENT_PROVIDERS, providerName } from '@ramu/shared/providers/providers'
+import { ProviderIcon } from '../models/ProviderIcon'
 import type { PortableMcpServer, WaitingTool } from '@ramu/shared/toolSync'
 import type { AgentProvider, Project } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
@@ -694,7 +695,9 @@ function ServerDetail({
         })()}
         <div className="flex items-center justify-between gap-3 rounded-(--radius-s) bg-fill px-3 py-2">
           <span className="flex min-w-0 flex-col">
-            <span className="text-control text-foreground">
+            <span className="flex items-center gap-1.5 text-control text-foreground">
+              {connection.enabled &&
+                agents.map((provider) => <ProviderIcon key={provider} provider={provider} size={13} />)}
               {!connection.enabled
                 ? t('Off')
                 : agents.length
