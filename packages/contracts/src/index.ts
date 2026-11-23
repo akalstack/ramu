@@ -90,7 +90,7 @@ export const SOCKET_PATH = '/socket'
 
 /**
  * Frames on the socket. `id` correlates one request with its answer and is unrelated to an `operationKey`, which
- * identifies a logical mutation across retries. Events carry the same `{ channel, payload }` as the SSE stream.
+ * identifies a logical mutation across retries. Events carry `{ channel, payload }`.
  */
 export type SocketClientFrame =
   | { t: 'invoke'; id: number; method: string; args: unknown[]; operationKey?: string }

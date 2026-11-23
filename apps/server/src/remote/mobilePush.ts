@@ -16,7 +16,7 @@ interface Registration {
   deviceId: string
   token: string
   computerId: string
-  /** Absent means every category except the opt-in ones, as for phones registered before the switches existed. */
+  /** Absent while the phone keeps every choice at its default: every category except the opt-in ones. */
   categories?: PushCategory[]
 }
 interface Ticket {

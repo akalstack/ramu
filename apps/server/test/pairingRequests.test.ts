@@ -31,7 +31,7 @@ async function fixture(discoverable = true, tunneled = false) {
   const server: Server = createServer(async (req, res) => {
     const device = await access.accept(req, res)
     if (device === undefined) return
-    res.writeHead(200).end(device ? device.id : 'legacy')
+    res.writeHead(200).end(device.id)
   })
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   cleanup.push(

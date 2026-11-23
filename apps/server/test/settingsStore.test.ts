@@ -26,14 +26,12 @@ function fixture(preferences: unknown = {}, models: unknown = null) {
   const db = openDb(join(directory, 'ramu.db'))
   cleanup.push(() => db.close())
   const workspace = new Workspace(db, join(directory, 'worktrees'))
-  workspace.setAppState('app-preferences', preferences)
-  workspace.setAppState('model-preferences', models)
   const warn = vi.fn()
   writeFileSync(join(directory, 'settings.json'), JSON.stringify({ ...(preferences as object), models }))
   const store = new SettingsStore(directory, warn)
   workspace.settingsStore = store
   cleanup.push(() => store.close())
-  return { directory, db, workspace, store, warn }
+  return { directory, workspace, store, warn }
 }
 
 const models = {
@@ -48,7 +46,7 @@ const models = {
     },
   ],
 }
-watched('defaults new browser installs to integrated and preserves legacy and explicit provider choices', () => {
+watched('defaults new browser installs to integrated and preserves explicit provider choices', () => {
   expect(fixture().store.preferences().agentBrowser?.agentBrowser).toBe('integrated')
   expect(
     fixture({
@@ -61,15 +59,13 @@ watched('defaults new browser installs to integrated and preserves legacy and ex
   ).toMatchObject({ agentBrowser: 'integrated', providerOverrides: { codex: 'provider' } })
 })
 
-watched('migrates real SQLite preferences and models once, preserving the legacy archive and runtime state', () => {
+watched('keeps preferences and models in settings.json across restarts, beside runtime state', () => {
   const f = fixture({ ...DEFAULT_APP_PREFERENCES, accent: 'teal', worktreeBranchPrefix: 'team/' }, models)
   f.workspace.setAppState('runtime-example', { active: true })
   const document = JSON.parse(readFileSync(f.store.path, 'utf8'))
   expect(document).toMatchObject({ accent: 'teal', worktreeBranchPrefix: 'team/', models })
   f.workspace.setAppState('app-preferences', { ...DEFAULT_APP_PREFERENCES, accent: 'violet' })
   expect(f.workspace.getAppState('app-preferences', {})).toMatchObject({ accent: 'violet' })
-  const archive = f.db.prepare("SELECT value FROM app_state WHERE key = 'app-preferences'").get() as { value: string }
-  expect(JSON.parse(archive.value)).toMatchObject({ accent: 'teal' })
   f.store.close()
   const restarted = new SettingsStore(f.directory)
   cleanup.push(() => restarted.close())

@@ -133,7 +133,7 @@ it('rejects unapproved browser origins, and only emits CORS for explicitly enabl
   expect(allowed.headers.get('access-control-allow-origin')).toBe('https://companion.example')
 })
 
-it('reports the caller role for client action hiding, defaulting local and legacy callers to owner', async () => {
+it('reports the caller role for client action hiding, defaulting local callers to owner', async () => {
   const f = await fixture()
   const viewer = f.devices.redeem(f.devices.createCode(f.now(), 'viewer').code, 'Phone', f.now())!.device
   const owner = f.devices.redeem(f.devices.createCode(f.now(), 'owner').code, 'Laptop', f.now())!.device

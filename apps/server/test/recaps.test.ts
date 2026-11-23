@@ -46,8 +46,8 @@ beforeEach(async () => {
   digest = vi.fn()
   service = new RecapService(db, ws, agents, () => {}, digest as unknown as () => void)
 })
-it('uses the current OS timezone for daily timing instead of a legacy override', async () => {
-  ws.setAppState('app-preferences', { recapsEnabled: true, recapTime: '08:00', timezone: 'UTC' })
+it('uses the current OS timezone for daily timing', async () => {
+  ws.setAppState('app-preferences', { recapsEnabled: true, recapTime: '08:00' })
   ws.setAppState('recap-generated-at', Date.parse('2026-01-01T13:00:00Z'))
   vi.mocked(systemTimezone).mockReturnValue('America/New_York')
   await service.tick(Date.parse('2026-01-02T08:30:00Z')) // 03:30 in the OS zone
@@ -178,7 +178,7 @@ it('does not call the model again until the thread or the model changes, and alw
 })
 
 it('announces the daily recap once a day, only for the scheduled run and only when it produced items', async () => {
-  ws.setAppState('app-preferences', { recapsEnabled: true, recapTime: '08:00', timezone: 'UTC' })
+  ws.setAppState('app-preferences', { recapsEnabled: true, recapTime: '08:00' })
   const addEvent = (seq: number) =>
     db
       .prepare("INSERT INTO agent_events (session_id, seq, event) VALUES ('session',?,?)")

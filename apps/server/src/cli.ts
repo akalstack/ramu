@@ -101,7 +101,6 @@ Options:
   --listen <[host:]port>         Also accept authenticated network clients (a bare port binds 127.0.0.1)
   --private-network              Permit a non-loopback --listen address without TLS when every device that can reach it is
                                  on a network you trust, such as a VPN (Tailscale, NetBird, ZeroTier, WireGuard) or a LAN.
-                                 (--allow-plaintext-remote is the same flag.)
   --discoverable                 With --listen: let devices on the same network see this host's name and find it when pairing
                                  (off by default; Settings controls it otherwise). Nothing is advertised on loopback.
   --tls-cert <file> --tls-key <file>
@@ -171,7 +170,6 @@ const booleans = new Set([
   'rotate',
   'help',
   'version',
-  'allow-plaintext-remote',
   'private-network',
   'discoverable',
   'no-private-network',
@@ -220,7 +218,7 @@ if (listen) {
   }
   process.env.RAMU_LISTEN = listen
 }
-if (flags.has('allow-plaintext-remote') || flags.has('private-network')) process.env.RAMU_ALLOW_PLAINTEXT_REMOTE = '1'
+if (flags.has('private-network')) process.env.RAMU_ALLOW_PLAINTEXT_REMOTE = '1'
 if (flags.has('discoverable')) process.env.RAMU_DISCOVERABLE = '1'
 if (text('tls-cert')) process.env.RAMU_TLS_CERT = text('tls-cert')
 if (text('tls-key')) process.env.RAMU_TLS_KEY = text('tls-key')

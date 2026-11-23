@@ -46,7 +46,7 @@ describe('app languages', () => {
     expect(formatChatDate(now - 86400_000, now, 'id')).toMatch(/^Kemarin /)
     expect(formatChatDate(now, now, 'id')).not.toMatch(/PM|AM/)
   })
-  it('migrates old preferences, persists language, and validates the preference', () => {
+  it('fills defaults, persists language, and validates the preference', () => {
     let saved: unknown = { accent: 'teal' }
     const dispatcher = createDispatcher({ userData: '/tmp/ramu-i18n-test', send: () => {}, native: async () => null }, {
       workspace: {

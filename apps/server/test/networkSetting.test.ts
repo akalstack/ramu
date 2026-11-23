@@ -75,18 +75,12 @@ it('saves privately and survives a missing or broken file', () => {
   expect(readNetworkSetting(path, false)).toEqual(DEFAULT_NETWORK_SETTING)
 })
 
-it('keeps discovery off unless it is saved on, including for settings written before it existed', () => {
-  const path = file()
-  writeFileSync(path, JSON.stringify({ enabled: true, host: '100.64.0.7', port: 7788, acceptUnencrypted: true }))
-  expect(readNetworkSetting(path, false).discoverable).toBe(false)
+it('keeps discovery off unless it is saved on', () => {
   expect(validateNetworkSetting({ ...on, discoverable: true }, false, addresses).discoverable).toBe(true)
   expect(() => validateNetworkSetting({ ...on, discoverable: 'yes' }, false, addresses)).toThrow(/Invalid/)
 })
 
-it('keeps a tunnel’s address as an https origin, and none for settings written before it existed', () => {
-  const path = file()
-  writeFileSync(path, JSON.stringify({ enabled: true, host: '127.0.0.1', port: 7788, acceptUnencrypted: false }))
-  expect(readNetworkSetting(path, false).publicUrl).toBeNull()
+it('keeps a tunnel’s address as an https origin', () => {
   expect(parsePublicUrl(' https://Ramu.Example.com/ ')).toBe('https://ramu.example.com')
   expect(parsePublicUrl('https://ramu.example.com:8443')).toBe('https://ramu.example.com:8443')
   expect(parsePublicUrl('')).toBeNull()

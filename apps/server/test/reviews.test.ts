@@ -15,7 +15,6 @@ beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), 'ramu-review-'))
   db = openDb(':memory:')
   ws = new Workspace(db, join(dir, 'worktrees'))
-  ws.setAppState('app-preferences', { aiChangeNotes: false, autoReviewChanges: false })
   const task = await ws.createTask({ projectId: NO_PROJECT, title: 'Review test', mode: 'current' })
   const scope = ws.agentScope(task.id)
   cwd = scope.cwd
@@ -316,8 +315,7 @@ describe('saved reviews and live workspaces', () => {
   })
 })
 describe('agent changes and batched feedback', () => {
-  it('never starts automatic analysis, even for old profiles with both toggles enabled', async () => {
-    ws.setAppState('app-preferences', { aiChangeNotes: true, autoReviewChanges: true })
+  it('never starts automatic analysis', async () => {
     const id = await service.begin(review.taskId, { cwd, covers: [cwd], additionalDirs: [] })
     service.bind(id, 'session')
     writeFileSync(join(cwd, 'changed.txt'), 'Another change\n')

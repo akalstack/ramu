@@ -24,7 +24,6 @@ beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), 'ramu-shared-checkout-'))
   db = openDb(':memory:')
   const workspace = new Workspace(db, join(dir, 'worktrees'))
-  workspace.setAppState('app-preferences', { aiChangeNotes: false, autoReviewChanges: false })
   for (const session of ['a', 'b']) {
     const task = await workspace.createTask({ projectId: NO_PROJECT, title: `Thread ${session}`, mode: 'current' })
     tasks[session] = task.id

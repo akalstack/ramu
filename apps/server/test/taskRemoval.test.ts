@@ -177,7 +177,7 @@ it.skipIf(process.platform === 'win32')(
   },
 )
 
-it('retains the legacy two-argument deletion for threads without unsettled managed commands', async () => {
+it('deletes with two arguments a thread without unsettled managed commands', async () => {
   const f = await fixture()
   await f.remove()
   expect(() => f.workspace.getTask(f.task.id)).toThrow()

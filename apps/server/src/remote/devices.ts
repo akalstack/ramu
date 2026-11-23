@@ -83,7 +83,7 @@ interface PendingCode {
   id: string
   /** Who created it (a dialog or the CLI); a new offer from the same owner replaces its previous unused one. */
   owner?: string
-  role?: DeviceRole
+  role: DeviceRole
   codeHash: string
   expiresAt: number
   /** Made for this device's agents: it can only become a host pairing, which follows that device's Agents permission. */
@@ -437,7 +437,7 @@ export class DeviceStore {
   /** Unused offers, without their codes. */
   offers(now = Date.now()): { id: string; role: DeviceRole; expiresAt: number }[] {
     return this.read().pending.flatMap((p) =>
-      p.expiresAt > now ? [{ id: p.id, role: p.role ?? 'owner', expiresAt: p.expiresAt }] : [],
+      p.expiresAt > now ? [{ id: p.id, role: p.role, expiresAt: p.expiresAt }] : [],
     )
   }
 
@@ -458,7 +458,7 @@ export class DeviceStore {
     const pending = file.pending.find((p) => p.id === id)
     if (pending)
       return pending.expiresAt > now
-        ? { state: 'pending', expiresAt: pending.expiresAt, role: pending.role ?? 'owner' }
+        ? { state: 'pending', expiresAt: pending.expiresAt, role: pending.role }
         : { state: 'expired' }
     const settled = file.settled?.find((entry) => entry.id === id)
     if (!settled) return { state: 'unknown' }
@@ -517,13 +517,13 @@ export class DeviceStore {
       createdAt: now,
       lastSeenAt: now,
       expiresAt: lifetime === null ? null : now + lifetime,
-      role: match.role ?? 'owner',
+      role: match.role,
       tokenHash: sha256(token),
       unclaimed: true,
       // A host pairing holds no device permissions: what it may do is fixed by its kind and access ceiling.
       ...(kind === 'host' ? { kind, maxAccess: 'edits' as const } : {}),
       ...(match.agentsOf ? { agentsOf: match.agentsOf } : {}),
-      ...((match.role ?? 'owner') === 'owner' && kind !== 'host'
+      ...(match.role === 'owner' && kind !== 'host'
         ? {
             permissions: Object.fromEntries(
               (file.defaultPermissions ?? AUTOMATIC_PERMISSIONS).map((permission) => [permission, { until: null }]),
@@ -569,11 +569,10 @@ export class DeviceStore {
     }
     // Remembered in memory and written rarely, so a busy client does not rewrite the file the CLI also edits.
     const lastWrite = this.seen.get(record.id) ?? 0
-    if (claimed || promote || now - lastWrite >= LAST_SEEN_WRITE_MS || record.expiresAt === undefined) {
+    if (claimed || promote || now - lastWrite >= LAST_SEEN_WRITE_MS) {
       this.seen.set(record.id, now)
       record.lastSeenAt = now
       record.expiresAt = lifetime === null ? null : now + lifetime
-      record.role ??= 'owner'
       this.write(file)
     }
     return strip(record)
@@ -591,7 +590,7 @@ export class DeviceStore {
     const record = file.devices.find((d) => d.tokenHash === hash)
     if (!record) return null
     const lifetime = this.lifetimeFor(file, record)
-    const expiry = record.expiresAt === undefined ? null : record.expiresAt
+    const expiry = record.expiresAt
     if (expiry !== null && expiry <= now) return null
     const token = randomBytes(32).toString('hex')
     record.nextTokenHash = sha256(token)
@@ -603,18 +602,7 @@ export class DeviceStore {
 
   list(now = Date.now()): DeviceInfo[] {
     const file = this.dropOrphans(this.read(), now)
-    return file.devices.map((record) => {
-      const lifetime = this.lifetimeFor(file, record)
-      return strip({
-        ...record,
-        expiresAt:
-          record.expiresAt === undefined
-            ? lifetime === null
-              ? null
-              : (record.lastSeenAt ?? record.createdAt) + lifetime
-            : record.expiresAt,
-      })
-    })
+    return file.devices.map(strip)
   }
   /** Removes grants nobody ever used, so a lost pairing response does not leave a credential no one holds. */
   private dropOrphans(file: DeviceFile, now: number): DeviceFile {
@@ -702,5 +690,5 @@ const strip = ({
   createdAt,
   lastSeenAt,
   expiresAt,
-  role: role ?? 'owner',
+  role,
 })

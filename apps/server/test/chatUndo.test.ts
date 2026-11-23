@@ -33,7 +33,6 @@ beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), 'ramu-chat-undo-'))
   db = openDb(':memory:')
   const workspace = new Workspace(db, join(dir, 'worktrees'))
-  workspace.setAppState('app-preferences', { aiChangeNotes: false, autoReviewChanges: false })
   const task = await workspace.createTask({ projectId: NO_PROJECT, title: 'Undo across providers', mode: 'current' })
   taskId = task.id
   cwd = workspace.agentScope(taskId).cwd

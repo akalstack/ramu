@@ -43,7 +43,7 @@ it('push respects each phone category switches and treats scheduled threads as t
     request,
     (id) => id.startsWith('sched'),
   )
-  push.register('a', 'ExpoPushToken[abcdefghijk11111]', 'host') // old app: no switches, everything on
+  push.register('a', 'ExpoPushToken[abcdefghijk11111]', 'host') // every choice at its default: everything on
   push.register('b', 'ExpoPushToken[abcdefghijk22222]', 'host', ['input', 'failed', 'bogus'])
   push.register('c', 'ExpoPushToken[abcdefghijk33333]', 'host', ['scheduled'])
   const tokens = () => sent.splice(0).map((message) => message.to.slice(-6, -1))
@@ -76,7 +76,7 @@ it('scheduled runs that never got a thread and the daily digest are generic, and
     return new Response(JSON.stringify({ data: { status: 'ok', id: 'ticket' } }))
   }) as unknown as typeof fetch
   const push = new MobilePush(join(dir, 'push.json'), () => [{ id: 'a' }, { id: 'b' }, { id: 'c' }], request)
-  push.register('a', 'ExpoPushToken[abcdefghijk11111]', 'host') // an older app: everything but the digest
+  push.register('a', 'ExpoPushToken[abcdefghijk11111]', 'host') // every choice at its default: everything but the digest
   push.register('b', 'ExpoPushToken[abcdefghijk22222]', 'host', ['input', 'failed', 'done', 'scheduled', 'digest'])
   push.register('c', 'ExpoPushToken[abcdefghijk33333]', 'host', ['input', 'failed', 'done'])
   const tokens = () => sent.splice(0).map((message) => message.to.slice(-6, -1))

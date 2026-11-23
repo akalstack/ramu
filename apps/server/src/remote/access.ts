@@ -60,7 +60,7 @@ export class RemoteAccess {
   }
 
   /** undefined means this response has already been sent. */
-  async accept(req: IncomingMessage, res: ServerResponse): Promise<DeviceInfo | null | undefined> {
+  async accept(req: IncomingMessage, res: ServerResponse): Promise<DeviceInfo | undefined> {
     const origin = req.headers.origin
     if (origin) {
       if (!this.options.browserOrigins.includes(origin)) {
@@ -231,10 +231,8 @@ export class RemoteAccess {
       return
     }
     this.failures.delete(peer)
-    if (device) {
-      res.setHeader('X-Ramu-Device-Role', device.role)
-      if (device.expiresAt !== null) res.setHeader('X-Ramu-Token-Expires', String(device.expiresAt))
-    }
+    res.setHeader('X-Ramu-Device-Role', device.role)
+    if (device.expiresAt !== null) res.setHeader('X-Ramu-Token-Expires', String(device.expiresAt))
     return device
   }
 }

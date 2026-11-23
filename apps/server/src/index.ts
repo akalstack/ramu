@@ -1966,9 +1966,8 @@ const handle = () => async (req: import('node:http').IncomingMessage, res: Serve
         .end(JSON.stringify('delivery' in answer ? { outcome: answer.delivery.outcome } : { error: answer.error }))
       return
     }
-    const authenticated = await remoteAccess.accept(req, res)
-    if (authenticated === undefined) return
-    const device = authenticated ?? undefined
+    const device = await remoteAccess.accept(req, res)
+    if (device === undefined) return
     const path = (req.url ?? '/').split('?')[0]
     // Calls and events travel only on the WebSocket (`/socket`); HTTP here is for pairing, renewal and health, which
     // happen before a socket can be authenticated, and for this one check that a token is still accepted.
