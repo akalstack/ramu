@@ -1255,7 +1255,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           challenge: operationKey(),
           signal: probeSignal,
         })
-        if (identity.state !== 'verified') failure = identity.state
+        // A host that does not have this phone paired cannot confirm it is the saved one.
+        if (identity.state !== 'verified') failure = identity.state === 'forgotten' ? 'mismatch' : identity.state
         return identity
       },
       usable: (candidate, probeSignal) =>
@@ -1334,6 +1335,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             checkHostConnection(address, token, expoFetch as typeof globalThis.fetch, signal),
         })
         if (!current()) return
+        if (route === 'forgotten') throw new HostError('Pairing was revoked. Pair this host again.', 401)
         if (!route) throw new HostError('Host unreachable. Checking saved addresses again shortly.')
         const saved = ref.current.computers.find((c) => c.id === computer.id)
         if (!saved || saved.deviceId !== computer.deviceId) return

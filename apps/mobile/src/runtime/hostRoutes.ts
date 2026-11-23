@@ -107,13 +107,20 @@ export function meshHostRoute(address: string): boolean {
   }
 }
 
-/** Keep a working saved/manual choice. When it fails, prefer a verified mesh route among the alternatives. */
-export async function chooseHostRoute(input: Parameters<typeof findHostRoute>[0]) {
+/**
+ * Keep a working saved/manual choice. When it fails, prefer a verified mesh route among the alternatives. `forgotten`
+ * means no route proved itself and the saved address, the last one that did, says it no longer has this device paired.
+ */
+export async function chooseHostRoute(
+  input: Parameters<typeof findHostRoute>[0],
+): Promise<Awaited<ReturnType<typeof findHostRoute>> | 'forgotten'> {
   let learned: string[] = []
   let expectedHost: string | undefined
+  let forgotten = false
   const verify: typeof input.verify = async (address, signal) => {
     const result = await input.verify(address, signal)
     if (signal.aborted) return { state: 'unreachable' }
+    if (result.state === 'forgotten' && address === input.address) forgotten = true
     if (result.state === 'verified') {
       if (expectedHost && result.hostId !== expectedHost) return { state: 'mismatch' }
       expectedHost = result.hostId
@@ -123,11 +130,12 @@ export async function chooseHostRoute(input: Parameters<typeof findHostRoute>[0]
   }
   const current = await findHostRoute({ ...input, routes: [input.address], includeCurrent: true, verify })
   if (current || input.signal.aborted) return current
-  return findHostRoute({
+  const other = await findHostRoute({
     ...input,
     routes: learnedRoutes([...input.routes, ...learned]),
     includeCurrent: false,
     prefer: meshHostRoute,
     verify,
   })
+  return other ?? (forgotten && !input.signal.aborted ? 'forgotten' : null)
 }

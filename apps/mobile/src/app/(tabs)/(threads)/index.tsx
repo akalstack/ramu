@@ -25,6 +25,7 @@ import {
   SquarePen,
   Ellipsis,
   WifiOff,
+  Unlink,
   Clock,
   X,
   Archive,
@@ -668,6 +669,38 @@ export default function Threads() {
                   {t.offlineHint}
                 </T>
               </View>
+            ) : null}
+            {!merged && pc?.status === 'revoked' ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityHint={t.pair}
+                onPress={() => {
+                  tap()
+                  router.push('/pair')
+                }}
+                style={{
+                  margin: space.l,
+                  marginBottom: 0,
+                  padding: space.m,
+                  borderRadius: radius.m,
+                  backgroundColor: c.fill,
+                  flexDirection: 'row',
+                  gap: space.m,
+                }}
+              >
+                <Unlink size={16} color={c.muted} />
+                <View style={{ flex: 1, gap: 2 }}>
+                  <T size={font.control} weight="600">
+                    {t.revokedTitle}
+                  </T>
+                  <T size={font.control} tone="muted" style={{ lineHeight: 19 }}>
+                    {t.revokedHint}
+                  </T>
+                  <T size={font.control} tone="accent" weight="600">
+                    {t.pair}
+                  </T>
+                </View>
+              </Pressable>
             ) : null}
 
             {/* The row leads with the host, then the list switch, then the filters once there is something to filter. */}

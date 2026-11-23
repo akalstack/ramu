@@ -27,6 +27,11 @@ export type HostVerification =
   | { state: 'mismatch' }
   /** Continuity cannot be proven, so pairing again is explicit. */
   | { state: 'unsupported' }
+  /**
+   * The address answered as a Ramu host that holds no pairing for this device: it was removed there, or another host
+   * now answers at this address. Unproven either way, so callers decide how far to trust it.
+   */
+  | { state: 'forgotten' }
   | { state: 'unreachable' }
 
 /**
@@ -53,6 +58,7 @@ export async function verifyHost(input: {
     return { state: 'unreachable' }
   }
   if (response.status === 404) return { state: 'unsupported' }
+  if (response.status === 401) return { state: 'forgotten' }
   if (!response.ok) return { state: 'unreachable' }
   let body: {
     hostId?: unknown

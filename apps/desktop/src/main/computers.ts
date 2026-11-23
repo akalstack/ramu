@@ -527,7 +527,8 @@ export class ComputerRegistry {
     // A credential issued over HTTPS never moves to plain HTTP on its own: the person pairs that address explicitly.
     if (saved.url.startsWith('https:') && url.startsWith('http:')) return 'insecure'
     const result = await this.verify(url, deviceId, endpoint.token, saved.hostId)
-    if (result.state !== 'verified') return result.state
+    // A host that does not have this device paired cannot prove it is the saved one.
+    if (result.state !== 'verified') return result.state === 'forgotten' ? 'mismatch' : result.state
     this.deps.servers.setRoutes(id, result.routes)
     this.deps.servers.setUrl(id, url)
     this.connect(id)

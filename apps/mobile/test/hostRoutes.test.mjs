@@ -269,3 +269,31 @@ test('an unresponsive VPN cannot hold offline recovery forever when another LAN 
   t.mock.timers.tick(4000)
   assert.equal((await pending).address, other)
 })
+
+test('a saved host that no longer has this phone paired is reported as such, not as unreachable', async () => {
+  const forgotten = await chooseHostRoute({
+    address: lan,
+    routes: [vpn],
+    signal: new AbortController().signal,
+    verify: async (address) => (address === lan ? { state: 'forgotten' } : { state: 'unreachable' }),
+  })
+  assert.equal(forgotten, 'forgotten')
+})
+
+test('only the saved address can say the pairing is gone, and a proven route still wins', async () => {
+  const elsewhere = await chooseHostRoute({
+    address: lan,
+    routes: [vpn],
+    signal: new AbortController().signal,
+    verify: async (address) => (address === vpn ? { state: 'forgotten' } : { state: 'unreachable' }),
+  })
+  assert.equal(elsewhere, null)
+  const moved = await chooseHostRoute({
+    address: lan,
+    routes: [vpn],
+    signal: new AbortController().signal,
+    verify: async (address) => (address === lan ? { state: 'forgotten' } : verified),
+    usable: async () => true,
+  })
+  assert.equal(moved.address, vpn)
+})

@@ -59,3 +59,12 @@ it('ignores malformed alternates and never reads more than a few', async () => {
   expect((await ask('mine', many)).state).toBe('mismatch')
   expect((await ask('mine', () => ({ hostId: 'h', proof: 'nope', alternates: 'oops' }))).state).toBe('mismatch')
 })
+
+it('tells a host that no longer has this device paired apart from one that cannot be reached', async () => {
+  const status = (code: number) => async () => ({ ok: false, status: code, json: async () => ({}) })
+  const check = (code: number) =>
+    verifyHost({ fetch: status(code), baseUrl: 'http://host', deviceId: 'd', token: 't', challenge: 'c' })
+  expect((await check(401)).state).toBe('forgotten')
+  expect((await check(429)).state).toBe('unreachable')
+  expect((await check(502)).state).toBe('unreachable')
+})
