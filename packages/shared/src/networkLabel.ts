@@ -12,11 +12,40 @@ export const hostOfUrl = (url: string): string => {
   }
 }
 
-/** A plain name for an address, so people choose "VPN" or "Local network" rather than an interface or IP. Pass through `t()`. */
+// Ramu Link's addresses (`linkHostname` in ramuLink.ts). Written out rather than imported: the phone's tests load this
+// file as it is, with no bundler to resolve imports.
+const RAMU_LINK = /^ramu-[a-z0-9]+\.akalstack\.com$/i
+
+/**
+ * The tunnel an address belongs to, from its name: Ramu Link's own addresses, Cloudflare's quick tunnels, Tailscale
+ * names (Funnel or the tailnet) and ngrok's domains. Null for anything else.
+ */
+function tunnelName(address: string): 'Ramu Link' | 'Quick tunnel (Cloudflare)' | 'Tailscale' | 'ngrok' | null {
+  const host = address.toLowerCase()
+  if (RAMU_LINK.test(host)) return 'Ramu Link'
+  if (host.endsWith('.trycloudflare.com')) return 'Quick tunnel (Cloudflare)'
+  if (host.endsWith('.ts.net')) return 'Tailscale'
+  if (/\.ngrok(-free)?\.(app|dev|io)$/.test(host)) return 'ngrok'
+  return null
+}
+
+/**
+ * A plain name for an address, so people choose "Ramu Link", "VPN" or "Local network" rather than an interface or IP.
+ * `tunnel` is the interface a host gives its public address. Pass through `t()`.
+ */
 export function networkName(
   address: string,
   interfaceName = '',
-): 'VPN' | 'Local network' | 'Virtual network' | 'Other network' {
+):
+  | NonNullable<ReturnType<typeof tunnelName>>
+  | 'Tunnel'
+  | 'VPN'
+  | 'Local network'
+  | 'Virtual network'
+  | 'Other network' {
+  const tunnel = tunnelName(address)
+  if (tunnel) return tunnel
+  if (interfaceName === 'tunnel') return 'Tunnel'
   if (VIRTUAL_INTERFACE.test(interfaceName)) return 'Virtual network'
   if (VPN_INTERFACE.test(interfaceName) || MESH_ADDRESS.test(address)) return 'VPN'
   return PRIVATE_ADDRESS.test(address) ? 'Local network' : 'Other network'

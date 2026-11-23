@@ -8050,6 +8050,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'the relay could not set up the tunnel': 'relay tidak bisa menyiapkan tunnel',
   'the Ramu account did not answer': 'akun Ramu tidak menjawab',
   'Same as /aside: ask without interrupting the thread': 'Sama dengan /aside: tanya tanpa mengganggu thread',
+  Tailscale: 'Tailscale',
+  Tunnel: 'Tunnel',
   'Terminal command': 'Perintah terminal',
   'Not available on this computer': 'Tidak tersedia di komputer ini',
   'Use Ramu from your terminal': 'Pakai Ramu dari terminal',

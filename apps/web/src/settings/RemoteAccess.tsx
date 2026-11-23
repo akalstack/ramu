@@ -24,6 +24,7 @@ import type {
   DeviceOs,
   NetworkDevice,
   NetworkStatus,
+  PairingOffer,
 } from '@ramu/shared/types'
 import { permissionsFor } from '@ramu/shared/devicePermissions'
 import { RowButton } from '@/components/row-button'
@@ -611,6 +612,12 @@ function ThisComputer() {
   )
 }
 
+/** Which network an offered address is on: the tunnel by name, or a network and its interface (`Local network · en0`). */
+const addressLabel = (entry: PairingOffer['urls'][number]) => {
+  const network = t(networkName(hostOfUrl(entry.url), entry.interface))
+  return entry.interface === 'tunnel' ? network : `${network} · ${entry.interface}`
+}
+
 /**
  * Pairs a phone or another computer: a QR code its camera opens and a one-time code, renewed while the dialog is open.
  * With other devices not yet allowed, it says so and allows them on this network in one step instead of sending the
@@ -746,7 +753,7 @@ export function PairDialog({ onClose }: { onClose: () => void }) {
                         >
                           <code className="font-mono text-control grow flex-1 min-w-0 truncate">{entry.url}</code>
                           <span className="muted text-muted-foreground small text-caption flex-none">
-                            {entry.url === url ? t('In the QR code') : entry.interface}
+                            {entry.url === url ? t('In the QR code') : addressLabel(entry)}
                           </span>
                           {entry.url !== url && (
                             <Button variant="ghost" size="sm" onClick={() => setQrUrl(entry.url)}>

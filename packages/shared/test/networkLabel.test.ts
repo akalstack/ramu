@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
 import { hostOfUrl, networkName, routeName } from '../src/networkLabel'
+import { linkHostname } from '../src/ramuLink'
 
 it('names networks in plain words from the address and interface', () => {
   expect(networkName('192.168.1.20', 'en0')).toBe('Local network')
@@ -7,6 +8,18 @@ it('names networks in plain words from the address and interface', () => {
   expect(networkName('10.8.0.2', 'wg0')).toBe('VPN')
   expect(networkName('172.17.0.1', 'docker0')).toBe('Virtual network')
   expect(networkName('8.8.8.8')).toBe('Other network')
+})
+
+it('names a tunnel address by the tunnel, never as a VPN', () => {
+  expect(networkName('ramu-198535f899.akalstack.com', 'tunnel')).toBe('Ramu Link')
+  expect(networkName('ramu-198535f899.akalstack.com')).toBe('Ramu Link')
+  expect(networkName(linkHostname('198535f899'))).toBe('Ramu Link')
+  expect(networkName('calm-river-1234.trycloudflare.com', 'tunnel')).toBe('Quick tunnel (Cloudflare)')
+  expect(networkName('studio.tail1234.ts.net')).toBe('Tailscale')
+  expect(networkName('abc123.ngrok-free.app')).toBe('ngrok')
+  expect(networkName('ramu.example.com', 'tunnel')).toBe('Tunnel')
+  // Only Ramu's own relay addresses are Ramu Link; one on another domain is the person's own relay.
+  expect(networkName('ramu-abc.example.com')).toBe('Other network')
 })
 it('reads the host from a saved route, including IPv6', () => {
   expect(hostOfUrl('http://100.64.0.7:7788')).toBe('100.64.0.7')
