@@ -313,6 +313,7 @@ export class ComputerRegistry {
           local: false,
           url: server.url,
           routes: this.deps.servers.routesOf(server.id),
+          ...(server.hostId ? { hostId: server.hostId } : {}),
           status: live?.status ?? 'offline',
           enabled: server.enabled,
           retryMode: server.retryMode,
@@ -344,11 +345,24 @@ export class ComputerRegistry {
     return true
   }
 
-  /** Pairs with a code, proves the new token works, then connects. */
-  async pair(address: string, code: string, label: string | undefined): Promise<Computer> {
-    const { parseRemoteUrl } = await import('@ramu/contracts')
-    const url = parseRemoteUrl(address)
-    return this.savePaired(url, label, await this.deps.pair(url, code.trim(), this.deps.deviceName))
+  /**
+   * Pairs with a code, proves the new token works, then connects. A pairing link's backup addresses are tried in turn
+   * when the one before cannot be reached; the host is saved at the one that answered.
+   */
+  async pair(address: string, code: string, label: string | undefined, alternates: string[] = []): Promise<Computer> {
+    const { pairAtFirstReachable, parseRemoteUrl } = await import('@ramu/contracts')
+    const { isTransportFailure } = await import('@ramu/client-runtime')
+    const urls = [parseRemoteUrl(address), ...alternates.map(parseRemoteUrl)]
+    // A local address away from its network has no route, and a tunnel name may not resolve: both mean try the next.
+    const unreachable = (error: unknown) =>
+      isTransportFailure(error) ||
+      ['ENOTFOUND', 'EHOSTUNREACH', 'EAI_AGAIN'].includes(String((error as NodeJS.ErrnoException).code))
+    const { url, result } = await pairAtFirstReachable(
+      [...new Set(urls)],
+      (next) => this.deps.pair(next, code.trim(), this.deps.deviceName),
+      unreachable,
+    )
+    return this.savePaired(url, label, result)
   }
 
   /**

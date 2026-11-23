@@ -6,7 +6,7 @@ import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
 import * as nearby from '../src/runtime/nearbyModel.ts'
 import * as pairing from '../src/runtime/pairingModel.ts'
-import { encodePairWebLink, parsePairInput } from '../../../packages/contracts/src/index.ts'
+import { encodePairWebLink, pairAtFirstReachable, parsePairInput } from '../../../packages/contracts/src/index.ts'
 
 const require = createRequire(import.meta.url)
 function harness(os, options = {}) {
@@ -56,7 +56,7 @@ function harness(os, options = {}) {
     },
     'expo-camera': { CameraView: 'CameraView', useCameraPermissions: () => [{ granted: true }, () => {}] },
     '../runtime/transport': { needsHttpConsent: (address) => address.startsWith('http:') },
-    '@ramu/contracts': { parsePairInput },
+    '@ramu/contracts': { pairAtFirstReachable, parsePairInput },
     '../runtime/pairingModel': pairing,
     '../runtime/toast': { showToast: (message) => toasts.push(message) },
     '../theme': { font: {}, radius: {}, space: { l: 16, m: 12 }, useTheme: () => ({ c: {} }) },
@@ -145,6 +145,34 @@ for (const os of ['ios', 'android']) {
     await new Promise((resolve) => setTimeout(resolve, 0))
     assert.deepEqual(h.toasts, ['pairedWith'])
     assert.deepEqual(h.navigation, ['/'])
+  })
+  test(`${os}: a scanned code tries the host's tunnel address when its own address cannot be reached`, async () => {
+    const h = harness(os)
+    let tree = h.render()
+    find(
+      tree,
+      'Pressable',
+      (props) => props.accessibilityRole === 'tab' && props.children.props.children === 'pairScanQr',
+    ).props.onPress()
+    tree = h.render()
+    find(tree, 'CameraView').props.onBarcodeScanned({
+      data: encodePairWebLink({
+        url: 'https://studio.local:7788',
+        code: 'ABCDE-FGHJK',
+        expiresAt: Date.now() + 60000,
+        name: 'Studio',
+        alternates: ['https://ramu-abc.akalstack.com'],
+      }),
+    })
+    h.finish(new TypeError('Network request failed'))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    assert.deepEqual(
+      h.calls.map((call) => call[1]),
+      ['https://studio.local:7788', 'https://ramu-abc.akalstack.com'],
+    )
+    h.finish()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    assert.deepEqual(h.toasts, ['pairedWith'])
   })
   test(`${os}: a refused code reads as expired with what to do next, not a status code`, async () => {
     const h = harness(os, { hosts: [] })

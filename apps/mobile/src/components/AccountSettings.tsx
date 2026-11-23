@@ -187,6 +187,48 @@ export function AccountSettings() {
       </Card>
       {user ? (
         <>
+          {requests.length ? (
+            <>
+              <SectionLabel>{t('New devices asking for your backup key')}</SectionLabel>
+              <Card style={{ marginHorizontal: space.l }}>
+                {requests.map((request, index) => (
+                  <View key={request.id}>
+                    {index ? <Divider inset={space.l} /> : null}
+                    <Row style={{ paddingVertical: space.m }}>
+                      <RowLabel
+                        title={request.name}
+                        help={
+                          request.code
+                            ? t('It should show {code}', { code: request.code })
+                            : t('Answer to see the number')
+                        }
+                      />
+                      {request.code ? (
+                        <Button
+                          title={t('Approve')}
+                          disabled={busy}
+                          onPress={() => void act(async () => account.approveKeyRequest(request.id, await random()))}
+                        />
+                      ) : (
+                        <Button
+                          kind="secondary"
+                          title={t('Answer')}
+                          disabled={busy}
+                          onPress={() => void act(async () => account.answerKeyRequest(request.id, await random()))}
+                        />
+                      )}
+                      <Button
+                        kind="secondary"
+                        title={t('Deny')}
+                        disabled={busy}
+                        onPress={() => void act(() => account.denyKeyRequest(request.id))}
+                      />
+                    </Row>
+                  </View>
+                ))}
+              </Card>
+            </>
+          ) : null}
           <SectionLabel>{t('This phone’s settings')}</SectionLabel>
           <Card style={{ marginHorizontal: space.l }}>
             <Row style={{ paddingVertical: space.m }}>
@@ -274,55 +316,15 @@ export function AccountSettings() {
               </>
             )}
           </Card>
-          {requests.length ? (
-            <>
-              <SectionLabel>{t('New devices asking for your backup key')}</SectionLabel>
-              <Card style={{ marginHorizontal: space.l }}>
-                {requests.map((request, index) => (
-                  <View key={request.id}>
-                    {index ? <Divider inset={space.l} /> : null}
-                    <Row style={{ paddingVertical: space.m }}>
-                      <RowLabel
-                        title={request.name}
-                        help={
-                          request.code
-                            ? t('It should show {code}', { code: request.code })
-                            : t('Answer to see the number')
-                        }
-                      />
-                      {request.code ? (
-                        <Button
-                          title={t('Approve')}
-                          disabled={busy}
-                          onPress={() => void act(async () => account.approveKeyRequest(request.id, await random()))}
-                        />
-                      ) : (
-                        <Button
-                          kind="secondary"
-                          title={t('Answer')}
-                          disabled={busy}
-                          onPress={() => void act(async () => account.answerKeyRequest(request.id, await random()))}
-                        />
-                      )}
-                      <Button
-                        kind="secondary"
-                        title={t('Deny')}
-                        disabled={busy}
-                        onPress={() => void act(() => account.denyKeyRequest(request.id))}
-                      />
-                    </Row>
-                  </View>
-                ))}
-              </Card>
-            </>
-          ) : null}
           <SectionLabel>{t('Your hosts')}</SectionLabel>
           <Card style={{ marginHorizontal: space.l }}>
             {!hosts.length ? (
               <Row style={{ paddingVertical: space.m }}>
                 <RowLabel
                   title={t('No listed hosts')}
-                  help={t('Turn on List this host in my account in a host’s Settings → Account.')}
+                  help={t(
+                    'On a host, choose who connects under Settings → Remote access → Devices on your Ramu account.',
+                  )}
                 />
               </Row>
             ) : null}
@@ -344,7 +346,13 @@ export function AccountSettings() {
                   />
                   <Button
                     kind="secondary"
-                    title={host.trust === 'ask' ? t('Pair') : t('Connect')}
+                    title={
+                      store.computers.some((computer) => computer.hostId === host.hostKey)
+                        ? t('Added')
+                        : host.trust === 'ask'
+                          ? t('Pair')
+                          : t('Connect')
+                    }
                     disabled={busy || store.computers.some((computer) => computer.hostId === host.hostKey)}
                     onPress={() =>
                       void act(async () => {

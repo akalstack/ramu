@@ -17,7 +17,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { needsHttpConsent } from '../runtime/transport'
-import { parsePairInput } from '@ramu/contracts'
+import { pairAtFirstReachable, parsePairInput } from '@ramu/contracts'
 import { CameraOff, CircleAlert, Monitor, QrCode, ShieldAlert } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
 import { useStore } from '../runtime/store'
@@ -38,7 +38,14 @@ import {
   pairingFill,
   type PairMethod,
 } from '../runtime/nearbyModel'
-import { pairProblem, pairedName, readScan, SecureRandomUnavailable, type PairProblem } from '../runtime/pairingModel'
+import {
+  pairProblem,
+  pairedName,
+  readScan,
+  SecureRandomUnavailable,
+  unreachable,
+  type PairProblem,
+} from '../runtime/pairingModel'
 
 const LENGTH = 10
 
@@ -67,9 +74,12 @@ export default function Pair() {
     code?: string
     exp?: string
     name?: string
+    alt?: string
     method?: string
     from?: string
   }>()
+  // The backup addresses the link that filled the form named, tried in turn when its address cannot be reached.
+  const [linkAlternates, setLinkAlternates] = useState<{ url: string; alternates: string[] } | null>(null)
   const [address, setAddress] = useState('')
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
@@ -134,6 +144,7 @@ export default function Pair() {
       ).toString()
       const offer = parsePairInput(`ramu://pair?${query}`)
       setAddress(offer.url)
+      setLinkAlternates({ url: offer.url, alternates: offer.alternates ?? [] })
       if (offer.code) setCode(offer.code.replace('-', ''))
       if (offer.name) setName((current) => current || offer.name!)
       setHttp(false)
@@ -141,8 +152,8 @@ export default function Pair() {
     } catch (error) {
       setProblem(error instanceof Error && /expired/i.test(error.message) ? { kind: 'expired' } : { kind: 'invalid' })
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [params.url, params.code, params.exp, params.name] by design; the values it reads beyond these are current as of that run
-  }, [params.url, params.code, params.exp, params.name])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [params.url, params.code, params.exp, params.name, params.alt] by design; the values it reads beyond these are current as of that run
+  }, [params.url, params.code, params.exp, params.name, params.alt])
   const insecure = needsHttpConsent(address)
   const ready = address.trim().length > 3 && code.length === LENGTH && (!insecure || http)
 
@@ -188,14 +199,18 @@ export default function Pair() {
     setScanning(true)
   }
   // A scanned code with an encrypted address needs no review: pairing starts the moment it is read.
-  const pairScanned = async (url: string, scannedCode: string, offeredName?: string) => {
+  const pairScanned = async (url: string, scannedCode: string, offeredName?: string, alternates: string[] = []) => {
     if (pairing.current) return
     pairing.current = true
     const host = pairedName({ url, name: offeredName })
     setJoining(host)
     setBusy(true)
     try {
-      await pair(offeredName?.trim() ?? '', url, scannedCode, false)
+      await pairAtFirstReachable(
+        [url, ...alternates],
+        (next) => pair(offeredName?.trim() ?? '', next, scannedCode, false),
+        unreachable,
+      )
       if (mounted.current) done(host)
     } catch (error) {
       if (mounted.current) setProblem(pairProblem(error))
@@ -519,10 +534,12 @@ export default function Pair() {
                         }
                         const offer = result.offer
                         setAddress(offer.url)
+                        setLinkAlternates({ url: offer.url, alternates: offer.alternates ?? [] })
                         setCode(offer.code?.replace('-', '') ?? '')
                         if (offer.name) setName((current) => current || offer.name!)
                         setHttp(false)
-                        if (result.kind === 'pair') return void pairScanned(offer.url, result.offer.code, offer.name)
+                        if (result.kind === 'pair')
+                          return void pairScanned(offer.url, result.offer.code, offer.name, offer.alternates)
                         // Something to decide first (plain HTTP to allow, or a code to type): the form shows it.
                         setOfferScanned(true)
                         Keyboard.dismiss()
@@ -742,7 +759,12 @@ export default function Pair() {
                   setBusy(true)
                   setProblem(null)
                   try {
-                    await pair(name.trim(), address.trim(), code, http)
+                    const backups = linkAlternates?.url === address.trim() ? linkAlternates.alternates : []
+                    await pairAtFirstReachable(
+                      [address.trim(), ...backups],
+                      (next) => pair(name.trim(), next, code, http),
+                      unreachable,
+                    )
                     done(name.trim() || pairedName({ url: address.trim() }))
                   } catch (error) {
                     setProblem(pairProblem(error))

@@ -1073,7 +1073,8 @@ export interface RamuMethods extends ArtifactMethods {
   ): void
   /** Brings a computer's window to the front. Rejects when it cannot be reached. */
   'computers.open'(id: string): void
-  'computers.pair'(url: string, code: string, name?: string): Computers
+  /** `alternates` are the link's https backup addresses, tried in turn only when the one before cannot be reached. */
+  'computers.pair'(url: string, code: string, name?: string, alternates?: string[]): Computers
   /** Asks a nearby host to pair; a person there allows it when both show the number sent as `computers:pairCode`. */
   'computers.pairByRequest'(url: string, name?: string): Computers
   /** Asks a host listed in this person's Ramu account to pair; the number to match arrives as `computers:pairCode`. */

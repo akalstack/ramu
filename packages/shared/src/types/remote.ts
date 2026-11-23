@@ -219,6 +219,8 @@ export interface Computer {
   routes?: string[]
   /** The SSH target when this computer is reached through a tunnel. */
   ssh?: string
+  /** The host's own id, which its listing on a Ramu account names; unknown for one paired before hosts said it. */
+  hostId?: string
   status: ComputerStatus
   enabled?: boolean
   retryMode?: 'events' | 'periodic'

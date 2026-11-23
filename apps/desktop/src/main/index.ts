@@ -1355,7 +1355,7 @@ async function main() {
       return openComputer(args[0])
     }
     if (method === 'computers.pair') {
-      const [address, code, label] = args
+      const [address, code, label, offered] = args
       if (
         typeof address !== 'string' ||
         typeof code !== 'string' ||
@@ -1363,8 +1363,12 @@ async function main() {
         !code.trim()
       )
         throw new Error('Enter the address and the pairing code')
+      // Only https backups, as a pairing link keeps them: the code is sent to each one tried.
+      const alternates = Array.isArray(offered)
+        ? offered.filter((url): url is string => typeof url === 'string' && url.startsWith('https://')).slice(0, 3)
+        : []
       const previous = servers.list()
-      await computers.pair(address, code, label)
+      await computers.pair(address, code, label, alternates)
       for (const server of previous) if (!computers.exists(server.id)) await closeComputer(server.id)
       return computers.list(self)
     }

@@ -146,6 +146,25 @@ it('pairs, proves the token works, connects, and replaces a host paired again', 
   expect(streams.has('http://10.0.0.2:7788')).toBe(true)
 })
 
+it('pairs at a link’s backup address when its own cannot be reached, and saves the host there', async () => {
+  const { deps, registry } = setup()
+  const noRoute = Object.assign(new Error('connect EHOSTUNREACH 192.168.1.4:7788'), { code: 'EHOSTUNREACH' })
+  vi.mocked(deps.pair).mockRejectedValueOnce(noRoute)
+  const paired = await registry.pair('192.168.1.4:7788', 'ABCDE-FGHJK', 'Studio', ['https://ramu-abc.akalstack.com'])
+  expect(vi.mocked(deps.pair).mock.calls.map(([url]) => url)).toEqual([
+    'http://192.168.1.4:7788',
+    'https://ramu-abc.akalstack.com',
+  ])
+  expect(paired.url).toBe('https://ramu-abc.akalstack.com')
+  // A refused code is the host's answer: the backup is never sent it.
+  vi.mocked(deps.pair).mockClear()
+  vi.mocked(deps.pair).mockRejectedValueOnce(new Error('The pairing code is wrong, already used or expired'))
+  await expect(
+    registry.pair('192.168.1.4:7788', 'ABCDE-FGHJK', 'Studio', ['https://ramu-abc.akalstack.com']),
+  ).rejects.toThrow(/wrong/)
+  expect(deps.pair).toHaveBeenCalledTimes(1)
+})
+
 it('does not save a host whose token fails the check', async () => {
   const { servers, deps, registry } = setup()
   vi.mocked(deps.invoke).mockRejectedValueOnce(new Error('The server rejected the access token'))

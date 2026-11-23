@@ -52,6 +52,7 @@ import { useStagedValue } from './stagedChanges'
 import { PairingCode } from './PairingCode'
 import { defaultPairUrl, pairingNetwork, pairingUrls, pairQrText } from './pairingOffer'
 import { usePairingOffer } from './usePairingOffer'
+import { AccountDevicesRow, AccountHostsList } from './AccountAccess'
 import { agentReachable, agentsOnEverywhere } from './agentHostLinks'
 import {
   DefaultPermissions,
@@ -524,6 +525,7 @@ function ThisComputer() {
           {t('Pair a device…')}
         </Button>
       </SettingsRow>
+      <AccountDevicesRow />
       <PermissionRequests status={status} invoke={changePermission} />
       {status.devices.map((device) => (
         <PairedDeviceRow
@@ -1029,6 +1031,7 @@ function Computers({ state }: { state: ComputerList }) {
           </SettingsEmpty>
         )}
       </div>
+      <AccountHostsList computers={state.computers} />
       <AgentHosts />
       {reachable.length > 1 && (
         <div className="mt-2">
@@ -1183,6 +1186,7 @@ function AddHostDialog({ link, repair, onClose }: { link?: string; repair?: Comp
   const [busy, setBusy] = useState(false)
   const [text, setText] = useState(link ?? repair?.url ?? '')
   const [address, setAddress] = useState(repair?.url ?? ''),
+    [alternates, setAlternates] = useState<string[]>([]),
     [code, setCode] = useState(''),
     [name, setName] = useState(repair?.name ?? '')
   const [focusCode, setFocusCode] = useState(!!repair)
@@ -1202,10 +1206,12 @@ function AddHostDialog({ link, repair, onClose }: { link?: string; repair?: Comp
   const read = (value: string) => {
     setText(value)
     setError(null)
+    setAlternates([])
     if (!value.trim() || isSshTarget(value, aliases)) return setAddress('')
     try {
       const parsed = parsePairInput(value)
       setAddress(parsed.url)
+      setAlternates(parsed.alternates ?? [])
       if (parsed.code) setCode(parsed.code)
       if (parsed.name) setName((current) => current || parsed.name!)
     } catch (reason) {
@@ -1246,7 +1252,7 @@ function AddHostDialog({ link, repair, onClose }: { link?: string; repair?: Comp
     if (busy) return
     if (ssh) void run(() => invoke('computers.pairSsh', text.trim(), name.trim() || undefined))
     else if (address && code.trim())
-      void run(() => invoke('computers.pair', address, code.trim(), name.trim() || undefined))
+      void run(() => invoke('computers.pair', address, code.trim(), name.trim() || undefined, alternates))
   }
   const tabs: { mode: AddMode; label: string; icon: ReactNode }[] = [
     { mode: 'nearby', label: t('Nearby'), icon: <Radar size={14} /> },

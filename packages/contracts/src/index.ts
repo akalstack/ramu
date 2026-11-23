@@ -172,17 +172,74 @@ export interface PairInput {
   code?: string
   expiresAt?: number
   name?: string
+  /** Other addresses of the same host to try when `url` cannot be reached, in order. Only https ones are kept. */
+  alternates?: string[]
 }
 
-const pairParams = (offer: { url: string; code: string; expiresAt?: number; name?: string }) => {
+/** What a pairing link carries. */
+export interface PairOffer {
+  url: string
+  code: string
+  expiresAt?: number
+  name?: string
+  alternates?: string[]
+}
+
+/** The most backup addresses a link carries. A host has one tunnel at a time; the rest is headroom. */
+const MAX_ALTERNATES = 3
+
+const pairParams = (offer: PairOffer) => {
   const params = new URLSearchParams({ url: offer.url, code: offer.code })
   if (offer.expiresAt) params.set('exp', String(offer.expiresAt))
   if (offer.name) params.set('name', offer.name)
+  // One comma-separated value: an origin never holds a comma, and a link opened from outside the app keeps one value
+  // per name.
+  const alternates = (offer.alternates ?? []).filter((url) => url !== offer.url).slice(0, MAX_ALTERNATES)
+  if (alternates.length) params.set('alt', alternates.join(','))
   return params
 }
 
+/**
+ * The backup addresses a link names: https only, since the code is sent to each one tried and only a certificate
+ * proves an address is the host's own (a private address can be anyone's on another network). Bad entries are dropped.
+ */
+function alternatesFrom(value: string | null, primary: string): string[] {
+  const found: string[] = []
+  for (const entry of (value ?? '').split(',')) {
+    try {
+      const url = parseRemoteUrl(entry)
+      if (url.startsWith('https://') && url !== primary && !found.includes(url)) found.push(url)
+    } catch {
+      /* not an address */
+    }
+    if (found.length === MAX_ALTERNATES) break
+  }
+  return found
+}
+
+/**
+ * Pairs at the link's address, then at each backup in turn, moving on only when an address cannot be reached: an
+ * answer, even a refused code, comes from the host and ends it there. Resolves with the address that worked.
+ */
+export async function pairAtFirstReachable<T>(
+  urls: readonly string[],
+  attempt: (url: string) => Promise<T>,
+  unreachable: (error: unknown) => boolean,
+): Promise<{ url: string; result: T }> {
+  let failure: unknown = new Error('Enter the address')
+  for (const url of urls) {
+    try {
+      return { url, result: await attempt(url) }
+    } catch (error) {
+      failure = error
+      if (!unreachable(error)) break
+    }
+  }
+  throw failure
+}
+
 /** `ramu://pair?url=<origin>&code=<code>&exp=<ms>`. Like the QR payload it carries no device token. */
-export function encodePairLink(offer: { url: string; code: string; expiresAt?: number; name?: string }): string {
+export function encodePairLink(offer: PairOffer): string {
   return `ramu://pair?${pairParams(offer)}`
 }
 
@@ -193,7 +250,7 @@ export const PAIR_PAGE = 'https://getramu.dev/pair'
  * A pairing QR any camera can read: getramu.dev/pair with the offer after `#`, which a browser never sends to the site,
  * so the host's address and code stay between the two devices. The app reads the same link when it scans it.
  */
-export function encodePairWebLink(offer: { url: string; code: string; expiresAt?: number; name?: string }): string {
+export function encodePairWebLink(offer: PairOffer): string {
   return `${PAIR_PAGE}#${pairParams(offer)}`
 }
 
@@ -206,11 +263,14 @@ function offerFromParams(params: URLSearchParams, now: number): PairInput {
   if (code && !PAIR_CODE.test(code)) throw new Error('This pairing link has an invalid code')
   const expiresAt = Number(params.get('exp')) || undefined
   if (expiresAt && expiresAt <= now) throw new Error('This pairing link has expired. Create a new one on the host.')
+  const primary = parseRemoteUrl(url)
+  const alternates = alternatesFrom(params.get('alt'), primary)
   return {
-    url: parseRemoteUrl(url),
+    url: primary,
     ...(code ? { code } : {}),
     ...(expiresAt ? { expiresAt } : {}),
     ...(params.get('name') ? { name: params.get('name')!.slice(0, 60) } : {}),
+    ...(alternates.length ? { alternates } : {}),
   }
 }
 

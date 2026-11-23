@@ -28,7 +28,14 @@ it('recognises loopback hosts', () => {
   for (const host of ['0.0.0.0', '192.168.1.5', 'example.com', '::']) expect(isLoopbackHost(host)).toBe(false)
 })
 
-import { PAIR_PAGE, encodePairLink, encodePairWebLink, parsePairInput, parseSshTarget } from '../src'
+import {
+  PAIR_PAGE,
+  encodePairLink,
+  encodePairWebLink,
+  pairAtFirstReachable,
+  parsePairInput,
+  parseSshTarget,
+} from '../src'
 describe('pairing links', () => {
   it('puts the offer after # on getramu.dev/pair, so any camera opens it and the site never sees it', () => {
     const soon = Date.now() + 60_000
@@ -53,6 +60,44 @@ describe('pairing links', () => {
     const link = encodePairLink({ url: 'http://100.64.0.7:7788', code: 'K7QM2-X9RTD', expiresAt: soon })
     expect(link.startsWith('ramu://pair?')).toBe(true)
     expect(parsePairInput(link)).toMatchObject({ url: 'http://100.64.0.7:7788', code: 'K7QM2-X9RTD', expiresAt: soon })
+  })
+  it('carries the host’s https backup addresses, and drops any other kind a link names', () => {
+    const link = encodePairWebLink({
+      url: 'http://192.168.1.20:7788',
+      code: 'K7QM2-X9RTD',
+      alternates: ['https://ramu-abc.akalstack.com', 'http://192.168.1.20:7788'],
+    })
+    expect(parsePairInput(link)).toMatchObject({
+      url: 'http://192.168.1.20:7788',
+      alternates: ['https://ramu-abc.akalstack.com'],
+    })
+    // A private address can be anyone's on another network, so the code is never sent to one a link adds.
+    expect(
+      parsePairInput(
+        'ramu://pair?url=http://h:1&code=K7QM2-X9RTD&alt=http://10.0.0.5:7788,https://a.example.com,nonsense,https://a.example.com',
+      ),
+    ).toEqual({ url: 'http://h:1', code: 'K7QM2-X9RTD', alternates: ['https://a.example.com'] })
+    expect(parsePairInput(encodePairLink({ url: 'http://h:1', code: 'K7QM2-X9RTD' }))).not.toHaveProperty('alternates')
+  })
+  it('pairs at a backup address only when the one before it cannot be reached', async () => {
+    const tried: string[] = []
+    const unreachable = (error: unknown) => (error as Error).message === 'unreachable'
+    const answers: Record<string, () => Promise<string>> = {
+      'http://a': () => Promise.reject(new Error('unreachable')),
+      'https://b': () => Promise.resolve('token'),
+      'https://c': () => Promise.resolve('other'),
+    }
+    const attempt = (url: string) => (tried.push(url), answers[url]!())
+    expect(await pairAtFirstReachable(['http://a', 'https://b', 'https://c'], attempt, unreachable)).toEqual({
+      url: 'https://b',
+      result: 'token',
+    })
+    expect(tried).toEqual(['http://a', 'https://b'])
+    // A refused code is the host's answer: the next address is never sent it.
+    tried.length = 0
+    answers['http://a'] = () => Promise.reject(new Error('The pairing code is wrong'))
+    await expect(pairAtFirstReachable(['http://a', 'https://b'], attempt, unreachable)).rejects.toThrow(/wrong/)
+    expect(tried).toEqual(['http://a'])
   })
   it('rejects expired links, bad codes and other schemes', () => {
     expect(() =>

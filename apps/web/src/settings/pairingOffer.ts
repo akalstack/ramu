@@ -8,10 +8,25 @@ const LOOPBACK = /^(127\.|::1$|localhost$)/
 
 /**
  * What a pairing QR code holds: a getramu.dev link any phone camera opens. It opens Ramu with the code filled in, or
- * the App Store or Google Play first; the address and code stay after `#`, so the site never receives them.
+ * the App Store or Google Play first; the address and code stay after `#`, so the site never receives them. The host's
+ * tunnel address rides along as a backup the phone tries when `url` does not answer (a local address scanned away from
+ * home), and only that: a tunnel's https address is the host's own anywhere, while a local one can be anyone's.
  */
-export function pairQrText(offer: Pick<PairingOffer, 'code' | 'expiresAt'>, url: string, name?: string): string {
-  return encodePairWebLink({ url, code: offer.code, expiresAt: offer.expiresAt, ...(name ? { name } : {}) })
+export function pairQrText(
+  offer: Pick<PairingOffer, 'code' | 'expiresAt'> & Partial<Pick<PairingOffer, 'urls'>>,
+  url: string,
+  name?: string,
+): string {
+  const alternates = (offer.urls ?? [])
+    .filter((entry) => entry.interface === 'tunnel' && entry.url.startsWith('https://') && entry.url !== url)
+    .map((entry) => entry.url)
+  return encodePairWebLink({
+    url,
+    code: offer.code,
+    expiresAt: offer.expiresAt,
+    ...(name ? { name } : {}),
+    ...(alternates.length ? { alternates } : {}),
+  })
 }
 
 /**

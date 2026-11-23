@@ -55,6 +55,9 @@ export function pairProblem(error: unknown): PairProblem {
   return { kind: 'other', detail: message }
 }
 
+/** Whether a pairing failed before reaching the host, so a link's backup address is worth trying next. */
+export const unreachable = (error: unknown) => pairProblem(error).kind === 'unreachable'
+
 /** The name a newly paired host shows before it reports its own: the name the link carried, or its address. */
 export function pairedName(offer: { url: string; name?: string }): string {
   if (offer.name) return offer.name
