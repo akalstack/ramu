@@ -1,6 +1,6 @@
 {
   "name": "ramu-monorepo",
-  "version": "0.1.0-alpha.19",
+  "version": "0.1.0-alpha.20",
   "private": true,
   "description": "An open-source workspace for coding with agents, on desktop and mobile.",
   "license": "MIT",
