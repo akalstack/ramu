@@ -36,8 +36,11 @@ interface Envelope<T> {
 export class CloudflareError extends Error {}
 
 export function cloudflare(config: CloudflareConfig): Cloudflare {
+  // Called on its own, never as `config.fetch(...)`: the Workers runtime's fetch throws "Illegal invocation" when it is
+  // called with any other object as `this`.
+  const send = config.fetch
   const call = async <T>(method: string, path: string, body?: unknown): Promise<Envelope<T>> => {
-    const response = await config.fetch(`${API}${path}`, {
+    const response = await send(`${API}${path}`, {
       method,
       headers: { Authorization: `Bearer ${config.token}`, 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -111,7 +114,7 @@ export function cloudflare(config: CloudflareConfig): Cloudflare {
           }
         } }
       }`
-      const response = await config.fetch(`${API}/graphql`, {
+      const response = await send(`${API}/graphql`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${config.token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -17,6 +17,9 @@ function fakeService() {
   let next = 1
   let me: Record<string, unknown> = { id: 'u1', name: 'Ada', email: 'ada@example.com', image: null }
   let linked: unknown[] | null = []
+  // The device code sign-in: approved in the browser, and how many profile reads fail after it.
+  let approved = false
+  let meFailures = 0
   // The person's settings gist on GitHub, once made.
   let gist: { id: string; files: Record<string, string>; updatedAt: string } | null = null
   const fetcher = vi.fn<typeof fetch>(async (input, init) => {
@@ -38,6 +41,19 @@ function fakeService() {
           gist.files[name] = entry.content
         return json({ id: gist.id })
       }
+    }
+    if (path === '/api/auth/device/code')
+      return json({
+        device_code: 'dev',
+        user_code: 'ABCD-EFGH',
+        verification_uri: 'https://account.test/device',
+        expires_in: 600,
+      })
+    if (path === '/api/auth/device/token')
+      return approved ? json({ access_token: 'fresh-session' }) : json({ error: 'authorization_pending' }, 400)
+    if (path === '/api/me' && meFailures > 0) {
+      meFailures--
+      return json({ error: 'busy' }, 503)
     }
     if (path === '/api/me') return json(me)
     if (path === '/api/auth/list-accounts') return linked ? json(linked) : json({ error: 'unavailable' }, 503)
@@ -105,6 +121,10 @@ function fakeService() {
     relayed,
     replies,
     gist: () => gist,
+    approve: (failingProfileReads = 0) => {
+      approved = true
+      meFailures = failingProfileReads
+    },
     setProfile: (user: Record<string, unknown>, accounts: unknown[] | null) => {
       me = user
       linked = accounts
@@ -352,5 +372,38 @@ describe('Your hosts on this host', () => {
       { id: 'm1', reply: { status: 200, body: { ok: true } } },
       { id: 'm2', reply: { status: 403, body: { error: 'This host is listed under another Ramu account.' } } },
     ])
+  })
+})
+
+describe('signing in with a code', () => {
+  it('finishes once approved, even when the first profile reads fail', async () => {
+    vi.useFakeTimers()
+    try {
+      const service = fakeService()
+      const { account } = host(service)
+      const started = await account.signIn()
+      expect((await account.status()).pendingSignIn).toEqual(started)
+      service.approve(2)
+      await vi.advanceTimersByTimeAsync(5_000 + 1_000 + 2_000)
+      expect(await account.status()).toMatchObject({ signedIn: true, pendingSignIn: null, user: { name: 'Ada' } })
+      expect(await account.bearer()).toBe('fresh-session')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('goes back to Sign in when the account service never says who signed in', async () => {
+    vi.useFakeTimers()
+    try {
+      const service = fakeService()
+      const { account } = host(service)
+      await account.signIn()
+      service.approve(10)
+      await vi.advanceTimersByTimeAsync(5_000 + 1_000 + 2_000)
+      expect(await account.status()).toMatchObject({ signedIn: false, pendingSignIn: null })
+      expect(await account.bearer()).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

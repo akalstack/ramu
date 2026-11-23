@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { LINK_LIMITS, LINK_URL, type LinkReply } from '@ramu/shared/ramuLink'
 import { HostCredentialStore } from '../src/credentials/store'
-import { LinkClient, parseRelay } from '../src/remote/ramuLink'
+import { LinkClient, RETRY_MS, parseRelay } from '../src/remote/ramuLink'
 
 afterEach(() => vi.useRealTimers())
 
@@ -25,7 +25,11 @@ function relay(replies: LinkReply[]) {
   return { calls, fetcher }
 }
 
-function client(fetcher: typeof fetch, bearer: string | null = 'session-token') {
+function client(
+  fetcher: typeof fetch,
+  bearer: string | null | (() => string | null) = 'session-token',
+  wanted?: () => boolean,
+) {
   const state = new Map<string, unknown>()
   const vault = new Map<string, string>()
   const changed = vi.fn()
@@ -33,7 +37,7 @@ function client(fetcher: typeof fetch, bearer: string | null = 'session-token') 
     new LinkClient({
       hostId: 'host-1',
       hostName: () => 'Studio Mac',
-      bearer: async () => bearer,
+      bearer: async () => (typeof bearer === 'function' ? bearer() : bearer),
       getState: (key, fallback) => (state.has(key) ? (structuredClone(state.get(key)) as never) : fallback),
       setState: (key, value) => void state.set(key, structuredClone(value)),
       changed,
@@ -43,6 +47,7 @@ function client(fetcher: typeof fetch, bearer: string | null = 'session-token') 
         deletePassword: async () => vault.delete(key),
       })),
       fetch: fetcher,
+      wanted,
     })
   return { link: make(), make, changed, vault }
 }
@@ -108,6 +113,56 @@ it('says why there is no link: signed out, suspended, or the account’s slot is
   const signedOut = client(relay([]).fetcher, null).link
   await signedOut.lease(LINK_URL, 'http://127.0.0.1:7788')
   expect(signedOut.status().state).toBe('signed-out')
+})
+
+it('asks again after the relay fails, waiting longer each time, and only while the link is still in use', async () => {
+  vi.useFakeTimers()
+  const { calls, fetcher } = relay([
+    { state: 'unavailable', reason: 'relay-error' },
+    { state: 'unavailable', reason: 'relay-error' },
+    { state: 'active', hostname: 'ramu-back.akalstack.com', token: 't', releasesAt: 5, usage },
+  ])
+  let inUse = true
+  const { link } = client(fetcher, 'session-token', () => inUse)
+  const leased = vi.fn()
+  link.onLease = leased
+  expect(await link.lease(LINK_URL, 'http://127.0.0.1:7788')).toBeNull()
+  expect(link.status()).toMatchObject({ state: 'unavailable', reason: 'relay-error' })
+  await vi.advanceTimersByTimeAsync(RETRY_MS)
+  expect(calls.filter((call) => call.path === '/v1/links')).toHaveLength(2)
+  // The second failure waits twice as long.
+  await vi.advanceTimersByTimeAsync(RETRY_MS)
+  expect(calls.filter((call) => call.path === '/v1/links')).toHaveLength(2)
+  await vi.advanceTimersByTimeAsync(RETRY_MS)
+  expect(leased).toHaveBeenCalledWith({ token: 't', url: 'https://ramu-back.akalstack.com' })
+
+  const idle = relay([{ state: 'unavailable', reason: 'relay-error' }])
+  const unused = client(idle.fetcher, 'session-token', () => inUse).link
+  await unused.lease(LINK_URL, 'http://127.0.0.1:7788')
+  inUse = false
+  await vi.advanceTimersByTimeAsync(RETRY_MS * 4)
+  expect(idle.calls.filter((call) => call.path === '/v1/links')).toHaveLength(1)
+})
+
+it('asks the relay as soon as this host signs in, instead of waiting for the next start', async () => {
+  let bearer: string | null = null
+  const { calls, fetcher } = relay([
+    { state: 'active', hostname: 'ramu-me.akalstack.com', token: 't', releasesAt: 5, usage },
+  ])
+  const { link } = client(fetcher, () => bearer)
+  const leased = vi.fn()
+  link.onLease = leased
+  await link.lease(LINK_URL, 'http://127.0.0.1:7788')
+  expect(link.status().state).toBe('signed-out')
+  link.accountChanged()
+  await Promise.resolve()
+  expect(calls).toHaveLength(0)
+  bearer = 'session-token'
+  link.accountChanged()
+  link.accountChanged()
+  await vi.waitFor(() => expect(leased).toHaveBeenCalledWith({ token: 't', url: 'https://ramu-me.akalstack.com' }))
+  expect(calls.filter((call) => call.path === '/v1/links')).toHaveLength(1)
+  expect(link.status().state).toBe('active')
 })
 
 it('lets five devices use the link at once, reports use at most hourly, and releases the slot', async () => {

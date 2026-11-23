@@ -2,6 +2,7 @@ import { LINK_LIMITS, linkUsageLevel, recommendRoutes, type RouteKind, type Rout
 import type { NetworkStatus } from '@ramu/shared/types'
 import { formatSize } from '@ramu/shared/formatSize'
 import { Button } from '@/components/desktop-button'
+import { Badge } from '@/components/ui/badge'
 import { LocalInlineAction } from '@/components/inline-action'
 import { CopyButton } from './CopyAddressButton'
 import { ramu } from '../ipc'
@@ -25,6 +26,11 @@ const ROUTE_WHY: Record<RouteOption['reason'], string> = {
   temporary: 'Works now. The address changes each time Ramu starts.',
   installed: 'Installed here, with your ngrok account.',
   'free-to-install': 'Free. Install it on this computer and your devices.',
+}
+/** The relay's reasons in words; anything else (a network error) is shown as the host reported it. */
+const LINK_REASON: Record<string, string> = {
+  'relay-error': 'the relay could not set up the tunnel',
+  'account-unreachable': 'the Ramu account did not answer',
 }
 export const OWN_RELAY_GUIDE = 'https://github.com/akalstack/ramu/tree/main/apps/link#run-your-own'
 const TAILSCALE_DOWNLOAD = 'https://tailscale.com/download'
@@ -55,9 +61,13 @@ function OtherRoutes({ status, onChoose }: { status: NetworkStatus; onChoose: (r
           className="flex items-center justify-between gap-3 rounded-(--radius-m) bg-fill px-3 py-2"
         >
           <div className="min-w-0">
-            <div className="text-body font-medium">
+            <div className="flex flex-wrap items-center gap-2 text-body font-medium">
               {t(ROUTE_TITLE[option.kind])}
-              {option.recommended ? <span className="ml-2 text-caption text-accent">{t('Recommended')}</span> : null}
+              {option.recommended ? (
+                <Badge variant="secondary" className="font-normal">
+                  {t('Recommended')}
+                </Badge>
+              ) : null}
             </div>
             <div className="muted text-muted-foreground small text-caption">{t(ROUTE_WHY[option.reason])}</div>
           </div>
@@ -178,17 +188,18 @@ export function RamuLinkState({
   // Without cloudflared the relay was never asked, so there is nothing to say about the link yet; the line about
   // installing it stands alone.
   if (link.state === 'unavailable' && (tunnel.state === 'missing' || !tunnel.tools.cloudflared)) return null
-  if (link.state === 'unavailable')
+  if (link.state === 'unavailable') {
+    const known = link.reason ? LINK_REASON[link.reason] : undefined
+    const reason = known ? t(known) : link.reason
     return (
       <>
         <p className={`${line} text-warn`} role="status">
-          {t('Ramu Link can’t be reached right now{0}. Ramu will ask again.', {
-            0: link.reason ? `: ${link.reason}` : '',
-          })}
+          {t('Ramu Link can’t be reached right now{0}. Ramu will ask again.', { 0: reason ? `: ${reason}` : '' })}
         </p>
         <OtherRoutes status={status} onChoose={onChoose} />
       </>
     )
+  }
   const usage = link.usage?.bytes ?? 0
   const level = linkUsageLevel(usage)
   return (

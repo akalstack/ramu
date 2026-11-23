@@ -18,6 +18,9 @@ const REQUEST_MS = 15_000
 const POOL_MS = 10 * 60_000
 /** A device reaching the host through the link is reported at most this often. */
 const SEEN_MS = 60 * 60_000
+/** After the relay could not be reached or failed, it is asked again after this long, doubling up to the cap. */
+export const RETRY_MS = 30_000
+const RETRY_MAX_MS = 15 * 60_000
 
 interface Saved {
   relay: string
@@ -39,6 +42,8 @@ export interface LinkHost {
   setState(key: string, value: unknown): void
   /** The link's state changed: Settings and the tunnel follow. */
   changed(): void
+  /** Whether this host still runs Ramu Link; a later check asks the relay only while it does, so it never takes a slot. */
+  wanted?(): boolean
   credentials?: HostCredentialStore
   fetch?: typeof fetch
 }
@@ -78,6 +83,12 @@ export class LinkClient {
   private readonly fetcher: typeof fetch
   private current: LinkStatus
   private waitTimer?: ReturnType<typeof setTimeout>
+  private retryMs = RETRY_MS
+  /** What the tunnel last asked for, so a later check (a retry, a sign-in) asks for the same. */
+  private asked: { relay: string; target: string } | null = null
+  private rechecking = false
+  /** A sign-in that arrived during a check, which may have read the session before it existed. */
+  private recheckAgain = false
   private pooled: { relay: string; at: number; pool: LinkPool | null } | null = null
   private lastSeen = 0
   private connected = new Set<string>()
@@ -156,6 +167,7 @@ export class LinkClient {
   }
 
   private async ask(relay: string, target: string): Promise<LinkLease | null> {
+    this.asked = { relay, target }
     const url = new URL(target)
     const request: LinkRequest = {
       hostId: this.host.hostId,
@@ -171,13 +183,14 @@ export class LinkClient {
         this.set({ ...blank(relay), state: 'signed-out' })
         return null
       }
-      // Unreachable relay: a kept token goes on working; the next start asks again.
+      // Unreachable relay: a kept token goes on working, and the relay is asked again later.
       this.set({
         ...this.current,
         relay,
         state: this.current.state === 'active' ? 'active' : 'unavailable',
         reason: errorText(error),
       })
+      if (this.current.state === 'unavailable') this.later(relay, target)
       return null
     }
     return this.take(relay, target, reply)
@@ -186,6 +199,7 @@ export class LinkClient {
   private async take(relay: string, target: string, reply: LinkReply): Promise<LinkLease | null> {
     const base = { ...blank(relay), hostname: this.current.hostname }
     if (reply.state === 'active') {
+      this.retryMs = RETRY_MS
       await this.token.save({ token: reply.token, hostname: reply.hostname })
       this.host.setState(STATE_KEY, { relay, hostname: reply.hostname, releasesAt: reply.releasesAt } satisfies Saved)
       const changed = this.current.hostname !== reply.hostname || this.current.state !== 'active'
@@ -210,16 +224,53 @@ export class LinkClient {
     else if (reply.state === 'taken') this.set({ ...base, state: 'taken', takenBy: reply.hostName })
     // An expired account session: signing in again here fixes it.
     else if (reply.reason === 'signed-out') this.set({ ...base, state: 'signed-out' })
-    else this.set({ ...base, state: 'unavailable', reason: reply.reason })
+    else {
+      this.set({ ...base, state: 'unavailable', reason: reply.reason })
+      this.later(relay, target)
+    }
     return null
+  }
+
+  /** Asks again after the current back-off, doubling it for the next failure. */
+  private later(relay: string, target: string) {
+    clearTimeout(this.waitTimer)
+    this.waitTimer = setTimeout(() => void this.retry(relay, target), this.retryMs)
+    this.waitTimer.unref?.()
+    this.retryMs = Math.min(this.retryMs * 2, RETRY_MAX_MS)
+  }
+
+  /**
+   * The Ramu account on this host changed. A link waiting on a sign-in asks the relay straight away, rather than on the
+   * next start, so Settings stops asking to sign in once the person has.
+   */
+  accountChanged(): void {
+    if (this.rechecking) {
+      this.recheckAgain = true
+      return
+    }
+    if (this.current.state !== 'signed-out' || !this.asked) return
+    clearTimeout(this.waitTimer)
+    this.retryMs = RETRY_MS
+    void this.retry(this.asked.relay, this.asked.target)
   }
 
   /** Set by the host: a slot found on a later check starts the tunnel, a changed one restarts it, null stops it. */
   onLease?: (lease: LinkLease | null) => void
 
   private async retry(relay: string, target: string) {
-    const lease = await this.ask(relay, target).catch(() => null)
-    if (lease) this.onLease?.(lease)
+    if (this.asked?.relay !== relay || this.asked.target !== target || this.rechecking) return
+    if (this.host.wanted && !this.host.wanted()) return
+    this.rechecking = true
+    try {
+      const lease = await this.ask(relay, target).catch(() => null)
+      if (lease) this.onLease?.(lease)
+    } finally {
+      this.rechecking = false
+    }
+    if (this.recheckAgain) {
+      this.recheckAgain = false
+      this.accountChanged()
+    }
   }
 
   /** The host is stopping: the relay deletes the tunnel and keeps the address for next time. */
@@ -232,6 +283,7 @@ export class LinkClient {
   /** Gives the slot back, or leaves the waitlist. */
   async release(): Promise<void> {
     clearTimeout(this.waitTimer)
+    this.asked = null
     const relay = this.current.relay
     await this.call(relay, 'DELETE', `/v1/links/${this.host.hostId}`).catch(() => {})
     await this.token.remove().catch(() => {})

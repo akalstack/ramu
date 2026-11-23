@@ -8047,6 +8047,8 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Skill dari folder milik tiap agent, dan cara membaginya ke agent lain, ada di Pengaturan → Pengaturan agent.',
   'MCP servers from each agent’s own config, and sharing them with your other agents, are in Settings → Agent setup.':
     'Server MCP dari konfigurasi milik tiap agent, dan cara membaginya ke agent lain, ada di Pengaturan → Pengaturan agent.',
+  'the relay could not set up the tunnel': 'relay tidak bisa menyiapkan tunnel',
+  'the Ramu account did not answer': 'akun Ramu tidak menjawab',
   'Terminal command': 'Perintah terminal',
   'Not available on this computer': 'Tidak tersedia di komputer ini',
   'Use Ramu from your terminal': 'Pakai Ramu dari terminal',

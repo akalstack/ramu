@@ -254,9 +254,20 @@ export class AccountService {
       const body = (await response?.json().catch(() => ({}))) as { access_token?: string; error?: string }
       if (body?.access_token) {
         await this.session.save({ token: body.access_token })
-        const profile = await this.profile()
+        // The code is spent once approved, so a failed profile read is tried again rather than leaving the sign-in
+        // showing its code with nothing left to wait for.
+        let profile: Awaited<ReturnType<AccountService['profile']>> | null = null
+        for (let attempt = 0; attempt < 3 && !profile; attempt++) {
+          if (attempt) await new Promise((resolve) => setTimeout(resolve, attempt * 1000))
+          profile = await this.profile().catch(() => null)
+        }
         this.signing = null
-        this.save(profile)
+        if (profile) this.save(profile)
+        else {
+          // Back to Sign in, which starts over, rather than a session the host cannot name.
+          await this.session.remove().catch(() => {})
+          this.save({ user: null })
+        }
         return
       }
       if (body?.error && !['authorization_pending', 'slow_down'].includes(body.error)) break

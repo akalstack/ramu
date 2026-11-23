@@ -1320,7 +1320,10 @@ const account: AccountService = new AccountService({
       }
     }
   },
-  changed: () => send('account:changed', null),
+  changed: () => {
+    send('account:changed', null)
+    ramuLink?.accountChanged()
+  },
 })
 account.start()
 ramuLink = new LinkClient({
@@ -1330,6 +1333,7 @@ ramuLink = new LinkClient({
   getState: (key, fallback) => workspace.getAppState(key, fallback),
   setState: (key, value) => workspace.setAppState(key, value),
   changed: () => {},
+  wanted: () => network.enabled && network.tunnel?.kind === 'link',
 })
 ramuLink.onLease = (lease) => tunnels.relinked(lease)
 workspace.settingsStore?.subscribe(() => account.settingsChanged())
