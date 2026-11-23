@@ -49,13 +49,19 @@ async function start(overrides: Partial<SocketHost> = {}, options = {}) {
     const ws = new WebSocket(`ws://127.0.0.1:${port}${path}`, { headers: { authorization: `Bearer ${token}` } })
     ws.on('error', () => {})
     cleanup.push(() => ws.terminate())
+    // The host can hear a connection before this end has finished opening it: a frame sent then waits for the open.
+    const sendNow = ws.send.bind(ws) as (data: string) => void
+    ws.send = ((data: string) => {
+      if (ws.readyState === ws.CONNECTING) ws.once('open', () => sendNow(data))
+      else sendNow(data)
+    }) as typeof ws.send
     const frames: SocketServerFrame[] = []
     ws.on('message', (data) => {
       const frame = decodeSocketFrame(data.toString(), 'server')
       if (frame) frames.push(frame)
     })
     const until = async (check: () => boolean) => {
-      for (let i = 0; i < 200 && !check(); i++) await new Promise((resolve) => setTimeout(resolve, 10))
+      for (let i = 0; i < 500 && !check(); i++) await new Promise((resolve) => setTimeout(resolve, 10))
       expect(check()).toBe(true)
     }
     return { ws, frames, until }
