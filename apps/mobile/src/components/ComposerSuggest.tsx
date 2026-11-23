@@ -192,6 +192,13 @@ export function useComposerSuggest({
               insertion: '/aside ',
             },
             {
+              id: 'btw',
+              label: '/btw',
+              description: say('Same as /aside: ask without interrupting the thread'),
+              kind: 'Command' as const,
+              insertion: '/btw ',
+            },
+            {
               id: 'changes',
               label: '/changes',
               description: say('Open the thread’s changed files'),

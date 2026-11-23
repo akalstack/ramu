@@ -221,4 +221,4 @@ A thread is named from its first message, then once more after the first reply. 
 
 ## Asides and advice
 
-Select text in a thread to quote it or ask a read-only Aside. The optional advisor asks a second model for an opinion ([Providers](providers.md#advisor)).
+Select text in a thread to quote it or ask a read-only Aside, or type `/aside` (or `/btw`) and a question in the message box to ask about the whole thread; the agent keeps working and never sees it. The optional advisor asks a second model for an opinion ([Providers](providers.md#advisor)).

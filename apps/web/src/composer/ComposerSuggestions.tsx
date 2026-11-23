@@ -266,6 +266,13 @@ export function useComposerSuggestions(
               kind: 'Command' as const,
               insertion: '/aside ',
             },
+            {
+              id: 'btw',
+              label: '/btw',
+              description: t('Same as /aside: ask without interrupting the thread'),
+              kind: 'Command' as const,
+              insertion: '/btw ',
+            },
           ]
         : []),
     ]
