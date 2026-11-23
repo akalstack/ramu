@@ -119,6 +119,17 @@ describe('pull requests on thread rows', () => {
     expect(listPullRequests).toHaveBeenCalledTimes(2)
   })
 
+  it('answers the open and closed views and simultaneous asks from one read until it is stale', async () => {
+    await Promise.all([
+      index.list('/repo', 'repo', { includeClosed: false, force: false }),
+      index.list('/repo', 'repo', { includeClosed: true, force: false }),
+    ])
+    await index.list('/repo', 'repo', { includeClosed: true, force: false })
+    expect(listPullRequests).toHaveBeenCalledTimes(1)
+    await index.list('/repo', 'repo', { includeClosed: true, force: true })
+    expect(listPullRequests).toHaveBeenCalledTimes(2)
+  })
+
   it('shows replies ready when drafts wait for the person', async () => {
     await at(0)
     index.drafts = () => [

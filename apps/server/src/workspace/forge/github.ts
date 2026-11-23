@@ -62,12 +62,18 @@ export class ForgeError extends Error {
 }
 
 /** Packaged apps may start without the shell's PATH, so look in the usual install locations too. */
+let ghFound: { at: number; path: string | null } | null = null
+
+/** Where `gh` is. Every forge call asks, and scanning PATH is synchronous, so the answer is kept briefly. */
 function ghExecutable(): string | null {
-  return (
+  // A path found stays good while the file is there; a missing CLI is looked for again soon, as it may be installed.
+  if (ghFound && (ghFound.path ? existsSync(ghFound.path) : Date.now() - ghFound.at < 10_000)) return ghFound.path
+  const path =
     findExecutable('gh') ??
-    ['/opt/homebrew/bin/gh', '/usr/local/bin/gh', '/usr/bin/gh'].find((path) => existsSync(path)) ??
+    ['/opt/homebrew/bin/gh', '/usr/local/bin/gh', '/usr/bin/gh'].find((candidate) => existsSync(candidate)) ??
     null
-  )
+  ghFound = { at: Date.now(), path }
+  return path
 }
 
 /** Maps gh's error output to the reason forge features are unavailable, when it is one of those. */
@@ -85,28 +91,66 @@ let accountStore: ForgeAccountStore | null = null
 export function configureForgeAccounts(store: ForgeAccountStore | null): void {
   accountStore = store
   remoteCache.clear()
+  cliTokens.clear()
 }
 
-const remoteCache = new Map<string, { at: number; remote: ForgeRemote | null }>()
+const remoteCache = new Map<string, { at: number; none?: boolean; remote: Promise<ForgeRemote | null> }>()
+/**
+ * How long a checkout's remote is trusted. Every forge call asks for it (several Git commands), and the list and its
+ * background look come back every couple of minutes, so a shorter window would never be hit.
+ */
+const REMOTE_TTL = 5 * 60_000
 
 /** The forge repository behind a checkout's publish remote, from its URL alone. No network request. */
-export async function forgeRemoteOf(cwd: string): Promise<ForgeRemote | null> {
+export function forgeRemoteOf(cwd: string): Promise<ForgeRemote | null> {
   const cached = remoteCache.get(cwd)
-  if (cached && Date.now() - cached.at < 10_000) return cached.remote
-  let remote: ForgeRemote | null = null
-  try {
-    const { remote: name } = await publishRemote(cwd, await currentBranch(cwd))
-    if (name) remote = parseForgeRemote((await git(cwd, ['remote', 'get-url', name])).trim())
-  } catch {
-    remote = null
+  if (cached && Date.now() - cached.at < (cached.none ? 10_000 : REMOTE_TTL)) return cached.remote
+  const entry: { at: number; none?: boolean; remote: Promise<ForgeRemote | null> } = {
+    at: Date.now(),
+    remote: Promise.resolve(null),
   }
+  const remote = (async () => {
+    try {
+      const { remote: name } = await publishRemote(cwd, await currentBranch(cwd))
+      return name ? parseForgeRemote((await git(cwd, ['remote', 'get-url', name])).trim()) : null
+    } catch {
+      return null
+    }
+  })()
+  // No remote yet is asked again soon: publishing the repository adds one.
+  void remote.then((found) => {
+    if (!found) entry.none = true
+  })
+  entry.remote = remote
   if (remoteCache.size > 200) remoteCache.clear()
-  remoteCache.set(cwd, { at: Date.now(), remote })
+  remoteCache.set(cwd, entry)
   return remote
 }
 
+/** After a remote is added, changed or removed, or a branch starts tracking another one. */
+export function forgetForgeRemote(cwd: string): void {
+  remoteCache.delete(cwd)
+}
+
+const cliTokens = new Map<string, { at: number; token: Promise<string> }>()
+/** `gh auth token` is a process per forge call; a token read a moment ago is still the sign-in's token. */
+const CLI_TOKEN_TTL = 5 * 60_000
+
 /** The token of one `gh` sign-in, for a call that must use a specific CLI account. Never stored or returned. */
 function cliToken(executable: string, origin: string, login: string): Promise<string> {
+  const key = `${executable}\n${origin}\n${login}`
+  const cached = cliTokens.get(key)
+  if (cached && Date.now() - cached.at < CLI_TOKEN_TTL) return cached.token
+  const token = readCliToken(executable, origin, login)
+  cliTokens.set(key, { at: Date.now(), token })
+  // A failed read is asked again next time: the person may be signing in right now.
+  token.catch(() => {
+    if (cliTokens.get(key)?.token === token) cliTokens.delete(key)
+  })
+  return token
+}
+
+function readCliToken(executable: string, origin: string, login: string): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(
       executable,
@@ -251,20 +295,40 @@ function authStatusText(executable: string): Promise<string> {
   })
 }
 
+let lastAuthStatus: { at: number; executable: string; text: Promise<string> } | null = null
+
+/**
+ * `gh auth status` checks every sign-in with GitHub, which takes seconds. Callers asking at once share one check, and
+ * a caller that only needs the account names may take one up to `maxAge` old.
+ */
+function authStatus(executable: string, maxAge: number): Promise<string> {
+  const last = lastAuthStatus
+  if (last && last.executable === executable && Date.now() - last.at <= maxAge) return last.text
+  const text = authStatusText(executable)
+  lastAuthStatus = { at: Date.now(), executable, text }
+  return text
+}
+
 /** The GitHub sign-ins already on this host. Read-only: nothing is saved, changed or sent anywhere but to `gh`. */
 export async function forgeConnections(
-  options: { executable?: string | null; status?: (executable: string) => Promise<string>; now?: number } = {},
+  options: {
+    executable?: string | null
+    status?: (executable: string) => Promise<string>
+    now?: number
+    maxAge?: number
+  } = {},
 ): Promise<ForgeConnectionSummary> {
   const checkedAt = options.now ?? Date.now()
   const executable = options.executable === undefined ? ghExecutable() : options.executable
   if (!executable) return { cli: 'no-cli', accounts: [], saved: [], checkedAt }
-  const accounts = parseGhAuthStatus(await (options.status ?? authStatusText)(executable))
+  const status = options.status ?? ((path: string) => authStatus(path, options.maxAge ?? 0))
+  const accounts = parseGhAuthStatus(await status(executable))
   return { cli: accounts.length ? 'signed-in' : 'signed-out', accounts, saved: [], checkedAt }
 }
 
-/** Detected CLI sign-ins plus the credentials saved on this host. */
-export async function connectionSummary(canAdminister: boolean): Promise<ForgeConnectionSummary> {
-  const detected = await forgeConnections()
+/** Detected CLI sign-ins plus the credentials saved on this host; `maxAge` accepts a recent check of the CLI. */
+export async function connectionSummary(canAdminister: boolean, maxAge = 0): Promise<ForgeConnectionSummary> {
+  const detected = await forgeConnections({ maxAge })
   return accountStore ? { ...detected, ...accountStore.summary(canAdminister) } : detected
 }
 
@@ -850,6 +914,7 @@ export async function publishRepository(cwd: string, input: PublishRepositoryInp
       },
     ).catch(directFailure)
     await git(cwd, ['remote', 'add', 'origin', created.clone_url])
+    forgetForgeRemote(cwd)
     await git(cwd, ['push', '-u', 'origin', (await currentBranch(cwd))!])
     return
   }

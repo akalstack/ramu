@@ -38,7 +38,7 @@ import { FILES_PAGE, TIMELINE_LENGTH, boundedPatch, opening, registerForgeAdapte
 import { textPatch } from './textPatch'
 import { enrichOpen } from './enrich'
 import { checksRollup } from '@ramu/shared/pullRequests'
-import { ForgeError, pullRequestDraft } from './github'
+import { ForgeError, pullRequestDraft, forgetForgeRemote } from './github'
 import { azureCredential, type AzureCredential } from './azureCredentials'
 import { FAILED_STEPS, failedStepLog } from './buildLogs'
 
@@ -524,6 +524,7 @@ export async function publishRepository(cwd: string, input: PublishRepositoryInp
   const [clone] = parseRepositories([repo])
   if (!clone) throw new Error('Azure DevOps created the repository without an HTTPS address.')
   await git(cwd, ['remote', 'add', 'origin', clone.cloneUrl])
+  forgetForgeRemote(cwd)
   await git(cwd, ['push', '-u', 'origin', 'HEAD'])
 }
 

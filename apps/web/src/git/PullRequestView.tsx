@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { SERVICE_LINK_TARGET } from '@ramu/shared/browserLinks'
 import { keptPullRequestRead } from './keptPullRequests'
 import { PullRequestTimeline } from './PullRequestTimeline'
@@ -117,9 +117,15 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
   const outside = outsideRepository(view.repoId)
   const addProject = useAddProject(host.id)
 
+  // Set before a refetch that must skip the host's cache, such as after an action changed the pull request.
+  const forceNext = useRef(false)
   const list = useQuery({
     queryKey: ipcQueryKeyOn(host.id, 'forge.pullRequests', taskId, view.repoId, false),
-    queryFn: () => call('forge.pullRequests', taskId, view.repoId, false, false),
+    queryFn: () => {
+      const force = forceNext.current
+      forceNext.current = false
+      return call('forge.pullRequests', taskId, view.repoId, false, force)
+    },
     ...keptPullRequestRead(host.id, 'forge.pullRequests', taskId, view.repoId, false),
     refetchInterval: () => (document.hasFocus() ? 60_000 : false),
   })
@@ -164,8 +170,14 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
   )
 
   const refresh = async () => {
-    await call('forge.pullRequests', taskId, view.repoId, false, true).catch(() => {})
-    await Promise.all([list.refetch(), threads.refetch(), drafts.refetch(), closedList.refetch()])
+    forceNext.current = true
+    const fresh = await list.refetch()
+    // The host's list now carries the change; the closed view reads that same list.
+    await Promise.all([
+      threads.refetch(),
+      drafts.refetch(),
+      ...(fresh.data?.pullRequests.some((entry) => entry.url === view.url) ? [] : [closedList.refetch()]),
+    ])
     window.dispatchEvent(new Event('ramu:git-updated'))
   }
 

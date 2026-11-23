@@ -22,8 +22,20 @@ const STALE = 2 * 60_000
 /** A repository whose service is unavailable (signed out, no CLI) is asked again only this often. */
 const UNAVAILABLE_PAUSE = 10 * 60_000
 const RATE_LIMIT_PAUSE = 10 * 60_000
-/** Repositories read at once for the Pull requests page; each read is a CLI or API call. */
-const OVERVIEW_READS = 4
+/** Repositories read at once for the Pull requests page and the background look; each read is a CLI or API call. */
+const OVERVIEW_READS = 6
+
+/** Runs `work` on every item, `limit` at a time. */
+async function eachLimited<T>(items: T[], limit: number, work: (item: T, index: number) => Promise<void>) {
+  let next = 0
+  const worker = async () => {
+    while (next < items.length) {
+      const index = next++
+      await work(items[index]!, index)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+}
 
 /** A thread's pull request, kept with what was last seen of it so the row stays right between looks. */
 interface Link {
@@ -161,37 +173,34 @@ export class PullRequestIndex {
         .map((task) => [task.id, task.title]),
     )
     const results: RepositoryPullRequests[] = new Array(repositories.length)
-    let next = 0
-    const worker = async () => {
-      while (next < repositories.length) {
-        const position = next++
-        const { project, repo } = repositories[position]!
-        const base = { projectId: project.id, projectName: project.name, repoId: repo.id, repoName: repo.name }
-        try {
-          // The page refreshes on its own timer and on request; a list the background look read recently is current enough.
-          const list = await this.list(repo.root, repo.id, { ...options, maxAge: STALE })
-          const threads: Record<string, { taskId: string; title: string }[]> = {}
-          const local: RepositoryPullRequests['local'] = {}
-          for (const pr of list.pullRequests) {
-            const linked = this.threadsFor(pr.url).filter((taskId) => titles.has(taskId))
-            if (linked.length) threads[pr.url] = linked.map((taskId) => ({ taskId, title: titles.get(taskId)! }))
-            const state = this.localState(pr.url, linked)
-            if (state.draftsReady || state.agentWorking) local[pr.url] = state
-          }
-          results[position] = { ...base, ...list, threads, local }
-        } catch (error) {
-          results[position] = {
-            ...base,
-            availability: 'ready',
-            viewer: null,
-            pullRequests: [],
-            local: {},
-            error: error instanceof Error ? error.message : String(error),
-          }
+    // The search for pull requests elsewhere starts with the repositories, through the checkouts it used last time.
+    const involvedEarly = options.includeClosed || options.force ? null : this.involvedEarly()
+    await eachLimited(repositories, OVERVIEW_READS, async ({ project, repo }, position) => {
+      const base = { projectId: project.id, projectName: project.name, repoId: repo.id, repoName: repo.name }
+      try {
+        // The page refreshes on its own timer and on request; a list the background look read recently is current enough.
+        const list = await this.list(repo.root, repo.id, { ...options, maxAge: STALE })
+        const threads: Record<string, { taskId: string; title: string }[]> = {}
+        const local: RepositoryPullRequests['local'] = {}
+        for (const pr of list.pullRequests) {
+          const linked = this.threadsFor(pr.url).filter((taskId) => titles.has(taskId))
+          if (linked.length) threads[pr.url] = linked.map((taskId) => ({ taskId, title: titles.get(taskId)! }))
+          const state = this.localState(pr.url, linked)
+          if (state.draftsReady || state.agentWorking) local[pr.url] = state
+        }
+        results[position] = { ...base, ...list, threads, local }
+      } catch (error) {
+        results[position] = {
+          ...base,
+          availability: 'ready',
+          viewer: null,
+          pullRequests: [],
+          local: {},
+          error: error instanceof Error ? error.message : String(error),
         }
       }
-    }
-    await Promise.all(Array.from({ length: Math.min(OVERVIEW_READS, repositories.length) }, worker))
+    })
+    await involvedEarly
     const seen = new Set<string>()
     const listed = results.map((entry) => {
       const pullRequests = entry.pullRequests.filter((pr) => !seen.has(pr.url))
@@ -204,6 +213,34 @@ export class PullRequestIndex {
 
   /** The last search for pull requests involving each GitHub account, by the checkout it signed in through. */
   private involved = new Map<string, { at: number; rows: Awaited<ReturnType<typeof listInvolvedPullRequests>> }>()
+  /** Searches running now, so the phone and the desktop asking at once share one. */
+  private searching = new Map<
+    string,
+    Promise<{ at: number; rows: Awaited<ReturnType<typeof listInvolvedPullRequests>> }>
+  >()
+
+  private searchInvolved(root: string) {
+    const running = this.searching.get(root)
+    if (running) return running
+    const search = listInvolvedPullRequests(root)
+      .then((rows) => {
+        const entry = { at: Date.now(), rows }
+        this.involved.set(root, entry)
+        return entry
+      })
+      .finally(() => this.searching.delete(root))
+    this.searching.set(root, search)
+    return search
+  }
+
+  /** Refreshes stale searches through the checkouts that found results before; failures wait for the usual search. */
+  private involvedEarly(): Promise<unknown> {
+    return Promise.all(
+      [...this.involved]
+        .filter(([, entry]) => Date.now() - entry.at >= STALE)
+        .map(([root]) => this.searchInvolved(root).catch(() => null)),
+    )
+  }
   /**
    * The checkout whose account found each repository in no project, by lowercase `owner/repo`. Kept after the search
    * stops listing it, so a pull request open in full still reads once it is merged.
@@ -251,8 +288,7 @@ export class PullRequestIndex {
       let cached = this.involved.get(root)
       if (force || !cached || Date.now() - cached.at >= STALE) {
         try {
-          cached = { at: Date.now(), rows: await listInvolvedPullRequests(root) }
-          this.involved.set(root, cached)
+          cached = await this.searchInvolved(root)
         } catch (error) {
           console.error('Pull requests elsewhere:', error)
           continue
@@ -293,13 +329,9 @@ export class PullRequestIndex {
   ): Promise<PullRequestList> {
     const outside = outsideRepository(repoId)
     if (outside) return this.readOutside(repoId, outside, cwd, options)
-    if (options.includeClosed) {
-      const list = await listPullRequests(cwd, { includeClosed: true })
-      this.absorb(repoId, list, null)
-      return list
-    }
+    // Every read already carries recently merged and closed pull requests, so both views share one cache.
     const entry = this.entries.get(repoId)
-    if (!options.force && entry?.list && Date.now() - entry.at < (options.maxAge ?? 15_000)) return entry.list
+    if (!options.force && entry?.list && Date.now() - entry.at < (options.maxAge ?? STALE)) return entry.list
     return (await this.read(repoId, cwd)) ?? { availability: 'ready', viewer: null, pullRequests: [] }
   }
 
@@ -314,7 +346,7 @@ export class PullRequestIndex {
     options: { force: boolean; maxAge?: number },
   ): Promise<PullRequestList> {
     const entry = this.entries.get(repoId)
-    if (!options.force && entry?.list && Date.now() - entry.at < (options.maxAge ?? 15_000)) return entry.list
+    if (!options.force && entry?.list && Date.now() - entry.at < (options.maxAge ?? STALE)) return entry.list
     const list = await listRepositoryPullRequests(cwd, repository)
     this.entries.set(repoId, { at: Date.now(), list, checkedOut: null })
     return list
@@ -444,12 +476,14 @@ export class PullRequestIndex {
         // A thread whose project or worktree is gone has nothing to look up.
       }
     }
-    for (const [repoId, root] of repos) {
-      if (this.stopping) return
+    const due = [...repos].filter(([repoId]) => {
       const entry = this.entries.get(repoId)
-      if (entry?.pending || (entry && now - entry.at < STALE) || (entry?.retryAt && now < entry.retryAt)) continue
+      return !(entry?.pending || (entry && now - entry.at < STALE) || (entry?.retryAt && now < entry.retryAt))
+    })
+    await eachLimited(due, OVERVIEW_READS, async ([repoId, root]) => {
+      if (this.stopping) return
       await this.read(repoId, root).catch((error) => console.error('Pull request list:', error))
-    }
+    })
   }
 
   async stop(): Promise<void> {

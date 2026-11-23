@@ -24,6 +24,11 @@ export async function identityAccounts(
   ctx: Pick<HandlerContext, 'loadPreferences' | 'mediaAccounts' | 'getSharedMcp' | 'plugins' | 'hostBrowser'>,
 ): Promise<IdentityAccountOption[]> {
   const options: IdentityAccountOption[] = []
+  // The slow lookups run together. Account names barely change, so a recent `gh auth status` is good enough here.
+  const [forge, media] = await Promise.all([
+    connectionSummary(false, 2 * 60_000).catch(() => null),
+    ctx.mediaAccounts?.list(false).catch(() => []) ?? [],
+  ])
   const binaries = ctx.loadPreferences().providerBinaries
   for (const provider of AGENT_PROVIDERS) {
     const config = binaries[provider]
@@ -43,7 +48,6 @@ export async function identityAccounts(
         email: account.name && account.name.includes('@') ? account.name : null,
       })
   }
-  const forge = await connectionSummary(false).catch(() => null)
   for (const saved of forge?.saved ?? [])
     options.push({
       key: forgeAccountKey(saved.id)!,
@@ -58,7 +62,7 @@ export async function identityAccounts(
       label: `${account.host} · ${account.login} (gh)`,
       email: null,
     })
-  for (const account of (await ctx.mediaAccounts?.list(false).catch(() => [])) ?? [])
+  for (const account of media)
     if (account.connected)
       options.push({
         key: accountKey('media', account.service),

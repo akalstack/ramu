@@ -43,7 +43,7 @@ import { FILES_PAGE, TIMELINE_LENGTH, boundedPatch, opening, registerForgeAdapte
 import { enrichOpen } from './enrich'
 import { checksRollup } from '@ramu/shared/pullRequests'
 import { findExecutable } from '../../providers/providerBinaries'
-import { ForgeError, failureExcerpt, pullRequestDraft } from './github'
+import { ForgeError, failureExcerpt, pullRequestDraft, forgetForgeRemote } from './github'
 import { savedGitlabCredential } from './gitlabCredentials'
 import { brokenBranchPrompt } from './buildLogs'
 
@@ -616,6 +616,7 @@ export async function publishRepository(cwd: string, input: PublishRepositoryInp
     body: { name, path: name, visibility: input.visibility, ...(namespaceId ? { namespace_id: namespaceId } : {}) },
   })
   await git(cwd, ['remote', 'add', 'origin', project.http_url_to_repo])
+  forgetForgeRemote(cwd)
   await git(cwd, ['push', '-u', 'origin', 'HEAD'])
 }
 

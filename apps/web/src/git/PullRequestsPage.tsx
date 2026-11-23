@@ -88,17 +88,29 @@ export function showPullRequests(ws: ReturnType<typeof useWorkspace>, repo: Repo
 /** Every repository's pull requests on each listed host, refreshed while the window has focus. */
 function useHostsPullRequests(includeClosed: boolean, enabled = true) {
   const hosts = useScopedHosts()
+  // Hosts whose next read skips the host's cache: Refresh asks once, rather than forcing a read and then refetching.
+  const forced = useRef(new Set<string>())
   const results = useQueries({
     queries: hosts.map((host) => ({
       queryKey: ipcQueryKeyOn(host.id, 'forge.allPullRequests', includeClosed),
-      queryFn: () => queryInvokerFor(host.id)('forge.allPullRequests', includeClosed, false),
+      queryFn: () => {
+        const force = forced.current.delete(host.id)
+        return queryInvokerFor(host.id)('forge.allPullRequests', includeClosed, force)
+      },
       ...keptPullRequestRead(host.id, 'forge.allPullRequests', includeClosed),
       // An offline host is named on the page instead; it lists again once it is back.
       enabled: enabled && host.status === 'connected',
       refetchInterval: () => (document.hasFocus() ? 120_000 : false),
     })),
   })
-  return hosts.map((host, index) => ({ host, query: results[index]! }))
+  return hosts.map((host, index) => ({
+    host,
+    query: results[index]!,
+    refresh: () => {
+      forced.current.add(host.id)
+      return results[index]!.refetch()
+    },
+  }))
 }
 
 /** How many open pull requests wait on the person on the listed hosts, for the sidebar's badge. */
@@ -240,15 +252,7 @@ export function PullRequestsPage() {
   const refresh = async () => {
     setRefreshing(true)
     try {
-      await Promise.all(
-        lists
-          .filter(({ host }) => host.status === 'connected')
-          .map(({ host, query }) =>
-            queryInvokerFor(host.id)('forge.allPullRequests', filter === 'closed', true)
-              .catch(() => {})
-              .then(() => query.refetch()),
-          ),
-      )
+      await Promise.all(lists.filter(({ host }) => host.status === 'connected').map(({ refresh }) => refresh()))
     } finally {
       setRefreshing(false)
     }
