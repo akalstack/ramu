@@ -37,8 +37,11 @@ export function LiveActivityMonitor() {
   const chats = store.chats.filter((c) => c.computerId === store.selected && c.status !== 'archived')
   const running = chats.filter((c) => c.status === 'running').length
   const waiting = chats.filter((c) => c.status === 'needs-input').length
+  // iOS reports point releases like "17.5.1", which Number() reads as NaN, so only major.minor is compared.
   const available =
-    Platform.OS === 'ios' && Number(Platform.Version) >= 16.2 && !!requireOptionalNativeModule('ExpoWidgets')
+    Platform.OS === 'ios' &&
+    Number(String(Platform.Version).split('.').slice(0, 2).join('.')) >= 16.2 &&
+    !!requireOptionalNativeModule('ExpoWidgets')
   const persist = (value: Current | null) =>
     latest.current.setDraft(
       'live-activity-meta',
