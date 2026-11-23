@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs'
+import { readFileSync, readdirSync, realpathSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { createHash } from 'node:crypto'
 
@@ -18,7 +18,12 @@ export function runtimeBuild(daemonPath: string): string {
 }
 /** Version of the package that ships the server bundle, found by walking up from its entry point. */
 export function runtimeVersion(daemonPath: string): string {
-  for (let dir = dirname(daemonPath), previous = ''; dir !== previous; previous = dir, dir = dirname(dir)) {
+  // npm starts the CLI through a link in its bin folder, far from the package it belongs to.
+  let entry = daemonPath
+  try {
+    entry = realpathSync(daemonPath)
+  } catch {}
+  for (let dir = dirname(entry), previous = ''; dir !== previous; previous = dir, dir = dirname(dir)) {
     try {
       const version = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).version
       if (typeof version === 'string') return version

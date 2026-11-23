@@ -31,11 +31,24 @@ A device pairs once and keeps one token, role and set of permissions on every ro
 
 ## Headless server
 
+With Node.js 26, run it straight from npm:
+
+```sh
+npx --allow-scripts=node-pty,esbuild @akalstack/ramu serve --listen 0.0.0.0:7788 --private-network
+npx @akalstack/ramu pair
+```
+
+To keep it running as a service, install it first, since npx's cache can be cleared at any time: `npm install --global --allow-scripts=node-pty,esbuild @akalstack/ramu`, then `ramu up`. `--allow-scripts` lets those two packages finish installing on npm versions that hold install scripts back; on Linux, `node-pty` compiles there, so it also needs Python 3, `make` and a C++ compiler (`build-essential` on Debian and Ubuntu). Each published release reaches npm with the same version. To update, run the same install with `@latest`.
+
+From a checkout instead:
+
 ```sh
 pnpm build
 pnpm server serve --listen 0.0.0.0:7788 --private-network
 ramu pair
 ```
+
+On a computer with the desktop app, you don't need a checkout for these commands: **Install** next to **Terminal command** in **Settings → Background & updates**, or on the last setup step, puts `ramu` in `~/.local/bin` and adds that folder to your shell's PATH (zsh, bash or fish) when it isn't there yet. The command runs the CLI inside the app with the app's own runtime, so it needs no Node.js and always matches the app and its background service. `ramu up` from it relies on the app's service instead of installing another. It follows the app when you move it, and **Remove** deletes only a `ramu` that Ramu wrote. An AppImage, or a Mac app opened straight from Downloads, can't offer it because its path changes each launch.
 
 | Command | What it does |
 | --- | --- |
@@ -118,6 +131,7 @@ The desktop app installs its own background service with **Settings → Backgrou
 **Settings → Remote access** shows each connected host's Ramu version and provider CLIs, with **Update Ramu** and **Update providers** when something is newer; **Update all hosts** does every host at once, this computer last. The phone's host list has the same actions. Viewer devices see none of this.
 
 - **A host with Ramu's desktop app open** downloads the release and its app installs it, then restarts and reconnects. It installs only signed builds. A build that isn't signed says so and points to the release on GitHub.
+- **A host installed from npm** says which `npm install --global` command brings it the release; run it there and restart the service.
 - **A headless host running from a checkout** (as above) moves to the release tag, runs `pnpm install` and `pnpm build`, and restarts if a service manager will start it again (systemd, launchd, or `RAMU_SUPERVISED=1`); otherwise it asks you to restart the service. A checkout with local changes is left alone, and a failed build is put back on the version that ran.
 - A release that failed to install on a host is not retried from another device; retry it on the host.
 

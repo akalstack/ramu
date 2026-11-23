@@ -429,7 +429,9 @@ export function Onboarding() {
             />
           )}
           {key === 'reach' && <ReachStep onError={setError} />}
-          {key === 'project' && <ProjectStep projects={ws.projects} busy={add.busy} onAdd={() => void add.add()} />}
+          {key === 'project' && (
+            <ProjectStep projects={ws.projects} busy={add.busy} onAdd={() => void add.add()} onError={setError} />
+          )}
         </div>
         {error && (
           <p role="alert" className="m-0 px-6 pb-2 text-caption text-bad">

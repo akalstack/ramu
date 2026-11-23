@@ -18,6 +18,8 @@ export interface HostUpdateDeps {
   installOnDesktop(version: string): Promise<void>
   /** The repository this server runs from, when it runs from a source checkout. */
   sourceRoot: string | null
+  /** The npm package this server runs from, when it was installed from npm or started with npx. */
+  npmPackage?: string | null
   /** Runs one command with an argument array (never a shell string) in `cwd`, failing on a non-zero exit. */
   run(command: string, args: string[], cwd: string): Promise<string>
   /** A service manager restarts this process when it exits. */
@@ -36,6 +38,16 @@ export function sourceCheckout(serverDist: string): string | null {
   try {
     const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { name?: string }
     return manifest.name === 'ramu-monorepo' && existsSync(join(root, '.git')) ? root : null
+  } catch {
+    return null
+  }
+}
+
+/** The npm package a server was installed from: the manifest beside `dist` names it, unlike the workspace's own. */
+export function npmPackage(serverDist: string): string | null {
+  try {
+    const { name } = JSON.parse(readFileSync(join(serverDist, '..', 'package.json'), 'utf8')) as { name?: string }
+    return name && name !== '@ramu/server' ? name : null
   } catch {
     return null
   }
@@ -90,6 +102,14 @@ export class HostUpdater {
         const result = await this.fromSource(this.deps.sourceRoot, release.version)
         return done(result, result.outcome === 'restarting')
       }
+      // npm installs where the person chose (a global prefix, npx's cache), often needing their own permissions.
+      if (this.deps.npmPackage)
+        return done({
+          outcome: 'unavailable',
+          version: release.version,
+          message: `This host runs Ramu from npm. Run npm install --global ${this.deps.npmPackage}@${release.version} there and restart it, or start it with npx ${this.deps.npmPackage}@${release.version}.`,
+          notesUrl: release.notesUrl,
+        })
       return done({
         outcome: 'unavailable',
         version: release.version,

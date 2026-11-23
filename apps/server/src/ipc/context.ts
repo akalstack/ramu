@@ -11,7 +11,7 @@ import { ProviderService } from '../providers/providers'
 import { KeepAwakeService } from '../background/keepAwake'
 import { AttachmentStore } from '../attachments'
 import { AppUpdateService } from '../background/appUpdates'
-import { HostUpdater, isSupervised, runCommand, sourceCheckout } from '../background/hostUpdate'
+import { HostUpdater, isSupervised, npmPackage, runCommand, sourceCheckout } from '../background/hostUpdate'
 import { ModelNews } from '../providers/modelNews'
 import { ModelSignalSource } from '../providers/modelSignals'
 import { runtimeVersion } from '../build'
@@ -135,6 +135,7 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
     installOnDesktop: (version) =>
       host.desktopApp ? host.desktopApp.installUpdate(version) : Promise.reject(new Error('No desktop app here')),
     sourceRoot: sourceCheckout(dirname(fileURLToPath(import.meta.url))),
+    npmPackage: npmPackage(dirname(fileURLToPath(import.meta.url))),
     run: runCommand,
     supervised: isSupervised(),
   })

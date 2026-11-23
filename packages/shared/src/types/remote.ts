@@ -25,6 +25,22 @@ export interface BackgroundStatus {
   os: DeviceOs
 }
 
+/** The `ramu` terminal command the desktop app puts on this computer, running the CLI that ships inside the app. */
+export interface TerminalCommandStatus {
+  /**
+   * Why this app cannot install it: a development run, a copy whose path changes each launch (an AppImage, or a Mac app
+   * opened straight from Downloads, which macOS runs from a random copy) or Windows.
+   */
+  unavailable?: 'development' | 'appimage' | 'translocated' | 'platform'
+  installed: boolean
+  /** Where the command is, or would be, written. */
+  path: string
+  /** Another program's `ramu` is already there; Ramu leaves it alone. */
+  taken: boolean
+  /** Whether new terminals find it: its folder is on the shell's PATH, or Ramu added it to the shell's profile. */
+  onPath: boolean
+}
+
 /** What asking a host to update Ramu did. `built` means a supervisor-less host needs its service restarted by hand. */
 export interface HostUpdateResult {
   outcome: 'current' | 'restarting' | 'built' | 'unavailable'

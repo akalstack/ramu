@@ -1,0 +1,79 @@
+name: npm release
+# Publishes the workspace server as @akalstack/ramu, what `npx @akalstack/ramu` runs, once a GitHub release is published,
+# so npm carries the same version as the desktop app. npmjs.com trusts this workflow file to stage versions, so no token
+# is stored and every version carries provenance; a maintainer approves the staged version with 2FA to make it public.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published release tag to publish to npm, such as v0.1.0
+        required: true
+        type: string
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: npm-release
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      TAG: ${{ inputs.tag || github.event.release.tag_name }}
+      PACKAGE: '@akalstack/ramu'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@v6
+      - name: Require the tag to match the version
+        run: |
+          VERSION=$(node --input-type=module -e "import { versionOf } from './scripts/release/release.mjs'; console.log(versionOf(process.env.TAG))")
+          test "v$VERSION" = "$TAG"
+          test "$(node -p "require('./package.json').version")" = "$VERSION"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+      - name: Skip a version npm already has
+        run: |
+          if npm view "$PACKAGE@$VERSION" version > /dev/null 2>&1; then
+            echo "$PACKAGE@$VERSION is already on npm."
+            echo "PUBLISHED=true" >> "$GITHUB_ENV"
+          fi
+      - if: env.PUBLISHED != 'true'
+        run: pnpm install --frozen-lockfile
+      - if: env.PUBLISHED != 'true'
+        run: pnpm --filter @ramu/server build
+      - if: env.PUBLISHED != 'true'
+        run: node scripts/release/npm-package.mjs dist/npm
+      - name: Install the package as a person would, then run it
+        if: env.PUBLISHED != 'true'
+        run: |
+          tarball=$(cd dist/npm && npm pack --silent --pack-destination "$RUNNER_TEMP")
+          prefix="$RUNNER_TEMP/global"
+          npm install --global --prefix "$prefix" --allow-scripts=node-pty,esbuild "$RUNNER_TEMP/$tarball"
+          ramu="$prefix/bin/ramu"
+          test "$("$ramu" --version)" = "$VERSION"
+          export RAMU_USER_DATA="$RUNNER_TEMP/profile" RAMU_WORKTREES="$RUNNER_TEMP/worktrees"
+          "$ramu" serve > "$RUNNER_TEMP/serve.log" 2>&1 &
+          for _ in $(seq 1 60); do "$ramu" status > /dev/null 2>&1 && break; sleep 1; done
+          "$ramu" status || { cat "$RUNNER_TEMP/serve.log"; exit 1; }
+          "$ramu" stop
+          wait
+      - name: Stage for approval
+        if: env.PUBLISHED != 'true'
+        working-directory: dist/npm
+        run: |
+          # Prereleases are what `npx @akalstack/ramu` runs until a stable release exists; then they go to `next`.
+          tag=latest
+          stable=$(npm view "$PACKAGE" dist-tags.latest 2>/dev/null || true)
+          if [[ "$VERSION" == *-* && -n "$stable" && "$stable" != *-* ]]; then tag=next; fi
+          npm stage publish --access public --provenance --tag "$tag"
+          {
+            echo "Staged $PACKAGE@$VERSION as \`$tag\`. Approve it on npmjs.com, or run \`npm stage list $PACKAGE\`"
+            echo "then \`npm stage approve <stage-id>\`, to make it public."
+          } >> "$GITHUB_STEP_SUMMARY"

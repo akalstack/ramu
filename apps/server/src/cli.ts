@@ -740,7 +740,9 @@ function call<T>(method: string, args: unknown[] = []): Promise<T> {
   return runtimeInvoke(config.socketPath, method, args).catch((error: Error) =>
     fail(
       /ENOENT|ECONNREFUSED/.test(String((error as { code?: string }).code))
-        ? 'ramu is not running. Start it with ramu up or ramu serve.'
+        ? process.env.RAMU_TERMINAL_COMMAND === '1'
+          ? 'Ramu is not running. Open the Ramu app, or run ramu serve.'
+          : 'ramu is not running. Start it with ramu up or ramu serve.'
         : error.message,
     ),
   ) as Promise<T>
@@ -767,6 +769,12 @@ async function up() {
   let wantPrivate = named('private-network') ?? (flags.has('yes') ? true : undefined)
 
   let running = await runtimeInvoke(config.socketPath, 'background.status').catch(() => null)
+  // npx runs from a cache it may clear at any time, which would leave the service pointing at nothing.
+  if (!running && /[\\/]_npx[\\/]/.test(process.argv[1] ?? ''))
+    fail('Install Ramu first so its service has a lasting home: npm install --global @akalstack/ramu, then ramu up.')
+  // The app's command runs the app's own runtime; the app keeps its service running, so it never installs a second one.
+  if (!running && process.env.RAMU_TERMINAL_COMMAND === '1')
+    fail('Open Ramu, or turn on Start at login in Settings > Background & updates, then run ramu up again.')
   if (!running) {
     if (!(await ask('Ramu is not running. Keep it running in the background on this computer?', true)))
       fail('Start it with ramu serve, then run ramu up again.')

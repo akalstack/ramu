@@ -107,6 +107,7 @@ import {
   loginPreferred,
   loginSupported,
 } from './runtimeLauncher'
+import { commandTarget, terminalCommand } from './terminalCommand'
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'ramu-content', privileges: { standard: true, secure: true } },
@@ -183,6 +184,20 @@ async function main() {
 
   const userData = app.getPath('userData')
   const daemonPath = join(import.meta.dirname, 'daemon.js')
+  const ramuCommand = terminalCommand({
+    userData,
+    target: commandTarget({
+      executable: process.execPath,
+      cli: join(import.meta.dirname, 'cli.js'),
+      platform: process.platform,
+      env: process.env,
+      development: !app.isPackaged,
+    }),
+  })
+  // After the app moved or a new copy was installed, the command follows it.
+  try {
+    ramuCommand.refresh()
+  } catch {}
   // This computer's server always runs. Paired computers connect alongside it in the same shell.
   // Settings live in the service, so until it answers the window follows the system language.
   configureDesktopLanguage('system', app.getPreferredSystemLanguages())
@@ -1397,6 +1412,10 @@ async function main() {
       for (const server of previous) if (!computers.exists(server.id)) await closeComputer(server.id)
       return computers.list(self)
     }
+    // Device-local: the command goes on this computer's PATH, whichever host the window shows.
+    if (method === 'terminalCommand.status') return ramuCommand.status()
+    if (method === 'terminalCommand.install') return ramuCommand.install()
+    if (method === 'terminalCommand.remove') return ramuCommand.remove()
     if (method === 'computers.cancelPairRequest') {
       pairRequest?.abort()
       pairRequest = null

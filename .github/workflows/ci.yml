@@ -28,6 +28,9 @@ jobs:
         run: if [ "$RUNNER_OS" = Linux ]; then sudo apt-get update && sudo apt-get install -y ripgrep; else brew install ripgrep; fi
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
+      # The npm package (npx @akalstack/ramu) stages from that build; a dependency the bundle imports but no package
+      # declares fails here rather than in the release.
+      - run: node scripts/release/npm-package.mjs dist/npm
       # One desktop startup smoke test uses an isolated profile and simulated providers.
       - if: runner.os == 'macOS'
         run: pnpm test:desktop-smoke

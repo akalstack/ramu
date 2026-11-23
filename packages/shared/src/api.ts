@@ -977,6 +977,10 @@ export interface RamuMethods extends ArtifactMethods {
   'background.restart'(): void
   'background.keepAwake'(): { enabled: boolean; active: boolean; supported: boolean; error: string | null }
   'background.login'(enabled: boolean): { firstInstall: boolean }
+  /** The `ramu` command for terminals on this computer. The desktop answers these; they never reach a host. */
+  'terminalCommand.status'(): import('./types').TerminalCommandStatus
+  'terminalCommand.install'(): import('./types').TerminalCommandStatus
+  'terminalCommand.remove'(): import('./types').TerminalCommandStatus
   /** Access from other devices. These run only for the local desktop app, never for a paired device. */
   'network.status'(): NetworkStatus
   'network.configure'(input: NetworkSettingsInput): NetworkStatus

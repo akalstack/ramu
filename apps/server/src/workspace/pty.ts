@@ -1,4 +1,6 @@
-import { basename } from 'node:path'
+import { accessSync, chmodSync, constants, existsSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { basename, dirname, join } from 'node:path'
 // PTY-backed terminals. Each terminal is started in a binding's cwd and keeps that reference.
 import { randomUUID } from 'node:crypto'
 import * as nodePty from 'node-pty'
@@ -79,6 +81,30 @@ const WAIT_TAIL = 4000
 const ANSI = /\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)|[@-Z\\-_])/g
 const plain = (text: string) => text.replace(ANSI, '').replace(/\r(?!\n)/g, '\n')
 
+let spawnHelperChecked = false
+/**
+ * node-pty starts each shell through its prebuilt spawn-helper. npm marks it executable in an install script, which
+ * newer npm versions skip unless allowed, and every terminal then fails with "posix_spawnp failed".
+ */
+function ensureSpawnHelper() {
+  if (spawnHelperChecked || process.platform === 'win32') return
+  spawnHelperChecked = true
+  try {
+    const root = dirname(dirname(createRequire(import.meta.url).resolve('node-pty')))
+    for (const helper of [
+      join(root, 'build', 'Release', 'spawn-helper'),
+      join(root, 'prebuilds', `${process.platform}-${process.arch}`, 'spawn-helper'),
+    ]) {
+      if (!existsSync(helper)) continue
+      try {
+        accessSync(helper, constants.X_OK)
+      } catch {
+        chmodSync(helper, 0o755)
+      }
+    }
+  } catch {}
+}
+
 export class TerminalService {
   private readonly terms = new Map<string, Entry>()
   private readonly watchers = new Map<string, Set<() => void>>()
@@ -117,6 +143,7 @@ export class TerminalService {
     const shell = process.env.SHELL || (process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh')
     const win = process.platform === 'win32'
     const args = command ? (win ? ['-Command', command] : ['-lc', command]) : win ? [] : ['-l']
+    ensureSpawnHelper()
     const pty = nodePty.spawn(shell, args, {
       name: 'xterm-256color',
       cwd,

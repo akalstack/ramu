@@ -39,6 +39,7 @@ import { usePaged } from './settings/cards'
 import { useViewOnly } from './composer/useViewOnly'
 import { VIEW_ONLY_WRITE_NOTICE } from './composer/viewerAccess'
 import { notifyError } from './chat/Notifications'
+import { TerminalCommandButton, terminalCommandHelp, useTerminalCommand } from './settings/TerminalCommand'
 import {
   RULE_KINDS,
   byNextRun,
@@ -1005,7 +1006,24 @@ export function BackgroundControls({ compact = false, onInstalled }: { compact?:
           />
         </SettingsRow>
       )}
+      <TerminalCommandRow />
     </>
+  )
+}
+/** The `ramu` command for this computer's terminals, which runs the CLI inside this app. */
+function TerminalCommandRow() {
+  const command = useTerminalCommand((message) => message && notifyError(message, 'Terminal command'))
+  if (!command.status) return null
+  return (
+    <SettingsRow className="">
+      <span>
+        <strong>{t('Terminal command')}</strong>
+        <span className="muted text-muted-foreground block small text-caption">
+          {terminalCommandHelp(command.status)}
+        </span>
+      </span>
+      <TerminalCommandButton command={command} />
+    </SettingsRow>
   )
 }
 

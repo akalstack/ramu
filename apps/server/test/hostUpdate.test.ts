@@ -3,7 +3,13 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { AppUpdateStatus } from '@ramu/shared/updates'
-import { HostUpdater, isSupervised, sourceCheckout, type HostUpdateDeps } from '../src/background/hostUpdate'
+import {
+  HostUpdater,
+  isSupervised,
+  npmPackage,
+  sourceCheckout,
+  type HostUpdateDeps,
+} from '../src/background/hostUpdate'
 
 const release = {
   version: '0.2.0',
@@ -138,6 +144,25 @@ describe('updating Ramu on a host from another device', () => {
     finish()
     await first
   })
+})
+
+it('tells a host installed from npm the command that updates it', async () => {
+  const { value, commands } = deps({ npmPackage: '@akalstack/ramu' })
+  expect((await new HostUpdater(value).apply()).result).toMatchObject({
+    outcome: 'unavailable',
+    message: expect.stringContaining('npm install --global @akalstack/ramu@0.2.0'),
+  })
+  expect(commands).toEqual([])
+  const root = mkdtempSync(join(tmpdir(), 'ramu-npm-'))
+  try {
+    mkdirSync(join(root, 'dist'))
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ name: '@akalstack/ramu' }))
+    expect(npmPackage(join(root, 'dist'))).toBe('@akalstack/ramu')
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ name: '@ramu/server' }))
+    expect(npmPackage(join(root, 'dist'))).toBeNull()
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })
 
 it('finds the checkout a server was built from, and knows when a service manager restarts it', () => {

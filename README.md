@@ -129,6 +129,14 @@ sudo dnf install ramu
 
 Ramu is in **alpha**. macOS builds are signed, notarized and update themselves. On Linux without a package manager, updates install by hand from GitHub Releases. The AppImage needs FUSE 2: `sudo apt install libfuse2t64` on Ubuntu 24.04+, `libfuse2` on 22.04.
 
+### Run the server without the app
+
+On a server, run the workspace server and its `ramu` CLI from npm with Node.js 26 ([headless server](docs/guide/remote-hosts.md#headless-server)):
+
+```sh
+npx --allow-scripts=node-pty,esbuild @akalstack/ramu serve
+```
+
 ### Run from source
 
 You need Git, Node.js 26 LTS and pnpm 12.21.0. Native modules may also need Python 3 and a C/C++ toolchain (Xcode Command Line Tools on macOS, `build-essential` on Debian/Ubuntu).

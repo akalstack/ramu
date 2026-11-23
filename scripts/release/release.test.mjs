@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { collectAssets, compareVersions, run, versionOf, withCredits } from './release.mjs'
+import { importedPackages, npmManifest } from './npm-package.mjs'
 
 test('rejects malformed versions and tag/path injection', () => {
   for (const value of ['../x', '1.2', '01.2.3', '1.2.3;bad', '1.2.3-01', '1.2.3+build'])
@@ -121,4 +122,37 @@ test('orders versions so the previous release is found by version, not creation 
   ])
   assert.ok(compareVersions('0.2.0', '0.10.0') < 0)
   assert.ok(compareVersions('1.0.0-rc', '1.0.0-rc.1') < 0)
+})
+test('lists the packages a server bundle imports by name, not builtins, relative files or text in strings', () => {
+  const bundle = [
+    'import { z } from "zod";\nimport * as pty from "node-pty";\nimport { join } from "node:path";',
+    'import "yjs";\nexport { a } from "@noble/curves/ed25519.js";\nconst m = await import("ws");\nimport x from "./chunk.js";',
+    'const swift = `\nimport AppKit\nimport Foundation from "Foundation"`;\nimport fs from "fs";',
+  ]
+  assert.deepEqual(importedPackages(bundle), ['@noble/curves', 'node-pty', 'ws', 'yjs', 'zod'])
+})
+test('publishes the server with every dependency the bundle needs, versioned, and refuses an undeclared one', () => {
+  const server = {
+    description: 'd',
+    license: 'MIT',
+    bin: { ramu: 'dist/cli.js' },
+    engines: { node: '>=26' },
+    dependencies: { zod: 'catalog:', ws: '8.0.0', 'chart.js': '4.0.0' },
+  }
+  const inlined = [{ name: '@ramu/shared', dependencies: { yjs: '13.0.0', '@ramu/contracts': 'workspace:*' } }]
+  const manifest = npmManifest(server, {
+    catalog: { zod: '4.0.0' },
+    version: '1.2.3',
+    imported: ['@ramu/contracts', 'ws', 'yjs', 'zod'],
+    inlined,
+  })
+  assert.equal(manifest.name, '@akalstack/ramu')
+  assert.equal(manifest.version, '1.2.3')
+  assert.deepEqual(manifest.bin, { ramu: 'dist/cli.js' })
+  assert.deepEqual(manifest.dependencies, { 'chart.js': '4.0.0', ws: '8.0.0', yjs: '13.0.0', zod: '4.0.0' })
+  assert.throws(
+    () => npmManifest(server, { catalog: { zod: '4.0.0' }, version: '1.2.3', imported: ['left-pad'], inlined }),
+    /imports left-pad/,
+  )
+  assert.throws(() => npmManifest(server, { catalog: {}, version: '1.2.3', imported: [], inlined }), /catalog/)
 })

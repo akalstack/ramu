@@ -8041,4 +8041,18 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Skill dari folder milik tiap agent, dan cara membaginya ke agent lain, ada di Pengaturan → Pengaturan agent.',
   'MCP servers from each agent’s own config, and sharing them with your other agents, are in Settings → Agent setup.':
     'Server MCP dari konfigurasi milik tiap agent, dan cara membaginya ke agent lain, ada di Pengaturan → Pengaturan agent.',
+  'Terminal command': 'Perintah terminal',
+  'Not available on this computer': 'Tidak tersedia di komputer ini',
+  'Use Ramu from your terminal': 'Pakai Ramu dari terminal',
+  'An AppImage moves each time it opens. Install the .deb or .rpm package to get the ramu command.':
+    'AppImage berpindah tempat setiap kali dibuka. Pasang paket .deb atau .rpm untuk mendapatkan perintah ramu.',
+  'Move Ramu to your Applications folder and open it again, then install the ramu command here.':
+    'Pindahkan Ramu ke folder Applications dan buka lagi, lalu pasang perintah ramu di sini.',
+  '{0} belongs to another program, so Ramu leaves it alone.': '{0} milik program lain, jadi Ramu tidak mengubahnya.',
+  'Open a new terminal window and run ramu --help. It uses this app, so it always matches it.':
+    'Buka jendela terminal baru dan jalankan ramu --help. Perintah ini memakai aplikasi ini, jadi versinya selalu sama.',
+  'Installed in {0}. Add that folder to your PATH to run ramu by name.':
+    'Terpasang di {0}. Tambahkan folder itu ke PATH agar ramu bisa dijalankan dengan namanya.',
+  'Start threads, pair devices and check this computer from any terminal. It runs inside this app, so nothing else is installed.':
+    'Mulai thread, pasangkan perangkat, dan periksa komputer ini dari terminal mana pun. Perintah ini berjalan di dalam aplikasi ini, jadi tidak ada lagi yang perlu dipasang.',
 }

@@ -1,5 +1,14 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Check, ExternalLink, FolderGit2, Layers, QrCode, SlidersHorizontal, Smartphone } from 'lucide-react'
+import {
+  Check,
+  ExternalLink,
+  FolderGit2,
+  Layers,
+  QrCode,
+  SlidersHorizontal,
+  Smartphone,
+  SquareTerminal,
+} from 'lucide-react'
 import { cn } from 'cn'
 import { providerName, type ProviderStatus } from '@ramu/shared/providers/providers'
 import type {
@@ -31,6 +40,7 @@ import { LoadingDots } from '@/components/loading-dots'
 import { PairingCode } from '../settings/PairingCode'
 import { defaultPairUrl, pairingNetwork } from '../settings/pairingOffer'
 import { usePairingOffer } from '../settings/usePairingOffer'
+import { TerminalCommandButton, terminalCommandHelp, useTerminalCommand } from '../settings/TerminalCommand'
 import { AntigravitySignIn } from '../settings/AntigravitySignIn'
 import { antigravityKeyName } from '@ramu/shared/providers/environment'
 
@@ -648,7 +658,18 @@ export function ReachStep({ onError }: { onError(message: string): void }) {
   )
 }
 
-export function ProjectStep({ projects, busy, onAdd }: { projects: Project[]; busy: boolean; onAdd(): void }) {
+export function ProjectStep({
+  projects,
+  busy,
+  onAdd,
+  onError,
+}: {
+  projects: Project[]
+  busy: boolean
+  onAdd(): void
+  onError(message: string): void
+}) {
+  const command = useTerminalCommand(onError)
   return (
     <div className="flex flex-col gap-3">
       {projects.length > 0 && (
@@ -671,6 +692,21 @@ export function ProjectStep({ projects, busy, onAdd }: { projects: Project[]; bu
           {projects.length ? t('Add another repository') : t('Choose repository')}
         </Button>
       </div>
+      {command.status && (
+        <Group className="mt-3">
+          <Row
+            title={
+              <>
+                <SquareTerminal size={15} className="text-muted-foreground" />
+                {t('Use Ramu from your terminal')}
+              </>
+            }
+            help={terminalCommandHelp(command.status)}
+          >
+            <TerminalCommandButton command={command} />
+          </Row>
+        </Group>
+      )}
     </div>
   )
 }
