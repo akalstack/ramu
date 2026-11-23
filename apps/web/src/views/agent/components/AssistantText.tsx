@@ -71,7 +71,9 @@ export const AssistantText = memo(function AssistantText({
             {path}
           </ChatLink>
         ) : (
-          <code className={className}>{children}</code>
+          // A short name such as `--primary-light` stays whole: a hyphen inside it is no place to break a line. Long code
+          // still wraps, so it never pushes past the column.
+          <code className={!className && text.length <= 48 ? 'whitespace-nowrap' : className}>{children}</code>
         )
       },
     }),
