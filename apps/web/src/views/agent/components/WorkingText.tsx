@@ -19,7 +19,9 @@ export function WorkingText({ children }: { children: React.ReactNode }) {
   return (
     <span
       ref={text}
-      className="shimmer bg-clip-text text-transparent motion-reduce:animate-none!"
+      // Never wider than its row: a long command's label is cut with an ellipsis here, so the highlight is sized and
+      // timed to what shows rather than to text far past the edge, where it would spend most of each pass unseen.
+      className="shimmer inline-block max-w-full overflow-hidden text-ellipsis whitespace-nowrap align-bottom bg-clip-text text-transparent motion-reduce:animate-none!"
       style={{
         backgroundImage: 'linear-gradient(90deg, var(--muted) 30%, var(--text) 50%, var(--muted) 70%)',
         backgroundSize: '200% 100%',

@@ -3,8 +3,13 @@ import type { ComponentProps } from 'react'
 import { cn } from 'cn'
 import { Button } from './desktop-button'
 
+/**
+ * Text that acts, inside a sentence: it takes the sentence's size, line and baseline, and no state (open, pressed,
+ * hovered) gives it a box or a fill, which a button's own styles would otherwise add, such as the tint an open
+ * disclosure gets from aria-expanded.
+ */
 const INLINE =
-  'inline cursor-pointer no-underline h-auto min-h-0 rounded-(--radius-xs) border-0 bg-transparent p-0 text-[length:var(--font-caption)] font-normal underline-offset-2 hover:underline active:translate-y-0 focus-visible:outline focus-visible:outline-1 focus-visible:outline-ring focus-visible:outline-offset-2'
+  'inline cursor-pointer no-underline h-auto min-h-0 rounded-(--radius-xs) border-0 bg-transparent p-0 align-baseline text-[length:inherit] leading-[inherit] font-normal underline-offset-2 shadow-none hover:bg-transparent hover:underline aria-expanded:bg-transparent aria-[pressed=true]:bg-transparent active:translate-y-0 focus-visible:outline focus-visible:outline-1 focus-visible:outline-ring focus-visible:outline-offset-2'
 
 /** An action embedded in prose; host mutations retain the enclosing Settings field's disabled state. */
 export function InlineAction({
@@ -19,7 +24,9 @@ export function InlineAction({
       variant="link"
       className={cn(
         INLINE,
-        tone === 'accent' ? 'text-brand' : 'text-muted-foreground hover:text-foreground',
+        tone === 'accent'
+          ? 'text-brand aria-expanded:text-brand'
+          : 'text-muted-foreground hover:text-foreground aria-expanded:text-foreground',
         className,
       )}
     />

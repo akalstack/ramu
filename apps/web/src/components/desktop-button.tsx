@@ -24,6 +24,14 @@ function ghostHover(className: unknown) {
     : 'hover:bg-fill-hover dark:hover:bg-fill-hover aria-expanded:bg-fill-hover'
 }
 
+/**
+ * A link-style button is text that acts: it keeps the surrounding text's size, line and baseline, and no state gives
+ * it a box. The registry's sizes add height and padding, and its open state (aria-expanded) adds a fill, which drew a
+ * tinted box around an inline "Why?". A caller's own classes still come after these.
+ */
+const LINK =
+  'h-auto min-h-0 p-0 align-baseline text-[length:inherit] leading-[inherit] text-brand bg-transparent shadow-none underline-offset-2 hover:bg-transparent hover:underline aria-expanded:bg-transparent aria-expanded:text-brand active:translate-y-0'
+
 /** Keep desktop density and the user's font size while composing the registry Button. */
 export function Button({ className, size, variant = 'secondary', ...props }: ComponentProps<typeof NativeButton>) {
   const field = useSettingsField()
@@ -33,8 +41,9 @@ export function Button({ className, size, variant = 'secondary', ...props }: Com
       size={size}
       className={cn(
         'text-[length:var(--font-body)] font-normal whitespace-inherit disabled:opacity-40',
-        size?.startsWith('icon') ? 'min-h-0' : 'h-auto min-h-[26px]',
+        size?.startsWith('icon') ? 'min-h-0' : variant === 'link' ? null : 'h-auto min-h-[26px]',
         variant === 'secondary' && 'bg-fill hover:bg-fill-hover',
+        variant === 'link' && LINK,
         typeof className === 'string' ? textSizes(className) : className,
         variant === 'ghost' && ghostHover(className),
       )}

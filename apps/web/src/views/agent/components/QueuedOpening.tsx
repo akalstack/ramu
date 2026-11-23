@@ -1,6 +1,6 @@
 import { Clock } from 'lucide-react'
 import { Message, MessageContent } from '@/components/ui/message'
-import { Button } from '@/components/desktop-button'
+import { LocalInlineAction } from '../../../components/inline-action'
 import type { QueuedMessage } from '@ramu/shared/types'
 import { Attachments } from '../../../composer/Attachments'
 import { t as translate } from '../../../i18n'
@@ -36,9 +36,7 @@ export function QueuedOpening({
               : translate('Queued')}
           </span>
           {waitingFor && onOpenWaiting && (
-            <Button variant="link" size="xs" className="h-auto p-0 text-caption" onClick={onOpenWaiting}>
-              {translate('Open thread')}
-            </Button>
+            <LocalInlineAction onClick={onOpenWaiting}>{translate('Open thread')}</LocalInlineAction>
           )}
         </div>
       </MessageContent>

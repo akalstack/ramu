@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { InlineAction } from '../components/inline-action'
 import { ExternalLink } from 'lucide-react'
 import type {
   AzureSummary,
@@ -228,18 +229,14 @@ function RestartService() {
   const [error, setError] = useState<string | null>(null)
   return (
     <>
-      <Button
-        type="button"
-        variant="link"
-        size="sm"
-        className="h-auto p-0"
+      <InlineAction
         onClick={() => {
           setError(null)
           void Promise.resolve(invoke('background.restart')).catch((reason) => setError(errorText(reason)))
         }}
       >
         {t('Restart background service')}
-      </Button>
+      </InlineAction>
       {error && <span>{error}</span>}
     </>
   )
@@ -707,9 +704,7 @@ function InlineAlternative({ text, action, onClick }: { text: string; action: st
   return (
     <p className="m-0 flex flex-wrap items-center gap-x-2 border-t border-edge pt-3 text-caption text-muted-foreground">
       {text}
-      <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={onClick}>
-        {action}
-      </Button>
+      <InlineAction onClick={onClick}>{action}</InlineAction>
     </p>
   )
 }

@@ -1,5 +1,5 @@
 import { useId, useState } from 'react'
-import { Button } from '@/components/desktop-button'
+import { LocalInlineAction } from '../../../components/inline-action'
 import { t as translate, useLanguage } from '../../../i18n'
 
 /**
@@ -14,16 +14,9 @@ export function FullAccessWhy({ reason }: { reason?: string }) {
     <div className="mt-2 text-caption text-muted-foreground">
       <div className="flex flex-wrap items-center gap-x-1">
         <span>{translate('Full access still asks before this.')}</span>
-        <Button
-          variant="link"
-          size="sm"
-          className="h-auto p-0 text-caption"
-          aria-expanded={open}
-          aria-controls={panel}
-          onClick={() => setOpen((value) => !value)}
-        >
+        <LocalInlineAction aria-expanded={open} aria-controls={panel} onClick={() => setOpen((value) => !value)}>
           {translate('Why?')}
-        </Button>
+        </LocalInlineAction>
       </div>
       {open && (
         <div id={panel} className="mt-1 space-y-1">

@@ -48,15 +48,19 @@ export function Shimmer({
   size = font.control,
   style,
   singleLine = false,
+  visibleWidth,
 }: {
   children: string
   size?: number
   singleLine?: boolean
   style?: StyleProp<TextStyle>
+  /** The width that shows, when the row cuts the text off: the pass is timed to it rather than to the hidden rest. */
+  visibleWidth?: number
 }) {
   const reduced = useReducedMotion()
   const sweep = useSharedValue(-WINDOW)
-  const [width, setWidth] = useState(0)
+  const [measured, setMeasured] = useState(0)
+  const width = visibleWidth ? Math.min(visibleWidth, measured || visibleWidth) : measured
   const duration = sweepDuration(width, TOOL_MOTION.sweepMs, TOOL_MOTION.sweepPxPerSecond)
   useEffect(() => {
     if (reduced) return
@@ -84,7 +88,7 @@ export function Shimmer({
       accessible
       accessibilityRole="text"
       accessibilityLabel={children}
-      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+      onLayout={(event) => setMeasured(event.nativeEvent.layout.width)}
       style={{ flexDirection: 'row', flexWrap: singleLine ? 'nowrap' : 'wrap' }}
     >
       {characters.map((character, index) => (
@@ -196,8 +200,9 @@ export function ActivityText({
           importantForAccessibility="no-hide-descendants"
           style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}
         >
-          <Shimmer size={size} singleLine>
-            {children.slice(0, 180)}
+          {/* Only about what fits the row sweeps: the highlight crosses visible letters instead of hidden ones. */}
+          <Shimmer size={size} singleLine visibleWidth={width || undefined}>
+            {children.slice(0, width ? Math.max(12, Math.ceil(width / (size * 0.5))) : 180)}
           </Shimmer>
         </View>
       ) : null}

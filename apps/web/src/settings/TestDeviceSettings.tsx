@@ -1,4 +1,5 @@
 import { useCallback, useContext, useEffect, useState } from 'react'
+import { LocalInlineAction } from '../components/inline-action'
 import { Check, ChevronDown, CircleCheck, Copy, Hourglass, Smartphone, TriangleAlert } from 'lucide-react'
 import {
   queuePlace,
@@ -141,14 +142,9 @@ function InUse({
           <span className="truncate text-control">{title}</span>
           <span className="truncate text-caption text-muted-foreground">
             {onLeave ? (
-              <Button
-                variant="link"
-                size="xs"
-                className="h-auto p-0 text-caption text-muted-foreground"
-                onClick={() => leave(() => select(hostId, { kind: 'task', taskId }))}
-              >
+              <LocalInlineAction tone="muted" onClick={() => leave(() => select(hostId, { kind: 'task', taskId }))}>
                 {thread ?? t('Open thread')}
-              </Button>
+              </LocalInlineAction>
             ) : (
               (thread ?? t('Held by a thread'))
             )}
