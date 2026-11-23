@@ -115,7 +115,7 @@ it('lets the person add a file set apart as someone else’s to this turn, which
   reviews.observe('b', edit('1', 'b.txt'))
   writeFileSync(join(cwd, 'b.txt'), 'from b\n')
   writeFileSync(join(cwd, 'mystery.txt'), 'who wrote this?\n')
-  await new Promise((resolve) => setTimeout(resolve, 300))
+  await new Promise((resolve) => setTimeout(resolve, 1_500))
   await reviews.complete('a')
   const before = reviews.get(first)
   const outside = before.elsewhere?.find((group) => !group.taskId)
@@ -154,7 +154,7 @@ it('names the changed files another thread wrote last, so a commit from this thr
   writeFileSync(join(cwd, 'b.txt'), 'from b\n')
   writeFileSync(join(cwd, 'by-hand.txt'), 'nobody’s turn\n')
   // File events arrive a moment after the write.
-  await new Promise((resolve) => setTimeout(resolve, 300))
+  await new Promise((resolve) => setTimeout(resolve, 1_500))
   await reviews.complete('a')
   await reviews.complete('b')
   expect(await reviews.otherThreadPaths(tasks.a!, cwd)).toEqual(['b.txt'])
