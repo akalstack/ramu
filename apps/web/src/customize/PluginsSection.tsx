@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/input'
 import { Dialog, Menu } from '../Menu'
 import { useHost } from '../workspace/HostProvider'
 import { useHostRuntime } from '../workspace/workspace'
-import { Credential } from '../settings/Plugins'
+import { AccountSignIn, Credential, startAccountSignIn } from '../settings/Plugins'
 import { errorText } from '../lib/errors'
 import { t, useLanguage } from '../i18n'
 import { CustomizeHeader, displayName, ExtensionGrid, ExtensionItem, Quiet, SectionTitle } from './parts'
@@ -110,7 +110,13 @@ export function PluginsSection({
   useEffect(() => {
     load()
     void invoke('projects.list').then(setProjects, () => {})
-    return on('plugins:changed', load)
+    const offPlugins = on('plugins:changed', load)
+    // An account sign-in finishes on the MCP connection the plugin added.
+    const offMcp = on('mcp:changed', load)
+    return () => {
+      offPlugins()
+      offMcp()
+    }
   }, [load, invoke, on])
   /** Runs one action; false when it failed, so a dialog that started it stays open with what was typed. */
   const act = async (key: string, work: () => Promise<unknown>) => {
@@ -135,9 +141,18 @@ export function PluginsSection({
   const nextStep = (plugins: InstalledPlugin[]) => {
     setInstalledPair([])
     const needsKey = plugins.find((plugin) => plugin.credentials.some((slot) => slot.state !== 'saved'))
+    const account = plugins.flatMap((plugin) =>
+      (plugin.accounts ?? [])
+        .filter((entry) => !entry.signedIn && entry.connectionId)
+        .map((entry) => ({ plugin, entry })),
+    )[0]
     const server = plugins.flatMap((plugin) => plugin.mcpConnections)[0]
     if (needsKey) setOpenId(needsKey.id)
-    else if (server) openCustomize('mcp', server.id)
+    else if (account) {
+      // A service that signs in with its own account opens its sign-in page straight away, as a key would be asked for.
+      setOpenId(account.plugin.id)
+      void startAccountSignIn(invoke, account.entry.connectionId!).catch((reason) => setError(errorText(reason)))
+    } else if (server) openCustomize('mcp', server.id)
   }
   /** The plugin a review's plugin pairs with, unless it is installed already. */
   const companionFor = (staged: PluginReview) => {
@@ -195,7 +210,11 @@ export function PluginsSection({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- opens once for each request
   }, [install])
   const shown = (installed ?? []).filter((plugin) => matches(plugin, query))
-  const needsSetup = shown.filter((plugin) => plugin.credentials.some((slot) => slot.state !== 'saved'))
+  const needsSetup = shown.filter(
+    (plugin) =>
+      plugin.credentials.some((slot) => slot.state !== 'saved') ||
+      (plugin.accounts ?? []).some((account) => !account.signedIn),
+  )
   const ready = shown.filter((plugin) => !needsSetup.includes(plugin))
   const available = useMemo(
     () => (listings ?? []).filter((listing) => !listing.installed && listingMatches(listing, query)),
@@ -687,6 +706,9 @@ function PluginDetail({
             onCheckedChange={onToggle}
           />
         </div>
+        {(plugin.accounts ?? []).map((account) => (
+          <AccountSignIn key={account.server} account={account} viewOnly={false} onChanged={onChanged} />
+        ))}
         {plugin.credentials.map((slot) => (
           <Credential key={slot.id} plugin={plugin} slot={slot} viewOnly={false} onChanged={onChanged} />
         ))}

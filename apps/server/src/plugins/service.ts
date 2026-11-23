@@ -8,6 +8,7 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { AGENT_PROVIDERS } from '@ramu/shared/providers/providers'
 import type { CustomAgent } from '@ramu/shared/customAgents'
 import type { SharedMcpConnection } from '@ramu/shared/mcp'
+import { OAUTH_REFERENCE_NAME } from '../mcp/oauth'
 import type { AgentProvider, AppPreferences, ManagedSkill } from '@ramu/shared/types'
 import type { ToolAuditFile } from '@ramu/shared/toolAudit'
 import type { Rule, RuleInput } from '@ramu/shared/types/rules'
@@ -241,6 +242,18 @@ export class PluginService {
       updatedAt: plugin.updatedAt,
       enabled: plugin.enabled,
       mcpConnections: Object.entries(plugin.parts.mcp).map(([name, id]) => ({ name, id })),
+      accounts: (plugin.extension.accounts ?? []).map((account) => {
+        const connectionId = plugin.parts.mcp[account.server] ?? null
+        const connection = connectionId
+          ? this.host.mcp.connections().find((entry) => entry.id === connectionId)
+          : undefined
+        return {
+          ...account,
+          connectionId,
+          signedIn:
+            connection?.transport.type === 'http' && !!connection.transport.headerSecretRefs[OAUTH_REFERENCE_NAME],
+        }
+      }),
       credentials: plugin.extension.credentials.map((slot) => {
         const saved = plugin.credentials[slot.id]
         return {
@@ -1363,6 +1376,8 @@ export class PluginService {
               ...(target.fromImage ? { fromImage: target.fromImage } : {}),
               ...(target.refine ? { refine: target.refine } : {}),
               ...(target.downloads?.length ? { downloads: target.downloads } : {}),
+              ...(target.params ? { params: target.params } : {}),
+              ...(target.arguments ? { arguments: target.arguments } : {}),
             },
           ]
         : []

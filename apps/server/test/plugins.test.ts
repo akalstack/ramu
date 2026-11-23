@@ -336,6 +336,51 @@ describe('installing', () => {
     })
   })
 
+  it('asks for an account sign-in on a remote server until the connection holds its tokens', async () => {
+    const h = host()
+    services.push(h.service)
+    const remote = {
+      '.mcp.json': JSON.stringify({ mcpServers: { clips: { type: 'http', url: 'https://mcp.clips.test/mcp' } } }),
+    }
+    const review = await h.service.stage({
+      source: renderPlugin(remote, {
+        accounts: [{ server: 'clips', label: 'Clips account' }],
+        abilities: {
+          video_generation: {
+            server: 'clips',
+            tool: 'generate_video',
+            status: 'job_status',
+            params: 'params',
+            arguments: { model: 'clip-1' },
+            downloads: ['https://*.clips.test'],
+          },
+        },
+      }),
+    })
+    expect(review.contents.accounts).toEqual([{ server: 'clips', label: 'Clips account' }])
+    const plugin = await h.service.confirm(review.stageId, { scope: { kind: 'all' } })
+    const connection = h.connections[0]!
+    expect(plugin.accounts).toEqual([
+      { server: 'clips', label: 'Clips account', connectionId: connection.id, signedIn: false },
+    ])
+    expect(h.preferences().abilities.autoMcp?.video_generation).toEqual({
+      connectionId: connection.id,
+      tool: 'generate_video',
+      status: 'job_status',
+      downloads: ['https://*.clips.test'],
+      params: 'params',
+      arguments: { model: 'clip-1' },
+    })
+    // The service's sign-in finished: the connection now holds a reference to its tokens.
+    if (connection.transport.type === 'http') connection.transport.headerSecretRefs['mcp-oauth'] = 'ref-1'
+    expect(h.service.list()[0]!.accounts?.[0]!.signedIn).toBe(true)
+  })
+
+  it('refuses an account sign-in on a server that is not remote', () => {
+    const folder = readPluginFolder(renderPlugin({}, { accounts: [{ server: 'render', label: 'Render account' }] }))
+    expect(folder.contents.problems.map((problem) => problem.message).join(' ')).toContain('not a remote MCP server')
+  })
+
   it('refuses a download origin with a path', () => {
     const folder = readPluginFolder(
       renderPlugin(

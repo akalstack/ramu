@@ -46,7 +46,7 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true })
 })
 
-function setup() {
+function setup(shared: ConstructorParameters<typeof MediaAccounts>[4] = () => null) {
   const secrets = new Map<string, string>()
   const credentials = new HostCredentialStore(async (_service, key) => ({
     setPassword: async (value: string) => void secrets.set(key, value),
@@ -59,6 +59,8 @@ function setup() {
     (key, fallback) => (state.get(key) ?? fallback) as never,
     (key, value) => void state.set(key, value),
     credentials,
+    undefined,
+    shared,
   )
   const host: Host = {
     preferences: () => structuredClone(DEFAULT_APP_PREFERENCES),
@@ -122,4 +124,24 @@ it('a saved key makes speech on that service, and Disconnect sends the person ba
   expect(recorded()).toMatchObject({ status: 'refused', refusal: 'unavailable' })
   expect(recorded().summary).toContain('Settings → Providers')
   expect(requests.filter((request) => request.url.includes('/text-to-speech/'))).toHaveLength(1)
+})
+
+it('uses the Gemini key Antigravity signed in with until one is saved under Media, which then wins', async () => {
+  let lent: string | null = 'agy-gemini-key'
+  const { accounts, secrets } = setup((service) =>
+    service === 'gemini' && lent ? { token: lent, from: 'Antigravity' } : null,
+  )
+  expect(accounts.connected('gemini')).toBe(true)
+  expect(accounts.connected('elevenlabs')).toBe(false)
+  const [gemini] = await accounts.list(false)
+  expect(gemini).toMatchObject({ service: 'gemini', connected: true, account: null, sharedFrom: 'Antigravity' })
+  expect(await accounts.auth('gemini')).toEqual({ token: 'agy-gemini-key' })
+  // Nothing was copied: the key stays Antigravity's, and there is none of Media's own to hand Antigravity back.
+  expect(secrets.size).toBe(0)
+  expect(await accounts.savedKey('gemini')).toBeNull()
+
+  // Antigravity drops its key: Gemini is no longer connected.
+  lent = null
+  expect(accounts.connected('gemini')).toBe(false)
+  await expect(accounts.auth('gemini')).rejects.toThrow('Settings → Providers')
 })

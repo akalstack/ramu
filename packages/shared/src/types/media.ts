@@ -18,6 +18,11 @@ export interface MediaAccount {
   connected: boolean
   /** The account name the service reports for the saved key. */
   account: string | null
+  /**
+   * The signed-in provider whose key this service uses when none is saved under Media, such as "Antigravity" for a
+   * Gemini API key: one key, entered once, for both. Absent from hosts that do not share keys.
+   */
+  sharedFrom?: string | null
   /** Why the last check failed, in plain words. */
   error: string | null
   /** The service's page for creating a key. */

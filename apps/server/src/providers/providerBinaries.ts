@@ -94,6 +94,10 @@ export function configureProviderBinaries(value: ProviderConfiguration) {
 }
 let customEnvironment: ProviderEnvironmentValues = {}
 /** Variables from Settings → Environment variables, loaded from the host credential store. */
+/** A variable set in Ramu for one provider rather than for all of them, such as Antigravity's `GEMINI_API_KEY`. */
+export const providerVariable = (provider: AgentProvider, key: string): string | null =>
+  customEnvironment[provider]?.find((entry) => entry.key === key)?.value || null
+
 export function configureProviderEnvironment(value: ProviderEnvironmentValues) {
   customEnvironment = value
 }

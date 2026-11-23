@@ -52,7 +52,13 @@ export function ProviderSettings({
   const [updating, setUpdating] = useState<AgentProvider | null>(null)
   const [signingIn, setSigningIn] = useState<AgentProvider | null>(null)
   // Antigravity offers several sign-in methods; the account being signed in and the key names the host keeps.
-  const [antigravity, setAntigravity] = useState<{ accountId: string; keys: string[]; method?: string } | null>(null)
+  const [antigravity, setAntigravity] = useState<{
+    accountId: string
+    keys: string[]
+    method?: string
+    /** A Gemini key saved under Media, which signs Antigravity in with no key typed. */
+    mediaKey: boolean
+  } | null>(null)
   const [apiKey, setApiKey] = useState<{ provider: AgentProvider; accountId: string; name: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -294,9 +300,19 @@ export function ProviderSettings({
         return
       }
       if (provider === 'antigravity') {
-        const environment = await Promise.resolve(invoke('providers.environment')).catch(() => null)
+        const [environment, media] = await Promise.all([
+          Promise.resolve(invoke('providers.environment')).catch(() => null),
+          Promise.resolve(invoke('abilities.mediaAccounts', false)).catch(() => null),
+        ])
         const method = statuses.find((entry) => entry.provider === 'antigravity')?.signIn?.[accountId]?.detail
-        if (allowed()) setAntigravity({ accountId, keys: environment?.keys.antigravity ?? [], method })
+        const gemini = media?.accounts.find((account) => account.service === 'gemini')
+        if (allowed())
+          setAntigravity({
+            accountId,
+            keys: environment?.keys.antigravity ?? [],
+            method,
+            mediaKey: !!gemini?.connected && !gemini.sharedFrom,
+          })
         return
       }
       // Cursor signs in inside Ramu: the browser opens, and the call returns once sign-in completes.
@@ -476,6 +492,7 @@ export function ProviderSettings({
       {antigravity && (
         <AntigravitySignIn
           hasKey={(method) => antigravity.keys.includes(antigravityKeyName(method))}
+          mediaKey={antigravity.mediaKey && !antigravity.keys.includes('GEMINI_API_KEY')}
           current={antigravity.method}
           onClose={() => setAntigravity(null)}
           onSubmit={async (input) => {

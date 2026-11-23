@@ -21,7 +21,7 @@ Every change needs focused tests and typechecks for the packages it touches; des
 - **Starting points for test devices:** **Save as starting point** would make a Simlock baseline the next thread opens from. Waits for Simlock's agent-device front to allocate from a baseline (Ramu pins 0.6.0, which cannot).
 - **Test device video through a tunnel:** when WebRTC cannot connect (a tunnel blocking UDP), play Simlock's stream through Ramu's connection, decoded with WebCodecs in a WebView. Start by checking on a physical phone that its WebView decodes H.264 with WebCodecs.
 - **Computer use on Windows and Linux:** waits for native capture, permissions and signing on each.
-- **Media services as plugins:** move ElevenLabs (then others) from its built-in connector to a plugin once the vendor ships an MCP server that makes the file and passes the same live checks.
+- **Media services as plugins:** move ElevenLabs from its built-in connector to a plugin signed in with the ElevenLabs account. ElevenLabs archived its local MCP server, and its hosted one (`api.elevenlabs.io/v1/mcp`) makes speech but no music or sound effects yet, and registers no client a sign-in can use. Move it once the hosted server makes all three and accepts Ramu's sign-in.
 - **Mobile dev builds:** `apps/mobile/package.json` builds `expo-video` from source because its prebuilt binary does not match `expo-modules-core` 58.0.26; drop the override once Expo ships a matching binary.
 
 ## Later

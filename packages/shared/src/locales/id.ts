@@ -3652,6 +3652,12 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Google Cloud project': 'Project Google Cloud',
   Location: 'Lokasi',
   'Finish signing in in your browser.': 'Selesaikan proses masuk di browser-mu.',
+  'Uses the Gemini key saved under Media. Enter another to use that instead.':
+    'Memakai kunci Gemini yang tersimpan di Media. Masukkan kunci lain untuk memakainya.',
+  'Uses your {0} key. Remove the key from {0} to stop.': 'Memakai kuncimu dari {0}. Hapus kunci itu dari {0} untuk berhenti.',
+  'Use another key': 'Pakai kunci lain',
+  '{label}: signed in': '{label}: sudah masuk',
+  'Finish signing in to {label} in your browser.': 'Selesaikan proses masuk ke {label} di browser-mu.',
   'Signing in…': 'Sedang masuk…',
   'Continue in browser': 'Lanjutkan di browser',
   'Enter the Google Cloud project and location.': 'Masukkan project dan lokasi Google Cloud.',

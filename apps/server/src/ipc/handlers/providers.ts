@@ -109,11 +109,18 @@ export const registerProviderHandlers: RegisterHandlers = ({
       args: z.tuple([agentSettings.shape.provider, agentSettings.shape.accountId, antigravitySignIn.optional()]),
       run: async (provider: ProviderStatus['provider'], accountId?: string, method?: AntigravitySignIn) => {
         if (method && provider !== 'antigravity') throw new Error('This provider has one sign-in method')
-        const key = method?.apiKey?.trim()
-        if (method && key) {
+        const typed = method?.apiKey?.trim()
+        const name = method && antigravityKeyName(method.method)
+        // A Gemini key already saved under Media signs Antigravity in too, so the same key is never typed twice.
+        const key =
+          typed ||
+          (method?.method === 'gemini-api-key' &&
+          !environment.status(true).values?.antigravity?.some((entry) => entry.key === name)
+            ? await mediaAccounts?.savedKey('gemini').catch(() => null)
+            : null)
+        if (method && name && key) {
           // A key is a credential: it joins Antigravity's variables in the host credential store, like any other.
           if (host.canAdministerIntegrations?.() !== true) throw new Error('Enter API keys on the host running Ramu')
-          const name = antigravityKeyName(method.method)
           const current = environment.status(true).values ?? {}
           await environment.save({
             ...current,

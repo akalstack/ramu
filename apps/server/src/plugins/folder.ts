@@ -321,6 +321,16 @@ export function readPluginFolder(folder: string): PluginFolder {
     problems.push({ file: 'AGENTS.md', message: (error as Error).message })
   }
 
+  // An account sign-in belongs to a remote server: a local one is signed in with a credential slot instead.
+  for (const account of extension.accounts) {
+    const server = mcpServers[account.server]
+    if (!server || !('url' in server))
+      problems.push({
+        file: found.file,
+        message: `The ${account.label} sign-in names ${account.server}, which is not a remote MCP server the plugin declares.`,
+      })
+  }
+
   // Ability mappings must name a server the plugin declares; the tool is checked once the server runs.
   const abilities = Object.entries(extension.abilities).flatMap(([ability, target]) => {
     if (!target) return []
@@ -339,6 +349,8 @@ export function readPluginFolder(folder: string): PluginFolder {
         ...(target.fromImage ? { fromImage: target.fromImage } : {}),
         ...(target.refine ? { refine: target.refine } : {}),
         downloads: target.downloads,
+        ...(target.params ? { params: target.params } : {}),
+        ...(target.arguments ? { arguments: target.arguments } : {}),
       },
     ]
   })
@@ -403,6 +415,7 @@ export function readPluginFolder(folder: string): PluginFolder {
           reads: extension.cli.reads.map((prefix) => prefix.join(' ')),
         }
       : null,
+    accounts: extension.accounts,
     abilities,
     dataSources: extension.dataSources.map((source) => ({
       id: source.id,

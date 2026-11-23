@@ -114,6 +114,14 @@ const mcpTool = z.object({
     )
     .max(5)
     .optional(),
+  params: z
+    .string()
+    .regex(/^[A-Za-z_][A-Za-z0-9_]{0,39}$/)
+    .optional(),
+  arguments: z
+    .record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,39}$/), z.union([z.string().max(200), z.number(), z.boolean()]))
+    .refine((value) => Object.keys(value).length <= 10)
+    .optional(),
 })
 const abilityChoice = z.union([
   z.enum(['auto', 'off']),

@@ -13,6 +13,12 @@ interface SavedKey {
 type State = ConstructorParameters<typeof SavedCredential>[1]
 type SetState = ConstructorParameters<typeof SavedCredential>[2]
 
+/** A key a signed-in provider already holds for the same service, and that provider's name. */
+export interface SharedMediaKey {
+  token: string
+  from: string
+}
+
 export class MediaAccounts {
   private readonly saved: Record<MediaService, SavedCredential<SavedKey>>
   private readonly errors = new Map<MediaService, string>()
@@ -24,6 +30,8 @@ export class MediaAccounts {
     private readonly connector: (
       service: MediaService,
     ) => Pick<MediaConnector, 'name' | 'tokenPage' | 'account'> = mediaConnector,
+    /** Antigravity signed in with a Gemini API key lends it to Gemini, so the same key is never asked for twice. */
+    private readonly shared: (service: MediaService) => SharedMediaKey | null = () => null,
   ) {
     const saved = (service: MediaService) =>
       new SavedCredential<SavedKey>(
@@ -51,22 +59,29 @@ export class MediaAccounts {
     )
   }
 
-  /** Whether a key is saved, without reading it. */
+  /** Whether a key is saved here or lent by a signed-in provider, without reading a saved one. */
   connected(service: MediaService): boolean {
-    return !!this.saved[service].savedField()
+    return !!this.saved[service].savedField() || !!this.shared(service)
   }
 
   private describe(service: MediaService): MediaAccount {
     const connector = this.connector(service)
     const shown = this.saved[service].savedField()
+    const lent = shown ? null : this.shared(service)
     return {
       service,
       name: connector.name,
-      connected: !!shown,
+      connected: !!shown || !!lent,
       account: shown?.shown ?? null,
-      error: shown ? (this.errors.get(service) ?? null) : null,
+      sharedFrom: lent?.from ?? null,
+      error: shown || lent ? (this.errors.get(service) ?? null) : null,
       tokenPage: connector.tokenPage,
     }
+  }
+
+  /** The key saved under Media itself, for a provider signing in with the same service's key. */
+  async savedKey(service: MediaService): Promise<string | null> {
+    return (await this.saved[service].read())?.token ?? null
   }
 
   /** Checks a key with the service, then keeps it. A refused key never replaces a working one. */
@@ -82,9 +97,9 @@ export class MediaAccounts {
     await this.saved[service].remove()
   }
 
-  /** The key a call runs with. */
+  /** The key a call runs with: the one saved under Media, else the one a signed-in provider lends. */
   async auth(service: MediaService): Promise<MediaAuth> {
-    const value = await this.saved[service].read()
+    const value = (await this.saved[service].read()) ?? this.shared(service)
     if (!value) throw new Error(`Save a ${this.connector(service).name} API key in Settings → Providers first.`)
     return { token: value.token }
   }

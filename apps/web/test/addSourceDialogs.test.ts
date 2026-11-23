@@ -35,7 +35,11 @@ vi.mock('../src/workspace/HostProvider', () => ({ useHost: () => ({ invoke: stat
 vi.mock('../src/workspace/workspace', () => ({ useHostRuntime: () => ({}) }))
 vi.mock('../src/Menu', () => ({ Dialog: 'dialog', Dropdown: 'dropdown', Menu: 'menu' }))
 vi.mock('../src/settings/InstalledSkills', () => ({ InstalledSkills: 'installed-skills' }))
-vi.mock('../src/settings/Plugins', () => ({ Credential: 'credential' }))
+vi.mock('../src/settings/Plugins', () => ({
+  AccountSignIn: 'account-sign-in',
+  Credential: 'credential',
+  startAccountSignIn: async () => true,
+}))
 vi.mock('../src/customize/SkillFiles', () => ({ SkillFiles: 'skill-files' }))
 vi.mock('../src/customize/toolSync', () => ({
   useToolSync: () => ({ status: null, reload() {} }),

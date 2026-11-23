@@ -25,9 +25,10 @@ function headline(account: MediaAccount): string {
     return t('Not connected. Abilities can use it for {0}.', {
       0: MEDIA_ABILITIES[account.service].map((ability) => t(ABILITY_LABELS[ability]).toLowerCase()).join(', '),
     })
-  return (
-    account.error ?? t('Connected as {0} ({1})', { 0: account.account ?? account.name, 1: t('key saved on this host') })
-  )
+  if (account.error) return account.error
+  // A provider's key stays that provider's: removing it there stops this too.
+  if (account.sharedFrom) return t('Uses your {0} key. Remove the key from {0} to stop.', { 0: account.sharedFrom })
+  return t('Connected as {0} ({1})', { 0: account.account ?? account.name, 1: t('key saved on this host') })
 }
 
 /** Each media service's API key on the chosen host: pasted on the host itself, checked, then never shown again. */
@@ -121,10 +122,10 @@ function MediaKeyRow({
           )}
           {canAdminister && !open && (
             <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
-              {account.connected ? t('Reconnect') : t('Connect')}
+              {account.sharedFrom ? t('Use another key') : account.connected ? t('Reconnect') : t('Connect')}
             </Button>
           )}
-          {canAdminister && account.connected && !open && (
+          {canAdminister && account.connected && !account.sharedFrom && !open && (
             <Button
               variant="ghost"
               size="sm"

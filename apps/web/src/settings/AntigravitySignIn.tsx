@@ -47,6 +47,7 @@ const METHODS: { id: AntigravitySignInMethod; title: string; help: string; note?
 export function AntigravitySignIn({
   current,
   hasKey,
+  mediaKey = false,
   onSubmit,
   onCode,
   onClose,
@@ -55,6 +56,8 @@ export function AntigravitySignIn({
   current?: string
   /** Which key variables the host already has for Antigravity, so a saved key need not be typed again. */
   hasKey: (method: AntigravitySignInMethod) => boolean
+  /** A Gemini key is saved under Media and Antigravity has none, so that key signs it in unless another is typed. */
+  mediaKey?: boolean
   /** Resolves with Google's page when the sign-in finishes with a code pasted from it. */
   onSubmit: (input: SignIn) => Promise<{ url: string } | void>
   /** Finishes a browser sign-in with the pasted code; null abandons it. */
@@ -70,7 +73,8 @@ export function AntigravitySignIn({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const input: SignIn = { method, apiKey, gcpProject, gcpLocation }
-  const problem = antigravitySignInProblem(input, hasKey(method))
+  const useMediaKey = method === 'gemini-api-key' && mediaKey
+  const problem = antigravitySignInProblem(input, hasKey(method) || useMediaKey)
   const browser = method === 'oauth-personal' || method === 'oauth-business'
   /** Google's page while a browser sign-in waits for the code it shows. */
   const [page, setPage] = useState<string | null>(null)
@@ -181,7 +185,13 @@ export function AntigravitySignIn({
               autoComplete="off"
               maxLength={512}
               value={apiKey}
-              placeholder={hasKey(method) ? t('Saved on this host. Enter a new one to replace it.') : ''}
+              placeholder={
+                hasKey(method)
+                  ? t('Saved on this host. Enter a new one to replace it.')
+                  : useMediaKey
+                    ? t('Uses the Gemini key saved under Media. Enter another to use that instead.')
+                    : ''
+              }
               onChange={(event) => setApiKey(event.target.value)}
             />
           </label>

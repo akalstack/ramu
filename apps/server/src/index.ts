@@ -205,7 +205,7 @@ import { IdentityService } from './identities/service'
 import { ProjectPlaces } from './identities/places'
 import { setFolderEnvironment } from './userEnvironment'
 import { execFileSync } from 'node:child_process'
-import { setAccountRestriction } from './providers/providerBinaries'
+import { providerVariable, setAccountRestriction } from './providers/providerBinaries'
 import { accountKey } from '@ramu/shared/identities'
 import { setConnectionIdentityScope } from './mcp/policy'
 import { RAMU_INDEX_KEY } from '@ramu/shared/plugins'
@@ -792,6 +792,12 @@ const uptime = new UptimeWatches(
 const mediaAccounts = new MediaAccounts(
   (key, fallback) => workspace.getAppState(key, fallback),
   (key, value) => workspace.setAppState(key, value),
+  undefined,
+  undefined,
+  (service) => {
+    const token = service === 'gemini' ? providerVariable('antigravity', 'GEMINI_API_KEY') : null
+    return token ? { token, from: 'Antigravity' } : null
+  },
 )
 // Thread rows show their pull request, so a change there refreshes the thread lists.
 const pullRequestIndex = new PullRequestIndex(workspace, agents, () => send('workspace:changed', {}))

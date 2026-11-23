@@ -12,7 +12,7 @@ import {
   type ProviderCatalog,
 } from '@ramu/shared/types'
 import type { AbilityCall, AbilityPreferences } from '@ramu/shared/providers/abilities'
-import { AbilityService, mcpArguments, type AbilityHost } from '../src/agent/abilities'
+import { AbilityService, mcpArguments, videoArguments, videoExtension, type AbilityHost } from '../src/agent/abilities'
 import type { AbilityRun } from '../src/agent/abilityRuns'
 import type { AbilityDeclaration } from '../src/providers/adapter'
 import { AttachmentStore } from '../src/attachments'
@@ -874,5 +874,139 @@ describe('3D models on a plugin’s service', () => {
       status: 'refused',
       message: expect.stringContaining('plugin_search'),
     })
+  })
+})
+
+describe('videos on a plugin’s service', () => {
+  const MP4 = Buffer.concat([Buffer.from([0, 0, 0, 24]), Buffer.from('ftypisom'), Buffer.alloc(16, 2)])
+  const higgsfield = {
+    connectionId: 'h1',
+    tool: 'generate_video',
+    status: 'job_status',
+    balance: 'balance',
+    params: 'params',
+    arguments: { model: 'clip-1' },
+    downloads: ['https://*.higgsfield.ai'],
+  }
+  const tools = () => [{ connectionId: 'h1', tool: 'generate_video', server: 'Higgsfield' }]
+
+  function higgsfieldServer(statuses: string[], link = 'https://cdn.higgsfield.ai/j-7/clip.mp4') {
+    const sent: { tool: string; args: Record<string, unknown> }[] = []
+    let polls = 0
+    const mcp = vi.fn<NonNullable<AbilityHost['mcp']>>(async (_session, _connection, tool, build) => {
+      const schema =
+        tool === 'generate_video'
+          ? {
+              properties: {
+                params: {
+                  type: 'object',
+                  properties: {
+                    prompt: { type: 'string' },
+                    model: { type: 'string' },
+                    duration: { type: 'number' },
+                    aspect_ratio: { type: 'string', enum: ['16:9', '9:16', '1:1'] },
+                  },
+                },
+              },
+            }
+          : tool === 'job_status'
+            ? { properties: { jobId: { type: 'string' }, sync: { type: 'boolean' } } }
+            : { properties: {} }
+      sent.push({ tool, args: build(schema) })
+      if (tool === 'balance')
+        return { server: 'Higgsfield', result: { content: [{ type: 'text', text: '{"credits": 40}' }] } }
+      if (tool === 'generate_video')
+        return { server: 'Higgsfield', result: { content: [{ type: 'text', text: '{"results":[{"id":"j-7"}]}' }] } }
+      const status = statuses[Math.min(polls++, statuses.length - 1)]!
+      return {
+        server: 'Higgsfield',
+        result: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                generation: { status, ...(status === 'completed' ? { results: { rawUrl: link } } : {}) },
+              }),
+            },
+          ],
+        },
+      }
+    })
+    return { mcp, sent }
+  }
+  const download = vi.fn<NonNullable<AbilityHost['download']>>(async () => new Response(MP4, { status: 200 }))
+
+  it('sends the description inside the tool’s params with its fixed model, waits on the job and keeps the MP4', async () => {
+    const { mcp, sent } = higgsfieldServer(['in_progress', 'completed'])
+    const abilities = service(working, 'claude-code', undefined, { mcp, mcpTools: tools, download, statusEveryMs: 1 })
+    withAbilities({ choices: { video_generation: higgsfield } })
+    const answer = await abilities.call('thread', 'make_video', {
+      prompt: 'a paper boat on a rainy street',
+      seconds: 8,
+      aspect: 'portrait',
+    })
+    expect(answer).toMatchObject({ status: 'done' })
+    const recorded = (events.at(-1) as { call: AbilityCall }).call
+    expect(recorded.mcp).toEqual({ server: 'Higgsfield', tool: 'generate_video' })
+    expect(recorded.attachments?.map((file) => file.mimeType)).toEqual(['video/mp4'])
+    expect(recorded.credits).toBe(40)
+    expect(sent[0]).toEqual({
+      tool: 'generate_video',
+      args: {
+        params: { prompt: 'a paper boat on a rainy street', duration: 8, aspect_ratio: '9:16', model: 'clip-1' },
+      },
+    })
+    // The status tool is asked with the job id alone, not the making tool's params.
+    expect(sent.filter((entry) => entry.tool === 'job_status').map((entry) => entry.args)).toEqual([
+      { jobId: 'j-7' },
+      { jobId: 'j-7' },
+    ])
+    expect(permission).toHaveBeenCalledTimes(1)
+    expect(permission.mock.calls[0]![1]).toBe('Video with Higgsfield')
+  })
+
+  it('stops when the job is refused, and keeps no file from outside the declared origins', async () => {
+    const refused = higgsfieldServer(['nsfw'])
+    const abilities = service(working, 'claude-code', undefined, {
+      mcp: refused.mcp,
+      mcpTools: tools,
+      download,
+      statusEveryMs: 1,
+    })
+    withAbilities({ choices: { video_generation: higgsfield } })
+    expect(await abilities.call('thread', 'make_video', { prompt: 'x' })).toMatchObject({
+      status: 'failed',
+      message: expect.stringContaining('could not make the video'),
+    })
+    const elsewhere = service(working, 'claude-code', undefined, {
+      mcp: higgsfieldServer(['completed'], 'https://files.example.com/clip.mp4').mcp,
+      mcpTools: tools,
+      download,
+      statusEveryMs: 1,
+    })
+    expect(await elsewhere.call('thread', 'make_video', { prompt: 'x' })).toMatchObject({
+      status: 'failed',
+      message: expect.stringContaining('does not list as a place to download from'),
+    })
+  })
+
+  it('fits the length and shape to what the tool offers, and knows a video by its bytes', () => {
+    expect(
+      videoArguments(
+        { properties: { prompt: { type: 'string' }, duration: { type: 'string', enum: ['5s', '10s'] } } },
+        'rain',
+        { seconds: 8 },
+      ),
+    ).toEqual({ prompt: 'rain', duration: '10s' })
+    expect(
+      videoArguments(
+        { properties: { text: { type: 'string' }, aspect: { type: 'string', enum: ['landscape', 'portrait'] } } },
+        'rain',
+        { aspect: 'portrait' },
+      ),
+    ).toEqual({ text: 'rain', aspect: 'portrait' })
+    expect(videoExtension(MP4)).toBe('mp4')
+    expect(videoExtension(Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0, 0]))).toBe('webm')
+    expect(videoExtension(Buffer.from('<html>'))).toBeNull()
   })
 })

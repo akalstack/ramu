@@ -197,6 +197,8 @@ const downloadOrigin = z
     'Use an https origin such as https://assets.example.com or https://*.example.com, with no path.',
   )
 
+const argumentName = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,39}$/)
+
 const ability = z.strictObject({
   /** A server named in `.mcp.json` (or the manifest's `mcpServers`). */
   server: z.string().min(1).max(100),
@@ -211,6 +213,13 @@ const ability = z.strictObject({
   refine: z.string().min(1).max(200).optional(),
   /** Where a file the tool links to may be downloaded from; a link anywhere else is refused. */
   downloads: z.array(downloadOrigin).max(5).default([]),
+  /** The object property the tool's own fields sit in, such as Higgsfield's `params`. */
+  params: argumentName.optional(),
+  /** Fixed values the tool is always given beside the description, such as the model a service should use. */
+  arguments: z
+    .record(argumentName, z.union([z.string().max(200), z.number(), z.boolean()]))
+    .refine((value) => Object.keys(value).length <= 10, 'Give at most 10 fixed arguments.')
+    .optional(),
 })
 
 const queryField = z.strictObject({
@@ -269,6 +278,14 @@ const dataSource = z.strictObject({
 const ramuExtension = z
   .strictObject({
     credentials: z.array(credential).max(PLUGIN_LIMITS.credentials).default([]),
+    /**
+     * Remote MCP servers that sign in with the service's own account (OAuth with no pasted key or client), such as a
+     * hosted server that bills the person's plan. The plugin's card asks for each sign-in until it is done.
+     */
+    accounts: z
+      .array(z.strictObject({ server: z.string().min(1).max(100), label: text(80) }))
+      .max(PLUGIN_LIMITS.credentials)
+      .default([]),
     cli: cli.optional(),
     abilities: z.record(z.string(), ability).default({}),
     dataSources: z.array(dataSource).max(PLUGIN_LIMITS.dataSources).default([]),
@@ -446,6 +463,7 @@ export type PluginAbility = z.infer<typeof ability>
 
 export const EMPTY_EXTENSION: RamuExtension = {
   credentials: [],
+  accounts: [],
   abilities: {},
   dataSources: [],
   stacks: [],
@@ -547,6 +565,7 @@ export const indexEntry = z.object({
               skills: z.number().int().min(0).optional(),
               mcpServers: z.number().int().min(0).optional(),
               credentials: z.array(z.string().max(80)).max(PLUGIN_LIMITS.credentials).optional(),
+              accounts: z.array(z.string().max(80)).max(PLUGIN_LIMITS.credentials).optional(),
               cli: z.string().max(60).optional(),
               abilities: z.array(z.string().max(40)).max(20).optional(),
               dataSources: z.array(z.string().max(40)).max(PLUGIN_LIMITS.dataSources).optional(),
@@ -665,6 +684,8 @@ export interface PluginContents {
     scope: string | null
     fields: { id: string; label: string; kind: 'text' | 'url' | 'secret'; values?: string[] }[]
   }[]
+  /** Remote servers that sign in with the service's account; absent on plugins installed before accounts existed. */
+  accounts?: { server: string; label: string }[]
   cli: { binaries: string[]; npx: string | null; reads: string[] } | null
   abilities: ({ ability: Ability } & Omit<PluginAbility, never>)[]
   dataSources: { id: string; label: string; credential: string }[]
@@ -705,6 +726,11 @@ export interface InstalledPlugin {
   enabled: boolean
   /** The MCP connections it added, by the server's name in the plugin, whose tools are chosen in MCP servers. */
   mcpConnections: { name: string; id: string }[]
+  /**
+   * Its account sign-ins, by remote server: the connection that signs in, and whether that sign-in is done. Absent
+   * from hosts that have no account sign-ins.
+   */
+  accounts?: { server: string; label: string; connectionId: string | null; signedIn: boolean }[]
   credentials: {
     id: string
     label: string

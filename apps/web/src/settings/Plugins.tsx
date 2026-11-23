@@ -199,6 +199,82 @@ function Review({
 }
 
 /** One credential slot on a plugin's card: paste a token, sign in, or see who it belongs to. */
+/** Starts a plugin's account sign-in on its MCP connection and opens the service's page on this computer. */
+export async function startAccountSignIn(
+  invoke: (method: 'mcp.signIn', connectionId: string) => Promise<{ url: string } | null>,
+  connectionId: string,
+): Promise<boolean> {
+  const started = await invoke('mcp.signIn', connectionId)
+  if (started) open(started.url)
+  return !!started
+}
+
+/**
+ * A remote server's sign-in with the service's own account: the service's page opens in the browser and returns to
+ * Ramu, with no key or client to paste. Signing out drops the tokens from the host credential store.
+ */
+export function AccountSignIn({
+  account,
+  viewOnly,
+  onChanged,
+}: {
+  account: NonNullable<InstalledPlugin['accounts']>[number]
+  viewOnly: boolean
+  onChanged: () => void
+}) {
+  const invoke = useSettingsInvoke()
+  const [busy, setBusy] = useState(false)
+  const [waiting, setWaiting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const connectionId = account.connectionId
+  if (!connectionId) return null
+  const act = async (run: () => Promise<unknown>) => {
+    setBusy(true)
+    setError(null)
+    try {
+      await run()
+      onChanged()
+    } catch (cause) {
+      setError(errorText(cause))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="flex flex-col gap-1 border-t border-line pt-2.5">
+      <div className="flex items-center gap-2 text-caption">
+        <span className="min-w-0 flex-1 truncate">
+          {account.signedIn
+            ? t('{label}: signed in', { label: account.label })
+            : waiting
+              ? t('Finish signing in to {label} in your browser.', { label: account.label })
+              : account.label}
+        </span>
+        {account.signedIn ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={viewOnly || busy}
+            onClick={() => void act(() => invoke('mcp.disconnect', connectionId))}
+          >
+            {t('Sign out')}
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={viewOnly || busy}
+            onClick={() => void act(async () => setWaiting(await startAccountSignIn(invoke, connectionId)))}
+          >
+            {t('Sign in')}
+          </Button>
+        )}
+      </div>
+      {error && <Problem>{error}</Problem>}
+    </div>
+  )
+}
+
 export function Credential({
   plugin,
   slot,
@@ -455,9 +531,12 @@ export function PluginSettings() {
     reload()
     void invoke('projects.list').then(setProjects, () => {})
     const offChanged = on('plugins:changed', reload)
+    // An account sign-in finishes on the MCP connection the plugin added.
+    const offMcp = on('mcp:changed', reload)
     const offFailed = on('plugins:signInFailed', ({ message }) => setError(message))
     return () => {
       offChanged()
+      offMcp()
       offFailed()
     }
   }, [invoke, on, reload])
@@ -515,7 +594,10 @@ export function PluginSettings() {
           </SettingsEmpty>
         )}
         {installed.map((plugin) => {
-          const missing = plugin.credentials.filter((slot) => slot.state !== 'saved')
+          const missing = [
+            ...plugin.credentials.filter((slot) => slot.state !== 'saved'),
+            ...(plugin.accounts ?? []).filter((account) => !account.signedIn),
+          ]
           return (
             <article key={plugin.id} className={`${SETTINGS_CARD} gap-2! px-3.5! py-3!`}>
               {/* The name and its facts on the left, the controls in one fixed group on the right, so neither
@@ -643,6 +725,9 @@ export function PluginSettings() {
                   })}
                 </p>
               )}
+              {(plugin.accounts ?? []).map((account) => (
+                <AccountSignIn key={account.server} account={account} viewOnly={viewOnly} onChanged={reload} />
+              ))}
               {plugin.credentials.map((slot) => (
                 <Credential key={slot.id} plugin={plugin} slot={slot} viewOnly={viewOnly} onChanged={reload} />
               ))}
@@ -818,8 +903,11 @@ export function PluginSettings() {
           }}
           onConfirm={(options) =>
             void act(async () => {
-              await invoke('plugins.confirm', review.stageId, options)
+              const installed = await invoke('plugins.confirm', review.stageId, options)
               setReview(null)
+              // A service that signs in with its own account asks for it straight away, as a key would be.
+              const first = installed.accounts?.find((account) => !account.signedIn && account.connectionId)
+              if (first?.connectionId) await startAccountSignIn(invoke, first.connectionId).catch(() => false)
               setSource('')
               reload()
             })

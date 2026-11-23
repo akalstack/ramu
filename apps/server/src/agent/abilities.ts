@@ -163,8 +163,18 @@ const AUDIO_TYPES: Record<string, string> = {
   'audio/mp4': 'm4a',
 }
 
-/** How long a 3D service's background task is waited for. */
+/** How long a 3D or video service's background task is waited for. */
 const MODEL_WAIT_MS = 10 * 60_000
+/** The largest video file kept. */
+const VIDEO_MAX_BYTES = 200 * 1024 * 1024
+/** What a plugin's paid call makes, for the card that asks before the first one in a thread. */
+const SPENT_ON: Partial<Record<Ability, { title: string; what: string }>> = {
+  model_3d: { title: '3D model', what: 'a 3D model' },
+  video_generation: { title: 'Video', what: 'a video' },
+  speech: { title: 'Narration', what: 'narration' },
+  music: { title: 'Music', what: 'music' },
+  sound_effect: { title: 'Sound effect', what: 'a sound effect' },
+}
 /** The largest model file kept. */
 const MODEL_MAX_BYTES = 100 * 1024 * 1024
 /** The polygon target each detail level asks for, where the tool takes one. */
@@ -257,6 +267,57 @@ export function modelArguments(
     options.detail ? MODEL_POLYGONS[options.detail] : undefined,
   )
   return args
+}
+
+/**
+ * Arguments for a video service's tool: the description, and the length and shape where the tool has fields for
+ * them, in the form its schema asks for (`8` or `"8s"`, `"16:9"` or one of its listed choices).
+ */
+export function videoArguments(
+  schema: Record<string, unknown>,
+  prompt: string,
+  options: { seconds?: number; aspect?: 'landscape' | 'portrait' } = {},
+): Record<string, unknown> {
+  const properties = (schema.properties ?? {}) as Record<string, { type?: unknown; enum?: unknown }>
+  const names = Object.keys(properties)
+  const find = (pattern: RegExp) => names.find((name) => pattern.test(name))
+  const args: Record<string, unknown> = { ...mcpArguments(schema, prompt) }
+  const length = options.seconds === undefined ? undefined : find(/^(duration|seconds|length|duration_seconds)$/i)
+  if (length && options.seconds !== undefined) {
+    const field = properties[length]!
+    const choices = Array.isArray(field.enum) ? field.enum : null
+    const asText = field.type === 'string' || typeof choices?.[0] === 'string'
+    const wanted = asText
+      ? `${options.seconds}${choices?.some((entry) => /s$/.test(String(entry))) ? 's' : ''}`
+      : options.seconds
+    // A tool that lists lengths gets the nearest one it offers.
+    args[length] = choices?.length
+      ? choices.reduce((best, entry) =>
+          Math.abs(parseFloat(String(entry)) - options.seconds!) < Math.abs(parseFloat(String(best)) - options.seconds!)
+            ? entry
+            : best,
+        )
+      : wanted
+  }
+  const shape = options.aspect === undefined ? undefined : find(/^(aspect_ratio|aspect|ratio)$/i)
+  if (shape && options.aspect) {
+    const ratio = options.aspect === 'portrait' ? '9:16' : '16:9'
+    const choices = properties[shape]!.enum
+    if (!Array.isArray(choices) || choices.includes(ratio)) args[shape] = ratio
+    else {
+      const named = choices.find((entry) => String(entry).toLowerCase() === options.aspect)
+      if (named !== undefined) args[shape] = named
+    }
+  }
+  return args
+}
+
+/** A video file's extension from its first bytes, or null when they are not a video. */
+export function videoExtension(bytes: Buffer): 'mp4' | 'mov' | 'webm' | null {
+  if (bytes.length >= 12 && bytes.subarray(4, 8).toString('latin1') === 'ftyp')
+    return bytes.subarray(8, 10).toString('latin1') === 'qt' ? 'mov' : 'mp4'
+  if (bytes.length >= 4 && bytes.readUInt32BE(0) === 0x1a45dfa3) return 'webm'
+  return null
 }
 
 /** Arguments for a status or refine tool: the task id in its id field, and no waiting inside the call. */
@@ -941,11 +1002,22 @@ export class AbilityService {
       mcpArguments(schema, text, inputs),
   ) {
     if (!this.host.mcp) throw new Error('Shared MCP is not available on this host.')
+    // The making tool's own shape: its fields inside one object, and the fixed values its plugin gives it. A status,
+    // balance or refine call is asked with its id alone.
+    const making = ![tool.status, tool.balance, tool.refine].includes(tool.tool)
+    const shaped = (schema: Record<string, unknown>) => {
+      if (!making) return build(schema)
+      const inner = tool.params
+        ? (((schema.properties ?? {}) as Record<string, Record<string, unknown>>)[tool.params] ?? {})
+        : schema
+      const args = { ...build(inner), ...(tool.arguments ?? {}) }
+      return tool.params ? { [tool.params]: args } : args
+    }
     const { server, result } = await this.host.mcp(
       session.id,
       tool.connectionId,
       tool.tool,
-      build,
+      shaped,
       signal ?? new AbortController().signal,
     )
     const content = (Array.isArray(result.content) ? result.content : []) as {
@@ -1035,8 +1107,9 @@ export class AbilityService {
   ): Promise<AbilityMcpCheck> {
     const base = { connectionId: tool.connectionId, tool: tool.tool, ability, checkedAt: new Date().toISOString() }
     try {
-      // Making a model spends credits, so its check only reads the account's balance, when the plugin names a tool for it.
-      if (ability === 'model_3d') {
+      // Making a model, a video or audio spends credits, so its check only reads the account's balance, when the plugin
+      // names a tool for it.
+      if (ASKED_MCP_ABILITIES.includes(ability)) {
         if (!tool.balance) return { ...base, ok: true }
         const balance = await this.mcpCall(session, { ...tool, tool: tool.balance }, '', signal, [], () => ({}))
         const credits = creditsIn(balance)
@@ -1081,12 +1154,13 @@ export class AbilityService {
         'unavailable',
         `${ABILITY_LABELS[base.ability]} cannot run on a Shared MCP tool. Choose a provider for it in Settings → Models → Abilities.`,
       )
-    if (base.ability === 'model_3d') {
-      // A tool picked by hand in Settings keeps what its plugin declared: the status tool and where files download from.
-      const declared = this.preferences().autoMcp?.model_3d
-      const full = declared?.connectionId === choice.connectionId ? { ...declared, ...choice } : choice
-      return this.modelViaMcp(session, base, prepared, full, started, signal)
-    }
+    // A tool picked by hand in Settings keeps what its plugin declared: the status tool and where files download from.
+    const declared = this.preferences().autoMcp?.[base.ability]
+    const full = declared?.connectionId === choice.connectionId ? { ...declared, ...choice } : choice
+    if (ASKED_MCP_ABILITIES.includes(base.ability))
+      await this.approveSpend(session, base.ability, full, prepared, signal)
+    if (base.ability === 'model_3d') return this.modelViaMcp(session, base, prepared, full, started, signal)
+    if (base.ability === 'video_generation') return this.videoViaMcp(session, base, prepared, full, started, signal)
     // A long read sends its whole rendered prompt, documents included; an edit sends its images as data URLs.
     const text =
       base.ability === 'long_context'
@@ -1120,10 +1194,43 @@ export class AbilityService {
   }
 
   /**
-   * A 3D model from a plugin's service. The first call in a thread asks first, naming the service, since each one
-   * spends the account's credits. A service that works in the background returns a task id, which the mapped status
-   * tool is asked about every few seconds until the file is ready, it fails, Stop is pressed or ten minutes pass. The
-   * GLB is kept only when its bytes are glTF, downloaded only from an origin the plugin declared.
+   * The first paid call to a plugin's service in a thread asks first, naming the service and what is sent, since each
+   * one spends the account's credits. Later calls to the same service in the thread do not ask again.
+   */
+  private async approveSpend(
+    session: AgentSessionInfo,
+    ability: Ability,
+    choice: AbilityMcpTool,
+    prepared: Prepared,
+    signal?: AbortSignal,
+  ) {
+    const approval = `${session.id}\u0000${choice.connectionId}`
+    if (this.approvedModels.has(approval)) return
+    const server = this.mcpTools().find((entry) => entry.connectionId === choice.connectionId)?.server ?? 'the service'
+    const spent = SPENT_ON[ability] ?? { title: ABILITY_LABELS[ability], what: ABILITY_LABELS[ability].toLowerCase() }
+    const prompt = ability === 'model_3d' ? prepared.request.prompt : String(prepared.sent.prompt)
+    const allowed = await this.host.requestPermission(
+      session.id,
+      `${spent.title} with ${server}`,
+      [
+        `Makes ${spent.what} on your ${server} account, which spends its credits. Later calls to ${server} in this thread do not ask again. It sends only this:`,
+        clip(prompt || 'The image below.', 1200),
+        ...(prepared.sent.inputs.length ? [`Image: ${prepared.sent.inputs.join(', ')}`] : []),
+      ].join('\n\n'),
+      signal ?? new AbortController().signal,
+    )
+    if (!allowed)
+      throw new Refusal(
+        'declined',
+        `The person declined making ${spent.what} with ${server}. Continue without it and say so in your reply.`,
+      )
+    this.approvedModels.add(approval)
+  }
+
+  /**
+   * A 3D model from a plugin's service. A service that works in the background returns a task id, which the mapped
+   * status tool is asked about every few seconds until the file is ready, it fails, Stop is pressed or ten minutes
+   * pass. The GLB is kept only when its bytes are glTF, downloaded only from an origin the plugin declared.
    */
   private async modelViaMcp(
     session: AgentSessionInfo,
@@ -1136,26 +1243,6 @@ export class AbilityService {
     const stop = signal ?? new AbortController().signal
     const options = prepared.model ?? {}
     const prompt = prepared.request.prompt
-    const server = this.mcpTools().find((entry) => entry.connectionId === choice.connectionId)?.server ?? 'the service'
-    const approval = `${session.id}\u0000${choice.connectionId}`
-    if (!this.approvedModels.has(approval)) {
-      const allowed = await this.host.requestPermission(
-        session.id,
-        `3D model with ${server}`,
-        [
-          `Makes a 3D model on your ${server} account, which spends its credits. Later models in this thread do not ask again. It sends only this:`,
-          clip(prompt || 'The image below.', 1200),
-          ...(prepared.sent.inputs.length ? [`Image: ${prepared.sent.inputs.join(', ')}`] : []),
-        ].join('\n\n'),
-        stop,
-      )
-      if (!allowed)
-        throw new Refusal(
-          'declined',
-          `The person declined making a model with ${server}. Continue without it and say so in your reply.`,
-        )
-      this.approvedModels.add(approval)
-    }
     const path = prepared.request.images[0]
     const image = path
       ? {
@@ -1222,9 +1309,82 @@ export class AbilityService {
   }
 
   /**
-   * Waits on a 3D service's task: its status tool is asked every few seconds until the result holds a model, the task
-   * fails, Stop is pressed or ten minutes pass. A result that already holds the model is returned as it is.
+   * A video from a plugin's service, waited on like a 3D model when the service works in the background. The file is
+   * kept only when its bytes are a video, downloaded only from an origin the plugin declared.
    */
+  private async videoViaMcp(
+    session: AgentSessionInfo,
+    base: Pick<AbilityCall, 'id' | 'ability' | 'tool' | 'args'>,
+    prepared: Prepared,
+    choice: AbilityMcpTool,
+    started: number,
+    signal?: AbortSignal,
+  ): Promise<AbilityCall> {
+    const stop = signal ?? new AbortController().signal
+    const prompt = String(base.args.prompt ?? prepared.sent.prompt)
+    const first = await this.mcpCall(session, choice, prompt, stop, [], (schema) =>
+      videoArguments(schema, prompt, {
+        ...(typeof base.args.seconds === 'number' ? { seconds: base.args.seconds } : {}),
+        ...(base.args.aspect === 'portrait' || base.args.aspect === 'landscape' ? { aspect: base.args.aspect } : {}),
+      }),
+    )
+    const { file, result } = await this.waitForTask(session, first, choice, stop, 'video', (next) =>
+      this.videoFile(next, choice, stop),
+    )
+    if (!file) throw new Error(`${result.server} returned no video. ${clip(result.texts.join(' '), 300)}`.trim())
+    let credits: number | undefined
+    if (choice.balance)
+      credits = await this.mcpCall(session, { ...choice, tool: choice.balance }, '', stop, [], () => ({}))
+        .then(creditsIn)
+        .catch(() => undefined)
+    return {
+      ...base,
+      status: 'done',
+      mcp: { server: result.server, tool: choice.tool },
+      sent: prepared.sent,
+      summary: clip(
+        [`A ${(file.bytes.length / 1024 / 1024).toFixed(1)} MB video.`, result.texts.join('\n\n')]
+          .filter(Boolean)
+          .join(' '),
+        2_000,
+      ),
+      attachments: [this.host.attachments.add(`${slug(prompt)}.${file.extension}`, file.bytes)],
+      ...(credits === undefined ? {} : { credits }),
+      durationMs: Date.now() - started,
+    }
+  }
+
+  /** The video in a tool result, or null when it is not ready yet. */
+  private async videoFile(
+    result: Awaited<ReturnType<AbilityService['mcpCall']>>,
+    choice: AbilityMcpTool,
+    signal: AbortSignal,
+  ): Promise<{ bytes: Buffer; extension: string } | null> {
+    for (const blob of result.blobs) {
+      const extension = videoExtension(blob.bytes)
+      if (extension) return { bytes: blob.bytes, extension }
+    }
+    const pathOf = (url: string) => {
+      try {
+        return new URL(url).pathname.toLowerCase()
+      } catch {
+        return ''
+      }
+    }
+    const link =
+      result.links.find((entry) => /\.(mp4|mov|webm)$/.test(pathOf(entry.url))) ??
+      result.links.find(
+        (entry) =>
+          /video|raw_?url|result_?url/i.test(entry.key) && !/thumb|preview|poster|image|cover/i.test(entry.key),
+      )
+    if (!link) return null
+    const bytes = await this.fetchFile(link.url, choice, signal, VIDEO_MAX_BYTES)
+    const extension = videoExtension(bytes)
+    if (!extension) throw new Error(`${result.server} linked to a file that is not a video.`)
+    return { bytes, extension }
+  }
+
+  /** Waits on a 3D model's task: the preview is only waited on, and the model downloaded when `download` is set. */
   private async waitForModel(
     session: AgentSessionInfo,
     created: Awaited<ReturnType<AbilityService['mcpCall']>>,
@@ -1232,28 +1392,54 @@ export class AbilityService {
     stop: AbortSignal,
     download = true,
     fresh = false,
-  ): Promise<{ file: Awaited<ReturnType<AbilityService['modelFile']>>; result: typeof created }> {
+  ) {
+    return this.waitForTask(
+      session,
+      created,
+      choice,
+      stop,
+      'model',
+      download ? (result) => this.modelFile(result, choice, stop) : null,
+      fresh,
+    )
+  }
+
+  /**
+   * Waits on a background task: its status tool is asked every few seconds until `find` gets the file from the
+   * result, the task fails, Stop is pressed or ten minutes pass. A result that already holds the file is returned as
+   * it is. With no `find`, the task is only waited on until it finishes (a 3D preview that will be textured).
+   */
+  private async waitForTask<T>(
+    session: AgentSessionInfo,
+    created: Awaited<ReturnType<AbilityService['mcpCall']>>,
+    choice: AbilityMcpTool,
+    stop: AbortSignal,
+    what: 'model' | 'video',
+    find: ((result: typeof created) => Promise<T | null>) | null,
+    fresh = false,
+  ): Promise<{ file: T | null; result: typeof created }> {
     let result = created
+    const download = !!find
     // A refine task's first answer carries the preview's links, which are not its model.
-    let file = fresh || !download ? null : await this.modelFile(result, choice, stop)
+    let file = fresh || !find ? null : await find(result)
     if (file || !choice.status) return { file, result }
     const task = taskIn(created)
     if (task === undefined)
       throw new Error(
-        `${result.server} returned no model and no task to wait for. ${clip(result.texts.join(' '), 300)}`,
+        `${result.server} returned no ${what} and no task to wait for. ${clip(result.texts.join(' '), 300)}`,
       )
     const deadline = Date.now() + MODEL_WAIT_MS
     const every = this.host.statusEveryMs ?? 5_000
     while (!file) {
       if (Date.now() > deadline)
-        throw new Error(`${result.server} did not finish the model within ${MODEL_WAIT_MS / 60_000} minutes.`)
+        throw new Error(`${result.server} did not finish the ${what} within ${MODEL_WAIT_MS / 60_000} minutes.`)
       await new Promise<void>((resolve, reject) => {
         const timer = setTimeout(resolve, every)
         stop.addEventListener(
           'abort',
           () => {
             clearTimeout(timer)
-            reject(new Error('The model was stopped.'))
+            reject(new Error(`The ${what} was stopped.`))
           },
           { once: true },
         )
@@ -1262,14 +1448,14 @@ export class AbilityService {
         taskArguments(schema, String(task), /^(task_?id|job_?id)$/i),
       )
       const state = fieldIn(result.structured ?? result.texts, /^(status|state)$/i)
-      if (typeof state === 'string' && /^(fail(ed|ure)?|error|cancel(l)?ed|expired|banned)$/i.test(state))
-        throw new Error(`${result.server} could not make the model. ${clip(result.texts.join(' '), 300)}`.trim())
+      if (typeof state === 'string' && /^(fail(ed|ure)?|error|cancel(l)?ed|expired|banned|nsfw|rejected)$/i.test(state))
+        throw new Error(`${result.server} could not make the ${what}. ${clip(result.texts.join(' '), 300)}`.trim())
       if (typeof state === 'string' && !/^(succeeded|success|done|completed?|finished)$/i.test(state)) continue
       // With no status field, a preview is ready once it links to a model.
       if (!download && (state !== undefined || result.links.some((entry) => /glb/i.test(entry.key + entry.url))))
         return { file: null, result }
-      if (!download) continue
-      file = await this.modelFile(result, choice, stop)
+      if (!find) continue
+      file = await find(result)
     }
     return { file, result }
   }

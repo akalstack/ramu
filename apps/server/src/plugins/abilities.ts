@@ -38,6 +38,8 @@ export function mapPluginAbilities(
       ...(entry.fromImage ? { fromImage: entry.fromImage } : {}),
       ...(entry.refine ? { refine: entry.refine } : {}),
       ...(entry.downloads?.length ? { downloads: entry.downloads } : {}),
+      ...(entry.params ? { params: entry.params } : {}),
+      ...(entry.arguments ? { arguments: entry.arguments } : {}),
     }
     changed = true
   }
