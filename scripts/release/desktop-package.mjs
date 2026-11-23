@@ -20,6 +20,13 @@ function find(from, name) {
   }
 }
 
+// The Agent SDK's per-platform Claude Code binaries (about 350 MB, over half the download). Ramu runs the person's
+// installed Claude Code instead, so the copies would never run.
+const unshipped = /^@anthropic-ai\/claude-agent-sdk-/
+
+// Source maps and type declarations are read only by editors and debuggers.
+const devOnlyFile = /\.(map|d\.ts|d\.mts|d\.cts)$/
+
 /** Every installed package the app needs at runtime: dependencies and present optionalDependencies, transitively. */
 export function productionClosure(appDir) {
   const seen = new Map()
@@ -33,6 +40,7 @@ export function productionClosure(appDir) {
       visit(found)
     }
     for (const name of Object.keys(manifest.optionalDependencies ?? {})) {
+      if (unshipped.test(name)) continue
       const found = find(dir, name)
       if (found) visit(found)
     }
@@ -99,7 +107,7 @@ function main() {
       cpSync(dir, stagePath(stage, dir), {
         recursive: true,
         dereference: true,
-        filter: (source) => source !== join(dir, 'node_modules'),
+        filter: (source) => source !== join(dir, 'node_modules') && !devOnlyFile.test(source),
       })
     }
     console.log(`Staged ${packages.length} production packages`)

@@ -120,6 +120,15 @@ export async function signOut() {
   await SecureStore.deleteItemAsync(KEY)
 }
 
+/** Deletes the account and everything the service keeps for it, then forgets this phone's session and key. */
+export async function deleteAccount() {
+  await call('DELETE', '/api/me')
+  await SecureStore.deleteItemAsync(AUTO)
+  await SecureStore.deleteItemAsync(SESSION)
+  await SecureStore.deleteItemAsync(KEY)
+  await SecureStore.deleteItemAsync(SLOT)
+}
+
 async function backupKey(): Promise<Uint8Array | null> {
   const saved = await SecureStore.getItemAsync(KEY)
   return saved ? fromBase64(saved) : null

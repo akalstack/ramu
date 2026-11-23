@@ -33,6 +33,9 @@ export default defineConfig({
           daemon: resolve(__dirname, '../server/src/index.ts'),
           cli: resolve(__dirname, '../server/src/cli.ts'),
         },
+        // Packages in this app's `dependencies` stay external and ship in node_modules; everything else is bundled. So
+        // only a package that needs its own files at runtime (native addons, binaries, .wasm, or modules that artifact
+        // compilation resolves) belongs there; plain JavaScript packages go in devDependencies to keep the download small.
         // Playwright ships its own runtime files; keep it as a packaged production dependency.
         // QuickJS loads its .wasm file from beside its own module, so it stays a packaged dependency too.
         // ws probes these optional native accelerators inside try/catch. Leave resolution to Node

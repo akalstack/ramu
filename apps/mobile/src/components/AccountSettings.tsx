@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Image, Linking, View } from 'react-native'
+import { ActivityIndicator, Alert, Image, Linking, View } from 'react-native'
 import * as Device from 'expo-device'
 import { KeyRound } from 'lucide-react-native'
 import type { AccountUser, ListedHostInfo } from '@ramu/shared/account'
@@ -377,6 +377,41 @@ export function AccountSettings() {
                 </Row>
               </View>
             ))}
+          </Card>
+          <Card style={{ marginHorizontal: space.l, marginTop: space.l }}>
+            <Row style={{ paddingVertical: space.m }}>
+              <RowLabel
+                title={t('Delete account')}
+                help={t('Deletes every backup, listed host and sign-in in the account. Settings on your hosts stay.')}
+              />
+              <Button
+                kind="danger"
+                title={t('Delete account…')}
+                disabled={busy}
+                onPress={() =>
+                  Alert.alert(
+                    t('Delete your Ramu account?'),
+                    t(
+                      'Every backup, listed host and sign-in in the account is deleted at once. Settings on your hosts stay as they are.',
+                    ),
+                    [
+                      { text: t('Cancel'), style: 'cancel' },
+                      {
+                        text: t('Delete account'),
+                        style: 'destructive',
+                        onPress: () =>
+                          void act(async () => {
+                            await account.deleteAccount()
+                            setRequests([])
+                            setHosts([])
+                            await refresh()
+                          }),
+                      },
+                    ],
+                  )
+                }
+              />
+            </Row>
           </Card>
         </>
       ) : null}

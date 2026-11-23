@@ -41,7 +41,7 @@ module.exports = {
         'Ramu uses Accessibility to operate the apps you let an agent use and to read their on-screen text.',
     },
     icon: join(repoRoot, 'assets', 'icon'),
-    // The detached Node daemon and Claude SDK executables must run outside ASAR.
+    // The detached Node daemon and native helpers (node-pty, esbuild) must run outside ASAR.
     asar: false,
     ignore: [
       /^\/(src|test|docs|scripts|output|dist|releases|\.git|\.github|\.agents)(\/|$)/,
@@ -93,11 +93,7 @@ module.exports = {
     { name: '@electron-forge/maker-squirrel', platforms: ['win32'], config: { name: 'ramu' } },
   ],
   hooks: {
-    prePackage: async (_config, platform, arch) => {
-      if (!existsSync(join(repoRoot, 'node_modules', '@anthropic-ai', `claude-agent-sdk-${platform}-${arch}`)))
-        throw new Error(
-          `Claude SDK executable for ${platform}/${arch} is missing. Install dependencies and build on the target platform.`,
-        )
+    prePackage: async () => {
       if (!existsSync(join(__dirname, 'out', 'main', 'daemon.js')))
         throw new Error('Build the desktop app first: run packaging through scripts/desktop-package.mjs.')
     },

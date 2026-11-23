@@ -1,25 +1,26 @@
-import { spawnSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { expect, it } from 'vitest'
-import { bundledRipgrep } from '../src/workspace/ripgrep'
+import { afterEach, beforeEach, expect, it } from 'vitest'
+import { claudeCodeRipgrep } from '../src/workspace/ripgrep'
 
-it('searches with the ripgrep inside the bundled Claude binary when none is installed', () => {
-  const rg = bundledRipgrep()
-  expect(rg?.argv0).toBe('rg')
-  const dir = mkdtempSync(join(tmpdir(), 'ramu rg '))
-  try {
-    writeFileSync(join(dir, 'note.txt'), 'find the needle here\n')
-    // spawn passes argv0 through; execFile does not.
-    const { stdout } = spawnSync(rg!.file, ['--json', '--fixed-strings', '--', 'needle', '.'], {
-      cwd: dir,
-      argv0: rg!.argv0,
-      encoding: 'utf8',
-    })
-    expect(stdout).toContain('"type":"match"')
-    expect(stdout).toContain('note.txt')
-  } finally {
-    rmSync(dir, { recursive: true, force: true })
-  }
+let dir: string
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), 'ramu rg '))
+})
+afterEach(() => rmSync(dir, { recursive: true, force: true }))
+
+it('runs a native Claude Code binary as ripgrep', () => {
+  expect(claudeCodeRipgrep(process.execPath)).toEqual({ file: process.execPath, argv0: 'rg' })
+})
+
+it('skips a Claude Code launcher script, which would ignore the ripgrep name', () => {
+  const script = join(dir, 'claude')
+  writeFileSync(script, '#!/bin/sh\nexec node cli.js "$@"\n')
+  chmodSync(script, 0o755)
+  expect(claudeCodeRipgrep(script)).toBeNull()
+})
+
+it('finds nothing when Claude Code is not installed', () => {
+  expect(claudeCodeRipgrep(join(dir, 'missing'))).toBeNull()
 })
