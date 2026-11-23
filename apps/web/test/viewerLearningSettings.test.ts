@@ -104,7 +104,7 @@ it('keeps cached reviews readable while disabling maintenance and retained apply
   state.viewer = true
   const viewer = nodes(RenderLearning())
   await flush()
-  expect(viewer.some((node) => node.props.meta?.includes('Host A'))).toBe(true)
+  expect(viewer.some((node) => String(node.props.title ?? '').includes('Host A'))).toBe(true)
   expect(viewer.find((node) => node.type === 'Button' && node.props.children === 'Apply')!.props.disabled).toBe(true)
   state.invoke.mockClear()
   apply.props.onClick()
@@ -129,8 +129,8 @@ it('hides another host snapshot immediately and ignores its late response', asyn
   finish(snapshot('Old host A'))
   await flush()
   const selected = nodes(RenderLearning())
-  expect(selected.some((node) => node.props.meta?.includes('Host B'))).toBe(true)
-  expect(selected.some((node) => node.props.meta?.includes('Old host A'))).toBe(false)
+  expect(selected.some((node) => String(node.props.title ?? '').includes('Host B'))).toBe(true)
+  expect(selected.some((node) => String(node.props.title ?? '').includes('Old host A'))).toBe(false)
   expect(state.notify).not.toHaveBeenCalled()
 })
 
@@ -153,6 +153,6 @@ it('keeps the newest refresh when same-host memory events complete out of order'
   finish(snapshot('Stale review'))
   await flush()
   const selected = nodes(RenderLearning())
-  expect(selected.some((node) => node.props.meta?.includes('Newest review'))).toBe(true)
-  expect(selected.some((node) => node.props.meta?.includes('Stale review'))).toBe(false)
+  expect(selected.some((node) => String(node.props.title ?? '').includes('Newest review'))).toBe(true)
+  expect(selected.some((node) => String(node.props.title ?? '').includes('Stale review'))).toBe(false)
 })

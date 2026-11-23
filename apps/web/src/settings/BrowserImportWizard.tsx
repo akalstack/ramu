@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import { BROWSER_DATA_BLOCKED } from '@ramu/shared/types/browser'
+import { MacPermission } from './MacPermission'
 import type {
   BrowserImportDomain,
   BrowserImportProfile,
@@ -77,16 +79,25 @@ export function BrowserImportWizard({
   const [error, setError] = useState('')
   const api = useMemo(() => importApi(scope, hostId), [scope, hostId])
 
+  // The system refused to let Ramu read the browser: offer the setting that allows it, then look again.
+  const [blocked, setBlocked] = useState(false)
+  const [attempt, setAttempt] = useState(0)
   useEffect(() => {
     let active = true
+    setBlocked(false)
+    setProfiles(null)
     api.profiles(source.id).then(
       (list) => active && setProfiles(list),
-      (reason) => active && setError(t(errorText(reason))),
+      (reason) => {
+        if (!active) return
+        if (errorText(reason) === BROWSER_DATA_BLOCKED) setBlocked(true)
+        else setError(t(errorText(reason)))
+      },
     )
     return () => {
       active = false
     }
-  }, [api, source.id])
+  }, [api, source.id, attempt])
 
   // Closing at any point gives up what was read, and removes a copy that was not kept.
   const finish = async (discardStaged: boolean) => {
@@ -160,7 +171,13 @@ export function BrowserImportWizard({
         {step === 'profile' && (
           <div className="flex flex-col gap-2">
             <span className="text-caption text-muted-foreground">{t('Choose the browser profile to copy from.')}</span>
-            {!profiles ? (
+            {blocked ? (
+              <MacPermission
+                pane="full-disk-access"
+                reason={t('macOS blocked Ramu from reading {0}’s data.', { 0: source.name })}
+                onCheckAgain={() => setAttempt((count) => count + 1)}
+              />
+            ) : !profiles ? (
               <span className="text-caption">{t('Looking for profiles…')}</span>
             ) : profiles.length ? (
               profiles.map((entry) => (
@@ -170,7 +187,9 @@ export function BrowserImportWizard({
               ))
             ) : (
               <span className="text-caption">
-                {t('No profiles were found. Close {0} and try again, or sign in manually.', { 0: source.name })}
+                {t('No {0} profiles were found on this computer. Sign in to a Ramu profile instead.', {
+                  0: source.name,
+                })}
               </span>
             )}
           </div>

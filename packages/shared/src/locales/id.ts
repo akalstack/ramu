@@ -8168,4 +8168,19 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Sends when this turn ends': 'Terkirim saat giliran ini selesai',
   '{0} memories': '{0} memori',
   '{0} procedures': '{0} prosedur',
+  'Importing from Safari isn’t available yet. Sign in to a Ramu profile instead.':
+    'Impor dari Safari belum tersedia. Masuk ke profil Ramu saja.',
+  'No {0} profiles were found on this computer. Sign in to a Ramu profile instead.':
+    'Tidak ada profil {0} di komputer ini. Masuk ke profil Ramu saja.',
+  'macOS blocked Ramu from reading {0}’s data.': 'macOS memblokir Ramu membaca data {0}.',
+  'In System Settings → Privacy & Security → {0}, turn on Ramu. macOS may ask Ramu to quit and reopen; your threads keep running.':
+    'Di Pengaturan Sistem → Privasi & Keamanan → {0}, nyalakan Ramu. macOS mungkin meminta Ramu keluar dan dibuka lagi; thread kamu tetap berjalan.',
+  "This computer blocked Ramu from reading the browser's data. Allow Ramu in Full Disk Access, then check again.":
+    'Komputer ini memblokir Ramu membaca data browser. Izinkan Ramu di Akses Disk Penuh, lalu periksa lagi.',
+  'System Settings': 'Pengaturan Sistem',
+  'Full Disk Access': 'Akses Disk Penuh',
+  Accessibility: 'Aksesibilitas',
+  'Screen Recording': 'Perekaman Layar',
+  'Input Monitoring': 'Pemantauan Input',
+  Camera: 'Kamera',
 }

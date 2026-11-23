@@ -66,6 +66,13 @@ export interface BrowserImportSource {
 }
 
 /** One browser profile on this computer that sessions could be copied from. Names only: no cookie or path is exposed. */
+/**
+ * The operating system refused Ramu access to a browser's data (on macOS, until Ramu has Full Disk Access). Reported as
+ * this exact message, so the import can offer the setting instead of saying no profiles exist.
+ */
+export const BROWSER_DATA_BLOCKED =
+  "This computer blocked Ramu from reading the browser's data. Allow Ramu in Full Disk Access, then check again."
+
 export interface BrowserImportProfile {
   id: string
   name: string

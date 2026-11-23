@@ -1,4 +1,5 @@
 import { isThemePreviewDocument, themePreviewResponse, THEME_PREVIEW_CSP } from './themePreview'
+import { PRIVACY_PANES, privacyPaneUrl, type PrivacyPane } from '@ramu/shared/privacyPanes'
 import { INTERACTIVE_CSP } from '@ramu/shared/interactive'
 import { ContentDocuments } from './contentDocuments'
 import { HostNavigation } from './hostNavigation'
@@ -1193,6 +1194,12 @@ async function main() {
       }
       return browserMethod(browser, method, args)
     }
+    if (method === 'app.openPrivacySettings') {
+      // Only the listed Privacy & Security pages, and only from this computer: a phone cannot open this Mac's settings.
+      if (remote || process.platform !== 'darwin' || typeof args[0] !== 'string' || !(args[0] in PRIVACY_PANES))
+        throw new Error('These settings are only on this Mac.')
+      return shell.openExternal(privacyPaneUrl(args[0] as PrivacyPane))
+    }
     if (method === 'app.openExternal') {
       if (remote || typeof args[0] !== 'string' || !isWebLink(args[0])) throw new Error('Only web links can be opened.')
       return shell.openExternal(args[0])
@@ -1616,7 +1623,7 @@ async function main() {
   ipcMain.handle('ramu:voice:settings', (event) => {
     voiceSender(event)
     // Microphone first; speech recognition lives on the same privacy page family.
-    void shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone')
+    void shell.openExternal(privacyPaneUrl('microphone'))
   })
 
   // Device-wide UI state: read synchronously by each page at startup, written through and fanned out to the other windows.

@@ -13,7 +13,7 @@ it('offers macOS Chrome, Edge and Firefox as supported when installed, and says 
   expect(byId.firefox).toMatchObject({ installed: true, supported: true })
   expect(byId.edge).toMatchObject({ installed: false, supported: true })
   expect(byId.safari).toMatchObject({ installed: true, supported: false })
-  expect(byId.safari!.reason).toMatch(/Full Disk Access/)
+  expect(byId.safari!.reason).toMatch(/Safari isn’t available yet/)
   expect(byId.chrome!.reason).toBeUndefined()
 })
 

@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { BROWSER_DATA_BLOCKED } from '@ramu/shared/types/browser'
 import { createDecipheriv, pbkdf2Sync } from 'node:crypto'
 import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -46,7 +47,8 @@ export function firefoxProfiles(
   let text: string
   try {
     text = read(join(firefoxDir, 'profiles.ini'))
-  } catch {
+  } catch (error) {
+    if (accessBlocked(error)) throw new Error(BROWSER_DATA_BLOCKED, { cause: error })
     return []
   }
   const profiles: (BrowserImportProfile & { dir: string })[] = []
@@ -100,6 +102,12 @@ export function readFirefoxCookies(profileDir: string): CookieRead {
   })
 }
 
+/** The system refused to let Ramu read the file, as macOS does for another app's data without Full Disk Access. */
+const accessBlocked = (error: unknown) => {
+  const code = (error as { code?: unknown } | null)?.code
+  return code === 'EPERM' || code === 'EACCES'
+}
+
 // ---- Chromium (Chrome, Edge) ----
 
 /** Profiles listed in the browser's `Local State`, named as the person sees them. */
@@ -118,7 +126,8 @@ export function chromiumProfiles(
         name: typeof info.name === 'string' && info.name ? info.name : dir,
         dir: join(userDataDir, dir),
       }))
-  } catch {
+  } catch (error) {
+    if (accessBlocked(error)) throw new Error(BROWSER_DATA_BLOCKED, { cause: error })
     return []
   }
 }

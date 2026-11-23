@@ -12,6 +12,7 @@ import type { BranchChoice, BranchNamingIntent, BranchNamingStrategy } from './w
 import type { AntigravitySignIn, ProviderEnvironmentStatus, ProviderEnvironmentValues } from './providers/environment'
 import type { HostOverview, HostDestination, HostTaskMethod } from './hostOverview'
 import type { ThreadDoneImpact } from './chat/threadDone'
+import type { PrivacyPane } from './privacyPanes'
 import type { SettingsSnapshot, SettingEdit } from './settingsCompatibility'
 import type { BackgroundActivity } from './chat/activity'
 import type { RamuTheme, ThemeIssue, ThemeRole } from './theme'
@@ -603,6 +604,8 @@ export interface RamuMethods extends ArtifactMethods {
   'app.content.mount'(html: string): string
   /** Opens a web link in the person's own browser. Plain http(s) links only. */
   'app.openExternal'(url: string): void
+  /** Opens the macOS Privacy & Security page where the person grants Ramu a permission it needs. */
+  'app.openPrivacySettings'(pane: PrivacyPane): void
   /** Integrated browser tabs of this computer's desktop app; every call names the host and thread it is for. */
   'browser.profiles.list'(hostId: string): BrowserProfileCatalog
   'browser.profiles.importSources'(hostId: string): import('./types/browser').BrowserImportSource[]

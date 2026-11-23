@@ -1,4 +1,5 @@
 import { createCipheriv } from 'node:crypto'
+import { BROWSER_DATA_BLOCKED } from '@ramu/shared/types/browser'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -111,6 +112,12 @@ describe('Chromium', () => {
       { id: 'Profile 2', name: 'Profile 2', dir: '/chrome/Profile 2' },
     ])
     expect(chromiumProfiles('/chrome', () => 'not json')).toEqual([])
+    // A missing browser has no profiles; one the system will not let Ramu read says so, so it can offer the setting.
+    const refuse = (code: string) => () => {
+      throw Object.assign(new Error(code), { code })
+    }
+    expect(chromiumProfiles('/chrome', refuse('ENOENT'))).toEqual([])
+    expect(() => chromiumProfiles('/chrome', refuse('EPERM'))).toThrow(BROWSER_DATA_BLOCKED)
   })
 
   it('decrypts v10 values, with and without the domain hash prefix, and refuses other schemes', () => {

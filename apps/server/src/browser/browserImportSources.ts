@@ -5,8 +5,7 @@ import { CHROMIUM_BROWSERS, CHROMIUM_BROWSER_IDS, linuxOf, windowsOf } from './c
 
 const WINDOWS_CHROMIUM =
   'Importing from Chromium browsers on Windows is not supported, because their credentials are protected. Sign in to a Ramu profile instead.'
-const SAFARI =
-  'Safari keeps its cookies where only apps with Full Disk Access can read them. Sign in to a Ramu profile instead.'
+const SAFARI = 'Importing from Safari isn’t available yet. Sign in to a Ramu profile instead.'
 
 /**
  * The browsers this host has, and whether sign-ins can be imported from each. Discovery reads executable presence

@@ -57,52 +57,56 @@ export function BrowserImportPanel({
   const missing = sources?.filter((source) => !source.installed) ?? []
   return (
     <>
-      {/* One card: what import does and its one action, then a row per browser found, so the choice reads at a glance. */}
-      <SettingsRow>
-        <SettingsLabel
-          title={t('Import signed-in sessions')}
-          help={t(
-            'Copy sign-ins from a browser on this computer into a new profile, once. Nothing is read until you choose, and that browser is never changed.',
-          )}
-        />
-        {!sources && (
-          <Button type="button" variant="secondary" size="sm" disabled={busy || loading} onClick={() => void load()}>
-            {loading ? t('Looking…') : t('Choose a browser')}
-          </Button>
-        )}
-      </SettingsRow>
-      {installed.map((source) => (
-        <SettingsRow key={source.id}>
-          <span className="flex min-w-0 items-center gap-2.5">
-            <Globe size={15} className="flex-none text-muted-foreground" aria-hidden />
-            <span className="min-w-0">
-              <span className="block text-control">{source.name}</span>
-              {!source.supported && (
-                <span className="block truncate text-caption text-muted-foreground" title={source.reason}>
-                  {source.reason?.includes('Full Disk Access')
-                    ? t('Needs Full Disk Access to read its sign-ins')
-                    : t(source.reason ?? 'Unavailable')}
-                </span>
-              )}
-            </span>
-          </span>
-          {source.supported ? (
-            <Button type="button" variant="secondary" size="sm" disabled={busy} onClick={() => setImporting(source)}>
-              {t('Import…')}
-            </Button>
-          ) : (
-            alternative
-          )}
-        </SettingsRow>
-      ))}
-      {sources && !installed.length && (
+      {/* One card: what import does and its one action, then a row per browser found, so the choice reads at a glance.
+          Its own block, so a page that spaces its children apart cannot split the card into separate pieces. */}
+      <div className="flex flex-col">
         <SettingsRow>
-          <SettingsLabel title={t('No browser found')} help={t('Sign in to the websites in a Ramu profile instead.')} />
-          {alternative}
+          <SettingsLabel
+            title={t('Import signed-in sessions')}
+            help={t(
+              'Copy sign-ins from a browser on this computer into a new profile, once. Nothing is read until you choose, and that browser is never changed.',
+            )}
+          />
+          {!sources && (
+            <Button type="button" variant="secondary" size="sm" disabled={busy || loading} onClick={() => void load()}>
+              {loading ? t('Looking…') : t('Choose a browser')}
+            </Button>
+          )}
         </SettingsRow>
-      )}
+        {installed.map((source) => (
+          <SettingsRow key={source.id}>
+            <span className="flex min-w-0 items-center gap-2.5">
+              <Globe size={15} className="flex-none text-muted-foreground" aria-hidden />
+              <span className="min-w-0">
+                <span className="block text-control">{source.name}</span>
+                {!source.supported && (
+                  <span className="block truncate text-caption text-muted-foreground" title={source.reason}>
+                    {t(source.reason ?? 'Unavailable')}
+                  </span>
+                )}
+              </span>
+            </span>
+            {source.supported ? (
+              <Button type="button" variant="secondary" size="sm" disabled={busy} onClick={() => setImporting(source)}>
+                {t('Import…')}
+              </Button>
+            ) : (
+              alternative
+            )}
+          </SettingsRow>
+        ))}
+        {sources && !installed.length && (
+          <SettingsRow>
+            <SettingsLabel
+              title={t('No browser found')}
+              help={t('Sign in to the websites in a Ramu profile instead.')}
+            />
+            {alternative}
+          </SettingsRow>
+        )}
+      </div>
       {missing.length > 0 && (
-        <p className="m-0 -mt-2 mb-3 px-4 text-caption text-muted-foreground">
+        <p className="m-0 px-4 text-caption text-muted-foreground">
           {t('Not found on this computer: {0}', { 0: missing.map((source) => source.name).join(', ') })}
         </p>
       )}
