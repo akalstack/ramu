@@ -1,6 +1,6 @@
 {
   "name": "@ramu/client-runtime",
-  "version": "0.1.0-alpha.17",
+  "version": "0.1.0-alpha.18",
   "private": true,
   "description": "Connections from Ramu clients to hosts: sockets, presence and network limits.",
   "license": "MIT",
