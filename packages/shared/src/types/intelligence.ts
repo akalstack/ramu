@@ -15,7 +15,9 @@ export interface IntelligencePreferences {
 export const DEFAULT_INTELLIGENCE_PREFERENCES: IntelligencePreferences = {
   toolSearch: true,
   crossThreadRecall: true,
-  learning: 'review',
+  // Every proposal is checked for credentials before it is saved, and the person's own notes outrank learned ones, so
+  // learning saves on its own rather than stacking reviews for the person to apply.
+  learning: 'auto',
   maintenanceModel: null,
   dailyReviews: 5,
   archiveSkillDays: 90,

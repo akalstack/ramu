@@ -8166,4 +8166,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Continued for {0}': 'Dilanjutkan selama {0}',
   'Continuing for {0}': 'Berlanjut selama {0}',
   'Sends when this turn ends': 'Terkirim saat giliran ini selesai',
+  '{0} memories': '{0} memori',
+  '{0} procedures': '{0} prosedur',
 }

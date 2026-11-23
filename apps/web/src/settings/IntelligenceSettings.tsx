@@ -1,4 +1,7 @@
 import { PRIMARY_ACTION_CLASS } from '@/components/button-classes'
+import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { chatMarkdownComponents } from '../chat/ChatMarkdown'
 import { MovedToCustomize } from '../customize/openCustomize'
 import { ListCount, ListEmpty, ListToolbar, useListView } from './ListView'
 import { Badge } from '@/components/ui/badge'
@@ -322,12 +325,16 @@ export function LearningSettings({ value, onChange }: Props) {
           {pagedReviews.shown.map((job) => (
             <SettingsCard
               key={job.id}
-              title={
-                <>
-                  {t('Learning review')} · {t(job.status)}
-                </>
-              }
-              meta={`${new Date(job.createdAt).toLocaleString()} · ${job.sessionTitle ?? t('Thread')}`}
+              // The thread it learned from leads; what it would save and when follow, so a list of reviews reads as
+              // threads rather than a column of identical "Learning review" titles.
+              title={job.sessionTitle ?? t('Thread')}
+              meta={[
+                t(job.status),
+                job.proposal ? proposalSummary(job.proposal) : null,
+                new Date(job.createdAt).toLocaleString(),
+              ]
+                .filter(Boolean)
+                .join(' · ')}
               actions={
                 <>
                   {job.status === 'pending' && (
@@ -579,12 +586,7 @@ function LearningProposal({
   skills: ManagedSkill[]
   showCheckpoint: boolean
 }) {
-  const change = JSON.parse(proposal) as {
-    checkpoint: string
-    memories: { title: string; content: string; reason: string }[]
-    skills: { id?: string; name: string; content: string; reason: string }[]
-    archive: { id: string; absorbedInto: string; reason: string }[]
-  }
+  const change = JSON.parse(proposal) as Proposal
   return (
     <details className="text-caption">
       <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
@@ -594,7 +596,7 @@ function LearningProposal({
         {showCheckpoint && change.checkpoint && (
           <section>
             <strong>{t('Session checkpoint')}</strong>
-            <p className="whitespace-pre-wrap text-caption">{change.checkpoint}</p>
+            <ProposalText text={change.checkpoint} />
           </section>
         )}
         {!showCheckpoint && change.checkpoint && (
@@ -605,7 +607,7 @@ function LearningProposal({
             <strong>
               {t('Memory')}: {note.title}
             </strong>
-            <p className="whitespace-pre-wrap text-caption">{note.content}</p>
+            <ProposalText text={note.content} />
             <p className="muted text-muted-foreground text-caption">{note.reason}</p>
           </section>
         ))}
@@ -640,5 +642,39 @@ function LearningProposal({
         ))}
       </div>
     </details>
+  )
+}
+
+type Proposal = {
+  checkpoint: string
+  memories: { title: string; content: string; reason: string }[]
+  skills: { id?: string; name: string; content: string; reason: string }[]
+  archive: { id: string; absorbedInto: string; reason: string }[]
+}
+
+/** What a review would save, in a few words: "Checkpoint · 2 memories · 1 procedure". */
+function proposalSummary(proposal: string): string | null {
+  try {
+    const change = JSON.parse(proposal) as Proposal
+    return [
+      change.checkpoint ? t('Checkpoint') : '',
+      change.memories.length ? t('{0} memories', { 0: change.memories.length }) : '',
+      change.skills.length ? t('{0} procedures', { 0: change.skills.length }) : '',
+    ]
+      .filter(Boolean)
+      .join(' · ')
+  } catch {
+    return null
+  }
+}
+
+/** Learned text is Markdown the model wrote; it reads as formatted text, not as raw headings and backticks. */
+function ProposalText({ text }: { text: string }) {
+  return (
+    <div className="text-caption [&_:is(h1,h2,h3,h4)]:mt-2 [&_:is(h1,h2,h3,h4)]:mb-1 [&_:is(h1,h2,h3,h4)]:text-[length:1em] [&_:is(h1,h2,h3,h4)]:font-semibold [&_p]:my-1 [&_ul]:my-1 [&_ul]:pl-4 [&_ul]:list-disc [&_li]:my-0.5 [&_:not(pre)>code]:rounded-(--radius-xs) [&_:not(pre)>code]:bg-fill [&_:not(pre)>code]:px-1 [&_:not(pre)>code]:text-[length:0.92em]">
+      <Markdown remarkPlugins={[remarkGfm]} components={chatMarkdownComponents}>
+        {text}
+      </Markdown>
+    </div>
   )
 }
