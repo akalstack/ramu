@@ -485,6 +485,11 @@ export class AgentService {
     this.record(sessionId, { kind: 'settings-change', cardId })
   }
 
+  /** A tool suggested from what the thread did, shown where it was noticed. */
+  toolSuggestionShown(sessionId: string, cardId: string): void {
+    this.record(sessionId, { kind: 'tool-suggestion', cardId })
+  }
+
   /** Threads this thread's agent started appear in it as one card that opens each of them. */
   threadsStarted(sessionId: string, threads: StartedThread[]): void {
     this.record(sessionId, { kind: 'threads-started', threads })

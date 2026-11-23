@@ -157,12 +157,12 @@ vi.mock('../src/workspace/BranchNameEditor', () => ({
     return null
   },
 }))
-vi.mock('../src/Menu', () => ({
+vi.mock('../src/Menu', () => ({ Menu: () => null }))
+vi.mock('../src/components/combobox', () => ({
   Combobox: (props: { options: { value: string; label: string }[] }) => {
     state.projectOptions = props.options
     return null
   },
-  Menu: () => null,
 }))
 vi.mock('../src/components/desktop-button', () => ({
   Button: ({ children }: { children?: ReactNode }) => createElement('button', null, children),

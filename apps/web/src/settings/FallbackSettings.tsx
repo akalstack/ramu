@@ -39,12 +39,12 @@ import type {
 import { providerName } from '@ramu/shared/providers/providers'
 import { useAppSettings } from './AppSettings'
 import { Dropdown } from '../Menu'
-import { effortDisplayName, modelDisplayName, useModelSets } from '../models/ModelSets'
+import { effortDisplayName, useModelSets } from '../models/ModelSets'
+import { missingModelOption, modelOption } from '../models/modelOptions'
+import { Combobox } from '@/components/combobox'
 import { peakUsage, usageTone, useUsage } from './Usage'
 import { defaultOrder } from '@ramu/shared/providers/routing'
 
-// The picker's value while no model is chosen yet.
-const NO_STEP = '__none'
 const newId = () => crypto.randomUUID()
 
 function stepFor(model: AgentModel, previous?: FallbackStep | null): FallbackStep {
@@ -93,30 +93,23 @@ function StepPicker({
         (entry) => entry.provider === step.provider && (entry.id === step.model || (!step.model && entry.isDefault)),
       )
     : undefined
-  const key = step ? `${step.provider}:${step.model}` : NO_STEP
+  // No step yet leaves the picker empty, showing its placeholder.
+  const key = step ? `${step.provider}:${step.model}` : ''
   const { visibleModels } = useAppSettings().preferences
-  const options = [
-    ...models
-      .filter((entry) => isModelListed(visibleModels, entry) || `${entry.provider}:${entry.id}` === key)
-      .map((entry) => ({
-        value: `${entry.provider}:${entry.id}`,
-        label: `${modelDisplayName(entry.name)} · ${providerName(entry.provider)}`,
-      })),
-  ]
+  const options = models
+    .filter((entry) => isModelListed(visibleModels, entry) || `${entry.provider}:${entry.id}` === key)
+    .map((entry) => modelOption(entry, `${entry.provider}:${entry.id}`))
   if (step && !options.some((option) => option.value === key))
-    options.unshift({
-      value: key,
-      label: step.model
-        ? t('{0} · Unavailable', { '0': step.model })
-        : t('{0} default', { '0': providerName(step.provider) }),
-    })
+    options.unshift(missingModelOption(step.provider, step.model, key))
   const fast = !!model?.serviceTiers?.some((tier) => tier === 'fast' || tier === 'priority')
   return (
     <div
       className={`fallback-step-picker [&.with-tier]:[grid-template-columns:minmax(0,_1.6fr)_minmax(0,_1fr)_minmax(0,_0.8fr)] [&_.dropdown-trigger]:w-full [&_.dropdown-trigger]:min-w-0 grid [grid-template-columns:minmax(0,_1.6fr)_minmax(0,_1fr)] gap-2 min-w-0${step && fast ? ' with-tier' : ''}`}
     >
-      <Dropdown
+      <Combobox
         label={t('{0} model', { '0': label })}
+        searchPlaceholder={t('Search models')}
+        emptyText={t('No matching models')}
         value={key}
         options={options}
         disabled={disabled}

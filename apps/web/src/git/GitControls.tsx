@@ -4,7 +4,7 @@ import { Button } from '@/components/desktop-button'
 import { AlertTriangle, CloudUpload, GitBranch, RefreshCcw } from 'lucide-react'
 import { useEffect } from 'react'
 import type { GitBranchInfo, GitStatus, PullMode, RepositoryBinding } from '@ramu/shared/types'
-import { Combobox } from '../Menu'
+import { Combobox } from '@/components/combobox'
 import { BrandIcon } from '@/components/brand-icon'
 
 export function BranchPicker({

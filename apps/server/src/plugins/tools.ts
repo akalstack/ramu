@@ -64,7 +64,7 @@ export function registerPluginTools(
     'plugin_search',
     {
       description:
-        'Search the plugin indexes for a service this task needs that Ramu does not know (a hosting platform, an analytics or issue tracker, an image service). Returns each listed plugin with its source and whether it is installed. Suggest one only when the task needs it, then call plugin_install. When nothing fits, offer plugin_create.',
+        'Search the plugin indexes for a service this task needs that Ramu does not know (a hosting platform, an analytics or issue tracker, an image service). Returns each listed plugin with its source and whether it is installed. When one would help but the person has not asked for it, call tool_suggest; call plugin_install when they asked for the tool. When nothing fits, offer plugin_create.',
       inputSchema: { query: z.string().trim().min(1).max(200) },
     },
     async ({ query }: { query: string }) => {
@@ -85,7 +85,7 @@ export function registerPluginTools(
     'plugin_install',
     {
       description:
-        'Ask the person to install a plugin found with plugin_search. They see the full review (skills, MCP servers and the commands they run, the credential asked for, commands that run without asking) and decide; you cannot approve it, and a refusal is final for this request. A credential the plugin needs is pasted by the person in Customize → Plugins on the host, never through you. New tools from it reach threads started after the install.',
+        'Ask the person to install a plugin found with plugin_search, when they asked for it (otherwise use tool_suggest). They see the full review (skills, MCP servers and the commands they run, the credential asked for, commands that run without asking) and decide; you cannot approve it, and a refusal is final for this request. A credential the plugin needs is pasted by the person in Customize → Plugins on the host, never through you. New tools from it reach threads started after the install.',
       inputSchema: {
         name: z.string().trim().min(1).max(64),
         hosts: z
@@ -142,7 +142,7 @@ export function registerPluginTools(
   server.registerTool(
     'plugin_create',
     {
-      description: `Make a plugin for a service no index lists, when the person asks for one ("connect Rodin for 3D models"). step "start" writes a working folder in ~/Ramu Plugins/<name> (mcp: true adds a Node MCP server, cli: true a CLI); then write its .claude-plugin/plugin.json, server and skill from the service's own documentation with your file tools. Declare the API key as a credential slot whose env the server reads, never a value; map an ability under extensions["${RAMU_EXTENSION}"].abilities (model_3d needs a tool, a status tool for its task id, a balance tool, and downloads: the https origins its files come from). step "check" starts the servers and lists every problem with its file; fix them until it passes. step "install" asks the person through the plugin review card and installs it as a Development plugin whose abilities are used at once. The person pastes the key on the plugin's card in Customize → Plugins; you never see it.`,
+      description: `Make a plugin for a service no index lists, when the person asks for one ("connect Rodin for 3D models"). step "start" writes a working folder in ~/Ramu Plugins/<name> (mcp: true adds a Node MCP server, cli: true a CLI); then write its .claude-plugin/plugin.json, server and skill from the service's own documentation with your file tools. Declare the API key as a credential slot whose env the server reads, never a value; map an ability under extensions["${RAMU_EXTENSION}"].abilities (a service that makes each image, audio, video or 3D file as a background job needs a tool, a status tool for its job id, a balance tool, and downloads: the https origins its files come from). step "check" starts the servers and lists every problem with its file; fix them until it passes. step "install" asks the person through the plugin review card and installs it as a Development plugin whose abilities are used at once. The person pastes the key on the plugin's card in Customize → Plugins; you never see it.`,
       inputSchema: {
         name: z.string().regex(PLUGIN_NAME).describe('Lowercase words joined by dashes, such as rodin-3d.'),
         step: z.enum(['start', 'check', 'install']),

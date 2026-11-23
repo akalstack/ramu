@@ -105,6 +105,8 @@ export interface AppPreferences extends WorkspaceDefaults {
   asyncQuestions: boolean
   /** Show a predicted next message in the empty composer after a turn. */
   suggestNextMessage: boolean
+  /** Suggest a tool in a thread when what it does clearly matches one that isn't on. */
+  suggestTools: boolean
   /** Seconds a Claude command may run in the foreground before Ramu moves it to the background; 0 leaves it to the agent. */
   autoBackgroundSeconds: number
   providerBinaries: ProviderConfiguration
@@ -198,6 +200,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   resumeChatsOnRestart: true,
   asyncQuestions: true,
   suggestNextMessage: true,
+  suggestTools: true,
   autoBackgroundSeconds: 60,
   providerBinaries: {},
   providerUpdateChecks: true,

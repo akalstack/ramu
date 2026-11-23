@@ -84,6 +84,11 @@ interface PluginRecord {
   ref: string | null
   signingKey: string | null
   byRamu: boolean
+  /**
+   * The index entry's name it was installed from, when that differs from its manifest's (Meshy lists `meshy-3d-agent`
+   * as `meshy-3d-generation`), so companions, listings and updates find it by either.
+   */
+  listedAs?: string
   update: PluginUpdate | null
   credentials: Record<
     string,
@@ -116,6 +121,8 @@ interface Staged {
   expires: number
   signingKey: string | null
   ref: string | null
+  /** The index entry's name, when the review came from one. */
+  listedAs: string | null
 }
 
 export interface PluginHost {
@@ -370,6 +377,7 @@ export class PluginService {
       expires: Date.now() + STAGE_MS,
       signingKey: listing?.signingKey ?? old?.signingKey ?? null,
       ref: listing ? (listing.ref ?? null) : (input.ref ?? null),
+      listedAs: listing?.entry.name ?? null,
     })
     return review
   }
@@ -491,6 +499,9 @@ export class PluginService {
       ref: staged.ref,
       signingKey: staged.signingKey,
       byRamu: review.byRamu,
+      ...((staged.listedAs ?? old?.listedAs) && (staged.listedAs ?? old?.listedAs) !== folder.manifest.name
+        ? { listedAs: staged.listedAs ?? old?.listedAs }
+        : {}),
       update: null,
       credentials: old?.credentials ?? {},
     }
@@ -1062,7 +1073,7 @@ export class PluginService {
       if (!force && plugin.update && Date.now() - plugin.update.checkedAt < UPDATE_EVERY_MS) continue
       try {
         const listing = plugin.source.index
-          ? await this.listing(plugin.source.index, plugin.name).catch(() => null)
+          ? await this.listing(plugin.source.index, plugin.listedAs ?? plugin.name).catch(() => null)
           : null
         const commit =
           listing?.sha ?? (await latestCommit(listing?.url ?? plugin.source.location, plugin.ref ?? undefined))
@@ -1071,7 +1082,7 @@ export class PluginService {
           continue
         }
         const review = await this.stage({
-          source: plugin.source.index ? plugin.name : plugin.source.location,
+          source: plugin.source.index ? (plugin.listedAs ?? plugin.name) : plugin.source.location,
           index: plugin.source.index ?? undefined,
           ref: commit,
           path: plugin.source.path,
@@ -1221,8 +1232,15 @@ export class PluginService {
    * The plugin one pairs with: a Ramu plugin's companion in Claude's directory or the marketplace it names, or for a
    * plugin there, the Ramu plugin that names it (read from Ramu's index as last fetched).
    */
+  /** Every name an installed plugin goes by: its manifest's, and the index entry's it was installed from. */
+  private installedNames() {
+    return new Set(
+      this.state().plugins.flatMap((plugin) => [plugin.name, ...(plugin.listedAs ? [plugin.listedAs] : [])]),
+    )
+  }
+
   private companionOf(name: string, declared: string | undefined, from?: { name: string; index: string }) {
-    const installed = new Set(this.state().plugins.map((plugin) => plugin.name))
+    const installed = this.installedNames()
     if (from) return { index: from.index, name: from.name, installed: installed.has(from.name) }
     if (declared) return { index: CLAUDE_PLUGIN_INDEX, name: declared, installed: installed.has(declared) }
     const ramu = this.listings
@@ -1473,11 +1491,18 @@ export class PluginService {
 
   /** Every listed plugin across indexes, matching `query` in its name, description or keywords. */
   async browse(query = ''): Promise<PluginListing[]> {
-    const installed = new Set(this.state().plugins.map((plugin) => plugin.name))
+    for (const index of this.indexes()) await this.readIndex(index.url)
+    return this.listed(query)
+  }
+
+  /** The listings as the indexes were last read, without reading them again; empty until something browses. */
+  listed(query = ''): PluginListing[] {
+    const installed = this.installedNames()
     const words = query.toLowerCase().split(/\s+/).filter(Boolean)
     const out: PluginListing[] = []
     for (const index of this.indexes()) {
-      const read = await this.readIndex(index.url)
+      const read = this.listings.get(index.url)
+      if (!read) continue
       for (const entry of read.entries) {
         const ramu = entry.extensions?.[RAMU_EXTENSION]
         const keywords = [...(entry.keywords ?? []), ...(entry.tags ?? [])]

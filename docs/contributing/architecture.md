@@ -105,7 +105,7 @@ User-facing behavior is in the [browser guide](../guide/browser-and-computer.md#
 | `settings/` | Host preferences and model sets. |
 | `identities/` | Identities and which one each project acts as. |
 | `rules/` | User-written rules and their delivery to providers. |
-| `plugins/` | Plugin install, review and `platform_cli` ([Forges and platforms](#forges-and-platforms)). |
+| `plugins/` | Plugin install, review and `platform_cli` ([Forges and platforms](#forges-and-platforms)), and the tools suggested while a thread runs (`toolSuggestions.ts`: the agent's `tool_suggest` and the link and stack rules in `packages/shared/src/toolSuggestions.ts`). |
 | `media/` | Media accounts for abilities (Google Gemini, ElevenLabs) on the person's own API key. |
 | `hosting/` | GitHub Pages publishing for artifacts. |
 | `account/` | This host's side of the optional Ramu account: sign-in, sealed backups, Your hosts. |

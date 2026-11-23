@@ -28,7 +28,8 @@ export function CustomizePage({ initial = { section: 'plugins' } }: { initial?: 
   const [section, setSection] = useState<CustomizeSection>(initial.section)
   // The plugin or server a link asked to open; a new object each time, so asking for the same one again reopens it.
   const [item, setItem] = useState<{ id: string } | null>(initial.item ? { id: initial.item } : null)
-  const [install, setInstall] = useState<{ index: string; name: string } | null>(initial.install ?? null)
+  const [install, setInstall] = useState<CustomizeTarget['install'] | null>(initial.install ?? null)
+  const [installSkill, setInstallSkill] = useState<CustomizeTarget['installSkill'] | null>(initial.installSkill ?? null)
   useEffect(() => {
     const show = (event: Event) => {
       const next = (event as CustomEvent<CustomizeTarget | undefined>).detail
@@ -36,6 +37,7 @@ export function CustomizePage({ initial = { section: 'plugins' } }: { initial?: 
       setSection(next.section)
       setItem(next.item ? { id: next.item } : null)
       setInstall(next.install ? { ...next.install } : null)
+      setInstallSkill(next.installSkill ? { ...next.installSkill } : null)
     }
     window.addEventListener(CUSTOMIZE_EVENT, show)
     return () => window.removeEventListener(CUSTOMIZE_EVENT, show)
@@ -79,7 +81,7 @@ export function CustomizePage({ initial = { section: 'plugins' } }: { initial?: 
       <div className="@container min-h-0 min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-[920px] px-6 py-6">
           {section === 'plugins' && <PluginsSection open={item} install={install} />}
-          {section === 'skills' && <SkillsSection onOpenPlugins={() => setSection('plugins')} />}
+          {section === 'skills' && <SkillsSection onOpenPlugins={() => setSection('plugins')} install={installSkill} />}
           {section === 'mcp' && <McpSection open={item} />}
           {section !== 'plugins' && <SharedInAgentSetup section={section} />}
         </div>

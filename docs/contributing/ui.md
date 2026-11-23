@@ -14,7 +14,9 @@ The desktop renderer (`apps/web`) uses shadcn/ui on Base UI, Tailwind 4 and Ramu
 | `drag-handle.tsx` | Reorder handles |
 | `inline-action.tsx` | Host mutations and external links |
 | `desktop-checkbox.tsx`, `desktop-input.tsx` | Form controls |
+| `combobox.tsx` | Any choice from a list long enough to search: models, branches, projects, issues |
 
+- Short fixed lists use `Dropdown` (`Menu.tsx`). A list that grows with the person's data uses `Combobox`: every typed word narrows it in any order (`matchesWords` in `packages/shared/src/search/matchWords.ts`), options can carry an icon, a second line and a sticky group heading, and a long list draws its first 200 rows until the search narrows it. Model pickers build their rows with `modelOption` (`models/modelOptions.tsx`), which names a model with `modelLabel` (`packages/shared/src/providers/modelLabel.ts`): its provider's mark and clean name, grouped under its provider or OpenCode route, with the full id in the tooltip. The phone's model sheet uses the same `modelLabel` and `matchesWords`.
 - Base UI triggers use `render`, not `asChild`. Dialogs use `onOpenChange(open, details)`.
 - `ui.css` maps colors and type to tokens and `styles.css` holds shared sizing. Tailwind preflight is off because Monaco and xterm style themselves.
 - Brand marks: `ProviderIcon` for agent providers, `DeviceIcon` for operating systems and `BrandIcon` (`components/brand-icon.tsx`) for forges, hosting platforms and services, typed by `BrandId` in `packages/shared/src/brands.ts`. A mark sits beside the brand's name, never instead of it. Add a mark to `apps/web/src/assets/brands/` with its source in its `SOURCES.md`, then run `node apps/mobile/scripts/gen-assets.mjs` so the phone gets it too.

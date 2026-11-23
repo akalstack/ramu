@@ -8,6 +8,7 @@ import { InlineUiCard } from '../../../chat/InlineUiCard'
 import { PullRequestWritesCard } from '../../../git/PullRequestWritesCard'
 import { TestDeviceWaitCard } from '../../../chat/TestDeviceWaitCard'
 import { SettingsChangeCard } from '../../../settings/SettingsChangeCard'
+import { ToolSuggestionCard } from './ToolSuggestionCard'
 import { InteractiveContent } from '../../../interactive/InteractiveContent'
 import { t as translate, useLanguage } from '../../../i18n'
 import { AgentContentView } from '../../../chat/AgentContentView'
@@ -142,6 +143,8 @@ export function EventRow({
       return taskId ? <TestDeviceWaitCard taskId={taskId} platform={e.platform} /> : null
     case 'settings-change':
       return <SettingsChangeCard cardId={e.cardId} />
+    case 'tool-suggestion':
+      return <ToolSuggestionCard cardId={e.cardId} />
     case 'settings':
       return (
         <div className={CONVERSATION_SEPARATOR_CLASS}>

@@ -1,9 +1,10 @@
 import type { IntelligencePreferences, ReasoningEffort } from '@ramu/shared/types'
-import { providerName } from '@ramu/shared/providers/providers'
 import { isModelListed } from '@ramu/shared/providers/modelVisibility'
-import { Combobox, Dropdown } from '../Menu'
+import { Dropdown } from '../Menu'
+import { Combobox } from '@/components/combobox'
 import { t } from '../i18n'
-import { effortDisplayName, modelDisplayName, useModelSets } from '../models/ModelSets'
+import { effortDisplayName, useModelSets } from '../models/ModelSets'
+import { modelOption } from '../models/modelOptions'
 import { useAppSettings } from './AppSettings'
 
 /** A model a setting runs on, as the preferences store it; `null` means the setting's own default. */
@@ -45,13 +46,11 @@ export function ModelChoice({
         label={label}
         value={value ? key(value.provider, value.model) : ''}
         searchPlaceholder={t('Search models')}
+        emptyText={t('No matching models')}
         className="min-w-0 max-w-[230px]"
         options={[
           { value: '', label: emptyLabel },
-          ...models.map((model) => ({
-            value: key(model.provider, model.id),
-            label: `${modelDisplayName(model.name)} · ${providerName(model.provider)}`,
-          })),
+          ...models.map((model) => modelOption(model, key(model.provider, model.id))),
         ]}
         onChange={(next) => {
           const model = models.find((entry) => key(entry.provider, entry.id) === next)

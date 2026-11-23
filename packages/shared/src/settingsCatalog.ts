@@ -302,6 +302,13 @@ export const SETTINGS_CATALOG: SettingsCatalogEntry[] = [
       'predict prediction next prompt autocomplete ghost tab suggestion suggestions recommendation chips follow up',
   },
   {
+    section: 'chats',
+    title: 'Suggest tools while threads run',
+    path: 'suggestTools',
+    help: 'Show a card in a thread when the agent or a link you share points to a tool that isn’t on. Turning one on is up to you.',
+    words: 'tool tools plugin plugins mcp server skill recommend recommendation suggestion suggest card integration',
+  },
+  {
     section: 'system',
     title: 'Daily recaps',
     path: 'recapsEnabled',

@@ -14,8 +14,12 @@ import {
 import type { AbilityCall, AbilityPreferences } from '@ramu/shared/providers/abilities'
 import {
   AbilityService,
+  audioExtension,
   fieldsOf,
+  jobFileLinks,
+  jobIds,
   mcpArguments,
+  modelArguments,
   videoArguments,
   videoExtension,
   type AbilityHost,
@@ -760,7 +764,7 @@ describe('3D models on a plugin’s service', () => {
     expect((events.at(-1) as { call: AbilityCall }).call.savedTo).toBe('assets/models/a-low-poly-fox-2.glb')
   })
 
-  it('stops with the service’s words when the task fails, and refuses a link outside the declared origins', async () => {
+  it('stops with the service’s words when the task fails for want of credits, and refuses a link outside the declared origins', async () => {
     const failing = meshyServer(['FAILED'])
     const abilities = service(working, 'claude-code', undefined, {
       mcp: failing.mcp,
@@ -770,7 +774,7 @@ describe('3D models on a plugin’s service', () => {
     })
     withAbilities({ choices: { model_3d: declared } })
     expect(await abilities.call('thread', 'make_model', { prompt: 'a fox' })).toMatchObject({
-      status: 'failed',
+      status: 'refused',
       message: expect.stringContaining('Not enough credits.'),
     })
     const elsewhere = service(working, 'claude-code', undefined, {
@@ -1024,4 +1028,218 @@ it('reads a tool’s fields from the first shape that lists them, as Higgsfield�
   expect(fieldsOf(params)).toBe(fields)
   expect(fieldsOf(fields)).toBe(fields)
   expect(videoArguments(fieldsOf(params), 'a fox at dawn')).toEqual({ prompt: 'a fox at dawn' })
+})
+
+describe('images and audio made as background jobs', () => {
+  const MP3 = Buffer.concat([Buffer.from('ID3'), Buffer.alloc(20, 1)])
+  const WAV = Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4), Buffer.from('WAVE'), Buffer.alloc(8)])
+  const IMAGE = Buffer.concat([PNG, Buffer.alloc(8)])
+  const mapping = (tool: string, model: string) => ({
+    connectionId: 'h1',
+    tool,
+    status: 'job_status',
+    balance: 'balance',
+    params: 'params',
+    arguments: { model },
+    downloads: ['https://*.higgsfield.ai'],
+  })
+  const tools = () => [
+    { connectionId: 'h1', tool: 'generate_image', server: 'Higgsfield' },
+    { connectionId: 'h1', tool: 'generate_audio', server: 'Higgsfield' },
+  ]
+
+  /** Higgsfield's shape: a start tool returning `results[].id`, and `job_status` per job until it is completed. */
+  function jobServer(
+    options: {
+      jobs?: string[]
+      statuses?: string[]
+      file?: (job: string) => string
+      start?: { isError: true; text: string }
+    } = {},
+  ) {
+    const jobs = options.jobs ?? ['j-1']
+    const statuses = options.statuses ?? ['queued', 'completed']
+    const sent: { tool: string; args: Record<string, unknown> }[] = []
+    const polls = new Map<string, number>()
+    const mcp = vi.fn<NonNullable<AbilityHost['mcp']>>(async (_session, _connection, tool, build) => {
+      const schema = tool.startsWith('generate_')
+        ? {
+            properties: {
+              params: {
+                type: 'object',
+                properties: { prompt: { type: 'string' }, model: {}, duration: { type: 'number' } },
+              },
+            },
+          }
+        : tool === 'job_status'
+          ? { properties: { jobId: { type: 'string' }, sync: { type: 'boolean' } } }
+          : { properties: {} }
+      const args = build(schema)
+      sent.push({ tool, args })
+      const text = (value: unknown) => ({
+        server: 'Higgsfield',
+        result: { content: [{ type: 'text', text: JSON.stringify(value) }] },
+      })
+      if (tool === 'balance') return text({ credits: 12 })
+      if (tool.startsWith('generate_'))
+        return options.start
+          ? { server: 'Higgsfield', result: { isError: true, content: [{ type: 'text', text: options.start.text }] } }
+          : text({ results: jobs.map((id) => ({ id })), poll_after_seconds: 0 })
+      const job = String(args.jobId)
+      const count = polls.get(job) ?? 0
+      polls.set(job, count + 1)
+      const status = statuses[Math.min(count, statuses.length - 1)]!
+      return text({
+        generation: {
+          status,
+          ...(status === 'completed'
+            ? {
+                results: {
+                  rawUrl: options.file?.(job) ?? `https://cdn.higgsfield.ai/${job}/out`,
+                  minUrl: `https://cdn.higgsfield.ai/${job}/thumb.webp`,
+                },
+              }
+            : {}),
+        },
+      })
+    })
+    return { mcp, sent }
+  }
+  const files = (bytes: Buffer) =>
+    vi.fn<NonNullable<AbilityHost['download']>>(async () => new Response(new Uint8Array(bytes), { status: 200 }))
+  const host = (mcp: NonNullable<AbilityHost['mcp']>, download = files(IMAGE), extra: Partial<AbilityHost> = {}) =>
+    service(working, 'claude-code', undefined, { mcp, mcpTools: tools, download, statusEveryMs: 1, ...extra })
+  const recorded = () => (events.at(-1) as { call: AbilityCall }).call
+
+  it('waits on every job an image call started and keeps each finished image, never its thumbnail', async () => {
+    const { mcp, sent } = jobServer({ jobs: ['j-1', 'j-2'] })
+    const download = files(IMAGE)
+    withAbilities({ choices: { image_generation: mapping('generate_image', 'gpt_image_2_6') } })
+    const answer = await host(mcp, download).call('thread', 'generate_image', { prompt: 'a lighthouse at dusk' })
+    expect(answer).toMatchObject({ status: 'done' })
+    expect(sent[0]).toEqual({
+      tool: 'generate_image',
+      args: { params: { prompt: 'a lighthouse at dusk', model: 'gpt_image_2_6' } },
+    })
+    const asked = sent.filter((entry) => entry.tool === 'job_status').map((entry) => entry.args.jobId)
+    expect(new Set(asked)).toEqual(new Set(['j-1', 'j-2']))
+    expect(download.mock.calls.map(([url]) => url).sort()).toEqual([
+      'https://cdn.higgsfield.ai/j-1/out',
+      'https://cdn.higgsfield.ai/j-2/out',
+    ])
+    expect(recorded().attachments?.map((file) => [file.name, file.mimeType])).toEqual([
+      ['a-lighthouse-at-dusk-1.png', 'image/png'],
+      ['a-lighthouse-at-dusk-2.png', 'image/png'],
+    ])
+    expect(recorded().credits).toBe(12)
+    // A background job spends credits, so the first one in the thread asks, naming the service.
+    expect(permission).toHaveBeenCalledTimes(1)
+    expect(permission.mock.calls[0]![1]).toBe('Image with Higgsfield')
+  })
+
+  it.each([
+    ['speak', 'speech', { text: 'Welcome to the tour.' }, 'seed_audio', MP3, 'audio/mpeg'],
+    ['make_music', 'music', { prompt: 'calm piano', seconds: 30 }, 'suno_music', WAV, 'audio/wav'],
+    ['make_sound', 'sound_effect', { prompt: 'a door creaks' }, 'mirelo_text_to_audio', MP3, 'audio/mpeg'],
+  ] as const)(
+    'runs %s as a job on the audio tool with its own model',
+    async (tool, ability, args, model, bytes, mime) => {
+      const { mcp, sent } = jobServer()
+      withAbilities({ choices: { [ability]: mapping('generate_audio', model) } })
+      expect(await host(mcp, files(bytes)).call('thread', tool, args)).toMatchObject({ status: 'done' })
+      expect(sent[0]!.args).toEqual({
+        params: { prompt: expect.any(String), model, ...(tool === 'make_music' ? { duration: 30 } : {}) },
+      })
+      expect(recorded().attachments?.map((file) => file.mimeType)).toEqual([mime])
+    },
+  )
+
+  it('says why a job ended: failed, refused, out of credits or not a file of the kind asked for', async () => {
+    withAbilities({ choices: { speech: mapping('generate_audio', 'seed_audio') } })
+    expect(await host(jobServer({ statuses: ['failed'] }).mcp).call('thread', 'speak', { text: 'hi' })).toMatchObject({
+      status: 'failed',
+      message: expect.stringContaining('could not make the narration'),
+    })
+    expect(
+      await host(jobServer({ statuses: ['ip_detected'] }).mcp).call('thread', 'speak', { text: 'hi' }),
+    ).toMatchObject({ status: 'failed', message: expect.stringContaining('refused the request (ip_detected)') })
+    expect(
+      await host(jobServer({ start: { isError: true, text: 'Not enough credits for this generation.' } }).mcp).call(
+        'thread',
+        'speak',
+        { text: 'hi' },
+      ),
+    ).toMatchObject({ status: 'refused', message: expect.stringContaining('no credits left') })
+    expect(
+      await host(jobServer().mcp, files(Buffer.from('<html>not audio</html>'))).call('thread', 'speak', { text: 'hi' }),
+    ).toMatchObject({ status: 'failed', message: expect.stringContaining('not audio') })
+    expect(
+      await host(jobServer({ file: () => 'https://files.example.com/out.mp3' }).mcp).call('thread', 'speak', {
+        text: 'hi',
+      }),
+    ).toMatchObject({ status: 'failed', message: expect.stringContaining('does not list as a place to download from') })
+  })
+
+  it('gives up after the time limit, saying the job may still finish, and stops when the call is stopped', async () => {
+    withAbilities({ choices: { image_generation: mapping('generate_image', 'gpt_image_2_6') } })
+    const slow = jobServer({ statuses: ['in_progress'] })
+    expect(
+      await host(slow.mcp, files(IMAGE), { jobWaitMs: 30, statusEveryMs: 2 }).call('thread', 'generate_image', {
+        prompt: 'x',
+      }),
+    ).toMatchObject({ status: 'failed', message: expect.stringContaining('did not finish the image within 1 minute.') })
+    const stop = new AbortController()
+    const stopped = host(jobServer({ statuses: ['in_progress'] }).mcp, files(IMAGE), { statusEveryMs: 5 }).call(
+      'thread',
+      'generate_image',
+      { prompt: 'x' },
+      stop.signal,
+    )
+    setTimeout(() => stop.abort(), 20)
+    expect(await stopped).toMatchObject({ status: 'failed', message: expect.stringContaining('was stopped') })
+  })
+
+  it('checks a job service under Auto by its balance alone, never with a paid sample image', async () => {
+    const { mcp, sent } = jobServer()
+    withAbilities({ autoMcp: { image_generation: mapping('generate_image', 'gpt_image_2_6') } })
+    expect(await host(mcp).call('thread', 'generate_image', { prompt: 'a red kite' })).toMatchObject({
+      status: 'done',
+    })
+    expect(sent.filter((entry) => entry.tool === 'generate_image')).toHaveLength(1)
+    expect(sent[0]!.tool).toBe('balance')
+  })
+
+  it('reads job ids, result links and audio bytes the way services return them', () => {
+    expect(jobIds({ texts: ['{"results":[{"id":"a"},{"id":"b"}]}'], structured: undefined })).toEqual(['a', 'b'])
+    expect(jobIds({ texts: [], structured: { job_ids: ['x', 'y', 'x'] } })).toEqual(['x', 'y'])
+    expect(jobIds({ texts: [], structured: { task_id: 7 } })).toEqual([7])
+    expect(
+      jobFileLinks(
+        [
+          { url: 'https://cdn.example.com/a/out', key: 'generation.results.rawUrl' },
+          { url: 'https://cdn.example.com/a/thumb.webp', key: '' },
+          { url: 'https://cdn.example.com/a/thumb.webp', key: 'generation.results.minUrl' },
+          { url: 'https://cdn.example.com/b.png', key: '' },
+          { url: 'https://higgsfield.ai/pricing', key: 'upgrade_url' },
+        ],
+        'image',
+      ),
+    ).toEqual(['https://cdn.example.com/a/out', 'https://cdn.example.com/b.png'])
+    expect(jobFileLinks([{ url: 'https://cdn.example.com/s.mp3', key: 'audio_url' }], 'image')).toEqual([])
+    expect(audioExtension(MP3)).toBe('mp3')
+    expect(audioExtension(WAV)).toBe('wav')
+    expect(audioExtension(Buffer.concat([Buffer.from('OggS'), Buffer.alloc(10)]))).toBe('ogg')
+    expect(audioExtension(Buffer.concat([Buffer.alloc(4), Buffer.from('ftypM4A '), Buffer.alloc(4)]))).toBe('m4a')
+    expect(audioExtension(Buffer.from('<html>not audio</html>'))).toBeNull()
+  })
+})
+
+it('passes an image to a 3D tool by its path in the field that tool reads it from, Tripo’s `input` included', () => {
+  const image = { path: '/project/fox.png', dataUrl: () => 'data:image/png;base64,AA==' }
+  expect(modelArguments({ properties: { input: { type: 'string' }, model: { type: 'string' } } }, '', image)).toEqual({
+    input: '/project/fox.png',
+  })
+  expect(modelArguments({ properties: { image_url: { type: 'string' } } }, '', image)).toEqual({
+    image_url: 'data:image/png;base64,AA==',
+  })
 })

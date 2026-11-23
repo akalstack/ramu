@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Globe, Plus, Puzzle, RefreshCw, SquareTerminal } from 'lucide-react'
-import { RECOMMENDED_MCP_SERVERS, type RecommendedMcpServer } from '@ramu/shared/mcpCatalog'
+import {
+  RECOMMENDED_MCP_SERVERS,
+  recommendedConnection,
+  serverAddress,
+  type RecommendedMcpServer,
+} from '@ramu/shared/mcpCatalog'
 import { CLAUDE_PLUGIN_INDEX } from '@ramu/shared/plugins'
 import {
   defaultToolChoice,
@@ -131,14 +136,7 @@ export function McpSection({ open: requested }: { open?: { id: string } | null }
       setOpenId(added.connection.id)
     })
   const addRecommended = (server: RecommendedMcpServer, use: UseChoice) =>
-    add({
-      name: server.name,
-      serviceAccountId: 'public',
-      enabled: true,
-      scope: use.place ? { hostWide: false, projectIds: [use.place] } : { hostWide: true, projectIds: [] },
-      providers: use.providers,
-      transport: { type: 'http', url: server.url, headerSecretRefs: {} },
-    })
+    add(recommendedConnection(server, use.place || null, use.providers))
   const words = query.toLowerCase().split(/\s+/).filter(Boolean)
   const fits = (text: string) => words.every((word) => text.toLowerCase().includes(word))
   const connections = (status?.connections ?? []).filter(
@@ -148,15 +146,13 @@ export function McpSection({ open: requested }: { open?: { id: string } | null }
         `${entry.connection.name} ${entry.connection.transport.type === 'http' ? entry.connection.transport.url : entry.connection.transport.command}`,
       ),
   )
-  // By address without its query, so a plugin's copy of a server (`?utm_source=plugin`) counts as added too.
-  const address = (url: string) => url.split('?')[0]!.replace(/\/$/, '')
   const added = new Set(
     (status?.connections ?? []).map((entry) =>
-      entry.connection.transport.type === 'http' ? address(entry.connection.transport.url) : '',
+      entry.connection.transport.type === 'http' ? serverAddress(entry.connection.transport.url) : '',
     ),
   )
   const recommended = RECOMMENDED_MCP_SERVERS.filter(
-    (server) => !added.has(address(server.url)) && fits(`${server.name} ${server.description}`),
+    (server) => !added.has(serverAddress(server.url)) && fits(`${server.name} ${server.description}`),
   )
   const canAdminister = status?.canAdminister === true
   const open = status?.connections.find((entry) => entry.connection.id === openId) ?? null

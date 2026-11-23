@@ -34,6 +34,8 @@ const viewerMethods = new Set([
   'settings.app.get',
   'settings.app.snapshot',
   'settings.changeCard.get',
+  // A suggestion card is read like the thread it is in; only full-access devices answer it.
+  'toolSuggestions.get',
   'preferences.layers.get',
   'settings.models.get',
   'recaps.get',

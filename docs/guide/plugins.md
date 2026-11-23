@@ -31,7 +31,22 @@ Ramu checks each plugin's source once a day (and on **Check for updates**). The 
 
 ### When an agent needs a service
 
-An agent that needs a service Ramu doesn't know ("deploy this to Render") can call `plugin_search`, and `plugin_install` shows you the same review as an approval card, on the desktop or a phone. The agent can't approve it and never handles the credential. It asks you to add it in **Customize → Plugins**. A plugin's CLI runs through `platform_cli` with its name, in threads started after the install.
+An agent that needs a service Ramu doesn't know ("deploy this to Render") can call `plugin_search`. When you asked for it, `plugin_install` shows you the same review as an approval card, on the desktop or a phone. The agent can't approve it and never handles the credential. It asks you to add it in **Customize → Plugins**. A plugin's CLI runs through `platform_cli` with its name, in threads started after the install. When you haven't asked, the agent [suggests the tool](#suggested-while-a-thread-runs) instead.
+
+### Suggested while a thread runs
+
+When a plugin, skill or MCP server that isn't on would clearly help a thread, a card in the thread names it, says what it does and why, and offers **Turn on for this project**, **Turn on everywhere** and **Not now**.
+
+Most suggestions come from the thread's agent, which calls `tool_suggest` when it judges a tool would help and you haven't asked for one. It names the tool as `plugin_search` or `skill_find` returned it, or a recommended MCP server, never an address or a command, and gives one sentence the card shows as **Suggested by the agent: …**. Its recommended scope is the card's main button. The agent carries on without waiting, and uses `plugin_install` or `skill_install` only when you asked for the tool. Each thread takes at most three suggestions from its agent.
+
+Two rules add the clearest cases without asking a model:
+
+- A service's link in your message or a tool's input, such as a page the agent fetches, suggests its recommended MCP server: Figma designs, Linear, Notion, Sentry, Jira and Confluence (`atlassian.net`), DeepWiki, the Stripe dashboard, the Supabase dashboard and a Vercel project. A GitHub issue or pull request suggests GitHub's plugin, only when Ramu has no GitHub sign-in (Settings → Git, or `gh`).
+- The project's stack (from `ramu.json`, or its `package.json`, `manage.py`, `go.mod`, `pyproject.toml` or `Gemfile`) suggests the plugin made for it, when exactly one listed plugin names that stack.
+
+A thread shows one waiting card at a time and each tool once. A tool already added or installed, on or off, is never suggested, and neither is one you chose **Not now** for in that project. The card turns nothing on by itself. A server is added as in **Customize → MCP servers** and asks for its sign-in on the card. A plugin or skill opens its install review with this project or every project chosen, and a key it needs is asked for on its card. The card then says **On**, or shows what failed with its buttons to try again.
+
+Turning a tool on works on the computer running the host. Elsewhere, the phone included, the card says so and keeps **Not now**, which hides that tool's suggestions for the project and is kept on the host. Viewer devices see the card without buttons. **Settings → Threads → Suggest tools while threads run** turns the cards off, and the agent's `tool_suggest` with them. Each tool's own switch stays in Customize.
 
 ### A plugin made by asking
 
@@ -132,7 +147,7 @@ Every value is kept in the host's OS credential store and reaches only that plug
 
 The agent runs it with `platform_cli` and the plugin's name. Reads run straight away, and every other command asks the person with a card naming it. Deploys need no marking. Ramu recognises them from the command itself, so a preview deploy runs without a card and a production one asks with **Allow production deploys in this thread** as its widest choice and runs the project's migrations first ([Deploying an app](deploy.md#deploying)). The CLI gets a home folder of Ramu's own, so the person's CLI login is never read or changed. `credential` names the slot that signs it in when there are several. A plugin with no credential slot runs a local tool that signs nothing in (a game engine such as Godot), so it keeps the person's own home folder, where the tool's settings live.
 
-**Abilities** map an ability to a server and tool: `{ "image_generation": { "server": "images", "tool": "generate" } }`. Image generation and editing, web search, long reads, music, sound effects, speech, video and 3D models can be mapped. Video, speech, music, sound effects and 3D models spend the account's credits, so Auto uses a plugin's tool for them only after you approve the first call in a thread, on a card naming the service. A tool that takes its fields inside one object names it in `params` (Higgsfield's `{ "params": { "prompt": … } }`), and `arguments` gives fixed values the tool always gets, such as `{ "model": "…" }`. A 3D or video service works in the background and links to its file, so its mapping says more:
+**Abilities** map an ability to a server and tool: `{ "image_generation": { "server": "images", "tool": "generate" } }`. Image generation and editing, web search, long reads, music, sound effects, speech, video and 3D models can be mapped. Video, speech, music, sound effects, 3D models and any ability a service makes as a background job spend the account's credits, so a plugin's tool for them runs only after you approve the first call in a thread, on a card naming the service. A tool that takes its fields inside one object names it in `params` (Higgsfield's `{ "params": { "prompt": … } }`), and `arguments` gives fixed values the tool always gets, such as `{ "model": "…" }`. A service that makes each file as a background job (most image, audio, video and 3D services) returns a job id instead of the file, so its mapping says more:
 
 ```json
 {
@@ -148,8 +163,10 @@ The agent runs it with `platform_cli` and the plugin's name. Reads run straight 
 }
 ```
 
-- `status` is called with the task id the first call returned (and `wait: false` when it takes one) until the result links to a GLB, or for video to an MP4, MOV or WebM file. `fromImage` takes an image instead of words, as a local `file_path` when the tool reads one. `refine` textures a text preview, given the preview's task id.
-- `balance` is what the live check calls, so checking costs nothing. `downloads` lists the https origins a model may come from (`https://*.domain` for a CDN's subdomains), and a link anywhere else is refused.
+- `status` makes any ability that makes a file (images and image edits, speech, music, sound effects, video and 3D models) a background job. It's called with each job id the first call returned (all of `results[].id` or `job_ids` when it starts one job per file, and `wait: false` when it takes one) a few seconds apart, then less often, or after the wait the service gives in `poll_after_seconds`. It stops when the job's `status` fails or is refused (`nsfw`, `ip_detected`, `rejected`), or after 5 minutes for images, speech and sound effects and 10 for music, video and 3D models. Stop in the thread or in Activity ends the wait. Each finished file is downloaded into the thread's files and kept only when its bytes are what was asked for: an image (PNG, JPEG or WebP), audio (MP3, WAV, Ogg or M4A), a video (MP4, MOV or WebM) or a GLB model. Ramu finds it by its extension or by a field named for a result (`rawUrl`, `result_url`), never a thumbnail. An answer saying the account is out of credits ends the call with that, so the agent tells you. A mapping without `status` waits for the tool's own answer, as before.
+- `fromImage` takes an image instead of words, as a local `file_path` when the tool reads one. `refine` textures a text preview, given the preview's task id.
+- `balance` is what the live check calls, so checking costs nothing. `downloads` lists the https origins a file may come from (`https://*.domain` for a CDN's subdomains), and a link anywhere else is refused.
+- Older Ramu versions don't wait on jobs for images or audio, so a plugin that maps them with `status` sets `requires.ramu` to the version that does.
 
 **Data sources** are tables a Dashboard artifact reads by `id`, declared without code:
 
@@ -170,7 +187,7 @@ The agent runs it with `platform_cli` and the plugin's name. Reads run straight 
 
 Ramu bounds the answer's size and time, and a dashboard reads a source only after its **Allow**.
 
-**Stacks** (`nextjs`, `django`, `fastapi`, `go`, ...) let **New project** suggest the plugin, `keywords` help search find it, and `requires.ramu` names the oldest Ramu version it works with. `companion` names the service's own plugin in Claude's directory when yours only connects it to Ramu, so installing yours offers that one too. A service that publishes its plugin in its own marketplace instead is named in your index entry as `"companionFrom": { "name": "…", "index": "https://github.com/owner/repo" }`; that plugin installs through the same review, and Ramu's daily update check follows its marketplace.
+**Stacks** (`nextjs`, `django`, `fastapi`, `go`, ...) let **New project** and a [running thread](#suggested-while-a-thread-runs) suggest the plugin, `keywords` help search find it, and `requires.ramu` names the oldest Ramu version it works with. `companion` names the service's own plugin in Claude's directory when yours only connects it to Ramu, so installing yours offers that one too. A service that publishes its plugin in its own marketplace instead is named in your index entry as `"companionFrom": { "name": "…", "index": "https://github.com/owner/repo" }`; that plugin installs through the same review, and Ramu's daily update check follows its marketplace.
 
 ### Getting listed
 

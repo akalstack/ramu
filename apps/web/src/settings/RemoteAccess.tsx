@@ -15,6 +15,7 @@ import { SETTINGS_CARD_LINE, SettingsEmpty } from './cards'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { ChevronDown, Link2, MoreHorizontal, Plus, Radar, Wifi } from 'lucide-react'
 import { useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type {
@@ -24,7 +25,6 @@ import type {
   DeviceOs,
   NetworkDevice,
   NetworkStatus,
-  PairingOffer,
 } from '@ramu/shared/types'
 import { permissionsFor } from '@ramu/shared/devicePermissions'
 import { RowButton } from '@/components/row-button'
@@ -50,7 +50,8 @@ import { osLine } from '@ramu/shared/deviceOs'
 import { isSshTarget } from '@ramu/shared/hostTarget'
 import { useStagedValue } from './stagedChanges'
 import { PairingCode } from './PairingCode'
-import { defaultPairUrl, pairingNetwork, pairingUrls, pairQrText } from './pairingOffer'
+import { defaultPairUrl, pairingNetwork, pairQrText } from './pairingOffer'
+import { PairRoute } from './PairRoute'
 import { usePairingOffer } from './usePairingOffer'
 import { AccountDevicesRow, AccountHostsList } from './AccountAccess'
 import { RenameDialog } from './RenameDialog'
@@ -634,16 +635,11 @@ function ThisComputer() {
   )
 }
 
-/** Which network an offered address is on: the tunnel by name, or a network and its interface (`Local network · en0`). */
-const addressLabel = (entry: PairingOffer['urls'][number]) => {
-  const network = t(networkName(hostOfUrl(entry.url), entry.interface))
-  return entry.interface === 'tunnel' ? network : `${network} · ${entry.interface}`
-}
-
 /**
- * Pairs a phone or another computer: a QR code its camera opens and a one-time code, renewed while the dialog is open.
- * With other devices not yet allowed, it says so and allows them on this network in one step instead of sending the
- * person to the switches above. Opens from Remote access, the sidebar menu and the command palette.
+ * Pairs a phone or another computer: a large QR code its camera opens and a one-time code, renewed while the dialog is
+ * open, with the access it grants and the address it carries beside it. With other devices not yet allowed, it says
+ * so and allows them on this network in one step instead of sending the person to the switches above. Opens from
+ * Remote access, the sidebar and the command palette.
  */
 export function PairDialog({ onClose }: { onClose: () => void }) {
   const invoke = useSettingsInvoke()
@@ -654,7 +650,6 @@ export function PairDialog({ onClose }: { onClose: () => void }) {
   const ready = !!status?.reachable
   const { offer, now, error, joined } = usePairingOffer(invoke, role, ready)
   const [qrUrl, setQrUrl] = useState('')
-  const [showOther, setShowOther] = useState(false)
   const change = status ? pairingNetwork(status) : null
   const allow = async () => {
     if (!change) return
@@ -668,9 +663,6 @@ export function PairDialog({ onClose }: { onClose: () => void }) {
       setAllowing(false)
     }
   }
-  const { likely, other } = offer ? pairingUrls(offer.urls) : { likely: [], other: [] }
-  const urls = showOther || !likely.length ? [...likely, ...other] : likely
-  const hidden = likely.length + other.length - urls.length
   const url =
     (offer?.urls.some((entry) => entry.url === qrUrl) ? qrUrl : '') || (offer ? defaultPairUrl(offer.urls) : undefined)
   const name = status?.discovery?.name
@@ -688,9 +680,7 @@ export function PairDialog({ onClose }: { onClose: () => void }) {
           </DialogTitle>
           {!joined && ready && (
             <DialogDescription>
-              {t(
-                'Scan the code with your phone’s camera, or choose this host under Nearby hosts in Ramu and allow it when both show the same number.',
-              )}
+              {t('Scan with your phone’s camera. It opens Ramu, or the App Store or Google Play first.')}
             </DialogDescription>
           )}
         </DialogHeader>
@@ -734,71 +724,36 @@ export function PairDialog({ onClose }: { onClose: () => void }) {
               {t('It can now use this host. You can revoke it any time under Devices that can use this host.')}
             </p>
           ) : (
-            <>
-              <Dropdown
-                label={t('Device access')}
-                value={role}
-                options={[
-                  { value: 'owner', label: t('Full access') },
-                  { value: 'viewer', label: t('View threads and answer requests') },
-                ]}
-                onChange={(value) => setRole(value as 'owner' | 'viewer')}
-              />
+            <div className="flex flex-col gap-3">
+              {/* The code stays in place while a new one is made, so the access choice keeps focus when it changes. */}
+              <PairingCode offer={offer} now={now} url={url} name={name}>
+                <PairAccess role={role} onChange={setRole} />
+              </PairingCode>
               {error && (
-                <p className="text-bad small text-caption" role="alert">
+                <p className="m-0 text-bad text-caption" role="alert">
                   {error}
                 </p>
               )}
               {offer && (
                 <>
-                  <PairingCode offer={offer} now={now} url={url} name={name} />
                   {url && (
-                    <div className="flex items-center gap-2 rounded-(--radius-s) bg-fill p-[4px_6px_4px_12px]">
-                      <Link2 size={14} className="flex-none text-muted-foreground" aria-hidden />
-                      <span className="grow flex-1 min-w-0 truncate text-control">{t('Pairing link')}</span>
-                      <span className="muted text-muted-foreground small text-caption flex-none">
-                        {t('Send it to your phone')}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <CopyButton text={pairQrText(offer, url, name)} label={t('Copy link')} labelled />
+                      <CopyButton text={offer.code} label={t('Copy code')} labelled />
+                      <span className="text-caption text-muted-foreground">
+                        {t('Paste the link on your phone to open it there.')}
                       </span>
-                      <CopyButton text={pairQrText(offer, url, name)} label={t('Copy pairing link')} />
-                      <CopyButton text={offer.code} label={t('Copy code')} />
                     </div>
                   )}
-                  <div className="flex flex-col gap-1">
-                    <span className="muted text-muted-foreground small text-caption">
-                      {t('Addresses this host has')}
-                    </span>
-                    {urls.length ? (
-                      urls.map((entry) => (
-                        <div
-                          key={entry.url}
-                          className="flex items-center gap-2 rounded-(--radius-s) bg-fill p-[4px_6px_4px_12px]"
-                        >
-                          <code className="font-mono text-control grow flex-1 min-w-0 truncate">{entry.url}</code>
-                          <span className="muted text-muted-foreground small text-caption flex-none">
-                            {entry.url === url ? t('In the QR code') : addressLabel(entry)}
-                          </span>
-                          {entry.url !== url && (
-                            <Button variant="ghost" size="sm" onClick={() => setQrUrl(entry.url)}>
-                              {t('Use in QR code')}
-                            </Button>
-                          )}
-                          <CopyButton text={entry.url} label={t('Copy address')} />
-                        </div>
-                      ))
-                    ) : (
-                      <p className="muted text-muted-foreground small text-caption">
-                        {t('No network address found. Connect this host to a network or VPN.')}
-                      </p>
-                    )}
-                    {hidden > 0 && (
-                      <Button variant="ghost" className="self-start" onClick={() => setShowOther(true)}>
-                        {t('Show {0} more (Docker, VM and other virtual networks)', { 0: other.length })}
-                      </Button>
-                    )}
-                  </div>
+                  <PairRoute offer={offer} url={url} onPick={setQrUrl} />
                 </>
               )}
-            </>
+              {status.discovery?.discoverable && (
+                <p className="m-0 text-caption text-muted-foreground">
+                  {t('Or pick this host under Nearby hosts on the phone, and allow it when both show the same number.')}
+                </p>
+              )}
+            </div>
           )}
         </DialogScrollBody>
         <DialogFooter>
@@ -812,6 +767,36 @@ export function PairDialog({ onClose }: { onClose: () => void }) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** What a paired device may do, as two choices beside the code and a line on what the chosen one means. */
+function PairAccess({ role, onChange }: { role: 'owner' | 'viewer'; onChange: (role: 'owner' | 'viewer') => void }) {
+  return (
+    <div className="mt-2 flex flex-col gap-1.5">
+      <ToggleGroup
+        size="sm"
+        variant="outline"
+        spacing={0}
+        aria-label={t('Device access')}
+        value={[role]}
+        onValueChange={(values) => {
+          if (values[0] === 'owner' || values[0] === 'viewer') onChange(values[0])
+        }}
+      >
+        <ToggleGroupItem value="owner" className="px-2.5">
+          {t('Full access')}
+        </ToggleGroupItem>
+        <ToggleGroupItem value="viewer" className="px-2.5">
+          {t('View only')}
+        </ToggleGroupItem>
+      </ToggleGroup>
+      <span className="text-caption text-muted-foreground">
+        {role === 'viewer'
+          ? t('It can read threads and answer requests, but not start threads, change files or run commands.')
+          : t('It can start threads and change files here, plus what this host allows new devices.')}
+      </span>
+    </div>
   )
 }
 

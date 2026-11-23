@@ -98,6 +98,12 @@ export function ChatsSettings({ draft, onChange, busy }: DraftProps) {
         title="Suggest next message"
         description="After a turn, show a likely next message in the empty message box. Tab uses it. Each one is a small extra request on your plan, made only for a thread you have open."
       />
+      <ToggleRow
+        {...toggleProps}
+        setting="suggestTools"
+        title="Suggest tools while threads run"
+        description="Show a card in a thread when the agent or a link you share points to a tool that isn’t on. Turning one on is up to you."
+      />
       <SettingsGroupTitle>{t('Sidebar')}</SettingsGroupTitle>
       <SettingsRow setting="recentChatMode">
         <SettingsLabel

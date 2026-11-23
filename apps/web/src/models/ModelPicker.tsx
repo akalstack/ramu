@@ -45,7 +45,9 @@ import { AGENT_PROVIDERS, providerName } from '@ramu/shared/providers/providers'
 import type { AgentProvider, AgentModel, AgentSettings } from '@ramu/shared/types'
 import { useAppSettings } from '../settings/AppSettings'
 import { notifyError } from '../chat/Notifications'
-import { modelDisplayName, useModelSets } from './ModelSets'
+import { useModelSets } from './ModelSets'
+import { modelLabel, modelSearchText } from '@ramu/shared/providers/modelLabel'
+import { matchesWords } from '@ramu/shared/search/matchWords'
 import { ProviderIcon } from './ProviderIcon'
 import { peakUsage, usageTone, useUsage, windowLabel } from '../settings/Usage'
 
@@ -84,16 +86,8 @@ export function ModelPicker({
   const favorites = useMemo(() => landedFavorites ?? savedFavorites ?? [], [landedFavorites, savedFavorites])
   const all = useMemo(() => catalogs.flatMap((catalog) => catalog.models), [catalogs])
   const modelByKey = useMemo(() => new Map(all.map((model) => [keyOf(model), model])), [all])
-  const searchable = useMemo(
-    () =>
-      new Map(
-        all.map((model) => [
-          model,
-          `${modelDisplayName(model.name)} ${model.name} ${model.id} ${providerName(model.provider)}`.toLowerCase(),
-        ]),
-      ),
-    [all],
-  )
+  const labels = useMemo(() => new Map(all.map((model) => [model, modelLabel(model)])), [all])
+  const searchable = useMemo(() => new Map(all.map((model) => [model, modelSearchText(model)])), [all])
   const [showLegacy, setShowLegacy] = useShowLegacyModels()
   const [tab, setTab] = useState<Tab>('all')
   const [query, setQuery] = useState('')
@@ -144,7 +138,7 @@ export function ModelPicker({
         favorites,
         visible: app.preferences.visibleModels,
       }).filter(
-        (model) => (q || tab === 'all' || model.provider === tab) && (!q || searchable.get(model)!.includes(q)),
+        (model) => (q || tab === 'all' || model.provider === tab) && (!q || matchesWords(searchable.get(model)!, q)),
       ),
     [all, searchable, q, tab, showLegacy, settings, favorites, app.preferences.visibleModels],
   )
@@ -263,7 +257,7 @@ export function ModelPicker({
     const visible = next.filter((key) => modelByKey.has(key))
     saveFavorites(
       next,
-      `Moved ${model ? modelDisplayName(model.name) : 'favorite'} to position ${visible.indexOf(key) + 1} of ${visible.length}.`,
+      `Moved ${model ? modelLabel(model).name : 'favorite'} to position ${visible.indexOf(key) + 1} of ${visible.length}.`,
     )
   }
   const drop = ({ active, over }: DragEndEvent) => {
@@ -453,7 +447,7 @@ export function ModelPicker({
                       <DragHandle
                         {...sortable.handle}
                         className="mp-drag py-1"
-                        aria-label={t('Reorder {0}', { '0': modelDisplayName(model.name) })}
+                        aria-label={t('Reorder {0}', { '0': modelLabel(model).name })}
                         title={t('Drag to reorder. Alt+↑/↓ moves this favorite.')}
                         onClick={(event) => event.stopPropagation()}
                         onKeyDown={(event) => {
@@ -470,9 +464,14 @@ export function ModelPicker({
                     <ProviderIcon provider={model.provider} size={14} />
                     {/* Legacy rides with the name, so the shortcut, check and star at the end never move it. */}
                     <span className="flex min-w-0 flex-1 items-center gap-2">
-                      <span className="mp-name min-w-0 truncate text-control font-medium">
-                        {modelDisplayName(model.name)}
+                      <span className="mp-name min-w-0 truncate text-control font-medium" title={model.id}>
+                        {labels.get(model)!.name}
                       </span>
+                      {labels.get(model)!.route && (
+                        <span className="min-w-0 flex-none truncate text-caption text-muted-foreground">
+                          {labels.get(model)!.route}
+                        </span>
+                      )}
                       {modelTags(model).legacy && (
                         <span className="flex-none rounded-full bg-fill px-1.5 text-caption text-muted-foreground">
                           {t('Legacy')}
@@ -531,8 +530,8 @@ export function ModelPicker({
                           }
                           aria-label={
                             favorites.includes(keyOf(model))
-                              ? t('Remove {0} from favorites', { '0': modelDisplayName(model.name) })
-                              : t('Add {0} to favorites', { '0': modelDisplayName(model.name) })
+                              ? t('Remove {0} from favorites', { '0': modelLabel(model).name })
+                              : t('Add {0} to favorites', { '0': modelLabel(model).name })
                           }
                           aria-pressed={favorites.includes(keyOf(model))}
                           onClick={(event) => {
@@ -584,9 +583,7 @@ export function ModelPicker({
                 <div className="pointer-events-none flex h-full w-full items-center gap-2 rounded-(--radius-s) border border-(--line-strong) bg-raised px-2 text-control font-medium text-foreground shadow-lg">
                   <GripVertical size={14} className="flex-none text-muted-foreground" />
                   <ProviderIcon provider={modelByKey.get(draggedFavorite)!.provider} size={14} />
-                  <span className="min-w-0 flex-1 truncate">
-                    {modelDisplayName(modelByKey.get(draggedFavorite)!.name)}
-                  </span>
+                  <span className="min-w-0 flex-1 truncate">{modelLabel(modelByKey.get(draggedFavorite)!).name}</span>
                 </div>
               )}
             </DragOverlay>,

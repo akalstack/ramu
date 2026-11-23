@@ -1428,6 +1428,13 @@ export interface RamuMethods extends ArtifactMethods {
   /** Puts back the values from before the card applied; refused for a row the person changed since. */
   'settings.changeCard.undo'(cardId: string): import('./settingsChanges').SettingsChangeCard
   'settings.changeCard.dismiss'(cardId: string): import('./settingsChanges').SettingsChangeCard
+  /**
+   * A tool suggested in a thread, whether it is on now and what this device may do with the card; null once it is gone
+   * or Suggest tools while threads run is off. Turning it on goes through Customize's own calls.
+   */
+  'toolSuggestions.get'(cardId: string): import('./toolSuggestions').ToolSuggestionView | null
+  /** Not now: hides this suggestion, and the same tool's later ones, in the thread's project. */
+  'toolSuggestions.dismiss'(cardId: string): import('./toolSuggestions').ToolSuggestionView | null
   'settings.permissions.clear'(removal?: import('./types').PermissionRemoval): void
   'settings.permissions.list'(): import('./types').SavedPermissionRule[]
   'settings.permissions.remove'(id: string): void

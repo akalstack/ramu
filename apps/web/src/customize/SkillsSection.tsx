@@ -38,7 +38,14 @@ type Draft = {
  * Skills: the ones you wrote, the ones installed from a repository or a plugin, and the skills.sh directory to add more
  * from, searched as you type.
  */
-export function SkillsSection({ onOpenPlugins }: { onOpenPlugins: () => void }) {
+export function SkillsSection({
+  onOpenPlugins,
+  install: requested,
+}: {
+  onOpenPlugins: () => void
+  /** A directory skill whose install review opens on arrival, such as one a thread suggested. */
+  install?: { source: string; skill: string; projectId?: string } | null
+}) {
   useLanguage()
   const { invoke } = useHost()
   const [skills, setSkills] = useState<ManagedSkill[] | null>(null)
@@ -108,6 +115,17 @@ export function SkillsSection({ onOpenPlugins }: { onOpenPlugins: () => void }) 
     act(key, async () =>
       setPreview(await invoke('skills.stage', { source, skill, projectId, ...(updatingId ? { updatingId } : {}) })),
     )
+  useEffect(() => {
+    if (requested)
+      void install(
+        `directory:${requested.source}/${requested.skill}`,
+        requested.source,
+        requested.skill,
+        undefined,
+        requested.projectId ?? null,
+      )
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- opens once for each request
+  }, [requested])
   /** A skill another host sent: an installed one is fetched from its source again, a written one opens in the editor. */
   const reviewWaiting = (entry: WaitingTool) => {
     if (entry.tool.kind !== 'skill') return

@@ -20,7 +20,7 @@ import { useHostRuntime } from '../workspace/workspace'
 import { cachedModelSets, rememberModelSets } from './modelSetsCache'
 import { stableContext } from '../lib/stableContext'
 
-import { modelDisplayName } from './modelNames'
+import { modelDisplayName } from '@ramu/shared/providers/modelLabel'
 export { modelDisplayName }
 export const effortDisplayName = (effort: ReasoningEffort | null, _provider: AgentProvider) =>
   effort === 'xhigh' ? t('Extra High') : effort ? t(effort[0]!.toUpperCase() + effort.slice(1)) : ''

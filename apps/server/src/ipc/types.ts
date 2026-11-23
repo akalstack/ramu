@@ -81,6 +81,8 @@ export interface Services {
   pullRequestDrafts?: import('../background/pullRequestDrafts').PullRequestDrafts
   pullRequestWrites?: import('../background/pullRequestWrites').PullRequestWrites
   settingsChanges?: import('../settings/settingsChanges').SettingsChanges
+  /** Tools suggested in threads from what they do. */
+  toolSuggestions?: import('../plugins/toolSuggestions').ToolSuggestions
   recaps: RecapService
   learning?: LearningService
   memory?: MemoryService
@@ -100,6 +102,8 @@ export interface RuntimeHost {
   userData: string
   /** Initial integration/credential administration is local to the execution host. */
   canAdministerIntegrations?(): boolean
+  /** The current call comes from a paired device with view-only access. */
+  callerIsViewer?(): boolean
   send(channel: string, payload: unknown): void
   native(method: 'pickExecutable' | 'pickDirectory' | 'pickAttachments' | 'reveal', path?: string): Promise<unknown>
   /** This host's own desktop app, when it is open: whether it is, and asking it to install a prepared update. */

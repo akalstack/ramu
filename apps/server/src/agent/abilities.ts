@@ -51,6 +51,7 @@ import { loadProjectConfig } from '../workspace/projectConfig'
 import { classifyLimit } from '../providers/limitClassifier'
 import { providerAccountId, taskAccountId } from '../providers/providerBinaries'
 import { resolveInRoot } from '../workspace/files'
+import { MAX_ATTACHMENT_BYTES } from '../attachments'
 import type { AbilityOutput, AbilityRequest, AbilityRun } from './abilityRuns'
 
 /** What the ability service needs from the rest of the host. */
@@ -89,8 +90,10 @@ export interface AbilityHost {
   inProject?(sessionId: string): boolean
   /** Downloads a file a tool linked to; the global fetch unless a test replaces it. */
   download?(url: string, signal: AbortSignal): Promise<Response>
-  /** How often a background task's status tool is asked, in milliseconds. */
+  /** How often a background task's status tool is first asked, in milliseconds; later asks back off from it. */
   statusEveryMs?: number
+  /** How long a background job is waited for, in milliseconds; the ability's own limit unless a test sets it. */
+  jobWaitMs?: number
 }
 
 /** Input bounds per tool, enforced again on every call. */
@@ -163,13 +166,42 @@ const AUDIO_TYPES: Record<string, string> = {
   'audio/mp4': 'm4a',
 }
 
-/** How long a 3D or video service's background task is waited for. */
-const MODEL_WAIT_MS = 10 * 60_000
+/** The abilities that make a file, which a service may make as a background job, and how long each is waited for. */
+const JOB_WAIT_MS: Partial<Record<Ability, number>> = {
+  image_generation: 5 * 60_000,
+  image_edit: 5 * 60_000,
+  speech: 5 * 60_000,
+  music: 10 * 60_000,
+  sound_effect: 5 * 60_000,
+  video_generation: 10 * 60_000,
+  model_3d: 10 * 60_000,
+}
+/** What a background job makes, as its messages name it. */
+const JOB_WHAT: Partial<Record<Ability, string>> = {
+  image_generation: 'image',
+  image_edit: 'image',
+  speech: 'narration',
+  music: 'music',
+  sound_effect: 'sound effect',
+  video_generation: 'video',
+  model_3d: 'model',
+}
+/** The most jobs one call waits on, and the most files it keeps from them. */
+const MAX_JOBS = 8
+/** A job's status that means the service refused what was asked, rather than failing to make it. */
+const REFUSED_STATE = /^(nsfw|ip_detected|rejected|banned|moderated|blocked|flagged|content_?policy|censored)$/i
+const FAILED_STATE = /^(fail(ed|ure)?|error|cancel(l)?ed|expired)$/i
+const DONE_STATE = /^(succeeded|success|done|completed?|finished)$/i
+/** An answer saying the account cannot pay for the job. */
+const NO_CREDITS =
+  /(insufficient|not enough|out of|no (more )?|zero) (credits?|balance|funds)|credits? (are |is )?(exhausted|depleted|insufficient)|payment required|\b402\b/i
 /** The largest video file kept. */
 const VIDEO_MAX_BYTES = 200 * 1024 * 1024
 /** What a plugin's paid call makes, for the card that asks before the first one in a thread. */
 const SPENT_ON: Partial<Record<Ability, { title: string; what: string }>> = {
   model_3d: { title: '3D model', what: 'a 3D model' },
+  image_generation: { title: 'Image', what: 'an image' },
+  image_edit: { title: 'Image edit', what: 'an edited image' },
   video_generation: { title: 'Video', what: 'a video' },
   speech: { title: 'Narration', what: 'narration' },
   music: { title: 'Music', what: 'music' },
@@ -257,7 +289,8 @@ export function modelArguments(
   const find = (pattern: RegExp) => names.find((name) => pattern.test(name))
   const args: Record<string, unknown> = {}
   if (image) {
-    const path = find(/^(file_path|image_path|local_path)$/i)
+    // Tripo's image-to-3D tool takes the image's path in `input`.
+    const path = find(/^(file_path|image_path|local_path|input)$/i)
     const url = find(/^(image_url|image|input_image|file_url|image_file)$/i)
     const list = find(/^(images|image_urls)$/i)
     if (path) args[path] = image.path
@@ -402,6 +435,89 @@ function fieldIn(value: unknown, pattern: RegExp, depth = 0): string | number | 
 const taskIn = (result: { texts: string[]; structured: unknown }) =>
   fieldIn(result.structured ?? result.texts, /^(task_?id|job_?id|result|id)$/i)
 
+/**
+ * Every job a start tool returned, for a service that starts one job per file (Higgsfield's `results[].id`): the ids in
+ * a list of jobs, else its one task id.
+ */
+export function jobIds(result: { texts: string[]; structured: unknown }): (string | number)[] {
+  const list = listIn(result.structured ?? result.texts, /^(results|jobs|tasks|generations|job_?ids|task_?ids)$/i)
+  const ids = (list ?? []).flatMap((entry) => {
+    if (typeof entry === 'string' || typeof entry === 'number') return [entry]
+    const id = entry && typeof entry === 'object' ? fieldIn(entry, /^(task_?id|job_?id|id)$/i) : undefined
+    return id === undefined ? [] : [id]
+  })
+  if (ids.length) return [...new Set(ids)].slice(0, MAX_JOBS)
+  const one = taskIn(result)
+  return one === undefined ? [] : [one]
+}
+
+/** The first list under a field named like `pattern`, anywhere in a tool result. */
+function listIn(value: unknown, pattern: RegExp, depth = 0): unknown[] | undefined {
+  if (depth > 6) return undefined
+  if (typeof value === 'string' && /^\s*[[{]/.test(value))
+    try {
+      return listIn(JSON.parse(value), pattern, depth + 1)
+    } catch {
+      return undefined
+    }
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const found = listIn(entry, pattern, depth + 1)
+      if (found) return found
+    }
+    return undefined
+  }
+  if (!value || typeof value !== 'object') return undefined
+  for (const [name, entry] of Object.entries(value)) if (pattern.test(name) && Array.isArray(entry)) return entry
+  for (const entry of Object.values(value)) {
+    const found = listIn(entry, pattern, depth + 1)
+    if (found) return found
+  }
+  return undefined
+}
+
+/**
+ * The addresses of the finished files in a job's result: by the file's extension, or by a field named for a result
+ * (`rawUrl`, `result_url`, `audio_url`). A thumbnail, preview or account page under its own field is never one.
+ */
+export function jobFileLinks(links: readonly { url: string; key: string }[], kind: 'image' | 'audio'): string[] {
+  const extension = kind === 'image' ? /\.(png|jpe?g|webp)$/ : /\.(mp3|wav|ogg|m4a)$/
+  const named =
+    kind === 'image'
+      ? /(raw|result|output|image|file|download)_?url$/i
+      : /(raw|result|output|audio|file|download)_?url$/i
+  const other = /thumb|preview|poster|cover|min_?url|upgrade|checkout|avatar|input|reference/i
+  const keys = new Map<string, string[]>()
+  for (const link of links) keys.set(link.url, [...(keys.get(link.url) ?? []), link.key])
+  const pathOf = (url: string) => {
+    try {
+      return new URL(url).pathname.toLowerCase()
+    } catch {
+      return ''
+    }
+  }
+  // An address seen in a text result is found both as text (no field) and under its field once the JSON is read.
+  return [...keys].flatMap(([url, all]) => {
+    const fields = all.filter(Boolean)
+    if (!fields.length) return extension.test(pathOf(url)) ? [url] : []
+    if (fields.some((key) => other.test(key))) return []
+    return extension.test(pathOf(url)) || fields.some((key) => named.test(key.split('.').at(-1) ?? '')) ? [url] : []
+  })
+}
+
+/** An audio file's extension from its first bytes, or null when they are not audio Ramu keeps. */
+export function audioExtension(bytes: Buffer): 'mp3' | 'wav' | 'ogg' | 'm4a' | null {
+  if (bytes.length < 12) return null
+  if (bytes.subarray(0, 3).toString('latin1') === 'ID3') return 'mp3'
+  if (bytes[0] === 0xff && (bytes[1]! & 0xe6) === 0xe2) return 'mp3'
+  if (bytes.subarray(0, 4).toString('latin1') === 'RIFF' && bytes.subarray(8, 12).toString('latin1') === 'WAVE')
+    return 'wav'
+  if (bytes.subarray(0, 4).toString('latin1') === 'OggS') return 'ogg'
+  if (bytes.subarray(4, 8).toString('latin1') === 'ftyp' && /^M4[AB]/.test(bytes.subarray(8, 12).toString('latin1')))
+    return 'm4a'
+  return null
+}
+
 /** The credits a balance tool reported, from a field named for them or a number beside the word. */
 function creditsIn(result: { texts: string[]; structured: unknown }): number | undefined {
   const field = fieldIn(result.structured ?? result.texts, /^(credits?|balance|remaining(_credits)?|credits_left)$/i)
@@ -418,6 +534,12 @@ const slug = (text: string) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 40) || 'image'
+
+/**
+ * Whether a plugin's call spends the account's credits, so the first one in a thread asks and its check reads only the
+ * balance: the paid abilities, and any ability a service makes as a background job.
+ */
+const paidMapping = (ability: Ability, tool: AbilityMcpTool) => ASKED_MCP_ABILITIES.includes(ability) || !!tool.status
 
 /** Thrown when a call cannot run at all; the agent reads the message and carries on. */
 class Refusal extends Error {
@@ -819,10 +941,22 @@ export class AbilityService {
       const project = loadProjectConfig(session.cwd).config.abilities ?? {}
       const choices = { ...host.choices, ...project }
       const mapped = choices[ability]
-      if (isMcpChoice(mapped))
-        return await this.track(ABILITY_LABELS[ability], clip(done.sent.prompt, 80), () =>
-          this.viaMcp(session, base, done, mapped, started, signal),
-        )
+      if (isMcpChoice(mapped)) {
+        // Stop in Activity ends the call as the thread's own Stop does, including a background job's wait.
+        const stop = new AbortController()
+        const abort = () => stop.abort()
+        signal?.addEventListener('abort', abort, { once: true })
+        try {
+          return await this.track(
+            ABILITY_LABELS[ability],
+            clip(done.sent.prompt, 80),
+            () => this.viaMcp(session, base, done, mapped, started, stop.signal),
+            abort,
+          )
+        } finally {
+          signal?.removeEventListener('abort', abort)
+        }
+      }
       if (isMediaChoice(mapped))
         return await this.track(ABILITY_LABELS[ability], clip(done.sent.prompt, 80), () =>
           this.viaMedia(session, base, done, mapped.media, started, signal),
@@ -1044,7 +1178,11 @@ export class AbilityService {
     }[]
     const structured = (result as { structuredContent?: unknown }).structuredContent
     const texts = content.flatMap((part) => (part.type === 'text' && typeof part.text === 'string' ? [part.text] : []))
-    if (result.isError) throw new Error(`${server} returned an error. ${clip(texts.join(' '), 300)}`.trim())
+    if (result.isError) {
+      // A background job's service says so when the account cannot pay, which the person can fix.
+      if (tool.status && NO_CREDITS.test(texts.join(' '))) throw this.noCredits(server, texts.join(' '))
+      throw new Error(`${server} returned an error. ${clip(texts.join(' '), 300)}`.trim())
+    }
     const images = content.flatMap((part) => {
       const extension = typeof part.mimeType === 'string' ? IMAGE_TYPES[part.mimeType] : undefined
       return part.type === 'image' && typeof part.data === 'string' && extension
@@ -1096,7 +1234,7 @@ export class AbilityService {
       return null
     const same = (entry: AbilityMcpCheck) =>
       entry.ability === base.ability && entry.connectionId === tool.connectionId && entry.tool === tool.tool
-    const asked = ASKED_MCP_ABILITIES.includes(base.ability)
+    const asked = paidMapping(base.ability, tool)
     // A balance check costs nothing, so a paid service is checked on every call: credits added a minute ago count.
     let check = asked ? undefined : this.mcpChecks().find(same)
     // A failed check is tried again a day later, since the server behind the tool may have been fixed.
@@ -1121,9 +1259,9 @@ export class AbilityService {
   ): Promise<AbilityMcpCheck> {
     const base = { connectionId: tool.connectionId, tool: tool.tool, ability, checkedAt: new Date().toISOString() }
     try {
-      // Making a model, a video or audio spends credits, so its check only reads the account's balance, when the plugin
-      // names a tool for it.
-      if (ASKED_MCP_ABILITIES.includes(ability)) {
+      // Making a model, a video, audio or a background job's image spends credits, so its check only reads the account's
+      // balance, when the plugin names a tool for it.
+      if (paidMapping(ability, tool)) {
         if (!tool.balance) return { ...base, ok: true }
         const balance = await this.mcpCall(session, { ...tool, tool: tool.balance }, '', signal, [], () => ({}))
         const credits = creditsIn(balance)
@@ -1171,8 +1309,7 @@ export class AbilityService {
     // A tool picked by hand in Settings keeps what its plugin declared: the status tool and where files download from.
     const declared = this.preferences().autoMcp?.[base.ability]
     const full = declared?.connectionId === choice.connectionId ? { ...declared, ...choice } : choice
-    if (ASKED_MCP_ABILITIES.includes(base.ability))
-      await this.approveSpend(session, base.ability, full, prepared, signal)
+    if (paidMapping(base.ability, full)) await this.approveSpend(session, base.ability, full, prepared, signal)
     if (base.ability === 'model_3d') return this.modelViaMcp(session, base, prepared, full, started, signal)
     if (base.ability === 'video_generation') return this.videoViaMcp(session, base, prepared, full, started, signal)
     // A long read sends its whole rendered prompt, documents included; an edit sends its images as data URLs.
@@ -1188,6 +1325,9 @@ export class AbilityService {
             return `data:${mime};base64,${readFileSync(path).toString('base64')}`
           })
         : []
+    // A service that makes the file as a background job names its status tool; the others answer with the file.
+    if (full.status && JOB_WAIT_MS[base.ability])
+      return this.filesViaJob(session, base, prepared, full, text, inputs, started, signal)
     const { server, texts, images, audio } = await this.mcpCall(session, choice, text, signal, inputs)
     const attachments = [...images, ...audio].map((file, index) =>
       this.host.attachments.add(`${slug(text)}-${index + 1}.${file.extension}`, file.bytes),
@@ -1342,7 +1482,7 @@ export class AbilityService {
         ...(base.args.aspect === 'portrait' || base.args.aspect === 'landscape' ? { aspect: base.args.aspect } : {}),
       }),
     )
-    const { file, result } = await this.waitForTask(session, first, choice, stop, 'video', (next) =>
+    const { file, result } = await this.waitForTask(session, first, choice, stop, 'video_generation', (next) =>
       this.videoFile(next, choice, stop),
     )
     if (!file) throw new Error(`${result.server} returned no video. ${clip(result.texts.join(' '), 300)}`.trim())
@@ -1412,43 +1552,57 @@ export class AbilityService {
       created,
       choice,
       stop,
-      'model',
+      'model_3d',
       download ? (result) => this.modelFile(result, choice, stop) : null,
-      fresh,
+      { fresh },
     )
   }
 
   /**
-   * Waits on a background task: its status tool is asked every few seconds until `find` gets the file from the
-   * result, the task fails, Stop is pressed or ten minutes pass. A result that already holds the file is returned as
-   * it is. With no `find`, the task is only waited on until it finishes (a 3D preview that will be textured).
+   * Waits on a background job: its status tool is asked until `find` gets the file from the result, the job fails or
+   * is refused, Stop is pressed or the ability's time limit passes. Asks start a few seconds apart and back off, or
+   * follow the wait the service gives (`poll_after_seconds`). A result that already holds the file is returned as it
+   * is. With no `find`, the job is only waited on until it finishes (a 3D preview that will be textured).
    */
   private async waitForTask<T>(
     session: AgentSessionInfo,
     created: Awaited<ReturnType<AbilityService['mcpCall']>>,
     choice: AbilityMcpTool,
     stop: AbortSignal,
-    what: 'model' | 'video',
+    ability: Ability,
     find: ((result: typeof created) => Promise<T | null>) | null,
-    fresh = false,
+    options: { fresh?: boolean; task?: string | number } = {},
   ): Promise<{ file: T | null; result: typeof created }> {
     let result = created
+    const what = JOB_WHAT[ability] ?? 'file'
     const download = !!find
     // A refine task's first answer carries the preview's links, which are not its model.
-    let file = fresh || !find ? null : await find(result)
+    let file = options.fresh || !find || options.task !== undefined ? null : await find(result)
     if (file || !choice.status) return { file, result }
-    const task = taskIn(created)
-    if (task === undefined)
-      throw new Error(
-        `${result.server} returned no ${what} and no task to wait for. ${clip(result.texts.join(' '), 300)}`,
-      )
-    const deadline = Date.now() + MODEL_WAIT_MS
+    const task = options.task ?? taskIn(created)
+    if (task === undefined) {
+      const said = clip(result.texts.join(' '), 300)
+      if (NO_CREDITS.test(said)) throw this.noCredits(result.server, said)
+      throw new Error(`${result.server} returned no ${what} and no task to wait for. ${said}`.trim())
+    }
+    const limit = this.host.jobWaitMs ?? JOB_WAIT_MS[ability] ?? 10 * 60_000
+    const deadline = Date.now() + limit
     const every = this.host.statusEveryMs ?? 5_000
+    let delay = every
     while (!file) {
-      if (Date.now() > deadline)
-        throw new Error(`${result.server} did not finish the ${what} within ${MODEL_WAIT_MS / 60_000} minutes.`)
+      // The service's own hint, kept between a first ask and a slow one; otherwise each ask waits half as long again.
+      const hint = fieldIn(result.structured ?? result.texts, /^(poll_after_seconds|retry_after(_seconds)?)$/i)
+      const wait =
+        typeof hint === 'number' && Number.isFinite(hint) ? Math.min(Math.max(hint * 1000, every), every * 6) : delay
+      delay = Math.min(delay * 1.5, every * 6)
+      const minutes = Math.max(1, Math.round(limit / 60_000))
+      if (Date.now() + wait > deadline)
+        throw new Error(
+          `${result.server} did not finish the ${what} within ${minutes} minute${minutes === 1 ? '' : 's'}. It may still finish there: look on ${result.server} before asking again, so its credits are not spent twice.`,
+        )
       await new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(resolve, every)
+        if (stop.aborted) return reject(new Error(`The ${what} was stopped.`))
+        const timer = setTimeout(resolve, wait)
         stop.addEventListener(
           'abort',
           () => {
@@ -1462,9 +1616,16 @@ export class AbilityService {
         taskArguments(schema, String(task), /^(task_?id|job_?id)$/i),
       )
       const state = fieldIn(result.structured ?? result.texts, /^(status|state)$/i)
-      if (typeof state === 'string' && /^(fail(ed|ure)?|error|cancel(l)?ed|expired|banned|nsfw|rejected)$/i.test(state))
-        throw new Error(`${result.server} could not make the ${what}. ${clip(result.texts.join(' '), 300)}`.trim())
-      if (typeof state === 'string' && !/^(succeeded|success|done|completed?|finished)$/i.test(state)) continue
+      const said = clip(result.texts.join(' '), 300)
+      if (typeof state === 'string' && REFUSED_STATE.test(state))
+        throw new Error(
+          `${result.server} could not make the ${what}: it refused the request (${state}). Change what is asked rather than sending the same again. ${said}`.trim(),
+        )
+      if (typeof state === 'string' && FAILED_STATE.test(state)) {
+        if (NO_CREDITS.test(said)) throw this.noCredits(result.server, said)
+        throw new Error(`${result.server} could not make the ${what}. ${said}`.trim())
+      }
+      if (typeof state === 'string' && !DONE_STATE.test(state)) continue
       // With no status field, a preview is ready once it links to a model.
       if (!download && (state !== undefined || result.links.some((entry) => /glb/i.test(entry.key + entry.url))))
         return { file: null, result }
@@ -1472,6 +1633,133 @@ export class AbilityService {
       file = await find(result)
     }
     return { file, result }
+  }
+
+  private noCredits(server: string, said: string) {
+    return new Refusal(
+      'unavailable',
+      `${server} has no credits left to make it (${clip(said, 200)}). Tell the person; they can add credits on their ${server} account. Continue without it and say so.`,
+    )
+  }
+
+  /**
+   * Images or audio from a service that makes them as background jobs: the making tool starts one job or several (one
+   * per file), each is waited on through the status tool, and every finished file is downloaded from an origin the
+   * plugin declared and kept only when its bytes are what was asked for.
+   */
+  private async filesViaJob(
+    session: AgentSessionInfo,
+    base: Pick<AbilityCall, 'id' | 'ability' | 'tool' | 'args'>,
+    prepared: Prepared,
+    choice: AbilityMcpTool,
+    text: string,
+    inputs: string[],
+    started: number,
+    signal?: AbortSignal,
+  ): Promise<AbilityCall> {
+    const stop = new AbortController()
+    const abort = () => stop.abort()
+    signal?.addEventListener('abort', abort, { once: true })
+    if (signal?.aborted) abort()
+    const kind = base.ability === 'image_generation' || base.ability === 'image_edit' ? 'image' : 'audio'
+    const what = JOB_WHAT[base.ability] ?? kind
+    try {
+      // Music's length goes in the tool's duration field as a video's does, in the form its schema asks for.
+      const seconds = typeof base.args.seconds === 'number' ? base.args.seconds : undefined
+      const first = await this.mcpCall(
+        session,
+        choice,
+        text,
+        stop.signal,
+        inputs,
+        seconds === undefined ? undefined : (schema) => videoArguments(schema, text, { seconds }),
+      )
+      const find = (result: typeof first) => this.jobFiles(result, choice, kind, stop.signal)
+      const ready = await find(first)
+      let files = ready ?? []
+      let server = first.server
+      const texts: string[] = []
+      if (!files.length) {
+        const tasks = jobIds(first)
+        if (!tasks.length) {
+          const said = clip(first.texts.join(' '), 300)
+          if (NO_CREDITS.test(said)) throw this.noCredits(first.server, said)
+          throw new Error(`${first.server} returned no ${what} and no job to wait for. ${said}`.trim())
+        }
+        // The jobs are waited on together; the first to fail stops the others.
+        const waits = await Promise.all(
+          tasks.map((task) =>
+            this.waitForTask(session, first, choice, stop.signal, base.ability, find, { task }).catch((error) => {
+              abort()
+              throw error
+            }),
+          ),
+        )
+        files = waits.flatMap((entry) => entry.file ?? [])
+        server = waits[0]?.result.server ?? server
+        texts.push(...waits.flatMap((entry) => entry.result.texts))
+      } else texts.push(...first.texts)
+      if (!files.length) throw new Error(`${server} returned no ${what}. ${clip(texts.join(' '), 300)}`.trim())
+      const name = slug(text)
+      const attachments = files
+        .slice(0, MAX_JOBS)
+        .map((file, index) =>
+          this.host.attachments.add(`${name}${files.length > 1 ? `-${index + 1}` : ''}.${file.extension}`, file.bytes),
+        )
+      let credits: number | undefined
+      if (choice.balance)
+        credits = await this.mcpCall(session, { ...choice, tool: choice.balance }, '', stop.signal, [], () => ({}))
+          .then(creditsIn)
+          .catch(() => undefined)
+      return {
+        ...base,
+        status: 'done',
+        mcp: { server, tool: choice.tool },
+        sent: prepared.sent,
+        summary: clip(
+          [
+            `${attachments.length} ${kind === 'image' ? 'image' : 'audio'} file${attachments.length > 1 ? 's' : ''}.`,
+            texts.join('\n\n'),
+          ]
+            .filter(Boolean)
+            .join(' '),
+          2_000,
+        ),
+        attachments,
+        ...(credits === undefined ? {} : { credits }),
+        durationMs: Date.now() - started,
+      }
+    } finally {
+      signal?.removeEventListener('abort', abort)
+    }
+  }
+
+  /** The images or audio a job's result holds, as content or links; null when it is not ready yet. */
+  private async jobFiles(
+    result: Awaited<ReturnType<AbilityService['mcpCall']>>,
+    choice: AbilityMcpTool,
+    kind: 'image' | 'audio',
+    signal: AbortSignal,
+  ): Promise<{ bytes: Buffer; extension: string }[] | null> {
+    const content = kind === 'image' ? result.images : result.audio
+    if (content.length) return content
+    const sniff = kind === 'image' ? imageExtension : audioExtension
+    const blobs = result.blobs.flatMap((blob) => {
+      const extension = sniff(blob.bytes)
+      return extension ? [{ bytes: blob.bytes, extension }] : []
+    })
+    if (blobs.length) return blobs
+    const links = jobFileLinks(result.links, kind).slice(0, MAX_JOBS)
+    if (!links.length) return null
+    const files: { bytes: Buffer; extension: string }[] = []
+    for (const link of links) {
+      const bytes = await this.fetchFile(link, choice, signal, MAX_ATTACHMENT_BYTES)
+      const extension = sniff(bytes)
+      if (!extension)
+        throw new Error(`${result.server} linked to a file that is not ${kind === 'image' ? 'an image' : 'audio'}.`)
+      files.push({ bytes, extension })
+    }
+    return files
   }
 
   /** The model in a tool result, and a poster image the service made of it, or null when it is not ready yet. */
@@ -1517,7 +1805,7 @@ export class AbilityService {
     for (let hop = 0; hop < 5; hop++) {
       const parsed = new URL(current)
       if (parsed.protocol !== 'https:' || parsed.username || !declaredOrigin(parsed.origin, allowed))
-        throw new Error(`The model is at ${parsed.origin}, which the plugin does not list as a place to download from.`)
+        throw new Error(`The file is at ${parsed.origin}, which the plugin does not list as a place to download from.`)
       const response = await (
         this.host.download ?? ((target, stop) => fetch(target, { redirect: 'manual', signal: stop }))
       )(current, signal)

@@ -11,13 +11,28 @@ export interface CustomizeTarget {
   section: CustomizeSection
   /** A plugin's id in Plugins, or an MCP connection's id in MCP servers. */
   item?: string
-  /** A listed plugin to open the install review of, in Plugins. */
-  install?: { index: string; name: string }
+  /** A listed plugin to open the install review of, in Plugins, chosen for one project when `projectId` is set. */
+  install?: { index: string; name: string; projectId?: string }
+  /** A skills.sh skill to open the install review of, in Skills, for one project when `projectId` is set. */
+  installSkill?: { source: string; skill: string; projectId?: string }
 }
-/** Opens Plugins on the install review of one listed plugin, such as a recommended MCP server's fuller plugin. */
-export function reviewPluginInstall(index: string, name: string) {
+/**
+ * Opens Plugins on the install review of one listed plugin, such as a recommended MCP server's fuller plugin, with one
+ * project chosen when `projectId` is given.
+ */
+export function reviewPluginInstall(index: string, name: string, projectId?: string) {
   window.dispatchEvent(
-    new CustomEvent<CustomizeTarget>(CUSTOMIZE_EVENT, { detail: { section: 'plugins', install: { index, name } } }),
+    new CustomEvent<CustomizeTarget>(CUSTOMIZE_EVENT, {
+      detail: { section: 'plugins', install: { index, name, ...(projectId ? { projectId } : {}) } },
+    }),
+  )
+}
+/** Opens Skills on the install review of one skill in the skills.sh directory, for one project or every project. */
+export function reviewSkillInstall(source: string, skill: string, projectId?: string) {
+  window.dispatchEvent(
+    new CustomEvent<CustomizeTarget>(CUSTOMIZE_EVENT, {
+      detail: { section: 'skills', installSkill: { source, skill, ...(projectId ? { projectId } : {}) } },
+    }),
   )
 }
 export function openCustomize(section: CustomizeSection, item?: string) {

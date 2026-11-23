@@ -20,8 +20,7 @@ import {
 import { Button } from '@/components/desktop-button'
 import { DANGER_ACTION_CLASS, PRIMARY_ACTION_CLASS } from '@/components/button-classes'
 import { Button as NativeButton } from '@/components/ui/button'
-import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 
@@ -542,80 +541,5 @@ export function Dropdown({
         </SelectGroup>
       </SelectContent>
     </Select>
-  )
-}
-
-/** A Dropdown you can type into, for long lists such as branches. Same trigger and width rules; the list scrolls without a scrollbar gutter. */
-export function Combobox({
-  label,
-  value,
-  options,
-  onChange,
-  icon,
-  placeholder = t('Select…'),
-  searchPlaceholder = t('Search…'),
-  className = '',
-  disabled = false,
-  title,
-  bare = false,
-}: {
-  label: string
-  value: string
-  options: { value: string; label: string; disabled?: boolean }[]
-  onChange: (value: string) => void
-  icon?: ReactNode
-  placeholder?: string
-  searchPlaceholder?: string
-  className?: string
-  disabled?: boolean
-  title?: string
-  /** Skip the field-style trigger so `className` supplies the whole look, e.g. a composer chip. */
-  bare?: boolean
-}) {
-  useLanguage()
-  const [open, setOpen] = useState(false)
-  const selected = options.find((option) => option.value === value)
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        disabled={disabled || !options.length}
-        aria-label={label}
-        title={title}
-        className={
-          bare
-            ? `flex items-center min-w-0 disabled:opacity-50 [&_>_svg]:flex-none [&_>_svg:last-child]:size-3 [&_>_svg:last-child]:ml-auto [&_>_svg:last-child]:text-muted-foreground ${className}`
-            : `dropdown-trigger [&_>_svg]:flex-none [&_>_svg]:w-3.5 [&_>_svg]:h-3.5 [&_>_svg]:text-soft [&_>_svg:last-child]:w-3 [&_>_svg:last-child]:h-3 [&_>_svg:last-child]:ml-auto [&_>_svg:last-child]:text-muted-foreground [&:hover]:bg-hover [&[aria-expanded=true]]:bg-hover flex items-center gap-2 min-h-[30px] min-w-0 p-[5px_10px] [border:1px_solid_transparent] rounded-(--radius-s) text-[length:var(--ui-font-size)] leading-[18px] text-left bg-fill disabled:opacity-50 ${className}`
-        }
-      >
-        {icon}
-        <span className={`min-w-0 flex-1 truncate${bare ? ' chip-label' : ''}`}>
-          {selected?.label ?? (value || placeholder)}
-        </span>
-        <ChevronDown />
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-(--anchor-width) min-w-56 gap-0 p-0">
-        <Command className="p-0">
-          <CommandInput placeholder={searchPlaceholder} />
-          <CommandList className="p-1">
-            <CommandEmpty>{t('No matches')}</CommandEmpty>
-            {options.map((option) => (
-              <CommandItem
-                key={option.value}
-                value={option.label}
-                disabled={option.disabled}
-                data-checked={option.value === value}
-                className="gap-1.5 rounded-md px-1.5 py-1 text-sm data-selected:bg-accent data-selected:text-accent-foreground"
-                onSelect={() => {
-                  setOpen(false)
-                  onChange(option.value)
-                }}
-              >
-                <span className="truncate">{option.label}</span>
-              </CommandItem>
-            ))}
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
   )
 }

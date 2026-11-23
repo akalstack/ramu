@@ -66,6 +66,8 @@ import { fill, useT, useSay } from '../i18n'
 import { translate } from '@ramu/shared/i18n'
 import { Chip, IconButton, Pill, Row, SHEET_SETTLE_MS, Segmented, Sheet, T, Toggle, tap, type Icon } from './ui'
 import { modelTags } from '@ramu/shared/providers/modelTags'
+import { modelLabel as pickerLabel, modelSearchText } from '@ramu/shared/providers/modelLabel'
+import { matchesWords } from '@ramu/shared/search/matchWords'
 import { SheetGroup, SheetOption } from './SheetOptions'
 
 const ACCESS_MODES = [
@@ -114,6 +116,12 @@ export function modelLabel(m: ModelChoice) {
   return m.model || providerNames[m.provider]
 }
 
+/** A model's clean name and route, as the desktop's pickers show them, and what search reads. */
+const routedName = (provider: AgentProvider, model: { id: string; name: string }) => {
+  const { name, route } = pickerLabel({ provider, id: model.id, name: model.name })
+  return { label: name, route, search: modelSearchText({ provider, id: model.id, name: model.name }) }
+}
+
 /** Rows an iOS model list draws at a time; the native sheet scrolls them. */
 const MODEL_PAGE = 60
 /** Models each provider shows on the picker's first page before "All N models". */
@@ -126,6 +134,10 @@ type ModelRow = {
   provider: AgentProvider
   model: string
   label: string
+  /** Who serves it when OpenCode routes to another provider ("OpenRouter"); shown in place of the id. */
+  route: string | null
+  /** Its names, route, provider and id, for search. */
+  search: string
   efforts: string[]
   isDefault: boolean
   defaultEffort: string
@@ -167,7 +179,7 @@ export function ModelChip({
           .map((m) => ({
             provider: p.provider,
             model: m.id,
-            label: m.name,
+            ...routedName(p.provider, m),
             efforts: m.efforts as string[],
             isDefault: m.isDefault,
             defaultEffort: (m.defaultEffort ?? '') as string,
@@ -214,11 +226,7 @@ export function ModelChip({
   const shown = useMemo(() => {
     const needle = query.trim().toLowerCase()
     if (!provider && !needle) return []
-    return models.filter(
-      (m) =>
-        (!provider || m.provider === provider) &&
-        (!needle || `${m.label} ${m.model} ${providerNames[m.provider]}`.toLowerCase().includes(needle)),
-    )
+    return models.filter((m) => (!provider || m.provider === provider) && (!needle || matchesWords(m.search, needle)))
   }, [models, provider, query])
   const title = provider ? providerNames[provider] : say('Model')
   const back = provider
@@ -254,6 +262,7 @@ export function ModelChip({
             else commit(m, m.efforts[0] ?? '')
           }}
         >
+          <ProviderIcon provider={m.provider} size={16} />
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
               <T weight={selected ? '600' : '400'} numberOfLines={1} style={{ flexShrink: 1 }}>
@@ -273,8 +282,8 @@ export function ModelChip({
                 </Pill>
               ) : null}
             </View>
-            <T size={font.caption} tone="muted" mono numberOfLines={1}>
-              {m.model}
+            <T size={font.caption} tone="muted" mono={!m.route} numberOfLines={1}>
+              {m.route ?? m.model}
             </T>
           </View>
           {selected ? (

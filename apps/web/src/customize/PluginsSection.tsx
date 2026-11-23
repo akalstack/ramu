@@ -74,8 +74,8 @@ export function PluginsSection({
   install,
 }: {
   open?: { id: string } | null
-  /** A listed plugin whose install review opens on arrival, asked for from elsewhere in Customize. */
-  install?: { index: string; name: string } | null
+  /** A listed plugin whose install review opens on arrival, asked for from elsewhere such as a thread's suggestion. */
+  install?: { index: string; name: string; projectId?: string } | null
 }) {
   useLanguage()
   const { invoke } = useHost()
@@ -426,7 +426,13 @@ export function PluginsSection({
           }}
           projects={projects}
           identity={fromHost?.name === review.contents.name ? identity : null}
-          projectId={fromHost?.name === review.contents.name ? projectScope : null}
+          projectId={
+            fromHost?.name === review.contents.name
+              ? projectScope
+              : install?.name === review.contents.name
+                ? (install.projectId ?? null)
+                : null
+          }
           busy={busy === 'confirm'}
           companion={companionFor(review)}
           onCancel={() => {

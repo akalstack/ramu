@@ -21,6 +21,7 @@ export type ToggleKey =
   | 'resumeChatsOnRestart'
   | 'asyncQuestions'
   | 'suggestNextMessage'
+  | 'suggestTools'
   | 'showUsageLimits'
   | 'keepAwake'
   | 'fontSmoothing'

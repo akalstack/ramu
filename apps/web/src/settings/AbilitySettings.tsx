@@ -194,7 +194,7 @@ export function AbilitySettings({
               <span>
                 <SettingsTitle>{t('{0}: also try in Auto', { '0': t(ABILITY_LABELS[ability]) })}</SettingsTitle>
                 <span className="muted text-muted-foreground block small text-caption">
-                  {ASKED_MCP_ABILITIES.includes(ability)
+                  {ASKED_MCP_ABILITIES.includes(ability) || tool?.status
                     ? t('Each call spends the service’s credits, so the first one in a thread asks you.')
                     : tool
                       ? autoMcpText(ability, tool)

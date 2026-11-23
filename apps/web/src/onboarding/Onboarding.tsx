@@ -333,23 +333,26 @@ export function Onboarding() {
             <p className="m-0 min-w-0 flex-1 text-caption text-muted-foreground">
               {t('Welcome to Ramu')} · {t('Step {0} of {1}', { 0: index + 1, 1: steps.length })} · {name(current)}
             </p>
-            {/* Saved at once, so the rest of setup reads in the chosen language. */}
-            <Dropdown
-              label={t('App language')}
-              value={app.preferences.language}
-              disabled={busy}
-              className="w-[180px]! flex-none"
-              options={[
-                { value: 'system', label: t('Follow system') },
-                { value: 'id', label: 'Bahasa Indonesia' },
-                { value: 'en', label: 'English' },
-              ]}
-              onChange={(language) =>
-                void app
-                  .save({ ...app.preferences, language: language as AppPreferences['language'] })
-                  .catch((e: unknown) => setError(errorText(e)))
-              }
-            />
+            {/* Chosen once, on the first step, and saved at once so the rest of setup reads in that language; it
+                stays in Settings → Appearance after that. */}
+            {index === 0 && (
+              <Dropdown
+                label={t('App language')}
+                value={app.preferences.language}
+                disabled={busy}
+                className="w-[180px]! flex-none"
+                options={[
+                  { value: 'system', label: t('Follow system') },
+                  { value: 'id', label: 'Bahasa Indonesia' },
+                  { value: 'en', label: 'English' },
+                ]}
+                onChange={(language) =>
+                  void app
+                    .save({ ...app.preferences, language: language as AppPreferences['language'] })
+                    .catch((e: unknown) => setError(errorText(e)))
+                }
+              />
+            )}
           </div>
           <DialogTitle className="m-0 flex items-center gap-2.5 text-heading font-semibold tracking-[-0.01em]">
             {provider && <ProviderIcon provider={provider} size={20} />}

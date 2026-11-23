@@ -1,6 +1,6 @@
 import { STACKS, STACK_IDS, type StackId } from '@ramu/shared/stacks'
 import { Input } from '@/components/desktop-input'
-import { Combobox } from '../Menu'
+import { Combobox } from '@/components/combobox'
 import { t } from '../i18n'
 import { ProjectParentField, type useProjectParent } from '../workspace/ProjectParentField'
 

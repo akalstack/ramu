@@ -663,7 +663,7 @@ export class ExternalSkills {
       'skill_install',
       {
         description:
-          'Stage one external skill from owner/repo, URL, git address or an absolute local path. Ask the user scope when omitted, then show files and wait for user approval. Scripts come with the skill; Ramu never runs them.',
+          'Stage one external skill from owner/repo, URL, git address or an absolute local path, when the person asked for it (otherwise suggest it with tool_suggest). Ask the user scope when omitted, then show files and wait for user approval. Scripts come with the skill; Ramu never runs them.',
         inputSchema: {
           source: skillInstallInput.shape.source,
           skill: skillInstallInput.shape.skill,

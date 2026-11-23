@@ -222,6 +222,7 @@ export const appPreferences = z.object({
   resumeChatsOnRestart: z.boolean().default(true),
   asyncQuestions: z.boolean().default(true),
   suggestNextMessage: z.boolean().default(true),
+  suggestTools: z.boolean().default(true),
   autoBackgroundSeconds: z.number().int().min(0).max(3600).default(60),
   providerBinaries: providerBinaries.default({}),
   providerUpdateChecks: z.boolean().default(true),

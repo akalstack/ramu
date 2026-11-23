@@ -97,7 +97,7 @@ import { allowedConnections, DUPLICATE_CHOICE_KEY, type DuplicateChoices } from 
 // Independent Node process. Electron windows are clients, never owners of agent lifetimes.
 import { createServer, type ServerResponse } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
-import { chmodSync, mkdirSync, readFileSync, unlinkSync, writeFileSync, rmSync, statSync } from 'node:fs'
+import { chmodSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync, rmSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { NoticeInbox } from './background/notices'
 import { join } from 'node:path'
@@ -198,6 +198,10 @@ import { MemoryService, registerMemoryTools } from './memory/memory'
 import { RuleStore } from './rules/rules'
 import { RuleFiles } from './rules/ruleFiles'
 import { PluginService } from './plugins/service'
+import { ToolSuggestions, registerSuggestTool } from './plugins/toolSuggestions'
+import { SkillDirectory } from './memory/skillDirectory'
+import { loadProjectConfig } from './workspace/projectConfig'
+import { STACK_MANIFESTS, detectStack } from '@ramu/shared/toolSuggestions'
 import { AccountService } from './account/service'
 import { exportSettings } from './ipc/handlers/settingsTransfer'
 import { TRANSFER_GROUP_IDS } from '@ramu/shared/settingsTransfer'
@@ -543,6 +547,8 @@ const ocuBackend = new OcuBackend(
 const computer = new ComputerService(new ComputerRouter(new SckDisplayBackend(new MacosComputerBackend()), ocuBackend))
 // With computer use on, the native helpers are ready before the first frame or click needs them.
 if (workspace.getAppState<boolean>('computer:enabled', false) === true) computer.backend.warm?.()
+// Made once plugins and Shared MCP are, below; events from before then suggest nothing.
+const suggestions: { service?: ToolSuggestions } = {}
 const agents = new AgentService(
   db,
   (sessionId, event, seq, revision) => {
@@ -566,6 +572,7 @@ const agents = new AgentService(
         if (!session.parentId) void testDevices.releaseThread(session.taskId)
       } catch {}
     threadTitles?.observe(sessionId, event)
+    suggestions.service?.observe(sessionId, event)
     shellPushes?.observe(sessionId, event)
     if (event.kind === 'state') void adoptClones(sessionId, event.state)
     queueMicrotask(() => {
@@ -1288,6 +1295,90 @@ const plugins = new PluginService({
   identityAllows: (pluginId, projectId) => identities.allowed(projectId, accountKey('plugin', pluginId)),
 })
 plugins.start()
+let githubCheck: { at: number; signedIn: Promise<boolean> } | null = null
+const suggestedSkills = new SkillDirectory()
+suggestions.service = new ToolSuggestions({
+  getAppState: (key, fallback) => workspace.getAppState(key, fallback),
+  setAppState: (key, value) => workspace.setAppState(key, value),
+  enabled: () => agents.preferences?.().suggestTools !== false,
+  session: (sessionId) => {
+    try {
+      const session = agents.get(sessionId)
+      if (session.parentId) return null
+      return { taskId: session.taskId, projectId: workspace.getTask(session.taskId).projectId, cwd: session.cwd }
+    } catch {
+      return null
+    }
+  },
+  connections: () => {
+    try {
+      return getSharedMcp()
+        .list()
+        .connections.map((entry) => ({
+          id: entry.connection.id,
+          url: entry.connection.transport.type === 'http' ? entry.connection.transport.url : null,
+          status: entry.status,
+          granted: (entry.granted?.length ?? 0) > 0,
+        }))
+    } catch {
+      return []
+    }
+  },
+  plugins: () =>
+    plugins.list().map((plugin) => ({
+      id: plugin.id,
+      name: plugin.name,
+      needsSetup:
+        plugin.credentials.some((slot) => slot.state !== 'saved') ||
+        (plugin.accounts ?? []).some((account) => !account.signedIn),
+    })),
+  skills: () =>
+    learning
+      .skills()
+      .filter((skill) => skill.status !== 'archived')
+      .map((skill) => ({
+        name: skill.name,
+        source: skill.installation?.source ?? null,
+        skill: skill.installation?.skill ?? null,
+      })),
+  listings: () => plugins.listed(),
+  readListings: () => void plugins.browse().catch(() => {}),
+  browse: (query) => plugins.browse(query),
+  findSkill: async (source, name) =>
+    (await suggestedSkills.search(name)).some((skill) => skill.source === source && skill.skill === name),
+  githubSignedIn: () => {
+    // `gh auth token` runs a process, so one answer serves every link for a few minutes.
+    if (!githubCheck || Date.now() - githubCheck.at > 10 * 60_000)
+      githubCheck = {
+        at: Date.now(),
+        signedIn: githubToken().then(
+          (token) => !!token,
+          () => false,
+        ),
+      }
+    return githubCheck.signedIn
+  },
+  stackOf: (cwd) => {
+    try {
+      const files = readdirSync(cwd).slice(0, 500)
+      const manifests: Partial<Record<(typeof STACK_MANIFESTS)[number], string>> = {}
+      for (const name of STACK_MANIFESTS)
+        if (files.includes(name) && statSync(join(cwd, name)).size <= 256_000)
+          manifests[name] = readFileSync(join(cwd, name), 'utf8')
+      return detectStack({ configured: loadProjectConfig(cwd).config.stack?.id ?? null, files, manifests })
+    } catch {
+      return null
+    }
+  },
+  // After the event that matched has been handled, so the card follows it in the thread.
+  show: (sessionId, cardId) =>
+    queueMicrotask(() => {
+      try {
+        agents.toolSuggestionShown(sessionId, cardId)
+      } catch {}
+    }),
+  changed: () => send('workspace:changed', {}),
+})
 const account: AccountService = new AccountService({
   getState: (key, fallback) => workspace.getAppState(key, fallback),
   setState: (key, value) => workspace.setAppState(key, value),
@@ -1467,6 +1558,12 @@ const dispatcher = createDispatcher(
       return devices.list().find((device) => device.id === caller.deviceId)?.name
     },
     browserGrantEligible: (id) => devices.list().some((device) => device.id === id && device.role !== 'viewer'),
+    callerIsViewer: () => {
+      const caller = origin.getStore()
+      return (
+        !!caller?.network && devices.list().some((device) => device.id === caller.deviceId && device.role === 'viewer')
+      )
+    },
     send,
     native: (method, path) => {
       if (origin.getStore()?.network)
@@ -1523,6 +1620,7 @@ const dispatcher = createDispatcher(
     pullRequestDrafts,
     pullRequestWrites,
     settingsChanges,
+    toolSuggestions: suggestions.service,
     recaps,
     reviews,
     memory,
@@ -2022,6 +2120,8 @@ const mcpHttp = createServer(async (req, res) => {
         send('toolSync:changed', null)
       },
     )
+    // Cards belong to the thread the person reads, not to a helper's own transcript.
+    if (!source.parentId && suggestions.service) registerSuggestTool(server, suggestions.service, source.id)
   }
   if (!review) registerCiTools(server, source, () => agents.get(source.id))
   if (!review && !source.parentId) registerSecretTools(server, agents, source.id)

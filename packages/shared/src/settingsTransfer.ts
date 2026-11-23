@@ -64,6 +64,7 @@ export const TRANSFER_GROUPS = [
       'agentThreads',
       'asyncQuestions',
       'suggestNextMessage',
+      'suggestTools',
       'autoBackgroundSeconds',
       'goals',
       'intelligence',

@@ -86,6 +86,8 @@ export type TranscriptItem = (
   | { kind: 'pull-request-writes'; id: string; cardId: string }
   | { kind: 'test-device-wait'; id: string; platform: import('@ramu/shared/testDevices').TestPlatform }
   | { kind: 'settings-change'; id: string; cardId: string }
+  /** A tool Ramu suggests from what the thread did. */
+  | { kind: 'tool-suggestion'; id: string; cardId: string }
   /** This thread continues on another host. */
   | { kind: 'continued'; id: string; event: import('@ramu/shared/continuation').ContinuedEvent }
   /** Another thread edited the same file in this checkout during the turn. */

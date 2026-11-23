@@ -644,7 +644,11 @@ export function ReachStep({ onError }: { onError(message: string): void }) {
         </>
       ) : offer ? (
         <>
-          <PairingCode offer={offer} now={pairing.now} url={url} name={status.discovery?.name} />
+          <PairingCode offer={offer} now={pairing.now} url={url} name={status.discovery?.name}>
+            <span className="mt-1 text-caption leading-[18px] text-muted-foreground">
+              {t('Scan with your phone’s camera. It opens Ramu, or the App Store or Google Play first.')}
+            </span>
+          </PairingCode>
           <p className="m-0 flex items-center gap-2 text-caption text-muted-foreground" role="status">
             <LoadingDots />
             {t('Waiting for your phone…')}

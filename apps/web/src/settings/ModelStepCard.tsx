@@ -3,13 +3,14 @@ import { Button } from '@/components/desktop-button'
 import { ArrowDown, ArrowUp, Trash2 } from 'lucide-react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { providerName } from '@ramu/shared/providers/providers'
 import type { ModelStep } from '@ramu/shared/types'
 import { t } from '../i18n'
 import { Dropdown } from '../Menu'
 import { isModelListed } from '@ramu/shared/providers/modelVisibility'
 import { useAppSettings } from './AppSettings'
-import { effortDisplayName, modelDisplayName, modelStepName } from '../models/ModelSets'
+import { effortDisplayName, modelStepName } from '../models/ModelSets'
+import { missingModelOption, modelOption } from '../models/modelOptions'
+import { Combobox } from '@/components/combobox'
 import type { useSettingsScope } from './SettingsScope'
 import { GHOST_ICON_BUTTON_CLASS } from './constants'
 
@@ -48,17 +49,9 @@ export function ModelStepCard({
   const { visibleModels } = useAppSettings().preferences
   const options = models
     .filter((entry) => isModelListed(visibleModels, entry) || `${entry.provider}:${entry.id}` === key)
-    .map((entry) => ({
-      value: `${entry.provider}:${entry.id}`,
-      label: `${modelDisplayName(entry.name)} · ${providerName(entry.provider)}`,
-    }))
+    .map((entry) => modelOption(entry, `${entry.provider}:${entry.id}`))
   if (!options.some((option) => option.value === key))
-    options.unshift({
-      value: key,
-      label: step.model
-        ? t('{0} · Unavailable', { '0': step.model })
-        : t('{0} default', { '0': providerName(step.provider) }),
-    })
+    options.unshift(missingModelOption(step.provider, step.model, key))
   return (
     <section
       ref={setNodeRef}
@@ -125,8 +118,10 @@ export function ModelStepCard({
       <div className="settings-step-controls grid [grid-template-columns:minmax(0,_1fr)_minmax(0,_1fr)] gap-3">
         <label>
           {t('Model')}
-          <Dropdown
+          <Combobox
             label={t('Step {0} model', { '0': index + 1 })}
+            searchPlaceholder={t('Search models')}
+            emptyText={t('No matching models')}
             value={key}
             options={options}
             disabled={busy}

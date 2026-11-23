@@ -410,6 +410,8 @@ type AgentEventBody =
   | { kind: 'pull-request-writes'; cardId: string }
   /** Settings the agent asked to change in one call; the card itself is read from the host by id. */
   | { kind: 'settings-change'; cardId: string }
+  /** A tool Ramu suggests from what the thread did; the card itself is read from the host by id. */
+  | { kind: 'tool-suggestion'; cardId: string }
   /** One ability call (an image, a web search, a long read) that Ramu ran on a provider that has the ability. */
   | { kind: 'ability'; call: import('../providers/abilities').AbilityCall }
   | ({ kind: 'provider-wait' } & ProviderWaitFields)

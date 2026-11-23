@@ -17,3 +17,9 @@ test('a settings change the agent asked for draws as its card, read from the hos
   assert.equal(card.kind, 'settings-change')
   assert.equal(card.cardId, 'card-1')
 })
+
+test('a tool suggestion draws as its card, read from the host by id like the desktop’s', () => {
+  const [card] = transcript([{ kind: 'tool-suggestion', cardId: 'card-2', at: 1 }])
+  assert.equal(card.kind, 'tool-suggestion')
+  assert.equal(card.cardId, 'card-2')
+})

@@ -229,6 +229,7 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
     else if (e.kind === 'pull-request-writes') items.push({ kind: 'pull-request-writes', id, cardId: e.cardId })
     else if (e.kind === 'test-device-wait') items.push({ kind: 'test-device-wait', id, platform: e.platform })
     else if (e.kind === 'settings-change') items.push({ kind: 'settings-change', id, cardId: e.cardId })
+    else if (e.kind === 'tool-suggestion') items.push({ kind: 'tool-suggestion', id, cardId: e.cardId })
     else if (e.kind === 'continued') items.push({ kind: 'continued', id, event: e })
     else if (e.kind === 'checkout-clash') items.push({ kind: 'checkout-clash', id, path: e.path, taskId: e.taskId })
     else if (e.kind === 'command-wait' && e.taskId) items.push({ kind: 'command-wait', id, taskId: e.taskId })

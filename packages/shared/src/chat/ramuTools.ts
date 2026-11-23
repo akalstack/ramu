@@ -137,6 +137,7 @@ const KNOWN = new Set([
   'plugin_create',
   'plugin_install',
   'plugin_search',
+  'tool_suggest',
   'project_add',
   'project_create',
   'project_list',
@@ -330,6 +331,12 @@ export function describeRamuTool(call: RamuToolCall, result?: string): RamuToolR
       return reply('Read skill', 'Reading skill', 'sparkles', quote(text(data.name)))
     case 'skill_find':
       return reply('Searched skills', 'Searching skills', 'search', quote(text(args.query)))
+    case 'tool_suggest': {
+      const tool = args.tool && typeof args.tool === 'object' ? (args.tool as Record<string, unknown>) : {}
+      return reply('Suggested a tool', 'Suggesting a tool', 'sparkles', quote(text(tool.name)), [
+        { label: 'Why', value: text(args.reason) ?? '' },
+      ])
+    }
     case 'pull_request_list':
       return reply('Listed pull requests', 'Listing pull requests', 'review')
     case 'pull_request_view':

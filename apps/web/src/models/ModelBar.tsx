@@ -13,6 +13,7 @@ import { takeModelListRequest } from './modelPickerRequest'
 import { ProviderIcon } from './ProviderIcon'
 import { Menu } from '../Menu'
 import { effortDisplayName, modelDisplayName, useModelSets } from './ModelSets'
+import { modelLabel } from '@ramu/shared/providers/modelLabel'
 import { notifyError } from '../chat/Notifications'
 import { errorText } from '../lib/errors'
 
@@ -127,7 +128,9 @@ export function ModelBar({
   const index = mode === 'effort' ? (shownEffort ? efforts.indexOf(shownEffort) : -1) : match
   const count = mode === 'effort' ? efforts.length : steps.length
   const effortName = effortDisplayName(shownEffort, shown.provider)
-  const modelName = modelDisplayName(model?.name ?? (shown.model || `${providerName(shown.provider)} default`))
+  const modelName = model
+    ? modelLabel(model).name
+    : modelDisplayName(shown.model || `${providerName(shown.provider)} default`)
   const available = (position: number) => {
     if (mode === 'effort') return true
     const step = steps[position]!

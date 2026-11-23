@@ -87,6 +87,7 @@ import { RamuGlyph } from './AnimatedMark'
 import { PullRequestWritesCard } from './PullRequestWritesCard'
 import { TestDeviceWaitCard } from './TestDeviceWaitCard'
 import { SettingsChangeCard } from './SettingsChangeCard'
+import { ToolSuggestionCard } from './ToolSuggestionCard'
 
 /** Drops the model change waiting for the next send; set by the chat screen that holds it. */
 export const CancelPendingSettings = createContext<() => void>(() => {})
@@ -676,6 +677,8 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
       return <TestDeviceWaitCard computerId={chat.computerId} taskId={chat.taskId} platform={item.platform} />
     case 'settings-change':
       return <SettingsChangeCard computerId={chat.computerId} cardId={item.cardId} />
+    case 'tool-suggestion':
+      return <ToolSuggestionCard computerId={chat.computerId} cardId={item.cardId} />
     case 'continued':
       return <ContinuedCard event={item.event} chat={chat} />
     case 'checkout-clash':

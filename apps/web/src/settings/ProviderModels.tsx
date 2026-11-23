@@ -6,7 +6,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { providerName } from '@ramu/shared/providers/providers'
 import { t } from '../i18n'
-import { modelDisplayName } from '../models/ModelSets'
+import { modelLabel, modelSearchText } from '@ramu/shared/providers/modelLabel'
+import { matchesWords } from '@ramu/shared/search/matchWords'
 import { SearchInput } from '../SearchInput'
 import { usePaged } from './cards'
 
@@ -32,13 +33,7 @@ export function ProviderModels({
   const [query, setQuery] = useState('')
   const known = useMemo(() => new Set(models.map((model) => model.id)), [models])
   const count = listed ? listed.filter((id) => known.has(id)).length : models.length
-  const matches = useMemo(() => {
-    const text = query.trim().toLowerCase()
-    return models.filter(
-      (model) =>
-        !text || model.id.toLowerCase().includes(text) || modelDisplayName(model.name).toLowerCase().includes(text),
-    )
-  }, [models, query])
+  const matches = useMemo(() => models.filter((model) => matchesWords(modelSearchText(model), query)), [models, query])
   const paged = usePaged(matches, 60, query)
   if (!models.length) return null
   const toggle = (id: string, on: boolean) => {
@@ -95,7 +90,7 @@ export function ProviderModels({
                   checked={!listed || listed.includes(model.id)}
                   onCheckedChange={(on) => toggle(model.id, on === true)}
                 />
-                <span className="min-w-0 flex-1 truncate text-control">{modelDisplayName(model.name)}</span>
+                <span className="min-w-0 flex-1 truncate text-control">{modelLabel(model).name}</span>
                 {model.name !== model.id && (
                   <span className="min-w-0 max-w-[45%] truncate text-caption text-muted-foreground">{model.id}</span>
                 )}
