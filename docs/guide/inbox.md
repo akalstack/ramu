@@ -16,7 +16,7 @@ On the phone, the project list has **New project**, shown as **Start something n
 
 ## Inbox
 
-**Inbox** (⌘⇧I) shows what needs you across every connected host. Its tabs are **Brief**, **Running**, **Recaps**, **Learned** and **Completed**, on desktop and phone. The badge counts what the Brief lists.
+**Inbox** (⌘⇧I) shows what needs you across every connected host. Its tabs are **Brief**, **Running**, **Learned** and **Completed**, on desktop and phone. The badge counts the threads the Brief lists, each once.
 
 ### Brief
 
@@ -28,7 +28,7 @@ The Brief lists what needs you, most urgent first, without a model call:
 4. A host low on memory
 5. Recaps that need a decision
 
-The usual next step is one tap: **Allow once** for an approval, an option for a single-choice question, **Retry** or **Mark done** for a failure, **Stop idle** for a host low on memory. Other questions expand in place. On desktop, opening an approval or question goes to the session that asked (a helper's own included), scrolled to the request. Five rows show, then **See all**. Viewer devices see rows without buttons. When what lets a thread continue is up to you, such as resuming a goal at its turn limit, its hover card says so.
+The usual next step is one tap: **Allow once** for an approval, an option for a single-choice question, **Retry** or **Mark done** for a failure, **Stop idle** for a host low on memory. Other questions expand in place. Each thread takes one row, its most urgent reason, with **+N more** for the rest. Opening a row goes where its next step is: an approval or question opens the session that asked (a helper's own included), scrolled to the request; a pull request opens its review; a recap's decision opens the thread at the turn it is about (on desktop); a failure opens its thread, which ends on the error. A thread still working, or already asking for something, holds its recaps until it settles. Five rows show, then **See all**. Viewer devices see rows without buttons. When what lets a thread continue is up to you, such as resuming a goal at its turn limit, its hover card says so.
 
 Deployed apps reach you as notifications, not Brief rows. A live address that stops answering opens a **Down:** thread in the project and notifies your phone ([Live address and uptime](deploy.md#live-address-and-uptime)).
 
@@ -43,10 +43,9 @@ Expand a thread to see its agent, terminals, commands, test devices and servers,
 
 On the phone, the host's own work (such as learning or recaps being generated) is listed under **On the computer**, with **Stop** for work that can be stopped safely.
 
-### Recaps, Learned and Completed
+### Learned and Completed
 
-- **Recaps** summarize what threads did and what is left. Mark an item done, dismiss it or snooze it. Every action has **Undo**.
 - **Learned** lists "What Ramu learned" summaries ([Learning](memory-and-learning.md)).
-- **Completed** shows threads finished in the last 7 days.
+- **Completed** shows threads finished in the last 7 days. A recap summarizes what each did, on its row, and the daily recap's state and refresh sit at the top. A recap that asks for a decision is in the Brief, with **Mark done**.
 
 Nothing needs clearing. Rows leave as you answer or finish them.

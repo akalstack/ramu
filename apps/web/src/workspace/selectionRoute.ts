@@ -64,6 +64,10 @@ export function applyDestination(
           kind: 'agent',
           sessionId: destination.sessionId,
           ...(destination.requestId ? { focusRequestId: destination.requestId } : {}),
+          // Scrolls to that place once, as a link to a message does.
+          ...(destination.sourceSeq !== undefined
+            ? { sourceSeq: destination.sourceSeq, sourceRequestId: crypto.randomUUID() }
+            : {}),
         })
       return true
     case 'project':

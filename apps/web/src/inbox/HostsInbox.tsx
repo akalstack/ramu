@@ -5,7 +5,7 @@ import { inboxBlocker, INBOX_TABS, type InboxChat, type InboxTab } from '@ramu/s
 import { HostProvider } from '../workspace/HostProvider'
 import { ThreadHoverCard } from '../sidebar/projects/ThreadHoverCard'
 import { Tabs, TabsContent } from '@/components/ui/tabs'
-import { Check, Inbox, Loader, Newspaper, Sparkles } from 'lucide-react'
+import { Check, Inbox, Loader, Sparkles } from 'lucide-react'
 import { HostNotice, InboxEmpty, InboxList, InboxMark, InboxRow, InboxTabsList, byDay } from './InboxParts'
 import { useHostSelection } from '../workspace/HostSelection'
 import { FeedSection } from '../HomeSection'
@@ -14,10 +14,6 @@ import { timeAgo } from '../Menu'
 import { StateDot, StatusMark } from '../sidebar/projects/TaskStateIcon'
 import { threadStatus } from '@ramu/shared/chat/threadStatus'
 import { savedInboxTab, saveInboxTab } from './navigation'
-import { RecapRow, notifyRecapAction, type RecapAction } from './recaps'
-import { ramu } from '../ipc'
-import { notifyError } from '../chat/Notifications'
-import { errorText } from '../lib/errors'
 
 /** All sections are derived after host filtering, including counts and limits. Actions always carry the owning host. */
 export function HostsInbox() {
@@ -66,7 +62,14 @@ export function HostsInbox() {
                 )
               }
               title={task?.title}
-              meta={[blocker, where(chat.computerId, chat.taskId)].filter(Boolean).join(' · ')}
+              // A finished thread's newest recap says what it did, where Completed lists it.
+              meta={[
+                blocker,
+                where(chat.computerId, chat.taskId),
+                model.recent.find((r) => r.computerId === chat.computerId && r.item.taskId === chat.taskId)?.item.title,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
               at={chat.lastActiveAt}
               disabled={!available(chat.computerId)}
               onOpen={() =>
@@ -98,58 +101,17 @@ export function HostsInbox() {
       })}
     </InboxList>
   )
-  const actRecap = async (id: string, recapId: string, action: RecapAction, until?: number) => {
-    const send = (next: 'open' | RecapAction, at?: number) =>
-      at === undefined
-        ? ramu.invoke('computers.recapAct', id, recapId, next)
-        : ramu.invoke('computers.recapAct', id, recapId, next, at)
-    try {
-      await send(action, until)
-      await hosts.find((entry) => entry.id === id)?.refetch()
-      notifyRecapAction(action, () => {
-        send('open')
-          .then(() => hosts.find((entry) => entry.id === id)?.refetch())
-          .catch((error) => notifyError(errorText(error), t('Recaps')))
-      })
-    } catch (error) {
-      notifyError(errorText(error), t('Recaps'))
-    }
-  }
-  const recaps = (list: typeof model.attention) => (
-    <InboxList>
-      {list.map(({ computerId, item }) => (
-        <RecapRow
-          key={JSON.stringify([computerId, item.id])}
-          item={item}
-          where={where(computerId, item.taskId)}
-          // Only a recap that asks for a decision is drawn as one, with Mark done and Snooze; an update just reads.
-          attention={item.group === 'attention'}
-          disabled={!available(computerId)}
-          onOpen={() => select(computerId, { kind: 'task', taskId: item.taskId, sessionId: item.sessionId })}
-          act={(action, until) => void actRecap(computerId, item.id, action, until)}
-        />
-      ))}
-    </InboxList>
-  )
-  const section = (id: InboxTab, title: string, count: number, children: React.ReactNode) =>
-    count && tab === id ? (
-      <FeedSection title={title} count={count}>
-        {children}
-      </FeedSection>
-    ) : null
   const scopedHosts = hosts.filter((entry) => !host || entry.id === host)
   const pending = scopedHosts.some((entry) => available(entry.id) && entry.isPending)
   const counts: Record<InboxTab, number> = {
     brief: model.needsYou,
     running: model.running.length,
-    recaps: model.recent.length,
     learned: model.unreadSummaries,
     completed: model.completed.length,
   }
   const labels: Record<InboxTab, string> = {
     brief: t('Brief'),
     running: t('Running'),
-    recaps: t('Recaps'),
     learned: t('Learned'),
     completed: t('Completed'),
   }
@@ -180,8 +142,6 @@ export function HostsInbox() {
             )}
             {tab === 'brief' && <Brief />}
             {tab === 'running' && model.running.length > 0 && chats(model.running)}
-            {section('recaps', t('Since your last visit'), model.sinceVisit.length, recaps(model.sinceVisit))}
-            {tab === 'recaps' && section('recaps', t('Earlier'), model.earlier.length, recaps(model.earlier))}
             {tab === 'learned' && model.summaries.length > 0 && (
               <InboxList>
                 {model.summaries.map(({ computerId, summary }) => (
@@ -237,12 +197,6 @@ function emptyTab(tab: Exclude<InboxTab, 'brief'>): { icon: React.ReactNode; tit
         icon: <Loader />,
         title: t('No agents running'),
         detail: t('Threads and sub-agents that are working or waiting on a usage limit appear here.'),
-      }
-    case 'recaps':
-      return {
-        icon: <Newspaper />,
-        title: t('No recaps yet'),
-        detail: t('A daily recap shows what your threads did and what is left.'),
       }
     case 'learned':
       return {

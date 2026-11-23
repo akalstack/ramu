@@ -13,8 +13,11 @@ export interface HostOverview {
 }
 
 export type HostDestination =
-  /** `sessionId` is the session to show (a helper's own, for its request); `requestId` the request to scroll to. */
-  | { kind: 'task'; taskId: string; sessionId?: string; requestId?: string }
+  /**
+   * `sessionId` is the session to show (a helper's own, for its request); `requestId` the request to scroll to, or
+   * `sourceSeq` the place in the transcript, such as the turn a recap is about.
+   */
+  | { kind: 'task'; taskId: string; sessionId?: string; requestId?: string; sourceSeq?: number }
   | { kind: 'project'; projectId: string }
   | { kind: 'new'; projectId?: string }
   | { kind: 'summary'; summaryId: string }
@@ -30,7 +33,9 @@ export function isHostDestination(value: unknown): value is HostDestination {
       return (
         id('taskId') &&
         (d.sessionId === undefined || id('sessionId')) &&
-        (d.requestId === undefined || (id('requestId') && id('sessionId')))
+        (d.requestId === undefined || (id('requestId') && id('sessionId'))) &&
+        (d.sourceSeq === undefined ||
+          (typeof d.sourceSeq === 'number' && Number.isInteger(d.sourceSeq) && d.sourceSeq >= 0 && id('sessionId')))
       )
     case 'project':
       return id('projectId')

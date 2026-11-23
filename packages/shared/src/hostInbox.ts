@@ -6,12 +6,15 @@ import type { LowMemory } from './resources'
 // Shared desktop/mobile inbox: what needs you, what is running, recaps, learning, and finished work.
 // Keep derivation independent of rendering and apply host scope before limits or counts.
 
-export type InboxTab = 'brief' | 'running' | 'recaps' | 'learned' | 'completed'
-export const INBOX_TABS: InboxTab[] = ['brief', 'running', 'recaps', 'learned', 'completed']
+export type InboxTab = 'brief' | 'running' | 'learned' | 'completed'
+export const INBOX_TABS: InboxTab[] = ['brief', 'running', 'learned', 'completed']
 
-/** A saved or linked tab, or the Brief when it is unknown, as the retired All and Waiting tabs now are. */
+/**
+ * A saved or linked tab, or the Brief when it is unknown, as the retired All and Waiting tabs now are. The retired
+ * Recaps tab opens Completed, where each finished thread shows its newest recap, so recap notifications still land.
+ */
 export const inboxTabOf = (value: unknown): InboxTab =>
-  INBOX_TABS.includes(value as InboxTab) ? (value as InboxTab) : 'brief'
+  value === 'recaps' ? 'completed' : INBOX_TABS.includes(value as InboxTab) ? (value as InboxTab) : 'brief'
 
 /** The few fields of a chat the Inbox cares about; the app's `Chat` satisfies it. */
 export interface InboxChat {

@@ -6,8 +6,8 @@ import { HostsInbox } from './HostsInbox'
 import { useEffect, useState } from 'react'
 import { useWorkspace } from '../workspace/workspace'
 import { DateTime } from 'luxon'
-import { Inbox, Loader, Newspaper, RefreshCw, Sparkles } from 'lucide-react'
-import type { LibrarySummary, RecapItem } from '@ramu/shared/types'
+import { Inbox, Loader, RefreshCw, Sparkles } from 'lucide-react'
+import type { LibrarySummary } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { Tabs, TabsContent } from '@/components/ui/tabs'
 import { InboxEmpty, InboxList, InboxMark, InboxRow, InboxTabsList, byDay } from './InboxParts'
@@ -16,7 +16,7 @@ import { AgentList, recentlyCompleted, rowsOf, useAgentOverview } from '../HomeA
 import { FeedSection } from '../HomeSection'
 import { useSummaries } from '../summaries/useSummaries'
 import { openSummary } from '../summaries/openSummary'
-import { RecapRow, useRecaps } from './recaps'
+import { useRecaps } from './recaps'
 import { timeAgo } from '../Menu'
 import { StateDot } from '../sidebar/projects/TaskStateIcon'
 import type { InboxTab } from '@ramu/shared/hostInbox'
@@ -91,24 +91,9 @@ function CurrentHostInbox() {
   const days = byDay(completed, (item) => finishedAt(item.session.taskId))
   const summaries = (snapshot?.summaries ?? []).slice(0, LEARNED_MAX)
   const unread = summaries.filter((summary) => summary.status === 'unread').length
-  const earlier = recaps.recent.filter((item) => !recaps.sinceVisit.includes(item))
-  const recapRow = (item: RecapItem) => (
-    <RecapRow
-      key={item.id}
-      item={item}
-      where={ws.projects.find((p) => p.id === ws.tasks.find((task) => task.id === item.taskId)?.projectId)?.name}
-      attention={false}
-      onOpen={() => {
-        ws.openTask(item.taskId)
-        ws.openView(item.taskId, { kind: 'agent', sessionId: item.sessionId, sourceSeq: item.sourceSeq })
-      }}
-      act={(action, until) => void recaps.act(item.id, action, until)}
-    />
-  )
   const tabs: { id: InboxTab; label: string; count: number }[] = [
     { id: 'brief', label: t('Brief'), count: model.needsYou },
     { id: 'running', label: t('Running'), count: running.length },
-    { id: 'recaps', label: t('Recaps'), count: recaps.sinceVisit.length },
     { id: 'learned', label: t('Learned'), count: unread },
     { id: 'completed', label: t('Completed'), count: 0 },
   ]
@@ -140,9 +125,27 @@ function CurrentHostInbox() {
               ))}
           </TabsContent>
 
-          <TabsContent value="recaps" className="flex flex-col gap-6">
-            {tab === 'recaps' && (
+          <TabsContent value="learned" className="flex flex-col gap-6">
+            {tab === 'learned' && (
               <>
+                {summaries.length > 0 ? (
+                  <LearnedList summaries={summaries} />
+                ) : (
+                  <InboxEmpty
+                    icon={<Sparkles />}
+                    title={t('No summaries yet')}
+                    detail={t('Ramu summarizes the memories and skills it saves from your threads.')}
+                  />
+                )}
+              </>
+            )}
+          </TabsContent>
+
+          <TabsContent value="completed" className="flex flex-col gap-6">
+            {tab === 'completed' && (
+              <>
+                {/* Recaps live on the threads they are about: each finished thread's row says what it did, and the
+                    daily recap's state and refresh sit here. Decisions a recap asks for are in the Brief. */}
                 {recaps.enabled && (
                   <div className="flex items-center gap-2 text-caption text-muted-foreground">
                     <span>
@@ -180,53 +183,9 @@ function CurrentHostInbox() {
                     {recaps.recap.error}
                   </p>
                 )}
-                {recaps.sinceVisit.length > 0 && (
-                  <FeedSection title={t('Since your last visit')} count={recaps.sinceVisit.length}>
-                    <InboxList>{recaps.sinceVisit.map(recapRow)}</InboxList>
-                  </FeedSection>
-                )}
-                {earlier.length > 0 && (
-                  <FeedSection title={t('Earlier')} count={earlier.length}>
-                    <InboxList>{earlier.map(recapRow)}</InboxList>
-                  </FeedSection>
-                )}
-                {!recaps.recent.length && !(recaps.recap?.generating && !recaps.recap.generatedAt) && (
-                  <InboxEmpty
-                    icon={<Newspaper />}
-                    title={t('No recaps yet')}
-                    detail={
-                      recaps.enabled
-                        ? t('A daily recap shows what your threads did and what is left.')
-                        : t('Daily recaps are off. Turn them on in Settings → Background & Recaps.')
-                    }
-                  />
-                )}
-              </>
-            )}
-          </TabsContent>
-
-          <TabsContent value="learned" className="flex flex-col gap-6">
-            {tab === 'learned' && (
-              <>
-                {summaries.length > 0 ? (
-                  <LearnedList summaries={summaries} />
-                ) : (
-                  <InboxEmpty
-                    icon={<Sparkles />}
-                    title={t('No summaries yet')}
-                    detail={t('Ramu summarizes the memories and skills it saves from your threads.')}
-                  />
-                )}
-              </>
-            )}
-          </TabsContent>
-
-          <TabsContent value="completed" className="flex flex-col gap-6">
-            {tab === 'completed' && (
-              <>
                 {days.map((day) => (
                   <FeedSection key={day.label} title={day.label} count={day.items.length}>
-                    <AgentList items={day.items} />
+                    <AgentList items={day.items} recapOf={recaps.recapOf} />
                   </FeedSection>
                 ))}
                 {completed.length > 0 ? (

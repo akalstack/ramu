@@ -26,6 +26,8 @@ import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
 import { HostProvider, useHost } from '../workspace/HostProvider'
 import { useHostSelection } from '../workspace/HostSelection'
+import { useWorkspace } from '../workspace/workspace'
+import { showPullRequest } from '../git/PullRequestsPage'
 import { invokeOn } from '../ipc'
 import { showInboxTab } from './navigation'
 import { useInboxModel } from './useBrief'
@@ -57,6 +59,10 @@ interface RowContent {
   sessionId?: string | null
   /** The request Open scrolls to, in `sessionId`. */
   requestId?: string
+  /** The place in `sessionId`'s transcript Open scrolls to, such as the turn a recap is about. */
+  sourceSeq?: number
+  /** A pull request whose next step is yours opens in its own review, not in the thread. */
+  pullRequest?: { url: string; closed: boolean }
   title: string
   detail: string
   /** When it last changed, for the row's age. */
@@ -79,7 +85,8 @@ function BriefRowView({
   useLanguage()
   const { id: hostId, invoke } = useHost()
   const viewOnly = useViewOnly()
-  const { select } = useHostSelection()
+  const { select, activeHost } = useHostSelection()
+  const ws = useWorkspace()
   const [busy, setBusy] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const run = (work: () => Promise<unknown>) => {
@@ -88,15 +95,22 @@ function BriefRowView({
       .then(onDone, (error) => notifyError(errorText(error)))
       .finally(() => setBusy(false))
   }
+  // A row opens where its next step is: the request, the pull request's review, or the turn a recap is about. A failure
+  // opens its thread, which ends on the error with Retry beside it.
   const open = () =>
-    content.taskId
-      ? select(hostId, {
-          kind: 'task',
-          taskId: content.taskId,
-          ...(content.sessionId ? { sessionId: content.sessionId } : {}),
-          ...(content.sessionId && content.requestId ? { requestId: content.requestId } : {}),
-        })
-      : showInboxTab('running')
+    content.pullRequest && hostId === activeHost
+      ? showPullRequest(ws, content.pullRequest.url, content.pullRequest.closed)
+      : content.taskId
+        ? select(hostId, {
+            kind: 'task',
+            taskId: content.taskId,
+            ...(content.sessionId ? { sessionId: content.sessionId } : {}),
+            ...(content.sessionId && content.requestId ? { requestId: content.requestId } : {}),
+            ...(content.sessionId && content.sourceSeq !== undefined && !content.requestId
+              ? { sourceSeq: content.sourceSeq }
+              : {}),
+          })
+        : showInboxTab('running')
   const request =
     row.kind === 'blocker' && (row.blocker.kind === 'approval' || row.blocker.kind === 'question')
       ? row.chat.inputSummary?.requests[0]
@@ -225,6 +239,7 @@ export function Brief() {
       return {
         taskId: item.taskId,
         sessionId: item.sessionId,
+        sourceSeq: item.sourceSeq,
         title: item.title,
         detail: item.detail,
         at: item.updatedAt,
@@ -238,6 +253,7 @@ export function Brief() {
       return {
         ...base,
         detail: `#${pr.number} · ${stageLabel(pr.stage)}`,
+        pullRequest: { url: pr.url, closed: pr.state !== 'open' },
       }
     }
     const request = row.chat.inputSummary?.requests[0]

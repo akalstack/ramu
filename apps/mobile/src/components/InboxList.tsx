@@ -9,7 +9,6 @@ import {
   ChevronRight,
   Inbox as InboxIcon,
   Loader,
-  Newspaper,
   RefreshCw,
   Sparkles,
   X,
@@ -26,7 +25,7 @@ import { Header, LargeTitle, PageScrollView, Screen, useScrolledUnderBar } from 
 import { TopFade } from './Glass'
 import { InboxBrief } from './InboxBrief'
 import { InboxThread } from './InputRequests'
-import { Chips, Nothing, RecapCard, Section } from './InboxParts'
+import { Chips, Nothing, Section } from './InboxParts'
 import { HostChip } from './HostChip'
 import { useTabActions } from './Overlays'
 import { Divider, ROW_INSET, Row, T, tap } from './ui'
@@ -40,7 +39,6 @@ function tabLabel(tab: InboxTab, t: Strings) {
   return {
     brief: t.tabBrief,
     running: t.tabRunning,
-    recaps: t.tabRecaps,
     learned: t.tabLearned,
     completed: t.tabCompleted,
   }[tab]
@@ -101,8 +99,6 @@ export function InboxList({ pane }: { pane?: boolean }) {
 
   const multi = store.computers.length > 1
   const computerName = (id: string) => store.computers.find((pc) => pc.id === id)?.name
-  const chatOf = (computerId: string, taskId: string) =>
-    store.chats.find((chat) => chat.computerId === computerId && chat.taskId === taskId)
   const projectName = (computerId: string, projectId: string) =>
     projectId === STANDALONE
       ? undefined
@@ -114,27 +110,19 @@ export function InboxList({ pane }: { pane?: boolean }) {
       {list.map((chat, i) => {
         const full = chat as Chat
         return (
-          <InboxThread key={full.id} chat={full} project={where(full.computerId, full.projectId)} divider={i > 0} />
+          <InboxThread
+            key={full.id}
+            chat={full}
+            project={where(full.computerId, full.projectId)}
+            divider={i > 0}
+            recap={
+              inbox.recent.find((r) => r.computerId === full.computerId && r.item.taskId === full.taskId)?.item.title
+            }
+          />
         )
       })}
     </View>
   )
-  const recap = (r: (typeof inbox.attention)[number], attention: boolean) => {
-    const chat = chatOf(r.computerId, r.item.taskId)
-    return (
-      <RecapCard
-        key={`${r.computerId}:${r.item.id}`}
-        item={r.item}
-        attention={attention}
-        project={chat ? where(chat.computerId, chat.projectId) : undefined}
-        onOpen={() => {
-          if (chat) openThread(chat.id)
-        }}
-        choices
-        onAct={(action, until) => auto.actRecap(r.computerId, r.item, action, until)}
-      />
-    )
-  }
   const summary = (entry: { computerId: string; summary: LibrarySummary }, index: number) => {
     const { summary: s } = entry
     return (
@@ -255,11 +243,9 @@ export function InboxList({ pane }: { pane?: boolean }) {
         ? inbox.needsYou
         : key === 'running'
           ? inbox.running.length
-          : key === 'recaps'
-            ? inbox.sinceVisit.length
-            : key === 'learned'
-              ? inbox.unreadSummaries
-              : 0,
+          : key === 'learned'
+            ? inbox.unreadSummaries
+            : 0,
   }))
 
   const body = {
@@ -313,8 +299,14 @@ export function InboxList({ pane }: { pane?: boolean }) {
         ) : null}
       </>
     ),
-    recaps: (
+    learned: inbox.summaries.length ? (
+      <View>{inbox.summaries.map(summary)}</View>
+    ) : (
+      <Nothing icon={Sparkles} title={t.noSummaries} detail={t.noSummariesHint} />
+    ),
+    completed: inbox.days.length ? (
       <>
+        {/* Recaps live on the threads they are about: each row's line says what it did, and refreshing them sits here. */}
         {recapsOn ? (
           <Row
             onPress={() => {
@@ -331,28 +323,6 @@ export function InboxList({ pane }: { pane?: boolean }) {
             </T>
           </Row>
         ) : null}
-        {inbox.sinceVisit.length ? (
-          <Section title={t.sinceVisit} count={inbox.sinceVisit.length}>
-            {inbox.sinceVisit.map((r) => recap(r, false))}
-          </Section>
-        ) : null}
-        {inbox.earlier.length ? (
-          <Section title={t.earlier} count={inbox.earlier.length}>
-            {inbox.earlier.map((r) => recap(r, false))}
-          </Section>
-        ) : null}
-        {!inbox.recent.length ? (
-          <Nothing icon={Newspaper} title={t.noRecaps} detail={recapsOn ? t.noRecapsHint : t.recapsOff} />
-        ) : null}
-      </>
-    ),
-    learned: inbox.summaries.length ? (
-      <View>{inbox.summaries.map(summary)}</View>
-    ) : (
-      <Nothing icon={Sparkles} title={t.noSummaries} detail={t.noSummariesHint} />
-    ),
-    completed: inbox.days.length ? (
-      <>
         {inbox.days.map((day) => (
           <Section key={day.label} title={t[day.label]} count={day.items.length}>
             {rows(day.items)}

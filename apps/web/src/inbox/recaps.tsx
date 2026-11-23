@@ -1,13 +1,7 @@
 import { animateThreadListChange } from '../workspace/threadListMotion'
 import { useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronDown, Newspaper, X } from 'lucide-react'
-import { InboxMark, InboxRow } from './InboxParts'
-import type { RecapItem } from '@ramu/shared/types'
-import { SNOOZE_CHOICES, snoozeUntil, type SnoozeChoice } from '@ramu/shared/snooze'
-import { Button } from '@/components/desktop-button'
 import { notify } from '@/components/app-toaster'
-import { Menu } from '../Menu'
 import { TOAST_MS } from '../chat/notificationCenter'
 import { t } from '../i18n'
 import { ipcQueryKeyOn } from '../dataQueries'
@@ -40,15 +34,6 @@ document.addEventListener('visibilitychange', () => {
 
 export type RecapAction = 'done' | 'dismissed' | 'snoozed'
 
-const GHOST =
-  'ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover small text-caption'
-
-const SNOOZE_LABEL: Record<SnoozeChoice, () => string> = {
-  'in-3-hours': () => t('In 3 hours'),
-  tomorrow: () => t('Tomorrow'),
-  'next-week': () => t('Next week'),
-}
-
 /** A toast that says what just happened to a recap item and offers to put it back, so a mis-click costs nothing. */
 export function notifyRecapAction(action: RecapAction, undo: () => void) {
   notify.add({
@@ -56,28 +41,6 @@ export function notifyRecapAction(action: RecapAction, undo: () => void) {
     title: action === 'done' ? t('Marked done') : action === 'dismissed' ? t('Dismissed') : t('Snoozed'),
     actionProps: { children: t('Undo'), onClick: undo },
   })
-}
-
-/** Snooze with a choice of how long: later today, tomorrow morning or next week. */
-export function SnoozeMenu({ onSnooze, disabled }: { onSnooze: (until: number) => void; disabled?: boolean }) {
-  return (
-    <Menu
-      label={t('Snooze')}
-      disabled={disabled}
-      className={GHOST}
-      icon={
-        <>
-          {t('Snooze')}
-          <ChevronDown size={11} />
-        </>
-      }
-      items={SNOOZE_CHOICES.map((choice) => ({
-        key: choice,
-        label: SNOOZE_LABEL[choice](),
-        onSelect: () => onSnooze(snoozeUntil(choice)),
-      }))}
-    />
-  )
 }
 
 /** Open recap items for live threads, split into those that need you and recent ones (all, and since your last visit). */
@@ -132,68 +95,10 @@ export function useRecaps() {
     recap,
     attention: open.filter((i) => i.group === 'attention'),
     recent,
+    /** A thread's newest recap, the line its row shows in Completed: what it did and what is left. */
+    recapOf: (taskId: string) => recent.find((item) => item.taskId === taskId),
     sinceVisit: recent.filter((i) => i.updatedAt >= previousVisit),
     act,
     refresh,
   }
-}
-
-/**
- * One recap item as an Inbox row: what happened over where and the gist, opening the thread at the moment it is
- * about. An item that needs a decision also offers Done and Snooze; any item can be dismissed.
- */
-export function RecapRow({
-  item,
-  where,
-  attention,
-  disabled = false,
-  onOpen,
-  act,
-}: {
-  item: RecapItem
-  where?: string
-  attention: boolean
-  disabled?: boolean
-  onOpen: () => void
-  act: (action: RecapAction, until?: number) => void
-}) {
-  return (
-    <InboxRow
-      mark={
-        <InboxMark tone={attention ? 'warn' : 'neutral'}>
-          <Newspaper />
-        </InboxMark>
-      }
-      title={item.title}
-      meta={[where, item.detail].filter(Boolean).join(' · ')}
-      wrapMeta
-      at={item.updatedAt}
-      disabled={disabled}
-      onOpen={onOpen}
-      actions={
-        <>
-          {attention && (
-            <>
-              <Button variant="ghost" size="xs" className={GHOST} disabled={disabled} onClick={() => act('done')}>
-                <Check size={12} />
-                {t('Mark done')}
-              </Button>
-              <SnoozeMenu disabled={disabled} onSnooze={(until) => act('snoozed', until)} />
-            </>
-          )}
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className={GHOST}
-            aria-label={t('Dismiss')}
-            title={t('Dismiss')}
-            disabled={disabled}
-            onClick={() => act('dismissed')}
-          >
-            <X size={13} />
-          </Button>
-        </>
-      }
-    />
-  )
 }

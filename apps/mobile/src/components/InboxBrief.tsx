@@ -1,4 +1,5 @@
 import { PULL_REQUEST_STAGE_LABEL } from '@ramu/shared/pullRequests'
+import { useRouter } from 'expo-router'
 import { useState } from 'react'
 import { Pressable, View } from 'react-native'
 import {
@@ -59,6 +60,7 @@ function BriefRowView({ row, divider, where }: { row: BriefRow; divider: boolean
   const say = useSay()
   const { c } = useTheme()
   const openThread = useOpenThread()
+  const router = useRouter()
   const store = useStore()
   const auto = useAutomation()
   const [busy, setBusy] = useState(false)
@@ -77,8 +79,15 @@ function BriefRowView({ row, divider, where }: { row: BriefRow; divider: boolean
       .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason)))
       .finally(() => setBusy(false))
   }
+  // A pull request whose next step is yours opens in its review, where that step is; everything else opens its thread.
   const go = () => {
-    if (chat) openThread(chat.id)
+    if (!chat) return
+    if (row.kind === 'pull-request' && row.chat.pullRequest)
+      router.push({
+        pathname: '/chat/[id]/pull-request',
+        params: { id: chat.id, repoId: row.chat.pullRequest.repoId, url: row.chat.pullRequest.url },
+      })
+    else openThread(chat.id)
   }
   const invoke = store.invoke as unknown as Invoke
   const request =
