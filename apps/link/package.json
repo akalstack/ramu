@@ -1,6 +1,6 @@
 {
   "name": "@ramu/link",
-  "version": "0.1.0-alpha.22",
+  "version": "0.1.0-alpha.23",
   "private": true,
   "description": "Ramu Link relay: hands signed-in hosts a Cloudflare Tunnel and an akalstack.com address.",
   "license": "MIT",
