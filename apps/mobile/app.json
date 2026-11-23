@@ -63,6 +63,7 @@
       "./plugins/withTrustedHttp.cjs",
       "./plugins/withWebRtcProguard.cjs",
       "./plugins/withGradleHeap.cjs",
+      "./plugins/withOptionalFeatures.cjs",
       [
         "@config-plugins/react-native-webrtc",
         {
