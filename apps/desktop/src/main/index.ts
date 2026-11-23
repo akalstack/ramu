@@ -284,12 +284,14 @@ async function main() {
     }
     return { firstInstall }
   }
+  // Starting at login is the person's choice (Background, or Stay reachable in Remote access); a login item they chose
+  // that has gone missing, as after the app moved, is put back.
   if (
     app.isPackaged &&
     !process.env.RAMU_USER_DATA &&
     loginSupported() &&
     keepRunningPreferred(userData) &&
-    loginPreferred(userData) !== false &&
+    loginPreferred(userData) === true &&
     !loginEnabled(userData)
   )
     await setLoginService(true)

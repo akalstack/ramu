@@ -1011,7 +1011,9 @@ export function BackgroundControls({ compact = false, onInstalled }: { compact?:
             <span className="muted text-muted-foreground small text-caption block block">
               {status?.keepRunning === false
                 ? t('Needs Keep running when Ramu closes.')
-                : t('Start the background service when you sign in.')}
+                : t(
+                    'Start the background service when you sign in. The first time, Keep host awake turns on too, while plugged in.',
+                  )}
             </span>
           </span>
           <Switch

@@ -53,6 +53,7 @@ import { PairingCode } from './PairingCode'
 import { defaultPairUrl, pairingNetwork, pairingUrls, pairQrText } from './pairingOffer'
 import { usePairingOffer } from './usePairingOffer'
 import { AccountDevicesRow, AccountHostsList } from './AccountAccess'
+import { StayReachable } from './StayReachable'
 import { agentReachable, agentsOnEverywhere } from './agentHostLinks'
 import {
   DefaultPermissions,
@@ -343,6 +344,7 @@ function ThisComputer() {
           }}
         />
       </SettingsRow>
+      {status.enabled && !managed && <StayReachable />}
       {status.enabled && (
         <p className="muted text-muted-foreground small text-caption m-[0_0_12px]" role="status">
           {listening

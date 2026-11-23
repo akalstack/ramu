@@ -40,6 +40,7 @@ import { LoadingDots } from '@/components/loading-dots'
 import { PairingCode } from '../settings/PairingCode'
 import { defaultPairUrl, pairingNetwork } from '../settings/pairingOffer'
 import { usePairingOffer } from '../settings/usePairingOffer'
+import { StayReachable } from '../settings/StayReachable'
 import { TerminalCommandButton, terminalCommandHelp, useTerminalCommand } from '../settings/TerminalCommand'
 import { AntigravitySignIn } from '../settings/AntigravitySignIn'
 import { antigravityKeyName } from '@ramu/shared/providers/environment'
@@ -624,19 +625,23 @@ export function ReachStep({ onError }: { onError(message: string): void }) {
             : t('Getting this host ready for your phone…')}
         </p>
       ) : pairing.joined ? (
-        <Group>
-          <Row
-            title={
-              <>
-                <Check size={15} className="text-primary" />
-                {t('{0} is paired', { 0: pairing.joined.name })}
-              </>
-            }
-            help={t('It can use this host now. Manage it in Settings › Remote access.')}
-          >
-            <Button onClick={pairing.renew}>{t('Pair another')}</Button>
-          </Row>
-        </Group>
+        <>
+          <Group>
+            <Row
+              title={
+                <>
+                  <Check size={15} className="text-primary" />
+                  {t('{0} is paired', { 0: pairing.joined.name })}
+                </>
+              }
+              help={t('It can use this host now. Manage it in Settings › Remote access.')}
+            >
+              <Button onClick={pairing.renew}>{t('Pair another')}</Button>
+            </Row>
+          </Group>
+          {/* Paired, the phone needs this host after a restart too. */}
+          <StayReachable />
+        </>
       ) : offer ? (
         <>
           <PairingCode offer={offer} now={pairing.now} url={url} name={status.discovery?.name} />

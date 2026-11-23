@@ -2,7 +2,7 @@
 
 The desktop app connects to a local service that owns threads, terminals and schedules. Closing the window leaves them running, and reopening reconnects. The host must stay awake. **Settings → Background** controls the service and starting at login. Updates are under **Settings → About**.
 
-**Keep running when Ramu closes** is on by default. Turned off, the service runs only while the app is open: quitting Ramu stops it, so running threads stop, schedules wait and paired devices can't connect until you open Ramu again. **Start at login** needs it on, and turning it off turns starting at login off too.
+Ramu doesn't start at login or keep the computer awake until you choose to: **Start at login** and **Keep host awake** are off on a new install, and **Remote access** offers them once other devices may use the host. **Keep running when Ramu closes** is on by default, so closing the window never cuts off an agent mid-task. Turned off, the service runs only while the app is open: quitting Ramu stops it, so running threads stop, schedules wait and paired devices can't connect until you open Ramu again. **Start at login** needs it on, and turning it off turns starting at login off too.
 
 The command palette (Cmd/Ctrl+Shift+P, or `>` in Cmd/Ctrl+P) offers **Reload window**, **Reload window and background service**, and **Restart background service**, which leaves the window as it is and reconnects it. Restarting the service asks first, since it stops running agents; unfinished threads resume when restart recovery is on.
 
