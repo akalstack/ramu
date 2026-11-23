@@ -8236,4 +8236,5 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Screen': 'Layar',
   'The rows on screen now': 'Baris yang ada di layar sekarang',
   'Pick part of the recent output': 'Pilih sebagian output terbaru',
+  'Show in Files': 'Tampilkan di File',
 }

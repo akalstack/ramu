@@ -5,7 +5,7 @@ import { errorText } from '../lib/errors'
 import { t, useLanguage } from '../i18n'
 import { Button } from '@/components/ui/button'
 import { ArrowUp, CornerDownRight, ListEnd, Paperclip, Play, Square, X } from 'lucide-react'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 
 import type { Attachment, FileContext } from '@ramu/shared/types'
 import { invoke as ownInvoke, ramu } from '../ipc'
@@ -135,6 +135,7 @@ export function Composer({
   pinnedCount.current = suggestions.pinned.length
   // Attachments upload to the host the composer sends to; the native picker runs on this window's own host.
   const { id: checkpointHost, isLocal, invoke } = useHost()
+  const skillsOf = useCallback(() => invoke('skills.list', scope!), [invoke, scope])
   const viewOnly = useViewOnly()
   const scopeKey = JSON.stringify([checkpointHost, suggestions.scope])
   // Dictation: a take belongs to this host's draft and the revision it started from. An edit, restored draft or
@@ -592,6 +593,7 @@ export function Composer({
           mentions={helpers?.mentions}
           onOpenFile={threadId ? openFileLink : undefined}
           onFindQuote={onShowQuote}
+          skills={scope ? skillsOf : undefined}
           readOnly={dictating || submitting}
           autoFocus={autoFocus}
           value={

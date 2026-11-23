@@ -120,8 +120,12 @@ protocol.registerSchemesAsPrivileged([
   { scheme: 'ramu-theme', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
 ])
 
-// Set the native runtime identity before creating menus, windows or notifications.
-app.setName('Ramu')
+// Set the native runtime identity before creating menus, windows or notifications. A development run is "Ramu Dev",
+// with its own data folder and its own "Ramu Dev Safe Storage" keychain item: macOS lets only the app that made a
+// keychain item read it without asking, and a dev build is signed differently from the installed app, so sharing one
+// asked for the keychain password on every launch, and a dev build could change real threads and settings.
+const DEV_NAME = 'Ramu Dev'
+app.setName(app.isPackaged ? 'Ramu' : DEV_NAME)
 // Websites read navigator.webdriver as a bot signal; the integrated browser is driven by a person or a supervised agent.
 app.commandLine.appendSwitch('disable-blink-features', 'AutomationControlled')
 if (process.platform === 'win32') app.setAppUserModelId('app.ramu.desktop')
@@ -129,6 +133,7 @@ app.setAboutPanelOptions({ applicationName: 'Ramu', applicationVersion: app.getV
 
 // Lets tests and screenshots run against a throwaway profile.
 if (process.env.RAMU_USER_DATA) app.setPath('userData', process.env.RAMU_USER_DATA)
+else if (!app.isPackaged) app.setPath('userData', join(app.getPath('appData'), DEV_NAME))
 
 // End-to-end runs stay out of the way: windows are created hidden and unfocused, and macOS shows no Dock icon.
 // Hidden pages would otherwise be throttled, so throttling is off; tests emulate focus through Playwright.

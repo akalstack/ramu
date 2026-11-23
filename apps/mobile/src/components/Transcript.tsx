@@ -119,6 +119,22 @@ export function ChatReferences({ chat, children }: { chat: Chat; children: React
       },
       openFile: (href: string) => void latest.current.files.openLink(href),
       openUrl: (url: string) => void Linking.openURL(url).catch(() => {}),
+      openSkill: (name: string) => {
+        if (!taskId) return
+        const { store, files } = latest.current
+        const say = (text: string) => translate(store.language, text)
+        void store.invoke(computerId, 'skills.list', taskId).then(
+          (skills) => {
+            const skill = skills.find((entry) => entry.name === name.replace(/^[$/]/, ''))
+            if (!skill) return
+            Alert.alert(skill.name, [skill.description, skill.path].filter(Boolean).join('\n\n'), [
+              { text: say('Open'), onPress: () => void files.openLink(skill.path) },
+              { text: say('Close'), style: 'cancel' },
+            ])
+          },
+          () => {},
+        )
+      },
     }),
     [computerId, taskId],
   )

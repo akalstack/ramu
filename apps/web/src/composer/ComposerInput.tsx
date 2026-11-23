@@ -1,4 +1,12 @@
-import { forwardRef, useImperativeHandle, useLayoutEffect, useRef, useState, type HTMLAttributes } from 'react'
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type HTMLAttributes,
+} from 'react'
 import { createPortal } from 'react-dom'
 import { Folder, Quote, SquareTerminal, Users, WandSparkles } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -12,6 +20,7 @@ import { markdownRuns, toggleMarkdownWrap } from '@ramu/shared/chat/markdownRuns
 import { isFolderLike } from '@ramu/shared/chat/referenceChip'
 import { localFileLink } from '@ramu/shared/workspace/fileLinks'
 import { t } from '../i18n'
+import type { SkillInfo } from '@ramu/shared/types'
 
 export interface ComposerInputHandle {
   focus(): void
@@ -105,14 +114,30 @@ export function InlineChip({
   onOpen,
   onFind,
   onRemove,
+  skills,
 }: {
   chip: DraftChip
   onOpen?: (target: string) => void
   /** Finds a quote's source in the conversation; absent outside a thread. */
   onFind?: (text: string) => void
   onRemove?: () => void
+  /** For a skill chip: the skills it can name, so its popover shows what the skill does and where it lives. */
+  skills?: () => Promise<SkillInfo[]>
 }) {
   const [open, setOpen] = useState(false)
+  const [skill, setSkill] = useState<SkillInfo | null>(null)
+  useEffect(() => {
+    if (!open || !skills || skill) return
+    let live = true
+    // A host that can't list skills leaves the chip's own text, as before.
+    void skills().then(
+      (list) => live && setSkill(list.find((entry) => entry.name === chip.label) ?? null),
+      () => {},
+    )
+    return () => {
+      live = false
+    }
+  }, [open, skills, skill, chip.label])
   const target = chip.kind === 'file' ? chip.target : undefined
   const path = target !== undefined ? (localFileLink(target)?.path ?? target) : undefined
   const folder = path !== undefined && isFolderLike(path)
@@ -174,28 +199,38 @@ export function InlineChip({
         {content}
       </PopoverTrigger>
       <PopoverContent align="start" sideOffset={6} className="w-[min(360px,calc(100vw-16px))] gap-2 p-3">
-        <p
-          className={`m-0 max-h-48 overflow-y-auto text-control whitespace-pre-wrap break-words ${chip.kind === 'quote' ? 'border-l-2 border-(--line-strong) pl-2.5 text-soft' : 'font-mono text-caption text-muted-foreground'}`}
-        >
-          {detail}
-        </p>
-        <div className="flex flex-wrap items-center justify-end gap-1">
-          {chip.kind === 'quote' && onFind && (
-            <Button size="sm" variant="secondary" onClick={act(() => onFind(chip.label))}>
-              {t('Show in conversation')}
-            </Button>
-          )}
-          {path && (
-            <Button size="sm" variant="ghost" onClick={act(() => void navigator.clipboard.writeText(path))}>
-              {t('Copy path')}
-            </Button>
-          )}
-          {onRemove && (
-            <Button size="sm" variant="ghost" onClick={act(onRemove)}>
-              {t('Remove')}
-            </Button>
-          )}
-        </div>
+        {skill ? (
+          <SkillDetail
+            skill={skill}
+            onOpen={onOpen && ((target) => act(() => onOpen(target))())}
+            onRemove={onRemove && act(onRemove)}
+          />
+        ) : (
+          <>
+            <p
+              className={`m-0 max-h-48 overflow-y-auto text-control whitespace-pre-wrap break-words ${chip.kind === 'quote' ? 'border-l-2 border-(--line-strong) pl-2.5 text-soft' : 'font-mono text-caption text-muted-foreground'}`}
+            >
+              {detail}
+            </p>
+            <div className="flex flex-wrap items-center justify-end gap-1">
+              {chip.kind === 'quote' && onFind && (
+                <Button size="sm" variant="secondary" onClick={act(() => onFind(chip.label))}>
+                  {t('Show in conversation')}
+                </Button>
+              )}
+              {path && (
+                <Button size="sm" variant="ghost" onClick={act(() => void navigator.clipboard.writeText(path))}>
+                  {t('Copy path')}
+                </Button>
+              )}
+              {onRemove && (
+                <Button size="sm" variant="ghost" onClick={act(onRemove)}>
+                  {t('Remove')}
+                </Button>
+              )}
+            </div>
+          </>
+        )}
       </PopoverContent>
     </Popover>
   )
@@ -217,6 +252,8 @@ type Props = Omit<HTMLAttributes<HTMLDivElement>, 'onChange'> & {
   onOpenFile?: (target: string) => void
   /** Finds a quote's source in the conversation, from its chip. */
   onFindQuote?: (text: string) => void
+  /** The skills a skill chip can name, read when its popover opens. */
+  skills?: () => Promise<SkillInfo[]>
 }
 const NO_MENTIONS: readonly DraftMention[] = []
 export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function ComposerInput(
@@ -229,6 +266,7 @@ export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function Com
     mentions = NO_MENTIONS,
     onOpenFile,
     onFindQuote,
+    skills,
     onKeyDown,
     onPaste,
     ...props
@@ -434,6 +472,7 @@ export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function Com
             chip={chip}
             onOpen={onOpenFile}
             onFind={onFindQuote}
+            skills={chip.kind === 'skill' ? skills : undefined}
             onRemove={
               readOnly
                 ? undefined
@@ -451,3 +490,56 @@ export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function Com
     </>
   )
 })
+
+/**
+ * A skill a chip names: what it does and where its SKILL.md lives, with a way to open that file or the skill's folder in
+ * the thread's files. Outside a thread, where nothing opens, the path can be copied instead.
+ */
+function SkillDetail({
+  skill,
+  onOpen,
+  onRemove,
+}: {
+  skill: SkillInfo
+  onOpen?: (target: string) => void
+  onRemove?: () => void
+}) {
+  const folder = skill.path.replace(/[\\/][^\\/]*$/, '')
+  return (
+    <>
+      <div className="flex min-w-0 items-center gap-1.5 text-control font-semibold">
+        <WandSparkles size={14} className="flex-none text-brand" aria-hidden="true" />
+        <span className="truncate">{skill.name}</span>
+      </div>
+      {skill.description && (
+        <p className="m-0 max-h-32 overflow-y-auto text-caption leading-relaxed text-muted-foreground">
+          {skill.description}
+        </p>
+      )}
+      <p className="m-0 truncate font-mono text-caption text-muted-foreground" title={skill.path}>
+        {skill.path}
+      </p>
+      <div className="flex flex-wrap items-center gap-1">
+        {onOpen ? (
+          <>
+            <Button size="sm" variant="secondary" onClick={() => onOpen(skill.path)}>
+              {t('Open')}
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => onOpen(`${folder}/`)}>
+              {t('Show in Files')}
+            </Button>
+          </>
+        ) : (
+          <Button size="sm" variant="secondary" onClick={() => void navigator.clipboard.writeText(skill.path)}>
+            {t('Copy path')}
+          </Button>
+        )}
+        {onRemove && (
+          <Button size="sm" variant="ghost" className="ml-auto" onClick={onRemove}>
+            {t('Remove')}
+          </Button>
+        )}
+      </div>
+    </>
+  )
+}

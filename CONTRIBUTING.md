@@ -23,7 +23,7 @@ pnpm dev
 | `pnpm dev:mobile` | Metro for the phone app ([mobile README](apps/mobile/README.md#development)) |
 | `pnpm dev:site` | The getramu.dev website |
 
-To work without signing in to a paid provider, start with `RAMU_FAKE_AGENT=1 pnpm dev`: every provider is simulated. Add `RAMU_USER_DATA=/tmp/ramu-dev` to keep that profile apart from the Ramu you use.
+`pnpm dev` runs as **Ramu Dev**, with its own data folder (`~/Library/Application Support/Ramu Dev` on macOS) and its own keychain item, so it never touches the Ramu you use or asks for your keychain password. `RAMU_USER_DATA=/path` points it at another folder. To work without signing in to a paid provider, start with `RAMU_FAKE_AGENT=1 pnpm dev`: every provider is simulated.
 
 Project search uses your `rg` if installed, otherwise the ripgrep inside the bundled Claude Code binary. Native dependencies may need Python 3 and a C/C++ toolchain. Keep the hoisted dependency layout in `pnpm-workspace.yaml`. Electron Forge depends on it.
 

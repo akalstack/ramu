@@ -23,6 +23,8 @@ import { markdownBlocks, nativeMarkdownSource, splitCodeFences } from '../runtim
 /** What a tapped reference does. The chat screen provides it; without one, references still render as badges. */
 export interface ReferenceActions {
   openFile(href: string): void
+  /** Shows what a skill a message names does, with a way to open its SKILL.md; absent where there is no host. */
+  openSkill?(name: string): void
   openUrl(url: string): void
   /** A workspace image path to something drawable (a data URL fetched from the computer). */ image?(
     href: string,

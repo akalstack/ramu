@@ -177,7 +177,8 @@ export function NativeMarkdown({
         contextMenuItems={menuItems}
         selectionMenuConfig={{ copy: { label: say('Copy') }, copyAsMarkdown: { label: say('Copy as Markdown') } }}
         onLinkPress={({ url }) => {
-          if (url.startsWith(SKILL_SCHEME)) return
+          if (url.startsWith(SKILL_SCHEME))
+            return actions.openSkill?.(decodeURIComponent(url.slice(SKILL_SCHEME.length)))
           if (url.startsWith(FILE_SCHEME)) return actions.openFile(decodeURIComponent(url.slice(FILE_SCHEME.length)))
           if (/^https?:\/\//i.test(url)) return actions.openUrl(url)
           if (localFileLink(url)) actions.openFile(url)

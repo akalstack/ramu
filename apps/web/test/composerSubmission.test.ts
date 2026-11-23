@@ -21,6 +21,9 @@ const state = vi.hoisted(() => ({
 }))
 vi.mock('react', async (original) => ({
   ...(await original<typeof import('react')>()),
+  useCallback<T>(callback: T) {
+    return callback
+  },
   useEffect(run: () => void | (() => void), deps: readonly unknown[]) {
     const index = state.effectIndex++,
       previous = state.effects[index]
