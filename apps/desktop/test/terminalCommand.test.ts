@@ -52,7 +52,8 @@ it('runs the app as Node with the arguments and quoting intact, on this app’s 
     )
     const script = join(root, 'ramu')
     writeFileSync(script, launcher({ executable, cli: join(root, 'cli.js') }, "/data/it's mine"), { mode: 0o755 })
-    const env = { PATH: process.env.PATH ?? '' }
+    // Only system folders: the workspace's own `ramu` must not answer for a missing app.
+    const env = { PATH: '/usr/bin:/bin' }
     expect(execFileSync(script, ['pair', '--json'], { env, encoding: 'utf8' })).toBe(
       `1|1|/data/it's mine|${join(root, 'cli.js')} pair --json\n`,
     )
@@ -60,7 +61,45 @@ it('runs the app as Node with the arguments and quoting intact, on this app’s 
       `1|1|/other|${join(root, 'cli.js')} status\n`,
     )
     rmSync(executable)
-    expect(() => execFileSync(script, [], { env, stdio: 'pipe' })).toThrow(/no longer at/)
+    expect(() => execFileSync(script, [], { env, stdio: 'pipe' })).toThrow(/not installed at/)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+it('finds the app after it moved, and otherwise hands over to a ramu installed another way', () => {
+  const root = mkdtempSync(join(tmpdir(), 'ramu moved-'))
+  try {
+    const runtime = '#!/bin/sh\nprintf "%s\\n" "$*"\n'
+    const bundle = (folder: string) => {
+      mkdirSync(join(folder, 'Ramu.app', 'Contents', 'MacOS'), { recursive: true })
+      mkdirSync(join(folder, 'Ramu.app', 'Contents', 'Resources'), { recursive: true })
+      writeFileSync(join(folder, 'Ramu.app', 'Contents', 'MacOS', 'Ramu'), runtime, { mode: 0o755 })
+      writeFileSync(join(folder, 'Ramu.app', 'Contents', 'Resources', 'cli.js'), '')
+    }
+    const moved = join(root, 'home')
+    bundle(join(moved, 'Applications'))
+    const gone = '/nowhere/Ramu.app'
+    const script = join(root, 'bin', 'ramu')
+    mkdirSync(join(root, 'bin'))
+    writeFileSync(
+      script,
+      launcher({ executable: `${gone}/Contents/MacOS/Ramu`, cli: `${gone}/Contents/Resources/cli.js` }, '/data'),
+      { mode: 0o755 },
+    )
+    const env = { PATH: `${join(root, 'bin')}:/usr/bin:/bin`, HOME: moved }
+    expect(execFileSync(script, ['up'], { env, encoding: 'utf8' })).toBe(
+      `${join(moved, 'Applications', 'Ramu.app', 'Contents', 'Resources', 'cli.js')} up\n`,
+    )
+
+    rmSync(join(moved, 'Applications'), { recursive: true })
+    const npm = join(root, 'npm bin')
+    mkdirSync(npm)
+    writeFileSync(join(npm, 'ramu'), '#!/bin/sh\nprintf "npm %s\\n" "$*"\n', { mode: 0o755 })
+    expect(execFileSync(script, ['up'], { env: { ...env, PATH: `${env.PATH}:${npm}` }, encoding: 'utf8' })).toBe(
+      'npm up\n',
+    )
+    expect(() => execFileSync(script, ['up'], { env, stdio: 'pipe' })).toThrow(/npm install --global @akalstack\/ramu/)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }

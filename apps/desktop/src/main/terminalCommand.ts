@@ -10,6 +10,8 @@ import { t } from './localization'
 /** Identifies a launcher this app wrote, so one from another program is never replaced or removed. */
 const MARKER = '# Installed by the Ramu app.'
 const PROFILE_MARKER = '# Added by Ramu so terminals find the ramu command'
+const DOWNLOADS = 'https://github.com/akalstack/ramu/releases'
+const NPM_PACKAGE = '@akalstack/ramu'
 
 export type CommandTarget =
   { executable: string; cli: string } | { unavailable: 'development' | 'appimage' | 'translocated' | 'platform' }
@@ -33,17 +35,55 @@ export function commandTarget(options: {
 
 const sh = (text: string) => `'${text.replace(/'/g, `'\\''`)}'`
 
+/** The executable's and the CLI's paths inside the app's `.app` bundle; null outside a macOS bundle. */
+function bundleOf(target: { executable: string; cli: string }) {
+  const bundle = /^(.+\.app)\/Contents\/MacOS\/[^/]+$/.exec(target.executable)?.[1]
+  if (!bundle || !target.cli.startsWith(`${bundle}/`)) return null
+  return {
+    executable: target.executable.slice(bundle.length),
+    cli: target.cli.slice(bundle.length),
+  }
+}
+
 export function launcher(target: { executable: string; cli: string }, userData: string): string {
+  const inBundle = bundleOf(target)
+  // Once the app is reinstalled in either Applications folder, the command still finds it. Spotlight is not asked: it
+  // also finds build outputs and stray copies, which must never be run in its place.
+  const relocate = inBundle
+    ? `
+if [ ! -x "$app" ]; then
+  for bundle in /Applications/Ramu.app "$HOME/Applications/Ramu.app"; do
+    if [ -x "$bundle"${sh(inBundle.executable)} ] && [ -f "$bundle"${sh(inBundle.cli)} ]; then
+      app="$bundle"${sh(inBundle.executable)}
+      cli="$bundle"${sh(inBundle.cli)}
+      break
+    fi
+  done
+fi`
+    : ''
   return `#!/bin/sh
 ${MARKER} Remove it in Settings > Background.
 app=${sh(target.executable)}
+cli=${sh(target.cli)}${relocate}
 if [ ! -x "$app" ]; then
-  echo "ramu: Ramu is no longer at $app. Open Ramu and install the terminal command again in Settings." >&2
+  # Without the app, a ramu installed some other way (such as from npm) still answers.
+  self="$(cd "$(dirname "$0")" 2>/dev/null && pwd)/$(basename "$0")"
+  old_ifs=$IFS
+  IFS=:
+  for dir in $PATH; do
+    if [ -x "$dir/ramu" ] && [ "$dir/ramu" != "$self" ] && ! grep -qF ${sh(MARKER)} "$dir/ramu" 2>/dev/null; then
+      IFS=$old_ifs
+      exec "$dir/ramu" "$@"
+    fi
+  done
+  IFS=$old_ifs
+  echo "ramu: Ramu is not installed at "${sh(target.executable)}" anymore." >&2
+  echo "Install it from ${DOWNLOADS}, or get the command without the app: npm install --global ${NPM_PACKAGE}" >&2
   exit 127
 fi
 if [ -z "$RAMU_USER_DATA" ]; then RAMU_USER_DATA=${sh(userData)}; fi
 export RAMU_USER_DATA
-ELECTRON_RUN_AS_NODE=1 RAMU_TERMINAL_COMMAND=1 exec "$app" ${sh(target.cli)} "$@"
+ELECTRON_RUN_AS_NODE=1 RAMU_TERMINAL_COMMAND=1 exec "$app" "$cli" "$@"
 `
 }
 
