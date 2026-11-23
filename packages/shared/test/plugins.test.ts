@@ -302,3 +302,31 @@ describe('pluginPicture', () => {
     expect(pluginPicture('https://gitlab.com/acme/plugin')).toBeNull()
   })
 })
+
+it('names a companion in the service’s own marketplace, and refuses an index that is not a GitHub repository', () => {
+  const read = (extension: Record<string, unknown>) =>
+    readRamuExtension(
+      pluginManifest.parse({ name: 'higgsfield-media', extensions: { 'dev.getramu': extension } }),
+      'plugin.json',
+    )
+  const from = { name: 'higgsfield', index: 'https://github.com/higgsfield-ai/skills' }
+  expect(read({ companionFrom: from })).toEqual({
+    extension: expect.objectContaining({ companionFrom: from }),
+    problems: [],
+  })
+  expect(read({ companionFrom: { ...from, index: 'https://example.com/skills' } }).problems[0]?.message).toMatch(
+    /companionFrom\.index: A companion index is a GitHub repository address/,
+  )
+  // In an index entry, read loosely as every Ramu reads it.
+  const entry = readMarketplace({
+    name: 'ramu-plugins',
+    plugins: [
+      {
+        name: 'higgsfield-media',
+        source: './plugins/higgsfield-media',
+        extensions: { 'dev.getramu': { companionFrom: from } },
+      },
+    ],
+  })
+  expect(entry.plugins[0]?.extensions?.['dev.getramu']?.companionFrom).toEqual(from)
+})

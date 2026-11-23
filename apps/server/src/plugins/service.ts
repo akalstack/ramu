@@ -271,7 +271,7 @@ export class PluginService {
       update: plugin.update,
       byRamu: plugin.byRamu,
       picture: plugin.source.kind === 'git' ? pluginPicture(plugin.source.location) : null,
-      companion: this.companionOf(plugin.name, plugin.extension.companion),
+      companion: this.companionOf(plugin.name, plugin.extension.companion, plugin.extension.companionFrom),
     }
   }
 
@@ -1218,11 +1218,12 @@ export class PluginService {
   }
 
   /**
-   * The plugin one pairs with: a Ramu plugin's companion in Claude's directory, or for a plugin there, the Ramu plugin
-   * that names it (read from Ramu's index as last fetched).
+   * The plugin one pairs with: a Ramu plugin's companion in Claude's directory or the marketplace it names, or for a
+   * plugin there, the Ramu plugin that names it (read from Ramu's index as last fetched).
    */
-  private companionOf(name: string, declared: string | undefined) {
+  private companionOf(name: string, declared: string | undefined, from?: { name: string; index: string }) {
     const installed = new Set(this.state().plugins.map((plugin) => plugin.name))
+    if (from) return { index: from.index, name: from.name, installed: installed.has(from.name) }
     if (declared) return { index: CLAUDE_PLUGIN_INDEX, name: declared, installed: installed.has(declared) }
     const ramu = this.listings
       .get(DEFAULT_PLUGIN_INDEX)
@@ -1503,7 +1504,7 @@ export class PluginService {
           installed: installed.has(entry.name),
           alternatives: [],
           companion: (() => {
-            const found = this.companionOf(entry.name, ramu?.companion)
+            const found = this.companionOf(entry.name, ramu?.companion, ramu?.companionFrom)
             return found ? { index: found.index, name: found.name } : null
           })(),
         })

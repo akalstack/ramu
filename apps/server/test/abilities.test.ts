@@ -12,7 +12,14 @@ import {
   type ProviderCatalog,
 } from '@ramu/shared/types'
 import type { AbilityCall, AbilityPreferences } from '@ramu/shared/providers/abilities'
-import { AbilityService, mcpArguments, videoArguments, videoExtension, type AbilityHost } from '../src/agent/abilities'
+import {
+  AbilityService,
+  fieldsOf,
+  mcpArguments,
+  videoArguments,
+  videoExtension,
+  type AbilityHost,
+} from '../src/agent/abilities'
 import type { AbilityRun } from '../src/agent/abilityRuns'
 import type { AbilityDeclaration } from '../src/providers/adapter'
 import { AttachmentStore } from '../src/attachments'
@@ -1009,4 +1016,12 @@ describe('videos on a plugin’s service', () => {
     expect(videoExtension(Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0, 0]))).toBe('webm')
     expect(videoExtension(Buffer.from('<html>'))).toBeNull()
   })
+})
+
+it('reads a tool’s fields from the first shape that lists them, as Higgsfield’s params is its fields or a quote', () => {
+  const fields = { type: 'object', properties: { model: { type: 'string' }, prompt: { anyOf: [{ type: 'string' }] } } }
+  const params = { anyOf: [fields, { type: 'object', properties: { ref: { type: 'string' } }, required: ['ref'] }] }
+  expect(fieldsOf(params)).toBe(fields)
+  expect(fieldsOf(fields)).toBe(fields)
+  expect(videoArguments(fieldsOf(params), 'a fox at dawn')).toEqual({ prompt: 'a fox at dawn' })
 })

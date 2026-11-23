@@ -44,6 +44,18 @@ export const PLUGIN_LIMITS = {
 
 /** Plugin names are what Claude Code requires: lowercase kebab case. */
 export const PLUGIN_NAME = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/
+
+/**
+ * A marketplace a service publishes its own plugin in, as a GitHub repository. Installing from it goes through the same
+ * review as any other index, and the daily update check follows its newest commit.
+ */
+const COMPANION_FROM = z.strictObject({
+  name: z.string().regex(PLUGIN_NAME),
+  index: z
+    .string()
+    .max(200)
+    .regex(/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+$/, 'A companion index is a GitHub repository address.'),
+})
 const SLOT_ID = /^[a-z][a-z0-9_-]{0,39}$/
 const ENV_NAME = /^[A-Z][A-Z0-9_]{0,63}$/
 /** Environment a plugin may not set: it would change how the CLI or server finds programs, or where it keeps a login. */
@@ -298,6 +310,8 @@ const ramuExtension = z
      * Ramu (sign-in, safe commands, dashboard data). Installing either offers the other.
      */
     companion: z.string().regex(PLUGIN_NAME).optional(),
+    /** The service's own plugin in the marketplace it publishes outside Claude's directory, instead of `companion`. */
+    companionFrom: COMPANION_FROM.optional(),
   })
   .superRefine((value, context) => {
     for (const name of Object.keys(value.abilities))
@@ -560,6 +574,11 @@ export const indexEntry = z.object({
           stacks: z.array(z.enum(STACK_IDS)).optional(),
           /** The service's own plugin in Claude's directory that this one pairs with. */
           companion: z.string().regex(PLUGIN_NAME).optional(),
+          /**
+           * The service's own plugin in its own marketplace. A Ramu version from before this field skips it, where it
+           * would read a plain `companion` as a plugin in Claude's directory.
+           */
+          companionFrom: COMPANION_FROM.optional(),
           adds: z
             .object({
               skills: z.number().int().min(0).optional(),

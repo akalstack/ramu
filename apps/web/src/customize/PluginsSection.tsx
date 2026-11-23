@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Check, ChevronDown, RefreshCw, Server, Share2 } from 'lucide-react'
 import {
   CLAUDE_PLUGIN_INDEX,
+  DEFAULT_PLUGIN_INDEX,
   listingMatches,
   type InstalledPlugin,
   type PluginListing,
@@ -49,9 +50,9 @@ const matches = (plugin: InstalledPlugin, query: string) =>
 
 /** What the other plugin of a pair adds, by which side it is on. */
 const companionText = (companion: { index: string }) =>
-  companion.index === CLAUDE_PLUGIN_INDEX
-    ? t('The service’s own plugin: its skills teach agents the service in full, often with its MCP server.')
-    : t('Ramu’s plugin for it: runs its CLI with your saved sign-in, or reads its data into dashboards.')
+  companion.index === DEFAULT_PLUGIN_INDEX
+    ? t('Ramu’s plugin for it: runs its CLI with your saved sign-in, or reads its data into dashboards.')
+    : t('The service’s own plugin: its skills teach agents the service in full, often with its MCP server.')
 
 /** Cards Claude's directory shows before Show all. */
 const CLAUDE_PAGE = 24

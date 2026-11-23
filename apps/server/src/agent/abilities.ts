@@ -190,6 +190,20 @@ const IMAGE_TYPES: Record<string, string> = {
 }
 
 /**
+ * The object schema a tool's fields are described by. A field that takes one of several shapes (Higgsfield's `params`
+ * is its fields or a reference to a quote) is read by its first shape that lists fields.
+ */
+export function fieldsOf(schema: Record<string, unknown>): Record<string, unknown> {
+  if (schema.properties) return schema
+  const shapes = [...((schema.anyOf as unknown[]) ?? []), ...((schema.oneOf as unknown[]) ?? [])]
+  return (
+    (shapes.find(
+      (shape) => !!shape && typeof shape === 'object' && 'properties' in (shape as Record<string, unknown>),
+    ) as Record<string, unknown> | undefined) ?? schema
+  )
+}
+
+/**
  * Arguments for a Shared MCP tool from the one text an ability passes: the property named like a prompt or query, else
  * the first required text property, else the first text property.
  */
@@ -1008,7 +1022,7 @@ export class AbilityService {
     const shaped = (schema: Record<string, unknown>) => {
       if (!making) return build(schema)
       const inner = tool.params
-        ? (((schema.properties ?? {}) as Record<string, Record<string, unknown>>)[tool.params] ?? {})
+        ? fieldsOf(((schema.properties ?? {}) as Record<string, Record<string, unknown>>)[tool.params] ?? {})
         : schema
       const args = { ...build(inner), ...(tool.arguments ?? {}) }
       return tool.params ? { [tool.params]: args } : args
