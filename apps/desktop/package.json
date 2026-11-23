@@ -1,7 +1,7 @@
 {
   "name": "@ramu/desktop",
   "productName": "Ramu",
-  "version": "0.1.0-alpha.14",
+  "version": "0.1.0-alpha.15",
   "private": true,
   "description": "Ramu desktop app: an open-source workspace for coding with agents.",
   "license": "MIT",
