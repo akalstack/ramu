@@ -5,7 +5,8 @@ import { markSource } from '../runtime/textMark'
 import { ContinuedCard } from './ContinueOnHost'
 import { CheckoutClashCard, CommandWaitNote } from './CheckoutClashCard'
 import { toolActivity } from '@ramu/shared/chat/toolActivity'
-import { thoughtLine } from '@ramu/shared/chat/thoughtLine'
+import { NEW_THOUGHT, thoughtLine, thoughtTitle, tickThought } from '@ramu/shared/chat/thoughtLine'
+import { useHeldHeight } from './heldHeight'
 import { FileIcon } from './FileIcon'
 import { isModelFile, ModelTile } from './ModelViewer'
 import { translate, type Language } from '@ramu/shared/i18n'
@@ -49,7 +50,7 @@ import { pickFolder } from '../runtime/folderPick'
 import { font, radius, space, useTheme } from '../theme'
 import { fill, useT, useSay } from '../i18n'
 import { agentErrorView } from '@ramu/shared/chat/agentErrorView'
-import { endedOnError } from '../runtime/turns'
+import { endedOnError, formatDuration } from '../runtime/turns'
 import { showError } from '../runtime/toast'
 import { accountName } from '@ramu/shared/providers/providers'
 import { providerNames, type Chat, type ToolKind, type TranscriptItem } from '../runtime/types'
@@ -1303,14 +1304,22 @@ function ToolGroup({ item, live }: { item: Extract<TranscriptItem, { kind: 'tool
   const tint = failed ? c.bad : c.muted
   // Tools already here when the group appeared stay still; ones that arrive later fade in.
   const initial = useRef(new Set(item.tools.map((tool) => tool.id))).current
+  // Only the folded live row holds its height: that is where lines come and go as calls start and finish. Opened, the
+  // group reads as the person left it.
+  const held = useHeldHeight(live && !open, item.id)
+  // Opening or folding the group, or a row inside it, lets the hold go, so the person's change shows.
+  const toggledInside = () => {
+    toggled()
+    held.release()
+  }
   return (
-    <View style={{ gap: space.xs }}>
+    <View style={{ gap: space.xs, minHeight: held.minHeight }} onLayout={held.onLayout}>
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
         onPress={() => {
           tap()
-          toggled()
+          toggledInside()
           setOpen((value) => !value)
         }}
         style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}
@@ -1344,17 +1353,19 @@ function ToolGroup({ item, live }: { item: Extract<TranscriptItem, { kind: 'tool
         </View>
       ) : null}
       <Collapse open={open}>
-        <View style={{ gap: space.xs }}>
-          {item.entries.map((entry, index) =>
-            entry.kind === 'thinking' ? (
-              <ThinkingRow key={entry.id} text={entry.text} live={live && index === item.entries.length - 1} />
-            ) : (
-              <Arrive key={entry.id} animate={!initial.has(entry.id)}>
-                <ToolRow item={entry} />
-              </Arrive>
-            ),
-          )}
-        </View>
+        <RowToggle.Provider value={toggledInside}>
+          <View style={{ gap: space.xs }}>
+            {item.entries.map((entry, index) =>
+              entry.kind === 'thinking' ? (
+                <ThinkingRow key={entry.id} text={entry.text} live={live && index === item.entries.length - 1} />
+              ) : (
+                <Arrive key={entry.id} animate={!initial.has(entry.id)}>
+                  <ToolRow item={entry} />
+                </Arrive>
+              ),
+            )}
+          </View>
+        </RowToggle.Provider>
       </Collapse>
     </View>
   )
@@ -2505,8 +2516,8 @@ function InteractiveVersionRow({
 
 /**
  * Reasoning the provider shared, as the desktop's ThinkingRow: led by the brain icon, which already says what the row
- * is, the thought on one line ending in an ellipsis (its newest paragraph, shimmering, while it streams); a tap opens
- * the whole thought under a "Thought" title.
+ * is, the thought on one line ending in an ellipsis (its newest paragraph, shimmering, while it streams), after
+ * "Thought for 4s" once it took a while; a tap opens the whole thought as Markdown under a "Thinking" or "Thought" title.
  */
 function ThinkingRow({ text, live }: { text: string; live: boolean }) {
   const { c } = useTheme()
@@ -2514,11 +2525,18 @@ function ThinkingRow({ text, live }: { text: string; live: boolean }) {
   const [open, setOpen] = useState(false)
   const toggled = useContext(RowToggle)
   const line = useMemo(() => thoughtLine(text, live), [text, live])
+  const [timing, setTiming] = useState(() => tickThought(NEW_THOUGHT, live, Date.now()))
+  useEffect(() => setTiming((current) => tickThought(current, live, Date.now())), [live])
+  const heading = thoughtTitle(live, timing.took)
+  const title =
+    heading.label === 'Thought for {0}' ? say(heading.label, { 0: formatDuration(heading.took) }) : say(heading.label)
+  // Closed, the thought's own line says what it is; a long one also says how long it took, as on the desktop.
+  const titled = open || heading.label === 'Thought for {0}'
   return (
     <View>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={say(live ? 'Thinking' : 'Thought')}
+        accessibilityLabel={title}
         accessibilityState={{ expanded: open }}
         onPress={() => {
           tap()
@@ -2529,13 +2547,13 @@ function ThinkingRow({ text, live }: { text: string; live: boolean }) {
         style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, paddingVertical: 4 }}
       >
         <Brain size={14} color={c.muted} />
+        {titled ? (
+          <T size={font.control} tone="muted" numberOfLines={1} style={{ flexShrink: 0 }}>
+            {title}
+          </T>
+        ) : null}
         <View style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-          {/* Open, the thought is below, so the row is titled as on the desktop. */}
-          {open ? (
-            <T size={font.control} tone="muted" numberOfLines={1}>
-              {say(live ? 'Thinking' : 'Thought')}
-            </T>
-          ) : !line ? null : live ? (
+          {open || !line ? null : live ? (
             <Shimmer size={font.control} singleLine>
               {line.slice(0, 180)}
             </Shimmer>
@@ -2549,9 +2567,7 @@ function ThinkingRow({ text, live }: { text: string; live: boolean }) {
       </Pressable>
       <Collapse open={open}>
         <View style={{ paddingTop: space.xs }}>
-          <T size={font.caption} tone="muted" style={{ lineHeight: 18 }}>
-            {text}
-          </T>
+          <Markdown text={text} density="compact" muted streaming={live} />
         </View>
       </Collapse>
     </View>

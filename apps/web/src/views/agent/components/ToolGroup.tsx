@@ -17,6 +17,7 @@ import { toolIsRunning, toolVerb } from '@ramu/shared/chat/toolStatus'
 import { type ToolResult, type ToolUse } from '../types'
 import { describeTools, toolFallbackTitle } from '../lib/toolSummary'
 import { useScrollFade } from '../hooks/useScrollFade'
+import { useHeldHeight } from '../hooks/useHeldHeight'
 import { ShadowPre } from './ShadowPre'
 import { ToolIcon } from './ToolIcon'
 import { ThinkingRow } from './ThinkingRow'
@@ -72,6 +73,9 @@ export function ToolGroup({
   useLanguage()
   const [open, setOpen] = useState(false)
   const bodyRef = useScrollFade<HTMLDivElement>()
+  // Only the folded live row holds its height: that is where lines come and go as calls start and finish. Opened, the
+  // group reads as the person left it.
+  const held = useHeldHeight<HTMLDivElement>(live && active && !open, tools[0]?.toolUseId)
   const status = toolActivity(tools, (tool) => {
     const result = results.get(tool.toolUseId)
     return result?.isError || result?.status === 'failed' || tool.status === 'failed'
@@ -96,7 +100,8 @@ export function ToolGroup({
         describeTools([primaryTool], results, active)
       : describeTools(tools, results, active)
   return (
-    <>
+    // Any click inside is the person opening or folding something, which the hold must let show.
+    <div ref={held.ref} onClickCapture={held.release}>
       {/* Keyed by whether it is a group, so a lone row becoming one switches at once instead of animating shut. */}
       <Collapsible
         key={entries.length > 1 ? 'group' : 'single'}
@@ -281,6 +286,6 @@ export function ToolGroup({
           </div>
         </CollapsibleContent>
       </Collapsible>
-    </>
+    </div>
   )
 }

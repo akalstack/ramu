@@ -4446,6 +4446,7 @@ function chatView() {
     './ui': { ...components, tap() {}, T: 'T', Card: 'Card' },
     './Motion': { Collapse: 'Collapse', Disclosure: 'Disclosure', Breathe: 'Breathe', Arrive: 'Arrive' },
     './ChoiceOption': { Option: function Option() {} },
+    './heldHeight': { useHeldHeight: () => ({ minHeight: undefined, onLayout() {}, release() {} }) },
   })
   const invoke = (node) => {
     states = componentStates.get(node.type) ?? []

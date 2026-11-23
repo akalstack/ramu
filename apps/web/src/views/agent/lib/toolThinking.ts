@@ -29,3 +29,15 @@ export function groupToolThinking(items: (ChatBlock | ChatBlock[])[]): (ChatBloc
   flush()
   return result
 }
+
+/**
+ * Whether the tool group `block` is the live one of a running turn: it holds `statusGroup`, the turn's newest calls,
+ * and the agent has not replied after it yet. Once the agent speaks, the group is done and settles where it stands
+ * instead of waiting for the turn to end; the next group to start is live in its place.
+ */
+export function isLiveToolGroup(block: ChatBlock, statusGroup: ChatBlock | undefined, items: ChatBlock[]): boolean {
+  if (block.kind !== 'tools' || statusGroup?.kind !== 'tools') return false
+  if (block !== statusGroup && !statusGroup.tools.some((tool) => block.tools.includes(tool))) return false
+  const after = items.slice(items.indexOf(statusGroup) + 1)
+  return !after.some((later) => later.kind === 'event' && later.event.kind === 'text')
+}

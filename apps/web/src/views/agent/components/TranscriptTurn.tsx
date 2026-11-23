@@ -16,7 +16,7 @@ import { Marker, MarkerContent } from '@/components/ui/marker'
 import { TurnSummary } from './TurnSummary'
 import { turnThinking } from '../lib/turnThinking'
 import { turnParts } from '../lib/turns'
-import { groupToolThinking, type ToolEntry } from '../lib/toolThinking'
+import { groupToolThinking, isLiveToolGroup, type ToolEntry } from '../lib/toolThinking'
 import { Fragment, useLayoutEffect, useRef } from 'react'
 import { reducedMotion } from '../../../workspace/panelMotion'
 
@@ -62,10 +62,7 @@ function TranscriptBlock({
             results={ctx.results}
             cwd={ctx.cwd}
             active={ctx.busyAgent && !finished}
-            live={
-              b === ctx.statusGroup ||
-              (ctx.statusGroup?.kind === 'tools' && ctx.statusGroup.tools.some((tool) => b.tools.includes(tool)))
-            }
+            live={isLiveToolGroup(b, ctx.statusGroup, turn.items)}
             taskId={ctx.taskId}
             onBackground={ctx.onBackground}
           />

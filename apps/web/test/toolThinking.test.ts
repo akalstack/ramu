@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import type { ChatBlock, ToolUse } from '@ramu/shared/chat/chatFolding'
-import { groupToolThinking } from '../src/views/agent/lib/toolThinking'
+import { groupToolThinking, isLiveToolGroup } from '../src/views/agent/lib/toolThinking'
 import { turnThinking } from '../src/views/agent/lib/turnThinking'
 
 const first: ChatBlock = { kind: 'event', event: { kind: 'thinking', text: 'Inspect the files' } }
@@ -48,4 +48,22 @@ it('retains reasoning inside tool groups during work and after completion', () =
       { kind: 'work', block: tools, entries: [first.event, call, next.event], first },
     ])
   }
+})
+
+it('keeps a group live only until the agent replies after it, then hands live to the next group', () => {
+  // A runs: its thoughts and calls are live, even as a run merged with the thought before it.
+  let items = [first, tools]
+  const groupA = groupToolThinking(items)[0]
+  expect(groupA).toMatchObject({ kind: 'work' })
+  const runA = groupA && 'block' in groupA ? groupA.block : tools
+  expect(isLiveToolGroup(runA, tools, items)).toBe(true)
+  // A is done and the agent speaks: A settles while the turn is still running.
+  items = [first, tools, message]
+  expect(isLiveToolGroup(runA, tools, items)).toBe(false)
+  // B starts: it is live and A stays settled.
+  items = [first, tools, message, moreTools]
+  expect(isLiveToolGroup(moreTools, moreTools, items)).toBe(true)
+  expect(isLiveToolGroup(runA, moreTools, items)).toBe(false)
+  // A thought after B's calls keeps B live.
+  expect(isLiveToolGroup(moreTools, moreTools, [...items, next])).toBe(true)
 })

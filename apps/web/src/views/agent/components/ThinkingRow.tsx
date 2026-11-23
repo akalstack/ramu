@@ -2,7 +2,7 @@ import { t as translate, useLanguage } from '../../../i18n'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Button } from '@/components/desktop-button'
 import { Brain, ChevronRight } from 'lucide-react'
-import { thoughtLine } from '@ramu/shared/chat/thoughtLine'
+import { NEW_THOUGHT, thoughtLine, thoughtTitle, tickThought } from '@ramu/shared/chat/thoughtLine'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { MarkdownText } from '../../../chat/MarkdownText'
 import { scrollMotion } from '../../../workspace/panelMotion'
@@ -21,27 +21,19 @@ import { CARET_CLASS, TOOL_DISCLOSURE_PANEL_CLASS, TOOL_ICON_CLASS, TOOL_SUMMARY
 export function ThinkingRow({ text, active = false }: { text: string; active?: boolean }) {
   useLanguage()
   const [open, setOpen] = useState(false)
-  const startedAt = useRef<number | null>(active ? Date.now() : null)
-  const [took, setTook] = useState<number | null>(null)
+  const [timing, setTiming] = useState(() => tickThought(NEW_THOUGHT, active, Date.now()))
   const body = useScrollFade<HTMLDivElement>()
   const line = useMemo(() => thoughtLine(text, active), [text, active])
   const clock = useRef(streamClock(text))
   noteArrival(clock.current, text)
   const rehypePlugins = useMemo(() => [rehypeStreamWords(clock.current)], [])
-  useEffect(() => {
-    if (active) {
-      startedAt.current ??= Date.now()
-    } else if (startedAt.current !== null) {
-      setTook(Date.now() - startedAt.current)
-      startedAt.current = null
-    }
-  }, [active])
-  const longThought = took !== null && took >= 1000
-  const title = active
-    ? translate('Thinking')
-    : longThought
-      ? translate('Thought for {0}', { '0': formatDuration(took) })
-      : translate('Thought')
+  useEffect(() => setTiming((current) => tickThought(current, active, Date.now())), [active])
+  const heading = thoughtTitle(active, timing.took)
+  const longThought = heading.label === 'Thought for {0}'
+  const title =
+    heading.label === 'Thought for {0}'
+      ? translate(heading.label, { '0': formatDuration(heading.took) })
+      : translate(heading.label)
   // Follow the newest line while thinking streams.
   useLayoutEffect(() => {
     const el = body.current
@@ -58,7 +50,7 @@ export function ThinkingRow({ text, active = false }: { text: string; active?: b
         <Brain size={14} className={TOOL_ICON_CLASS} />
         {/* Not a tool-summary: a tool group shrinks those, and this label must always read in full. Open, the row is
             titled, since the thought itself has moved below it; closed, the thought's own line says what it is. */}
-        {open || (!active && longThought) ? (
+        {open || longThought ? (
           <span className="flex-none whitespace-nowrap font-sans text-chat text-inherit">{title}</span>
         ) : (
           <span className="sr-only">{title}</span>
