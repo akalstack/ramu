@@ -27,7 +27,6 @@ export function ComputerUseNotice({ chat, onOpen }: { chat: Chat; onOpen?(): voi
       accessibilityLabel={`${say('Open computer')}, ${session.target.name}`}
       tone={!online ? 'off' : active ? 'attention' : 'quiet'}
       emphasis={active}
-      iconOnly={!active}
       onPress={onOpen}
       trailing={
         <Pressable

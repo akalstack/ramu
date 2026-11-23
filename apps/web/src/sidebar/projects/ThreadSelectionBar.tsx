@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { finishThreads } from '../../chat/FinishThreadDialog'
 import { Archive, Check, Pin, PinOff, Trash2, X } from 'lucide-react'
 import type { Task } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
@@ -62,13 +63,15 @@ export function useBulkThreadActions() {
       void (async () => {
         const changed: string[] = []
         const finished = await run(async () => {
-          for (const task of tasks) {
-            if (!canWrite()) return
-            if (task.status !== 'archived' && !!task.doneAt !== done && (done ? !busy(task) : true)) {
-              await host.invoke('tasks.done', task.id, done)
-              changed.push(task.id)
-            }
-          }
+          if (!canWrite()) return
+          const eligible = tasks
+            .filter((task) => task.status !== 'archived' && !!task.doneAt !== done && (done ? !busy(task) : true))
+            .map((task) => task.id)
+          // Marking done asks first when it would stop running work; keeping it running changes nothing.
+          if (done) {
+            if (!(await finishThreads(host.invoke, eligible))) return
+          } else for (const id of eligible) await host.invoke('tasks.done', id, false)
+          changed.push(...eligible)
           threadSelection.clear()
         })
         if (finished && done && changed.length)

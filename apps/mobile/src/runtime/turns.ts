@@ -50,7 +50,9 @@ export function foldTurns(
   let ended = false
   for (const item of items) {
     const output = item.kind === 'text' || item.kind === 'thinking' || item.kind === 'tool'
-    if (item.kind === 'user' || !turns.length || (ended && output)) {
+    // A message steered into a running turn continues it: one start, one timer, one "Worked for".
+    const opens = item.kind === 'user' && !(item.steered && turns.length)
+    if (opens || !turns.length || (ended && output)) {
       turns.push([])
       ended = false
     }
@@ -74,33 +76,60 @@ export function foldTurns(
       const startedAt = user?.at ?? body.find((item) => item.kind !== 'note' && item.at !== undefined)?.at
       // A running turn shows its steps as they come; the status line above the composer says it is working.
       if (!finished) return [...(user ? [user] : []), ...body, ...notes]
-      let start = body.length
-      while (start > 0 && body[start - 1]!.kind === 'text') start--
-      const work = body.slice(0, start)
-      const folded = work.filter(settled)
-      const kept = work.filter((item) => !settled(item))
       const endedAt =
         (result ?? ends[0])?.at ?? body.findLast((item) => item.kind !== 'note' && item.at !== undefined)?.at
       // A message steered into a running turn starts the next turn before the result; with no stop, failure or idle
       // in between, the agent carried on rather than stopped.
       const done = result ? !result.interrupted : !isLast && !ends.length
       const duration = startedAt !== undefined && endedAt !== undefined ? Math.max(0, endedAt - startedAt) : undefined
-      const label = done
+      const total = done
         ? duration !== undefined
           ? say('Worked for {0}', { 0: formatDuration(duration) })
           : say('Worked')
         : duration !== undefined
           ? say('Stopped after {0}', { 0: formatDuration(duration) })
           : say('Stopped')
-      return [
-        ...(user ? [user] : []),
-        ...(folded.length
-          ? [{ kind: 'summary' as const, id: `summary-${user?.id ?? index}`, label, items: folded }]
-          : []),
-        ...kept,
-        ...body.slice(start),
-        ...notes,
-      ]
+      // Each steered message starts a part. Only the last part ends in the answer; earlier ones fold whole, since what the
+      // agent said there was overtaken by the steer. The first fold carries the turn's whole time, later ones how long
+      // the work went on after their steer.
+      const parts: { steer?: TranscriptItem; items: TranscriptItem[] }[] = [{ items: [] }]
+      for (const item of body)
+        if (item.kind === 'user' && item.steered) parts.push({ steer: item, items: [] })
+        else parts.at(-1)!.items.push(item)
+      let first = true
+      const shown = parts.flatMap((part, p) => {
+        const last = p === parts.length - 1
+        let start = part.items.length
+        if (last) while (start > 0 && part.items[start - 1]!.kind === 'text') start--
+        const work = part.items.slice(0, start)
+        const folded = work.filter(settled)
+        const kept = work.filter((item) => !settled(item))
+        const from = part.steer && 'at' in part.steer ? part.steer.at : startedAt
+        const to = last ? endedAt : part.items.findLast((item) => item.kind !== 'note' && item.at !== undefined)?.at
+        const span = from !== undefined && to !== undefined ? Math.max(0, to - from) : undefined
+        const label = first
+          ? total
+          : span !== undefined
+            ? say('Continued for {0}', { 0: formatDuration(span) })
+            : say('Continued')
+        if (folded.length) first = false
+        return [
+          ...(part.steer ? [part.steer] : []),
+          ...(folded.length
+            ? [
+                {
+                  kind: 'summary' as const,
+                  id: `summary-${part.steer?.id ?? user?.id ?? index}`,
+                  label,
+                  items: folded,
+                },
+              ]
+            : []),
+          ...kept,
+          ...part.items.slice(start),
+        ]
+      })
+      return [...(user ? [user] : []), ...shown, ...notes]
     }),
   )
 }

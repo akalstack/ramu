@@ -26,7 +26,7 @@ import { resumeTime } from '../models/limitCopy'
 import { goalContinues, goalState, isLimitHold } from '@ramu/shared/chat/goalHold'
 import { goalLabel, GOAL_NOTE_LABELS, VERIFY_LIMIT, verifyDraft } from './goalLabels'
 
-export const goalIcon = (goal: ChatGoal) => {
+const goalIcon = (goal: ChatGoal) => {
   const state = goalState(goal)
   return state === 'completed'
     ? CircleCheck
@@ -154,6 +154,8 @@ export function GoalBar({
       open={expanded}
       onOpenChange={setExpanded}
       icon={<Icon className="goal-icon text-brand" />}
+      chip={t('Goal')}
+      live={active}
       title={
         <span className="flex min-w-0 items-center gap-2">
           <strong className="goal-status flex-none text-foreground font-medium">{t(goalLabel(goal))}</strong>

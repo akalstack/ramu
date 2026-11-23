@@ -4,7 +4,7 @@ import { expect, it, vi } from 'vitest'
 import { ComposerStack } from '../src/composer/ComposerStack'
 import { ComposerTray } from '../src/composer/ComposerTray'
 import { ComposerTraySection } from '../src/composer/ComposerTraySection'
-import { TrayStack } from '../src/composer/TrayStack'
+import { TrayStack, chipsThatFit } from '../src/composer/TrayStack'
 
 vi.mock('@/components/desktop-button', () => ({
   Button: ({ variant: _variant, ...props }: ComponentProps<'button'> & { variant?: string }) =>
@@ -60,40 +60,52 @@ it('shows a section count after its title with a dot separator that screen reade
   ).not.toContain('·')
 })
 
-it('keeps the first live card in the tray and lifts the rest into the layer above it', () => {
+it('lays live work out as one row of chips and drops empty slots', () => {
   const html = renderToStaticMarkup(
     createElement(TrayStack, {
-      summary: [],
       children: [
         false,
         createElement('section', { id: 'agents', key: 'agents' }),
         null,
-        createElement('section', { id: 'browser', key: 'browser' }),
         createElement('section', { id: 'goal', key: 'goal' }),
       ],
     }),
   )
   expect(html).toBe(
-    '<div class="composer-tray-stack"><div class="composer-tray-first"><section id="agents"></section></div><div class="composer-tray-spread"><section id="browser"></section><section id="goal"></section></div></div>',
+    '<div class="composer-tray-stack"><div class="composer-tray-slot"><section id="agents"></section></div><div class="composer-tray-slot"><section id="goal"></section></div></div>',
   )
-  expect(
-    renderToStaticMarkup(createElement(TrayStack, { summary: [], children: createElement('section', { id: 'only' }) })),
-  ).toBe('<div class="composer-tray-stack"><div class="composer-tray-first"><section id="only"></section></div></div>')
-  expect(renderToStaticMarkup(createElement(TrayStack, { summary: [], children: [false, null] }))).toBe('')
+  expect(renderToStaticMarkup(createElement(TrayStack, { children: [false, null] }))).toBe('')
 })
 
-it('names every kind of live work on the folded row once there is more than one', () => {
-  const summary = [
-    { key: 'browser', icon: createElement('i'), label: 'Browser', count: 1 },
-    { key: 'servers', icon: createElement('i'), label: 'Servers', count: 2 },
-    { key: 'goal', icon: createElement('i'), label: 'Goal' },
-  ]
-  const cards = [createElement('section', { key: 'a' }), createElement('section', { key: 'b' })]
-  const html = renderToStaticMarkup(createElement(TrayStack, { summary, children: cards }))
-  const row = html.match(/<div aria-hidden="true" class="composer-tray-summary">.*?<\/svg><\/div>/)?.[0] ?? ''
-  expect(row.replace(/<[^>]+>/g, '')).toBe('Browser1·Servers2·Goal')
-  // A single card is its own row; there is nothing to sum up.
-  expect(
-    renderToStaticMarkup(createElement(TrayStack, { summary: summary.slice(0, 1), children: cards[0] })),
-  ).not.toContain('composer-tray-summary')
+it('shows a stacked section as a chip with its short name and a card holding the full title and actions', () => {
+  const html = renderToStaticMarkup(
+    createElement(TrayStack, {
+      children: createElement(ComposerTraySection, {
+        title: 'Working toward goal: ship the search box',
+        chip: 'Working toward goal',
+        live: true,
+        icon: createElement('i'),
+        actions: createElement('button', {}, 'Pause goal'),
+        children: createElement('p', {}, 'Details'),
+      }),
+    }),
+  )
+  const trigger = html.match(/<button[^>]*composer-tray-chip-trigger[^>]*>.*?<\/button>/)?.[0] ?? ''
+  expect(trigger.replace(/<[^>]+>/g, '')).toBe('Working toward goal')
+  expect(trigger).toContain('composer-tray-live')
+  expect(trigger).toContain('aria-expanded="false"')
+  // The card stays mounted while closed, so a draft or live view inside it survives switching chips.
+  const card = html.slice(html.lastIndexOf('<div', html.indexOf('composer-tray-card')))
+  expect(card.slice(0, card.indexOf('>'))).toContain('hidden=""')
+  expect(card).toContain('Working toward goal: ship the search box')
+  expect(card).toContain('Pause goal')
+  expect(card).toContain('Details')
+})
+
+it('keeps every chip that fits and leaves room for the "+N" chip once one does not', () => {
+  expect(chipsThatFit([80, 80, 80], 244)).toBe(3)
+  // 80 + 2 + 80 needs 162; with 56 + 2 kept for "+N", only the first fits in 200.
+  expect(chipsThatFit([80, 80, 80], 200)).toBe(1)
+  expect(chipsThatFit([80, 80, 80, 80], 230)).toBe(2)
+  expect(chipsThatFit([], 100)).toBe(0)
 })

@@ -95,7 +95,11 @@ it('marks a completed inbox thread done without archiving or closing it', async 
   expect(html).not.toContain('Archive')
   click()
   await vi.waitFor(() => expect(state.refresh).toHaveBeenCalledOnce())
-  expect(state.invoke).toHaveBeenCalledExactlyOnceWith('tasks.done', 'thread', true)
+  // It asks what done would stop first; with nothing running, it marks done without a confirmation.
+  expect(state.invoke.mock.calls).toEqual([
+    ['tasks.doneImpact', 'thread'],
+    ['tasks.done', 'thread', true],
+  ])
   expect(state.forgetTask).not.toHaveBeenCalled()
 })
 
@@ -108,7 +112,9 @@ it('reopens a thread that is already marked done', async () => {
 })
 
 it('reports a failed mark-done action without removing the thread', async () => {
-  state.invoke.mockRejectedValueOnce(new Error('Cannot mark done'))
+  state.invoke.mockImplementation(async (method: string) => {
+    if (method === 'tasks.done') throw new Error('Cannot mark done')
+  })
   render()
   click()
   await vi.waitFor(() => expect(state.notifyError).toHaveBeenCalledWith('Cannot mark done'))

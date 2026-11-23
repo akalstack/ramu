@@ -1421,8 +1421,9 @@ function ToolGroup({ item, live }: { item: Extract<TranscriptItem, { kind: 'tool
   // The live group's newest step may be a thought, so its headline reads what the agent is considering now.
   const latest = item.entries.at(-1)
   const thought = live && !running && latest?.kind === 'thinking' ? latest : undefined
-  // While a call runs, the thought that led to it stays under the headline instead of hiding in the closed group.
-  const lastThought = live && running ? item.entries.findLast((entry) => entry.kind === 'thinking') : undefined
+  // Until the live group settles, its latest thought stays under the headline, between calls too, instead of hiding in
+  // the closed group the moment a call finishes.
+  const lastThought = live && !thought ? item.entries.findLast((entry) => entry.kind === 'thinking') : undefined
   const lastThoughtLine = lastThought ? thoughtLine(lastThought.text, true) : ''
   const headline = thought
     ? thoughtLine(thought.text, true) || say('Thinking')
@@ -1469,9 +1470,9 @@ function ToolGroup({ item, live }: { item: Extract<TranscriptItem, { kind: 'tool
         <Disclosure open={open} color={c.muted} />
       </Pressable>
       {!open && lastThoughtLine ? (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
-          <Brain size={12} color={c.muted} />
-          <T size={font.caption} tone="muted" numberOfLines={1} style={{ flex: 1, minWidth: 0 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.s }}>
+          <Brain size={12} color={c.muted} style={{ marginTop: 3 }} />
+          <T size={font.caption} tone="muted" numberOfLines={3} style={{ flex: 1, minWidth: 0 }}>
             {lastThoughtLine}
           </T>
         </View>
@@ -1994,9 +1995,10 @@ function PermissionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind
   const pattern = rule === 'exact' ? undefined : rule
   return (
     <Card style={{ padding: space.m, gap: space.m }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
-        <ShieldAlert size={16} color={c.warn} strokeWidth={1.8} />
-        <T size={font.body} weight="600">
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.s }}>
+        <ShieldAlert size={16} color={c.warn} strokeWidth={1.8} style={{ marginTop: 3 }} />
+        {/* A long command title wraps inside the card; the full command is in the block below. */}
+        <T size={font.body} weight="600" numberOfLines={3} style={{ flex: 1, minWidth: 0 }}>
           {say(item.title)}
         </T>
       </View>
@@ -2638,7 +2640,7 @@ function InteractiveVersionRow({
 /**
  * Reasoning the provider shared, as the desktop's ThinkingRow: led by the brain icon, which already says what the row
  * is, the thought on one line ending in an ellipsis (its newest paragraph, shimmering, while it streams); a tap opens
- * the whole thought.
+ * the whole thought under a "Thought" title.
  */
 function ThinkingRow({ text, live }: { text: string; live: boolean }) {
   const { c } = useTheme()
@@ -2662,7 +2664,12 @@ function ThinkingRow({ text, live }: { text: string; live: boolean }) {
       >
         <Brain size={14} color={c.muted} />
         <View style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-          {open || !line ? null : live ? (
+          {/* Open, the thought is below, so the row is titled as on the desktop. */}
+          {open ? (
+            <T size={font.control} tone="muted" numberOfLines={1}>
+              {say(live ? 'Thinking' : 'Thought')}
+            </T>
+          ) : !line ? null : live ? (
             <Shimmer size={font.control} singleLine>
               {line.slice(0, 180)}
             </Shimmer>

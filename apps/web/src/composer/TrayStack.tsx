@@ -1,28 +1,28 @@
 import {
   Children,
   createContext,
-  Fragment,
+  isValidElement,
   useContext,
   useId,
+  useLayoutEffect,
+  useRef,
   useState,
   type Dispatch,
   type ReactNode,
   type SetStateAction,
 } from 'react'
-import { ChevronUp } from 'lucide-react'
+import { MoreHorizontal } from 'lucide-react'
+import { cn } from 'cn'
+import { Menu } from '../Menu'
+import { t } from '../i18n'
 
-/** One kind of live work in a folded stack's summary, such as "Browser 1". */
-export interface TrayStackItem {
-  key: string
-  icon: ReactNode
-  label: string
-  count?: number
-}
-
-/** Which of a stack's sections is open: one at a time, so the spread never grows over the conversation. */
+/** Which of a stack's sections is open: one at a time, so only one card covers the conversation. */
 const OpenSection = createContext<{ open: string | null; setOpen: Dispatch<SetStateAction<string | null>> } | null>(
   null,
 )
+
+/** True inside a `TrayStack`, where a section draws itself as a chip. */
+export const useInTrayStack = () => useContext(OpenSection) !== null
 
 /**
  * A tray section's open state. Inside a `TrayStack`, opening one closes the one open before; elsewhere each section
@@ -36,41 +36,98 @@ export function useTraySection(initial = false): [boolean, (open: boolean) => vo
   return [group.open === id, (open) => group.setOpen((current) => (open ? id : current === id ? null : current))]
 }
 
+const GAP = 2
+/** Room kept for the "+N" chip whenever something does not fit. */
+const MORE_WIDTH = 56
+
+/** How many chips fit in `available` pixels, leaving room for the "+N" chip when some must move into it. */
+export function chipsThatFit(widths: number[], available: number): number {
+  const total = widths.reduce((sum, width, index) => sum + width + (index ? GAP : 0), 0)
+  if (total <= available) return widths.length
+  let used = 0
+  for (let index = 0; index < widths.length; index++) {
+    used += widths[index]! + (index ? GAP : 0)
+    if (used > available - MORE_WIDTH - GAP) return index
+  }
+  return widths.length
+}
+
+const triggersIn = (row: HTMLElement) =>
+  [...row.querySelectorAll<HTMLElement>(':scope > .composer-tray-slot')].map((slot) =>
+    slot.querySelector<HTMLElement>('.composer-tray-chip-trigger'),
+  )
+
 /**
- * Live work folded under its first card. The first card is the tray's own row; the rest wait in a layer above the tray
- * that only fades in when the person points at it or moves focus into it (see `.composer-tray-spread`). That layer is
- * never part of the layout, so spreading and folding the stack cannot move the conversation.
- *
- * Folded with more than one kind of work, the row names all of them rather than only the first, so nothing running is
- * out of sight; pointing at the tray, or focusing the card under the summary, spreads the stack.
+ * Live work and the message queue as one row of chips, like the project and checkout chips on Home and the activity
+ * chips on the phone. Everything running stays named in a single line, and a chip opens its card above the row.
+ * Chips that do not fit move into a "+N" chip whose menu opens them the same way, so the row never wraps or scrolls.
  */
-export function TrayStack({ children, summary }: { children: ReactNode; summary: TrayStackItem[] }) {
+export function TrayStack({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState<string | null>(null)
-  const [first, ...rest] = Children.toArray(children)
-  if (!first) return null
+  const sections = Children.toArray(children)
+  const row = useRef<HTMLDivElement>(null)
+  // A chip moved into "+N" is not laid out, so its last measured width stands in for it.
+  const widths = useRef<number[]>([])
+  const [fit, setFit] = useState({ shown: Infinity, labels: [] as string[], hiddenOpen: false })
+  useLayoutEffect(() => {
+    const element = row.current
+    if (!element) return
+    const measure = () => {
+      const triggers = triggersIn(element)
+      triggers.forEach((trigger, index) => {
+        if (trigger?.offsetWidth) widths.current[index] = trigger.offsetWidth
+      })
+      widths.current.length = triggers.length
+      const shown = chipsThatFit(widths.current, element.clientWidth)
+      const labels = triggers.map((trigger) => (trigger?.textContent ?? '').replace(/·/g, ' · '))
+      const hiddenOpen = triggers.some((trigger, index) => index >= shown && trigger?.hasAttribute('data-panel-open'))
+      setFit((current) =>
+        current.shown === shown && current.hiddenOpen === hiddenOpen && current.labels.join('\n') === labels.join('\n')
+          ? current
+          : { shown, labels, hiddenOpen },
+      )
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    return () => observer.disconnect()
+  })
+  if (!sections.length) return null
+  const hidden = sections.map((_, index) => index).filter((index) => index >= fit.shown)
   return (
     <OpenSection.Provider value={{ open, setOpen }}>
-      <div className="composer-tray-stack">
-        <div className="composer-tray-first">
-          {first}
-          {rest.length > 0 && summary.length > 1 && (
-            // Only a picture of the stack: the cards under it keep their controls for focus and screen readers.
-            <div aria-hidden className="composer-tray-summary">
-              {summary.map((item, index) => (
-                <Fragment key={item.key}>
-                  {index > 0 && <span className="composer-tray-count-dot">·</span>}
-                  <span className="composer-tray-summary-item">
-                    {item.icon}
-                    {item.label}
-                    {item.count !== undefined && <span className="composer-tray-count">{item.count}</span>}
-                  </span>
-                </Fragment>
-              ))}
-              <ChevronUp className="composer-tray-chevron ml-auto" />
-            </div>
-          )}
-        </div>
-        {rest.length > 0 && <div className="composer-tray-spread">{rest}</div>}
+      <div ref={row} className="composer-tray-stack">
+        {sections.map((section, index) => (
+          // The section's own key, so a chip leaving the row does not remount the cards after it.
+          <div
+            key={isValidElement(section) && section.key !== null ? section.key : index}
+            className="composer-tray-slot"
+            data-overflow={index >= fit.shown || undefined}
+          >
+            {section}
+          </div>
+        ))}
+        {hidden.length > 0 && (
+          <Menu
+            label={t('More activity')}
+            align="end"
+            className={cn('composer-tray-chip-trigger', fit.hiddenOpen && 'on')}
+            icon={
+              <>
+                <MoreHorizontal />
+                <span className="composer-tray-title">+{hidden.length}</span>
+              </>
+            }
+            items={hidden.map((index) => ({
+              key: String(index),
+              label: fit.labels[index] ?? '',
+              onSelect: () => {
+                const trigger = row.current && triggersIn(row.current)[index]
+                if (trigger && !trigger.hasAttribute('data-panel-open')) trigger.click()
+              },
+            }))}
+          />
+        )}
       </div>
     </OpenSection.Provider>
   )

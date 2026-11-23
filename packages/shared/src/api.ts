@@ -11,6 +11,7 @@ import type { RoutingCandidate, RoutingOutcome } from './workspace/projectRoutin
 import type { BranchChoice, BranchNamingIntent, BranchNamingStrategy } from './workspaceDefaults'
 import type { AntigravitySignIn, ProviderEnvironmentStatus, ProviderEnvironmentValues } from './providers/environment'
 import type { HostOverview, HostDestination, HostTaskMethod } from './hostOverview'
+import type { ThreadDoneImpact } from './chat/threadDone'
 import type { SettingsSnapshot, SettingEdit } from './settingsCompatibility'
 import type { BackgroundActivity } from './chat/activity'
 import type { RamuTheme, ThemeIssue, ThemeRole } from './theme'
@@ -1248,6 +1249,8 @@ export interface RamuMethods extends ArtifactMethods {
   'tasks.archive'(taskId: string, archived: boolean): Task
   'tasks.pin'(taskId: string, pinned: boolean): Task
   'tasks.done'(taskId: string, done: boolean): Task
+  /** What marking the thread done would stop, so the person can confirm first. */
+  'tasks.doneImpact'(taskId: string): ThreadDoneImpact
   'tasks.delete'(
     taskId: string,
     removeWorktrees: boolean,

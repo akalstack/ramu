@@ -107,6 +107,7 @@ import { ComposerDock, KeyboardLift, useKeyboardHeight } from '../../../componen
 import { ReadableColumn } from '../../../components/ReadableColumn'
 import { PendingBubble } from '../../../components/Outbox'
 import { SteeringBubble } from '../../../components/SteeringBubble'
+import { QueuedOpening } from '../../../components/QueuedOpening'
 import { PlanUsageSheet } from '../../../components/PlanUsage'
 import { ContextMeter } from '../../../components/ContextMeter'
 import { useCompactOffer, useContextUsage } from '../../../runtime/useContextUsage'
@@ -129,6 +130,7 @@ type ListRow =
   | TranscriptItem
   | { kind: 'pending'; id: string; outbox: OutboxItem }
   | { kind: 'steering'; id: string; message: QueuedMessage }
+  | { kind: 'opening'; id: string; message: QueuedMessage }
 
 /**
  * A choice that changes nothing the thread runs with, every field included: the login too, so switching accounts is
@@ -703,12 +705,26 @@ function ChatView({ id }: { id: string }) {
   }, [pageRows, store.language])
   // New rows fade in on their own (`fresh` below). A screen-wide layout animation is not used here: it left the list's
   // row positions behind their measured sizes, drawing a tall message over the reply under it.
+  // The thread whose turn in the same checkout this thread's queued messages wait for.
+  const waitingThread = chat?.queueWaitingFor
+    ? store.chats.find((other) => other.computerId === chat.computerId && other.taskId === chat.queueWaitingFor)
+    : undefined
   const renderRow = ({ item }: { item: ListRow; index: number }) => {
     const key = rowKey(item)
     const fresh = !seen.current.has(key)
     seen.current.add(key)
     if (item.kind === 'steering')
       return <SteeringBubble chatId={chat!.id} message={item.message} readOnly={viewOnly || offline} />
+    if (item.kind === 'opening')
+      return (
+        <QueuedOpening
+          message={item.message}
+          waitingFor={chat!.queuePaused ? undefined : waitingThread?.title}
+          onOpenWaiting={
+            waitingThread ? () => router.push({ pathname: '/chat/[id]', params: { id: waitingThread.id } }) : undefined
+          }
+        />
+      )
     if (item.kind === 'pending')
       return (
         <SentArrive identity={key} start={fresh && item.outbox.createdAt >= openedAt.current}>
@@ -900,10 +916,15 @@ function ChatView({ id }: { id: string }) {
       if (arrived) aliases.current.set(arrived.id, `steering:${sent.id}`)
     }
   steeringShown.current = steering
+  // A new thread whose first message waits on another thread in the same checkout still reads as started.
+  const opening = pageRows.some((row) => row.kind === 'user')
+    ? []
+    : (chat.queue ?? []).filter((message) => message.mode !== 'steer')
   const listRows: ListRow[] =
-    pending.length || steering.length
+    pending.length || steering.length || opening.length
       ? [
           ...pageRows,
+          ...opening.map((message) => ({ kind: 'opening' as const, id: `opening:${message.id}`, message })),
           ...steering.map((message) => ({ kind: 'steering' as const, id: `steering:${message.id}`, message })),
           ...pending.map((outbox) => ({ kind: 'pending' as const, id: `pending:${outbox.id}`, outbox })),
         ]
@@ -1685,7 +1706,7 @@ function ChatView({ id }: { id: string }) {
                   bottom={composerHeight}
                 />
                 {/* Beside the thread list the header is part of the page, and a fade from the top would wash it out. */}
-                {ios || inPane ? null : <TopFade visible={scrolled} color={c.window} />}
+                {ios || inPane ? null : <TopFade belowBar visible={scrolled} color={c.window} />}
                 {finding ? (
                   <ChatFindBar
                     rows={pageRows}
@@ -1861,14 +1882,7 @@ function ChatView({ id }: { id: string }) {
                         goal={chat.goal}
                         queue={chat.queue?.filter((message) => message.mode !== 'steer')}
                         queuePaused={chat.queuePaused}
-                        queueWaitingFor={
-                          chat.queueWaitingFor
-                            ? store.chats.find(
-                                (other) =>
-                                  other.computerId === chat.computerId && other.taskId === chat.queueWaitingFor,
-                              )?.title
-                            : undefined
-                        }
+                        queueWaitingFor={waitingThread?.title}
                         onResumeQueue={
                           chat.sessionId
                             ? () =>
@@ -1980,14 +1994,9 @@ function ChatView({ id }: { id: string }) {
                         <PressGrow pressed={pressed}>
                           {/* Not interactive glass: its press bulge balloons a button this small over the transcript. */}
                           <Glass
+                            floating
                             radius={radius.full}
-                            style={{
-                              width: 34,
-                              height: 34,
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              backgroundColor: floatingChrome ? undefined : c.raised,
-                            }}
+                            style={{ width: 34, height: 34, alignItems: 'center', justifyContent: 'center' }}
                           >
                             {running ? (
                               <ActivityIndicator size="small" color={c.text} style={{ transform: [{ scale: 0.75 }] }} />
@@ -2008,21 +2017,21 @@ function ChatView({ id }: { id: string }) {
           visible={Boolean(toast)}
           style={{
             position: 'absolute',
-            left: space.l,
-            right: space.l,
+            left: space.m,
+            right: space.m,
             top: inPane ? insets.top + 56 + space.s * 3 : belowHeader(insets.top),
           }}
         >
           <View pointerEvents="none">
             <Glass
-              radius={radius.full}
+              floating
+              radius={radius.l}
               style={{
                 paddingHorizontal: space.l,
                 paddingVertical: space.m,
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: space.s,
-                backgroundColor: floatingChrome ? undefined : c.raised,
               }}
             >
               <Check size={15} color={c.ok} />

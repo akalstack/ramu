@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { View } from 'react-native'
-import { Globe, Unplug } from 'lucide-react-native'
+import { Globe, Server, Unplug } from 'lucide-react-native'
 import { serverUrl, type ThreadServer } from '@ramu/shared/servers'
 import type { Chat } from '../runtime/types'
 import { useStore } from '../runtime/store'
@@ -85,7 +85,8 @@ export function ThreadServers({
     <>
       {first ? (
         <ActivityPill
-          icon={Globe}
+          // The browser's own pill wears the globe; a server is a server, as on the desktop.
+          icon={Server}
           label={servers.length === 1 ? serverAddress(first) : say('{0} servers', { 0: servers.length })}
           accessibilityLabel={say('Servers')}
           onPress={onOpen}

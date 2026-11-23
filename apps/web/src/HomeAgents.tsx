@@ -1,4 +1,5 @@
 import { animateThreadListChange } from './workspace/threadListMotion'
+import { finishThreads } from './chat/FinishThreadDialog'
 import { offerThreadUndo } from './sidebar/projects/threadUndo'
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -212,13 +213,15 @@ export function AgentRow({
       task?.goalState?.status === 'active')
   const markDone = () => {
     const marking = !task?.doneAt
+    let finished = !marking
     const change = (done: boolean) =>
       animateThreadListChange(async () => {
-        await invoke('tasks.done', session.taskId, done)
+        if (done) finished = await finishThreads(invoke, [session.taskId])
+        else await invoke('tasks.done', session.taskId, false)
         await ws.refresh()
       })
     void change(marking).then(
-      () => marking && offerThreadUndo('done', 1, () => change(false)),
+      () => marking && finished && offerThreadUndo('done', 1, () => change(false)),
       (error) => notifyError(errorText(error)),
     )
   }

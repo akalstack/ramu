@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { font, radius, space, useTheme } from '../theme'
 import { useT, type Strings } from '../i18n'
 import { TOAST_MS, currentToast, dismissToast, subscribeToast } from '../runtime/toast'
-import { Glass, floatingChrome } from './Glass'
+import { Glass } from './Glass'
 import { T, tap } from './ui'
 
 /** Where a notice sits so it clears the screen header, and the keyboard and composer below. */
@@ -41,7 +41,7 @@ export function UndoToast() {
         ...(toast.error ? { top: belowHeader(insets.top) } : { bottom: insets.bottom + 72 }),
       }}
     >
-      <Glass radius={radius.l} style={{ backgroundColor: floatingChrome ? undefined : c.raised }}>
+      <Glass floating radius={radius.l}>
         <View
           accessibilityLiveRegion="polite"
           style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: space.l, paddingRight: space.s }}

@@ -36,6 +36,7 @@ import { useStore } from '../runtime/store'
 import { showError, showToast } from '../runtime/toast'
 import { VIEW_ONLY_WRITE_NOTICE } from '../runtime/viewerAccess'
 import { useT, useSay } from '../i18n'
+import { confirmDone } from './confirmDone'
 import { Button, Sheet, T, type Icon } from './ui'
 import { ProjectCommandSettings } from './ProjectCommandSettings'
 import { ProjectDeploy } from './ProjectDeploy'
@@ -198,6 +199,7 @@ export function useChatCommands(chat: Chat) {
     togglePin: () => run(() => store.invoke(chat.computerId, 'tasks.pin', chat.taskId, chat.pinnedAt === null)),
     toggleDone: () =>
       run(async () => {
+        if (!chat.doneAt && !(await confirmDone(store.invoke, say, [chat]))) return
         await store.invoke(chat.computerId, 'tasks.done', chat.taskId, !chat.doneAt)
         if (!chat.doneAt) offerThreadUndo(latestStore.current, chat, 'done')
       }),

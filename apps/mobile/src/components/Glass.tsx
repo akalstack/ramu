@@ -17,12 +17,15 @@ export function Glass({
   radius,
   tint,
   interactive,
+  floating,
 }: {
   children?: ReactNode
   style?: StyleProp<ViewStyle>
   radius: number
   tint?: string
   interactive?: boolean
+  /** Sits over other content (a notice, a toast), so Android lifts it off the screen instead of drawing it flat. */
+  floating?: boolean
 }) {
   const { c, scheme } = useTheme()
   if (liquidGlass) {
@@ -47,8 +50,9 @@ export function Glass({
             borderRadius: radius,
             overflow: 'hidden',
             backgroundColor: tint ?? c.raised2,
-            elevation: 0,
+            elevation: floating ? 6 : 0,
           },
+          floating ? { borderWidth: StyleSheet.hairlineWidth, borderColor: c.lineStrong } : null,
           style,
         ]}
       >
@@ -108,7 +112,16 @@ export function BottomFade({ height, color }: { height: number; color?: string }
  * Stand-in for the UIKit scroll-edge effect where the native one is unavailable: clear while the content
  * rests at the top, then a soft fade beneath the transparent navigation bar once it scrolls under it.
  */
-export function TopFade({ visible, color }: { visible: boolean; color?: string }) {
+export function TopFade({
+  visible,
+  color,
+  belowBar = false,
+}: {
+  visible: boolean
+  color?: string
+  /** The screen starts below an opaque native bar, which already covers the status bar: only a short edge is needed. */
+  belowBar?: boolean
+}) {
   const { c } = useTheme()
   const insets = useSafeAreaInsets()
   const opacity = useSharedValue(0)
@@ -120,7 +133,7 @@ export function TopFade({ visible, color }: { visible: boolean; color?: string }
   return (
     <Reanimated.View
       pointerEvents="none"
-      style={[{ position: 'absolute', left: 0, right: 0, top: 0, height: insets.top + 44 + 20 }, fade]}
+      style={[{ position: 'absolute', left: 0, right: 0, top: 0, height: belowBar ? 20 : insets.top + 44 + 20 }, fade]}
     >
       {Array.from({ length: steps }, (_, i) => (
         <View

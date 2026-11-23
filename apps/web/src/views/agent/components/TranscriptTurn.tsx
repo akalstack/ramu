@@ -15,8 +15,9 @@ import { ToolGroup } from './ToolGroup'
 import { Marker, MarkerContent } from '@/components/ui/marker'
 import { TurnSummary } from './TurnSummary'
 import { turnThinking } from '../lib/turnThinking'
+import { turnParts } from '../lib/turns'
 import { groupToolThinking, type ToolEntry } from '../lib/toolThinking'
-import { useLayoutEffect, useRef } from 'react'
+import { Fragment, useLayoutEffect, useRef } from 'react'
 import { reducedMotion } from '../../../workspace/panelMotion'
 
 type TurnReview = React.ComponentProps<typeof TurnChanges>['review']
@@ -154,7 +155,17 @@ export function TranscriptTurn({
   const { blocks, working, needsInput } = ctx
   // A turn is done when the agent reported a result, a later message exists, or nothing is running any more.
   const finished = turn.ended || !isLast || (!working && !needsInput)
-  const { folded, kept, answer } = turnThinking(turn.items, finished, ctx.outcomes, ctx.results)
+  // Each message steered in starts a part of the turn. Only the last part ends in the answer; earlier parts fold whole
+  // once the turn is done, since what the agent said there was overtaken by the steer.
+  const parts = turnParts(turn.items).map((part, index, all) => {
+    const thought = turnThinking(part.items, finished, ctx.outcomes, ctx.results)
+    return index === all.length - 1
+      ? { ...part, ...thought }
+      : { ...part, folded: [...thought.folded, ...thought.answer], kept: thought.kept, answer: [] as Block[] }
+  })
+  const folded = parts.flatMap((part) => part.folded)
+  const kept = parts.flatMap((part) => part.kept)
+  const answer = parts.at(-1)!.answer
   const renderBlock = (b: Block, latest = false, toolEntries?: ToolEntry[], first: Block = b) => (
     <TranscriptBlock
       key={blockIndex(first, blocks)}
@@ -198,6 +209,8 @@ export function TranscriptTurn({
     turn.endedAt ?? (finished || needsInput ? turn.items.map(blockAt).findLast((at) => at !== undefined) : undefined)
   const duration = startedAt !== undefined && endedAt !== undefined ? Math.max(0, endedAt - startedAt) : undefined
   const { elapsed } = ctx
+  // The person stopped it, or it was interrupted: it says so with how long it ran, as on the phone.
+  const stopped = finished && (!!turn.interrupted || (isLast && !!ctx.stopped))
   return (
     <div className="turn [&_>_[data-block-index]:has(.msg.user)]:flex [&_>_[data-block-index]:has(.msg.user)]:justify-end flex flex-col gap-3.5 min-w-0">
       {dateSeparator !== undefined && (
@@ -219,31 +232,46 @@ export function TranscriptTurn({
         <div className="turn-working text-muted-foreground tabular-nums" role="status">
           <span>
             {(elapsed ?? duration) !== null && (elapsed ?? duration) !== undefined
-              ? translate('Working for {0}', { '0': formatDuration((elapsed ?? duration)!) })
+              ? translate(stopped ? 'Stopped after {0}' : 'Working for {0}', {
+                  '0': formatDuration((elapsed ?? duration)!),
+                })
               : translate('Working')}
           </span>
         </div>
       )}
-      {folded.length > 0 && (
-        <TurnSummary
-          label={
-            duration !== undefined
-              ? translate(
-                  finished && turn.ended && !turn.interrupted && !(isLast && ctx.stopped)
-                    ? 'Worked for {0}'
-                    : 'Working for {0}',
-                  { '0': formatDuration(duration) },
-                )
-              : translate(
-                  finished && turn.ended && !turn.interrupted && !(isLast && ctx.stopped) ? 'Worked' : 'Working',
-                )
-          }
-          sourceIndex={ctx.hasSourceSeq ? blockIndex(folded[0]!, blocks) : undefined}
-        >
-          {renderList(folded)}
-        </TurnSummary>
-      )}
-      {renderList(kept)}
+      {parts.map((part, index) => {
+        // The turn's first fold carries its whole time; each part after a steer says how long it went on from there.
+        const first = parts.findIndex((p) => p.folded.length) === index
+        const partEnd =
+          index === parts.length - 1 ? endedAt : part.items.map(blockAt).findLast((at) => at !== undefined)
+        const partStart = part.steer ? blockAt(part.steer) : startedAt
+        const partDuration =
+          partStart !== undefined && partEnd !== undefined ? Math.max(0, partEnd - partStart) : undefined
+        const settled = finished && turn.ended && !turn.interrupted && !(isLast && ctx.stopped)
+        const label = first
+          ? duration !== undefined
+            ? translate(settled ? 'Worked for {0}' : stopped ? 'Stopped after {0}' : 'Working for {0}', {
+                '0': formatDuration(duration),
+              })
+            : translate(settled ? 'Worked' : 'Working')
+          : partDuration !== undefined
+            ? translate(settled ? 'Continued for {0}' : 'Continuing for {0}', { '0': formatDuration(partDuration) })
+            : translate('Continued')
+        return (
+          <Fragment key={part.steer ? blockIndex(part.steer, blocks) : 'start'}>
+            {part.steer && renderBlock(part.steer)}
+            {part.folded.length > 0 && (
+              <TurnSummary
+                label={label}
+                sourceIndex={ctx.hasSourceSeq ? blockIndex(part.folded[0]!, blocks) : undefined}
+              >
+                {renderList(part.folded)}
+              </TurnSummary>
+            )}
+            {renderList(part.kept)}
+          </Fragment>
+        )
+      })}
       {answer.map((b) => renderBlock(b, b === ctx.latestAssistant))}
       {reviews?.map((review) => (
         <TurnChanges key={review.id} review={review} />

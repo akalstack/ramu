@@ -80,7 +80,10 @@ export function ThreadActivity({
           : say('{0} questions', { 0: activity.requests.length }),
       provider: say('Waiting for limit reset'),
       working: chat.compacting ? say('Compacting context…') : say('Working'),
-      helpers: say('{0} active agents', { 0: activity.model.counts.active }),
+      // Finished helpers still have a pill to open; it counts them, not a "0 active".
+      helpers: activity.model.counts.active
+        ? say('{0} active agents', { 0: activity.model.counts.active })
+        : say('{0} agents', { 0: activity.helpers.length || activity.groups.reduce((n, g) => n + g.agents.length, 0) }),
       advisor: activity.advisors.some(helperActive)
         ? say('Advisor reviewing')
         : unread

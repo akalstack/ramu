@@ -85,8 +85,9 @@ export function ToolGroup({
   // The live group's newest step may be a thought, so its headline reads what the agent is considering now.
   const latest = entries.at(-1)
   const thought = live && !running && latest?.kind === 'thinking' ? latest : undefined
-  // While a call runs, the thought that led to it stays under the headline instead of hiding in the closed group.
-  const lastThought = live && running ? entries.findLast((entry) => entry.kind === 'thinking') : undefined
+  // Until the live group settles, its latest thought stays under the headline, between calls too, instead of hiding in
+  // the closed group the moment a call finishes.
+  const lastThought = live && !thought ? entries.findLast((entry) => entry.kind === 'thinking') : undefined
   const headline = thought
     ? thoughtLine(thought.text, true) || translate('Thinking')
     : running || live
@@ -133,9 +134,9 @@ export function ToolGroup({
           </CollapsibleTrigger>
         )}
         {entries.length > 1 && !open && lastThought && thoughtLine(lastThought.text, true) && (
-          <div className="flex min-w-0 items-center gap-2 pb-1 text-caption text-muted-foreground">
-            <Brain size={12} className="flex-none opacity-70" />
-            <span className="truncate">{thoughtLine(lastThought.text, true)}</span>
+          <div className="flex min-w-0 items-start gap-2 pb-1 text-caption text-muted-foreground">
+            <Brain size={12} className="mt-[3px] flex-none opacity-70" />
+            <span className="line-clamp-3 min-w-0">{thoughtLine(lastThought.text, true)}</span>
           </div>
         )}
         <CollapsibleContent className={TOOL_DISCLOSURE_PANEL_CLASS}>

@@ -14,6 +14,8 @@ const state = vi.hoisted(() => ({
   projectOptions: [] as { value: string; label: string }[],
   prompt: 'Fix login',
   failMethod: '',
+  openedTasks: [] as string[],
+  returnedTo: [] as string[],
   route: { kind: 'unknown' } as Record<string, unknown>,
   setupFailed: false,
   consumed: 0,
@@ -59,8 +61,13 @@ vi.mock('../src/workspace/workspace', () => ({
     composing: 'p',
     composingWorkspace: null,
     refresh: async () => {},
-    openTask() {},
+    openTask(taskId: string) {
+      state.openedTasks.push(taskId)
+    },
     openView() {},
+    newTask(projectId: string) {
+      state.returnedTo.push(projectId)
+    },
   }),
 }))
 vi.mock('../src/workspace/HostProvider', () => ({
@@ -178,6 +185,8 @@ vi.mock('@tanstack/react-query', () => ({
 import { NewThread } from '../src/NewThread'
 
 beforeEach(() => {
+  state.openedTasks = []
+  state.returnedTo = []
   state.prompt = 'Fix login'
   state.failMethod = ''
   state.route = { kind: 'unknown' }
@@ -248,6 +257,9 @@ it('retains the unsent snapshot and reports rejection when starting the agent fa
   await expect(state.composer!.onSubmit([])).rejects.toThrow('Delivery rejected')
   expect(state.consumed).toBe(0)
   expect(state.calls.some((call) => call.method === 'tasks.delete')).toBe(true)
+  // The thread opened while its agent started; failing to start brings the person back to New thread and the draft.
+  expect(state.openedTasks.length).toBeGreaterThan(0)
+  expect(state.returnedTo).toEqual(['p'])
 })
 
 it('does not acknowledge a send when worktree setup failed and retains the workspace for recovery', async () => {

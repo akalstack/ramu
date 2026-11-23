@@ -33,6 +33,10 @@ it('names the running tool and what it runs on, and falls back to what the agent
 it('times the whole turn from the person’s latest message', () => {
   expect(turnStartedAt([user(10), use('a', 'Bash', 'ls'), user(50), result('a')])).toBe(50)
   expect(turnStartedAt([])).toBeNull()
+  // A message steered in continues the turn, so the timer keeps counting from where the turn began.
+  expect(
+    turnStartedAt([user(10), use('a', 'Bash', 'ls'), { ...user(50), steered: true } as AgentEvent, result('a')]),
+  ).toBe(10)
   expect(elapsedText(12_400)).toBe('12s')
   expect(elapsedText(65_000)).toBe('1m 05s')
   expect(elapsedText(3_720_000)).toBe('1h 02m')

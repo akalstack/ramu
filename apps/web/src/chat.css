@@ -40,99 +40,128 @@
   border-top: 1px solid var(--line);
 }
 
-/* Live work (agents, browser, computer, background commands, a goal) folds into a stack (see TrayStack): the first
-   card is the tray's own row and the rest wait in a layer above the tray, whose edges peek over it. Pointing at the
-   tray or focusing inside (`data-peek`) fades that layer in, and an open section keeps it there. The layer is never
-   in the layout, so the conversation does not move while the stack spreads or folds. */
-.composer-tray-spread {
+/* Live work and the queue are one row of chips (see TrayStack), like the project and checkout chips on Home. A chip
+   opens its card above the tray, over the conversation, so opening or switching cards never moves what is being read.
+   The tray is the card's positioning box; nothing between them is positioned. */
+.composer-tray-stack {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 2px 0;
+  /* One line: chips that do not fit move into the "+N" chip. The cards are positioned against the tray, so clipping
+     this row never clips them. */
+  overflow: hidden;
+}
+.composer-tray-slot {
+  flex: none;
+  min-width: 0;
+}
+/* A chip in "+N" keeps its card, which the menu opens; only the chip itself leaves the row. */
+.composer-tray-slot[data-overflow] .composer-tray-chip-trigger {
+  display: none;
+}
+.composer-tray-chip-trigger {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  max-width: 260px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 10px 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  font-size: var(--font-caption);
+  font-weight: 500;
+  color: var(--soft);
+  transition:
+    background-color 140ms var(--ease),
+    color 140ms var(--ease);
+}
+.composer-tray-chip-trigger:hover:not(:disabled),
+.composer-tray-chip-trigger[data-panel-open],
+.composer-tray-chip-trigger.on {
+  background: var(--hover);
+  color: var(--text);
+}
+.composer-tray-chip-trigger > svg {
+  flex: none;
+  width: var(--icon-compact);
+  height: var(--icon-compact);
+  color: var(--muted);
+}
+.composer-tray-chip-trigger .composer-tray-title {
+  color: inherit;
+}
+.composer-tray-live {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--ok);
+}
+.composer-tray-card {
   position: absolute;
   bottom: 100%;
   inset-inline: 0;
   z-index: 2;
   display: flex;
-  flex-direction: column-reverse;
+  flex-direction: column;
+  max-height: min(60vh, 520px);
   padding: 2px 6px;
+  border-bottom: 1px solid var(--line);
   border-radius: var(--radius-l) var(--radius-l) 0 0;
   background: var(--composer-tray);
   box-shadow: 0 -12px 32px rgb(0 0 0 / 0.22);
+  transition:
+    opacity 160ms var(--ease),
+    translate 200ms var(--ease);
+}
+.composer-tray-card[hidden] {
+  display: none;
+}
+.composer-tray-card:is([data-starting-style], [data-ending-style]) {
   opacity: 0;
   translate: 0 6px;
-  visibility: hidden;
-  transition:
-    opacity 180ms var(--ease),
-    translate 220ms var(--ease),
-    visibility 0s linear 220ms;
 }
-.composer-tray-spread > * + * {
+.composer-tray-card > .composer-tray-header {
+  flex: none;
   border-bottom: 1px solid var(--line);
 }
-/* Spread, the layer and the tray read as one panel: a divider where they meet, and only the layer's top is rounded. */
-.composer-tray-spread {
-  border-bottom: 1px solid var(--line);
+.composer-tray-card > .composer-tray-details {
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
-.chat-tray {
-  transition: border-radius 180ms var(--ease);
+.composer-tray-card-title {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 2px 8px;
 }
-.chat-tray:is([data-peek], :has(.composer-tray-spread [data-panel-open])):has(.composer-tray-spread) {
+.composer-tray-card-title > svg {
+  flex: none;
+  width: var(--icon-compact);
+  height: var(--icon-compact);
+  color: var(--muted);
+}
+/* With a card open, it and the tray read as one panel: only the card's top is rounded. */
+.chat-tray:has(.composer-tray-card[data-open]) {
   border-top-left-radius: 0;
   border-top-right-radius: 0;
 }
-.chat-tray[data-peek] .composer-tray-spread,
-.composer-tray-spread:has([data-panel-open]) {
-  opacity: 1;
-  translate: 0;
-  visibility: visible;
-  transition:
-    opacity 180ms var(--ease),
-    translate 220ms var(--ease),
-    visibility 0s;
-}
-.chat-tray::before,
-.chat-tray::after {
-  content: '';
-  position: absolute;
-  bottom: 100%;
-  height: 6px;
-  border-radius: var(--radius-l) var(--radius-l) 0 0;
-  background: var(--composer-tray);
-  opacity: 0;
-  translate: 0 6px;
-  pointer-events: none;
-  transition:
-    opacity 200ms var(--ease),
-    translate 260ms var(--ease);
-}
-.chat-tray::before {
-  inset-inline: 14px;
-}
-.chat-tray::after {
-  inset-inline: 28px;
-  bottom: calc(100% + 6px);
-}
-.chat-tray:has(.composer-tray-spread > :nth-child(1)):not(
-    [data-peek],
-    :has(.composer-tray-spread [data-panel-open])
-  )::before {
-  opacity: 0.6;
-  translate: 0;
-}
-.chat-tray:has(.composer-tray-spread > :nth-child(2)):not(
-    [data-peek],
-    :has(.composer-tray-spread [data-panel-open])
-  )::after {
-  opacity: 0.32;
-  translate: 0;
-}
 @media (prefers-reduced-motion: reduce) {
-  .composer-tray-spread,
-  .chat-tray::before,
-  .chat-tray::after {
+  .composer-tray-card,
+  .composer-tray-chip-trigger {
     transition: none;
   }
 }
-:root[data-reduce-motion] .composer-tray-spread,
-:root[data-reduce-motion] .chat-tray::before,
-:root[data-reduce-motion] .chat-tray::after {
+:root[data-reduce-motion] .composer-tray-card,
+:root[data-reduce-motion] .composer-tray-chip-trigger {
   transition: none;
 }
 .composer-tray-section {
@@ -173,54 +202,6 @@
   width: var(--icon-compact);
   height: var(--icon-compact);
   color: var(--muted);
-}
-/* Folded with several kinds of live work, a summary covers the first card's header and names all of them. Spreading the
-   stack (pointing, focus or an open section) hides it again, so the cards and their actions are back underneath. */
-.composer-tray-first {
-  position: relative;
-}
-.composer-tray-summary {
-  position: absolute;
-  inset: 0 0 auto;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  min-width: 0;
-  min-height: 28px;
-  height: auto;
-  padding: 2px 12px 2px 8px;
-  border-radius: var(--radius-s);
-  background: var(--composer-tray);
-  overflow: hidden;
-  pointer-events: none;
-  white-space: nowrap;
-  font-size: var(--font-caption);
-  font-weight: 500;
-  color: var(--muted);
-  transition:
-    opacity 140ms var(--ease),
-    visibility 0s;
-}
-.composer-tray-summary-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.composer-tray-summary svg {
-  flex: none;
-  width: var(--icon-compact);
-  height: var(--icon-compact);
-  color: var(--muted);
-}
-.chat-tray:is([data-peek], :has([data-panel-open])) .composer-tray-summary {
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transition:
-    opacity 140ms var(--ease),
-    visibility 0s linear 140ms;
 }
 .composer-tray-title {
   flex: 1;

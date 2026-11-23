@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import type { AgentEvent } from '@ramu/shared/types'
-import { toTurns } from '../src/views/agent/lib/turns'
+import { toTurns, turnParts } from '../src/views/agent/lib/turns'
 
 const turnsOf = (events: AgentEvent[]) =>
   toTurns(
@@ -55,4 +55,27 @@ it('opens a new turn when the agent works again after a result, such as a goal c
     { ended: true, interrupted: false },
     { ended: false, interrupted: false },
   ])
+})
+
+it('keeps a steered message inside its turn, with one start, and splits the turn into parts at it', () => {
+  const events: AgentEvent[] = [
+    { kind: 'user', text: 'go', at: 1000 },
+    { kind: 'text', text: 'working', at: 2000 },
+    { kind: 'user', text: 'also add tests', steered: true, at: 3000 },
+    { kind: 'text', text: 'adding tests', at: 4000 },
+    result('Done.'),
+  ]
+  const turns = toTurns(
+    events.map((event) => ({ kind: 'event' as const, event })),
+    events,
+  )
+  expect(turns).toHaveLength(1)
+  expect(turns[0]!.startedAt).toBe(1000)
+  const parts = turnParts(turns[0]!.items)
+  expect(
+    parts.map((part) =>
+      part.steer?.kind === 'event' && part.steer.event.kind === 'user' ? part.steer.event.text : null,
+    ),
+  ).toEqual([null, 'also add tests'])
+  expect(parts.map((part) => part.items.length)).toEqual([1, 2])
 })

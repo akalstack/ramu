@@ -5,7 +5,7 @@ import { useGlobalSearchParams, useRouter } from 'expo-router'
 import { Bell, X } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
 import { useStore } from '../runtime/store'
-import { Glass, floatingChrome } from './Glass'
+import { Glass } from './Glass'
 import { T, tap } from './ui'
 import { useSay } from '../i18n'
 
@@ -81,7 +81,7 @@ export function NoticeBanner() {
         transform: [{ translateY: slide.interpolate({ inputRange: [0, 1], outputRange: [-24, 0] }) }],
       }}
     >
-      <Glass radius={radius.l} style={{ backgroundColor: floatingChrome ? undefined : c.raised }}>
+      <Glass floating radius={radius.l}>
         <View
           style={{
             flexDirection: 'row',

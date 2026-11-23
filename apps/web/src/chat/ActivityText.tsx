@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { TOOL_MOTION } from '@ramu/shared/chat/presentation'
+import { sweepDuration, TOOL_MOTION } from '@ramu/shared/chat/presentation'
 import { reducedMotion } from '../workspace/panelMotion'
 import { WorkingText } from '../views/agent/components/WorkingText'
 
@@ -42,7 +42,12 @@ export function ActivityText({
         { clipPath: 'inset(0 0% 0 0)', opacity: 1, offset: TOOL_MOTION.fadeAt },
         { clipPath: 'inset(0 0% 0 0)', opacity: 0 },
       ],
-      { delay: TOOL_MOTION.settleMs, duration: TOOL_MOTION.finishMs, easing: 'linear' },
+      {
+        delay: TOOL_MOTION.settleMs,
+        // Paced by the label's width, so a long command's highlight does not streak across it.
+        duration: sweepDuration(overlay.current.offsetWidth || 0, TOOL_MOTION.finishMs, TOOL_MOTION.finishPxPerSecond),
+        easing: 'linear',
+      },
     )
     return () => animation?.cancel()
   }, [active])

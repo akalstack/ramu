@@ -1,4 +1,5 @@
 import { translate } from '@ramu/shared/i18n'
+import { confirmDone } from './confirmDone'
 import { readRemovalCommands, removalError } from '@ramu/shared/chat/taskRemoval'
 import { useRef } from 'react'
 import { Alert } from 'react-native'
@@ -47,6 +48,7 @@ export function useBulkThreadActions() {
     writable: (chats: readonly Chat[]) => chats.length > 0 && chats.every(writable),
     async markDone(chats: readonly Chat[]) {
       const { done, targets } = donePlan(chats.filter(writable))
+      if (done && !(await confirmDone(latest.current.invoke, say, targets))) return
       threadSelection.clear()
       const changed = await each(latest.current, targets, (chat) =>
         latest.current.invoke(chat.computerId, 'tasks.done', chat.taskId, done),

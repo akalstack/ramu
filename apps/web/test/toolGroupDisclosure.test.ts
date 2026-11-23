@@ -111,3 +111,23 @@ it('headlines a live group with its newest thought when the agent is thinking af
   expect(html).not.toContain('Thinking')
   expect(html).toContain('lucide-brain')
 })
+
+it('keeps the live group thought in view after its call finishes, until the group settles', () => {
+  const props = {
+    tools: [tool],
+    entries: [{ kind: 'thinking' as const, text: 'Read the config before editing' }, tool],
+    results: new Map<string, ToolResult>([
+      ['read', { kind: 'tool-result', toolUseId: 'read', summary: 'ok', isError: false }],
+    ]),
+    cwd: '',
+    active: true,
+  }
+  // Between calls the group is still live, so the thought stays under the headline.
+  expect(renderToStaticMarkup(createElement(ToolGroup, { ...props, live: true }))).toContain(
+    'Read the config before editing',
+  )
+  // Settled, the group folds to its summary and the thought waits inside it.
+  expect(renderToStaticMarkup(createElement(ToolGroup, { ...props, live: false }))).not.toContain(
+    'Read the config before editing',
+  )
+})

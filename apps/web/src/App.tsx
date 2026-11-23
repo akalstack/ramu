@@ -1,4 +1,5 @@
 import { ResourcesStatus } from './chat/ResourcesStatus'
+import { FinishThreadDialog } from './chat/FinishThreadDialog'
 import { receivePluginLink } from './settings/pluginLinks'
 import { PendingThreadDelivery } from './composer/WaitingThreads'
 import { ToolSyncDelivery } from './customize/toolSync'
@@ -913,6 +914,7 @@ function Shell() {
         <SummaryHost />
         <CommitBranchDialog />
         <ProtectedSyncDialog />
+        <FinishThreadDialog />
         <CommitDialog />
         <CreatePullRequestHost />
         <PublishRepositoryHost />

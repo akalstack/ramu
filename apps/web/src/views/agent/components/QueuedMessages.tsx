@@ -114,12 +114,15 @@ function HostQueuedRow({
   supportsSteering,
   configuring,
   reorderDisabled,
+  waitingFor,
   act,
   onRecall,
 }: {
   message: QueuedMessage
   sessionId: string
   busyAgent: boolean
+  /** Another thread is writing in this checkout, which the host lets only one thread do: sending now would fail. */
+  waitingFor: string | null
   supportsSteering: boolean
   configuring: boolean
   reorderDisabled: boolean
@@ -138,11 +141,14 @@ function HostQueuedRow({
   const sendNow = () => void act(() => invoke('agent.sendQueuedNow', sessionId, message.id))
   // Waiting for tools to finish is the wrong call when the turn is heading the wrong way; this stops it instead.
   const interruptAndSend = () => void act(() => invoke('agent.sendQueuedNow', sessionId, message.id, true))
-  const sendTip = !busyAgent
-    ? translate('Send now')
-    : supportsSteering
-      ? translate('Send after active tools finish')
-      : translate("This provider can't steer a running turn")
+  const blocked = !busyAgent && !!waitingFor
+  const sendTip = blocked
+    ? translate('Waiting for “{0}” in the same checkout', { '0': waitingFor })
+    : !busyAgent
+      ? translate('Send now')
+      : supportsSteering
+        ? translate('Send after active tools finish')
+        : translate("This provider can't steer a running turn")
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: message.id,
     disabled: configuring || reorderDisabled,
@@ -180,7 +186,7 @@ function HostQueuedRow({
           size="icon-xs"
           className={`${ICON_BUTTON_CLASS} queued-steer gap-[5px] text-soft disabled:pointer-events-none`}
           aria-label={busyAgent ? translate('Steer') : translate('Send now')}
-          disabled={configuring || (busyAgent && !supportsSteering)}
+          disabled={configuring || blocked || (busyAgent && !supportsSteering)}
           onClick={sendNow}
         >
           {busyAgent ? <CornerDownRight size={14} /> : <Send size={14} />}
@@ -320,6 +326,7 @@ export function QueuedMessages({
       aria-label={translate('Queued messages')}
       defaultOpen
       title={translate('Queued messages')}
+      chip={translate('Queued')}
       count={queued.length + pending.length}
       icon={<ListOrdered />}
       actions={
@@ -359,6 +366,7 @@ export function QueuedMessages({
                 supportsSteering={supportsSteering}
                 configuring={configuring || readOnly}
                 reorderDisabled={readOnly || queued.length < 2}
+                waitingFor={paused ? null : waitingFor}
                 act={act}
                 onRecall={onRecall}
               />

@@ -17,8 +17,8 @@ import { CARET_CLASS, TOOL_DISCLOSURE_PANEL_CLASS, TOOL_ICON_CLASS, TOOL_SUMMARY
 /**
  * Reasoning the provider shared, as one row led by the brain icon: closed, the thought itself on a single line that
  * ends in an ellipsis (its newest paragraph, shimmering, while it streams) preceded by "Thought for 4s" once it took
- * a while; opened, the whole thought shows as markdown, new words fading in while it streams. The icon says what the
- * row is, so no "Thinking" label repeats it.
+ * a while; opened, the row is titled "Thought" (or "Thinking", "Thought for 4s") and the whole thought shows below as
+ * markdown, new words fading in while it streams.
  */
 export function ThinkingRow({ text, active = false }: { text: string; active?: boolean }) {
   useLanguage()
@@ -38,6 +38,12 @@ export function ThinkingRow({ text, active = false }: { text: string; active?: b
       startedAt.current = null
     }
   }, [active])
+  const longThought = took !== null && took >= 1000
+  const title = active
+    ? translate('Thinking')
+    : longThought
+      ? translate('Thought for {0}', { '0': formatDuration(took) })
+      : translate('Thought')
   // Follow the newest line while thinking streams.
   useLayoutEffect(() => {
     const el = body.current
@@ -52,12 +58,12 @@ export function ThinkingRow({ text, active = false }: { text: string; active?: b
       {/* Full width, so a streaming thought ends in an ellipsis at the column's edge instead of overflowing it. */}
       <CollapsibleTrigger render={<Button variant="ghost" className="w-full min-w-0" />}>
         <Brain size={14} className={TOOL_ICON_CLASS} />
-        <span className="sr-only">{translate(active ? 'Thinking' : 'Thought')}</span>
-        {/* Not a tool-summary: a tool group shrinks those, and this label must always read in full. */}
-        {!active && took !== null && took >= 1000 && (
-          <span className="flex-none whitespace-nowrap font-sans text-chat text-inherit">
-            {translate('Thought for {0}', { '0': formatDuration(took) })}
-          </span>
+        {/* Not a tool-summary: a tool group shrinks those, and this label must always read in full. Open, the row is
+            titled, since the thought itself has moved below it; closed, the thought's own line says what it is. */}
+        {open || (!active && longThought) ? (
+          <span className="flex-none whitespace-nowrap font-sans text-chat text-inherit">{title}</span>
+        ) : (
+          <span className="sr-only">{title}</span>
         )}
         {!open && line && (
           <span className={`${TOOL_SUMMARY_CLASS} thinking-line text-muted-foreground`}>

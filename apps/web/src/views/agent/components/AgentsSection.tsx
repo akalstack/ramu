@@ -34,6 +34,7 @@ export function AgentsSection({
       aria-label={t('Agents')}
       title={t('Agents')}
       count={agents.length}
+      live={working > 0}
       icon={<Users />}
       actions={
         <>

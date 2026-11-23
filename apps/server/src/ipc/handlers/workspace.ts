@@ -27,6 +27,8 @@ import type { RoutingCandidate } from '@ramu/shared/workspace/projectRouting'
 import type { ContinuationRepo, ContinuationStart, ContinuedEvent } from '@ramu/shared/continuation'
 import { agentSettings, id } from '../schemas'
 import type { RegisterHandlers } from '../types'
+import { WRITING_STATES } from '../../agent/constants'
+import type { ThreadDoneImpact } from '@ramu/shared/chat/threadDone'
 import type { TaskRemovalReview } from '@ramu/shared/chat/taskRemoval'
 
 let lastSnapshotAt = 0
@@ -83,6 +85,8 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
   agentThreads,
   pullRequestIndex,
   testDevices,
+  computer,
+  browser,
 }) => {
   const continuations = () => {
     if (!agentThreads) throw new Error('Continuing threads is unavailable on this host.')
@@ -132,6 +136,51 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
     )
   }
   /** Stops a thread's agents and commands, then deletes it; `review` approves the commands the person saw. */
+  /**
+   * A thread marked done gives back what its work was holding, so nothing keeps running or stays open for a thread the
+   * person has finished: helpers and background commands (and the servers they run) stop, and the computer, its browser
+   * tabs, a test device and file watching are released. Reopening the thread starts each again as the work needs it.
+   */
+  const releaseThread = (taskId: string) => {
+    for (const session of agents.list(taskId))
+      if (session.parentId && WRITING_STATES.includes(session.state))
+        void agents.stopAndWait(session.id).catch(() => {})
+    for (const command of terminals.listBackground(taskId))
+      if (command.state === 'running') {
+        try {
+          terminals.stopBackground(taskId, command.id, false, 'user')
+        } catch {
+          // Already stopping or gone; nothing to give back.
+        }
+      }
+    computer?.revoke(taskId)
+    void testDevices?.releaseThread(taskId)
+    watchers.release(taskId)
+    if (browser?.isReady())
+      void browser
+        .view(taskId, { kind: 'list' })
+        .then((tabs) =>
+          Promise.all(
+            z
+              .array(z.object({ id: z.string() }))
+              .parse(tabs)
+              .map((tab) => browser.view(taskId, { kind: 'close', tabId: tab.id })),
+          ),
+        )
+        .catch(() => {})
+  }
+  /** What marking a thread done would stop, so the person can confirm before running work ends. */
+  const doneImpact = async (taskId: string): Promise<ThreadDoneImpact> => ({
+    commands: terminals.listBackground(taskId).filter((command) => command.state === 'running').length,
+    helpers: agents.list(taskId).filter((session) => session.parentId && WRITING_STATES.includes(session.state)).length,
+    computer: !!computer?.session(taskId),
+    browserTabs: browser?.isReady()
+      ? await browser
+          .view(taskId, { kind: 'list' })
+          .then((tabs) => z.array(z.object({ id: z.string() })).parse(tabs).length)
+          .catch(() => 0)
+      : 0,
+  })
   const deleteThread = async (taskId: string, removeWorktrees: boolean, review?: TaskRemovalReview) => {
     const covers = workspace.explorerBindings(taskId).map((binding) => binding.cwd)
     return lock.runMany([`delete-task:${taskId}`, ...covers.map((cwd) => `checkout:${cwd}`)], async () => {
@@ -526,10 +575,14 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
       args: z.tuple([id, z.boolean()]),
       run: (t: string, done: boolean) => {
         const task = workspace.setDone(t, done)
-        if (done) agents.holdThread(t)
+        if (done) {
+          agents.holdThread(t)
+          releaseThread(t)
+        }
         return task
       },
     },
+    'tasks.doneImpact': { args: z.tuple([id]), run: doneImpact },
     'tasks.archive': {
       args: z.tuple([id, z.boolean()]),
       run: (t: string, archived: boolean) => {

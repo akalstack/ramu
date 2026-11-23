@@ -59,11 +59,10 @@ export function BrowserNotice({ chat, tabs, onOpen }: { chat: Chat; tabs: Browse
   return (
     <ActivityPill
       icon={Globe}
-      label={agent ? say('Using browser') : tab.title || tab.url}
+      label={agent ? say('Using browser') : say('Browser')}
       accessibilityLabel={`${say('Open browser')}, ${tab.title || tab.url}`}
       tone={!online ? 'off' : agent ? 'attention' : 'quiet'}
       emphasis={agent}
-      iconOnly={!agent}
       onPress={onOpen}
     />
   )

@@ -33,11 +33,14 @@ export function agentActivityLabel(state: AgentSessionState | undefined, events:
   return 'Working'
 }
 
-/** When the running turn began: the person's latest message, so its timer counts the whole turn. */
+/**
+ * When the running turn began: the person's latest message that started a turn, so its timer counts the whole turn. A
+ * message steered in continues the turn, so the timer keeps going through it.
+ */
 export function turnStartedAt(events: readonly AgentEvent[]): number | null {
   for (let index = events.length - 1; index >= 0; index--) {
     const event = events[index]!
-    if (!event.agentId && event.kind === 'user') return event.at ?? null
+    if (!event.agentId && event.kind === 'user' && !event.steered) return event.at ?? null
   }
   return null
 }

@@ -625,6 +625,7 @@ export function ComputerActivity({ state }: { state: ComputerActivityState }) {
     <ComposerTraySection
       aria-label={t('Computer')}
       title={t('Computer')}
+      live={session.controller.kind === 'agent'}
       icon={<Monitor />}
       actions={
         liveView ? (

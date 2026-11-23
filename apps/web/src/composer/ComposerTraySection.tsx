@@ -3,11 +3,19 @@ import { ChevronDown } from 'lucide-react'
 import { cn } from 'cn'
 import { Button } from '@/components/desktop-button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { useTraySection } from './TrayStack'
+import { t } from '../i18n'
+import { useInTrayStack, useTraySection } from './TrayStack'
 
-/** One accessible disclosure treatment for questions, goals, the message queue and live work. */
+/**
+ * One accessible disclosure treatment for questions, goals, the message queue and live work.
+ *
+ * Inside a `TrayStack` the section is a chip in the tray's row; opening it shows its card above the row, over the
+ * conversation, so nothing under the composer moves. Elsewhere it is a full-width row that opens in place.
+ */
 export function ComposerTraySection({
   title,
+  chip,
+  live = false,
   icon,
   count,
   actions,
@@ -17,39 +25,88 @@ export function ComposerTraySection({
   defaultOpen,
   onOpenChange,
   ...props
-}: Omit<ComponentProps<typeof Collapsible>, 'title'> & {
+}: Omit<ComponentProps<typeof Collapsible>, 'title' | 'onOpenChange'> & {
   title: ReactNode
+  /** A shorter name for the chip when the title is long, such as a goal's status without its objective. */
+  chip?: ReactNode
+  /** The work is happening right now, such as an agent driving the browser; the chip shows a dot. */
+  live?: boolean
   icon: ReactNode
   /** How many items the section holds, shown after the title as "Title · 3". */
   count?: number
   actions?: ReactNode
+  onOpenChange?: (open: boolean) => void
 }) {
   // A section whose caller does not hold its state takes the stack's, so opening it closes the stack's other one.
   const [stacked, setStacked] = useTraySection(defaultOpen ?? false)
+  const inStack = useInTrayStack()
+  const open = controlled ?? stacked
+  const setOpen = (next: boolean) => {
+    if (controlled === undefined) setStacked(next)
+    onOpenChange?.(next)
+  }
+  const label = (text: ReactNode) => (
+    <span className="composer-tray-title">
+      {text}
+      {count !== undefined && (
+        <>
+          <span aria-hidden className="composer-tray-count-dot">
+            ·
+          </span>
+          <span className="composer-tray-count">{count}</span>
+        </>
+      )}
+    </span>
+  )
+  if (inStack)
+    return (
+      <Collapsible
+        className={cn('composer-tray-section composer-tray-chip', className)}
+        open={open}
+        onOpenChange={setOpen}
+        {...props}
+      >
+        <CollapsibleTrigger render={<Button variant="ghost" />} className="composer-tray-chip-trigger">
+          {icon}
+          {label(chip ?? title)}
+          {live && <span aria-hidden className="composer-tray-live" />}
+        </CollapsibleTrigger>
+        <CollapsibleContent
+          keepMounted
+          className="composer-tray-card"
+          onKeyDown={(event) => {
+            if (event.key !== 'Escape') return
+            event.stopPropagation()
+            setOpen(false)
+          }}
+        >
+          <div className="composer-tray-header">
+            <span className="composer-tray-card-title">
+              {icon}
+              {label(title)}
+            </span>
+            {actions && <div className="composer-tray-actions">{actions}</div>}
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="icon small-icon composer-tray-close"
+              aria-label={t('Close')}
+              title={t('Close')}
+              onClick={() => setOpen(false)}
+            >
+              <ChevronDown />
+            </Button>
+          </div>
+          <div className="composer-tray-details">{children}</div>
+        </CollapsibleContent>
+      </Collapsible>
+    )
   return (
-    <Collapsible
-      className={cn('composer-tray-section', className)}
-      open={controlled ?? stacked}
-      onOpenChange={(open, details) => {
-        if (controlled === undefined) setStacked(open)
-        onOpenChange?.(open, details)
-      }}
-      {...props}
-    >
+    <Collapsible className={cn('composer-tray-section', className)} open={open} onOpenChange={setOpen} {...props}>
       <div className="composer-tray-header">
         <CollapsibleTrigger render={<Button variant="ghost" />} className="composer-tray-trigger">
           {icon}
-          <span className="composer-tray-title">
-            {title}
-            {count !== undefined && (
-              <>
-                <span aria-hidden className="composer-tray-count-dot">
-                  ·
-                </span>
-                <span className="composer-tray-count">{count}</span>
-              </>
-            )}
-          </span>
+          {label(title)}
           <ChevronDown className="composer-tray-chevron" />
         </CollapsibleTrigger>
         {actions && <div className="composer-tray-actions">{actions}</div>}

@@ -277,7 +277,7 @@ export function Header({
   modal?: boolean
   large?: boolean
   collapsed?: boolean
-  /** Titles and subtitles share the leading edge unless a screen explicitly opts into centering. */
+  /** Titles and subtitles share the leading edge unless a screen opts into centering, which Android never does. */
   align?: 'left' | 'center'
   /** Enables native underlap on large-title screens; compact bars always reserve their height. */
   scrollEdge?: boolean
@@ -469,12 +469,7 @@ export function Header({
           headerShadowVisible: false,
           headerTitle: subtitle
             ? () => (
-                <View
-                  style={{
-                    alignItems: align === 'left' ? 'flex-start' : 'center',
-                    maxWidth: align === 'left' ? 260 : 220,
-                  }}
-                >
+                <View style={{ alignItems: 'flex-start', maxWidth: 260 }}>
                   <T size={font.heading} weight="600" numberOfLines={1}>
                     {title}
                   </T>
@@ -491,7 +486,8 @@ export function Header({
               ? title
               : '',
           headerTitleStyle: { fontSize: 17, fontWeight: '600' },
-          headerTitleAlign: align,
+          // Material top bars lead with the title. Centered, it collides with trailing items such as the host chip.
+          headerTitleAlign: 'left',
           headerBackVisible: false,
           headerLeft: modal
             ? () => <HeaderButton icon={X} label={say('Close')} onPress={close} />

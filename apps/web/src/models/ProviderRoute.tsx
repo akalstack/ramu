@@ -22,9 +22,43 @@ const WARN_AT = 80
 export const CHIP =
   'h-7 min-h-7 gap-1.5 rounded-full border-0 bg-fill px-2.5 text-caption font-normal text-soft [box-shadow:none] [transition:background-color_140ms_ease,color_140ms_ease] hover:bg-hover hover:text-foreground [&.on]:bg-hover [&.on]:text-foreground [&_svg]:flex-none [&_svg]:text-muted-foreground [&.warn]:bg-[color-mix(in_srgb,var(--warn)_12%,transparent)] [&.warn]:text-warn [&.warn:hover]:bg-[color-mix(in_srgb,var(--warn)_20%,transparent)] [&.bad]:bg-[color-mix(in_srgb,var(--bad)_12%,transparent)] [&.bad]:text-bad [&.bad:hover]:bg-[color-mix(in_srgb,var(--bad)_20%,transparent)] [&.warn_svg]:text-warn [&.bad_svg]:text-bad [&.switching]:text-foreground [&_.route-reason]:text-muted-foreground'
 
-/** The chip when there is nothing to warn about: an icon with no fill, so the composer row looks as it did. */
+/** Auto-resume beside the model and access pickers: an icon with no fill, quiet until a limit is near. */
 const QUIET_CHIP =
   'route-chip h-7 min-h-7 w-7 justify-center gap-0 rounded-full border-0 bg-transparent p-0 text-muted-foreground [box-shadow:none] [transition:background-color_140ms_ease,color_140ms_ease] hover:bg-hover hover:text-foreground [&.on]:bg-hover [&.on]:text-foreground [&_svg]:flex-none'
+
+const settingsItem = (): MenuEntry => ({
+  key: 'settings',
+  label: t('Fallback settings…'),
+  onSelect: () =>
+    window.dispatchEvent(
+      new CustomEvent('ramu:settings', { detail: { section: 'models', target: 'Provider fallback' } }),
+    ),
+})
+const autoResumeItems = (autoResume?: AutoResumeControl): MenuEntry[] =>
+  autoResume ? [...autoResumeSection(autoResume), { key: 'auto-resume-sep', separator: true }] : []
+
+/**
+ * This thread's Auto-resume choice in the composer bar, so it can be set before a limit without taking a row of its
+ * own. Near or at a limit the chip above the message box carries the same items with the reason.
+ */
+export function AutoResumeMenu({
+  autoResume,
+  readOnly = false,
+}: {
+  autoResume: AutoResumeControl
+  readOnly?: boolean
+}) {
+  useLanguage()
+  return (
+    <Menu
+      disabled={readOnly}
+      label={autoResumeLabel(autoResume)}
+      className={QUIET_CHIP}
+      icon={<Gauge size={13} />}
+      items={[...autoResumeItems(autoResume), settingsItem()]}
+    />
+  )
+}
 
 export function ProviderRouteChip({
   sessionId,
@@ -97,30 +131,9 @@ export function ProviderRouteChip({
       ? { step: { id: '', provider: hosted.provider, model: hosted.model, effort: null, accountId: hosted.accountId } }
       : null
     : estimate
-  const settingsItem = {
-    key: 'settings',
-    label: t('Fallback settings…'),
-    onSelect: () =>
-      window.dispatchEvent(
-        new CustomEvent('ramu:settings', { detail: { section: 'models', target: 'Provider fallback' } }),
-      ),
-  }
-  const resumeItems: MenuEntry[] = autoResume
-    ? [...autoResumeSection(autoResume), { key: 'auto-resume-sep', separator: true }]
-    : []
-  // Nothing to warn about: a quiet icon, so Auto-resume can still be set (or cleared) before a limit, in the same menu.
-  if (!warn && !limited) {
-    if (!autoResume) return null
-    return (
-      <Menu
-        disabled={readOnly}
-        label={autoResumeLabel(autoResume)}
-        className={QUIET_CHIP}
-        icon={<Gauge size={13} />}
-        items={[...resumeItems, settingsItem]}
-      />
-    )
-  }
+  const resumeItems = autoResumeItems(autoResume)
+  // Nothing to warn about: the chip row stays empty, and Auto-resume waits in the composer bar (AutoResumeMenu).
+  if (!warn && !limited) return null
   const next = route?.step
   const held = hold === 'message' || hold === 'chat' || (hosted?.state === 'switch' && !!hosted.held)
   const switching = !!route && !held
@@ -179,7 +192,7 @@ export function ProviderRouteChip({
           { key: 'about', heading: t('{0} · Limit reached', { '0': providerName(settings.provider) }) },
           ...continueItems(),
           ...resumeItems,
-          settingsItem,
+          settingsItem(),
         ]}
       />
     )
@@ -207,7 +220,7 @@ export function ProviderRouteChip({
             <span>{t('Keeping {0}', { '0': providerName(settings.provider) })}</span>
           </>
         }
-        items={[...release, ...resumeItems, settingsItem]}
+        items={[...release, ...resumeItems, settingsItem()]}
       />
     )
   if (!switching)
@@ -226,7 +239,7 @@ export function ProviderRouteChip({
           { key: 'about', heading: resetText(peak!.resetsAt) ?? t('Plan usage') },
           ...release,
           ...resumeItems,
-          settingsItem,
+          settingsItem(),
         ]}
       />
     )
@@ -263,7 +276,7 @@ export function ProviderRouteChip({
         },
         { key: 'sep', separator: true },
         ...resumeItems,
-        settingsItem,
+        settingsItem(),
       ]}
     />
   )

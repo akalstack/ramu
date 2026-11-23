@@ -30,6 +30,7 @@ import {
 import { retryThread, stopIdleThreads } from '@ramu/shared/chat/threadActions'
 import { gigabytes } from '@ramu/shared/resources'
 import { useSay } from '../i18n'
+import { confirmDone } from './confirmDone'
 import { useAutomation } from '../runtime/automation'
 import { inboxBlockerText } from '../runtime/inboxBlockerText'
 import { useStore } from '../runtime/store'
@@ -117,7 +118,13 @@ function BriefRowView({ row, divider, where }: { row: BriefRow; divider: boolean
         kind="secondary"
         title={say('Mark done')}
         disabled={off}
-        onPress={() => run(() => invoke(hostId, 'tasks.done', taskId, true).then(() => store.refresh(hostId)))}
+        onPress={() =>
+          run(async () => {
+            if (!(await confirmDone(store.invoke, say, [{ computerId: hostId, taskId }]))) return
+            await invoke(hostId, 'tasks.done', taskId, true)
+            await store.refresh(hostId)
+          })
+        }
       />
     </>
   ) : row.kind === 'low-memory' ? (

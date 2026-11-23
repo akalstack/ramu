@@ -1,4 +1,7 @@
 import { Spinner } from '@/components/ui/spinner'
+import { useStartingThread, type StartingThread } from './startingThreads'
+import { Message, MessageContent } from '@/components/ui/message'
+import { UserBubble } from '../views/agent/components/UserMessage'
 import { cachedDataOn } from '../dataQueries'
 import { errorText, isOfflineError } from '../lib/errors'
 import { visibleName } from '@ramu/shared/text'
@@ -94,6 +97,7 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
   )
   const agentViews = tabs.filter((v) => v.kind === 'agent')
   const [sessions, setSessions] = useState<AgentSessionInfo[]>(() => cachedDataOn(host, 'agent.list', taskId) ?? [])
+  const startingThread = useStartingThread(taskId)
   const [sessionsError, setSessionsError] = useState<{ text: string; offline: boolean } | null>(null)
   const [sessionsLoadedFor, setSessionsLoadedFor] = useState<string | null>(() =>
     cachedDataOn(host, 'agent.list', taskId) ? taskId : null,
@@ -300,12 +304,18 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
               <NewThread projectId={project?.id ?? ''} onProjectChange={(id) => ws.newTask(id)} feed={!editorView} />
             )}
             {sessionsError && !chatView && <ThreadUnavailable error={sessionsError} hostName={hostName} />}
-            {!isWorkspaceCtx(taskId) && !chatView && !sessionsError && sessionsLoadedFor !== taskId && (
-              <div className="flex flex-1 items-center justify-center">
-                <Spinner className="size-5 text-muted-foreground" aria-label={t('Loading conversation')} />
-              </div>
-            )}
+            {startingThread && !chatView && <StartingThreadView thread={startingThread} />}
+            {!startingThread &&
+              !isWorkspaceCtx(taskId) &&
+              !chatView &&
+              !sessionsError &&
+              sessionsLoadedFor !== taskId && (
+                <div className="flex flex-1 items-center justify-center">
+                  <Spinner className="size-5 text-muted-foreground" aria-label={t('Loading conversation')} />
+                </div>
+              )}
             {(showLauncherMain || (editorView && !chatView)) &&
+              !startingThread &&
               !isWorkspaceCtx(taskId) &&
               sessionsLoadedFor === taskId &&
               !sessions.length && (
@@ -1058,6 +1068,25 @@ function ThreadUnavailable({ error, hostName }: { error: { text: string; offline
       <p className="m-0 max-w-sm text-caption text-muted-foreground">
         {t('This thread opens by itself once the host is back. Messages you write meanwhile wait in the composer.')}
       </p>
+    </div>
+  )
+}
+
+/** A thread Home just created, shown with its first message while setup and the agent start. */
+function StartingThreadView({ thread }: { thread: StartingThread }) {
+  return (
+    <div className="flex flex-1 min-h-0 flex-col overflow-y-auto px-6 pt-3">
+      <div className="transcript-col mx-auto flex w-full max-w-[var(--chat-column-width)] flex-col gap-3.5">
+        <Message align="end" aria-busy="true">
+          <MessageContent className="max-w-[78%] items-end gap-1">
+            {thread.text && <UserBubble>{thread.text}</UserBubble>}
+          </MessageContent>
+        </Message>
+        <div className="flex items-center gap-2 text-control text-muted-foreground">
+          <Spinner className="size-3.5" aria-hidden />
+          <span>{thread.status}</span>
+        </div>
+      </div>
     </div>
   )
 }

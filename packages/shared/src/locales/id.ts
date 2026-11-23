@@ -8155,4 +8155,15 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Terpasang di {0}. Tambahkan folder itu ke PATH agar ramu bisa dijalankan dengan namanya.',
   'Start threads, pair devices and check this computer from any terminal. It runs inside this app, so nothing else is installed.':
     'Mulai thread, pasangkan perangkat, dan periksa komputer ini dari terminal mana pun. Perintah ini berjalan di dalam aplikasi ini, jadi tidak ada lagi yang perlu dipasang.',
+  'Stop running work and mark done?': 'Hentikan pekerjaan yang berjalan dan tandai selesai?',
+  'Marking this done stops:': 'Menandai ini selesai akan menghentikan:',
+  '{0} background commands, with any servers they run': '{0} perintah latar belakang, beserta server yang dijalankannya',
+  '{0} helper agents still working': '{0} agent pembantu yang masih bekerja',
+  'Using the computer': 'Penggunaan komputer',
+  'Reopening the thread later starts the work again as it needs.':
+    'Membuka thread ini lagi nanti akan memulai pekerjaannya lagi sesuai kebutuhan.',
+  'Stop and mark done': 'Hentikan dan tandai selesai',
+  'Continued for {0}': 'Dilanjutkan selama {0}',
+  'Continuing for {0}': 'Berlanjut selama {0}',
+  'Sends when this turn ends': 'Terkirim saat giliran ini selesai',
 }

@@ -19,7 +19,7 @@ import { revealFound, revealQuote } from '../lib/revealFound'
 import { quoteRange } from '../lib/quoteRange'
 import { ChatMentions } from '../chat/ChatReferences'
 import { ThreadAgents } from './agent/lib/threadAgents'
-import { Archive, CheckCircle2, Globe, Monitor, RotateCcw, Server, SquareTerminal, Users } from 'lucide-react'
+import { Archive, CheckCircle2, RotateCcw } from 'lucide-react'
 import { timeAgo } from '../Menu'
 import { t as translate, useLanguage } from '../i18n'
 import { ScrollToLatestButton } from './agent/components/ScrollToLatestButton'
@@ -35,10 +35,10 @@ import {
 } from '@/components/ui/message-scroller'
 import { TranscriptFollowState, TranscriptScrollApi } from './agent/components/TranscriptScrollApi'
 import type { FileContext } from '@ramu/shared/types'
-import { createElement, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Attachment, AgentEvent } from '@ramu/shared/types'
 import { agentActivityLabel } from '@ramu/shared/chat/agentActivity'
-import { GoalBar, goalIcon } from '../chat/GoalBar'
+import { GoalBar } from '../chat/GoalBar'
 import { goalChanges } from '@ramu/shared/chat/goalHistory'
 import { AgentControls } from '../chat/AgentControls'
 import { useAppSettings } from '../settings/AppSettings'
@@ -51,7 +51,7 @@ import { draftMentions, type AbilityModels } from '@ramu/shared/chat/helperMenti
 import type { CustomAgent } from '@ramu/shared/customAgents'
 import { useModelSets } from '../models/ModelSets'
 import type { AgentTask } from '@ramu/shared/types'
-import { ProviderRouteChip } from '../models/ProviderRoute'
+import { AutoResumeMenu, ProviderRouteChip } from '../models/ProviderRoute'
 import { limitPlaceholder, limitResume } from '../models/limitCopy'
 import { ContextMeter, useContextUsage } from '../settings/Usage'
 import { CompactBeforeSendToggle, useCompactOffer } from '../chat/CompactBeforeSend'
@@ -123,6 +123,7 @@ import { ContinueChatDialog } from './agent/components/ContinueChatDialog'
 import { ModelChangeDialog } from './agent/components/ModelChangeDialog'
 import { PendingQuestionsBar } from './agent/components/PendingQuestionsBar'
 import { QueuedMessages } from './agent/components/QueuedMessages'
+import { QueuedOpening } from './agent/components/QueuedOpening'
 import { ErrorNote } from './agent/components/ErrorNote'
 import { TranscriptTurn } from './agent/components/TranscriptTurn'
 import { useTranscriptArrival } from './agent/hooks/useTranscriptArrival'
@@ -986,6 +987,22 @@ export const AgentView = memo(function AgentView({
                                 />
                               </MessageScrollerItem>
                             )}
+                          {/* A new thread whose first message waits on another thread still reads as started. */}
+                          {!hydrating &&
+                            !events.some((event) => event.kind === 'user') &&
+                            trayQueued.map((message) => (
+                              <MessageScrollerItem key={message.id} messageId={`queued-opening-${message.id}`}>
+                                <QueuedOpening
+                                  message={message}
+                                  waitingFor={
+                                    queueWaitingFor && !queuePaused
+                                      ? (workspace.task(queueWaitingFor)?.title ?? null)
+                                      : null
+                                  }
+                                  onOpenWaiting={queueWaitingFor ? () => ws.openTask(queueWaitingFor) : undefined}
+                                />
+                              </MessageScrollerItem>
+                            ))}
                           {steering.map((message) => (
                             <MessageScrollerItem key={message.id} messageId={`steering-${message.id}`}>
                               <SteeringMessage
@@ -1049,7 +1066,7 @@ export const AgentView = memo(function AgentView({
                   pending.length > 0 ||
                   (!!session && trayAgents.length > 0) ||
                   dockQuestions.length > 0) && (
-                  <ComposerTray className="chat-tray" stack>
+                  <ComposerTray className="chat-tray">
                     {dockQuestions.length > 0 && (
                       <QuestionDock
                         sessionId={view.sessionId}
@@ -1064,50 +1081,8 @@ export const AgentView = memo(function AgentView({
                     {providerWait && (
                       <ProviderWaitNote retry={limitRetry} autoResume={autoResume} readOnly={viewOnly} />
                     )}
-                    {/* Live work folds into a stack under its first card; what needs the person stays outside it. */}
-                    <TrayStack
-                      summary={[
-                        ...(session && trayAgents.length > 0
-                          ? [{ key: 'agents', icon: <Users />, label: translate('Agents'), count: trayAgents.length }]
-                          : []),
-                        ...(browserActivity.tabs.length > 0
-                          ? [
-                              {
-                                key: 'browser',
-                                icon: <Globe />,
-                                label: translate('Browser'),
-                                count: browserActivity.tabs.length,
-                              },
-                            ]
-                          : []),
-                        ...(computerActivity.taskId && computerActivity.session
-                          ? [{ key: 'computer', icon: <Monitor />, label: translate('Computer') }]
-                          : []),
-                        ...(threadServers.servers.length > 0
-                          ? [
-                              {
-                                key: 'servers',
-                                icon: <Server />,
-                                label: translate('Servers'),
-                                count: threadServers.servers.length,
-                              },
-                            ]
-                          : []),
-                        ...(backgroundTerminals.terminals.length > 0 || commands.length > 0
-                          ? [
-                              {
-                                key: 'terminals',
-                                icon: <SquareTerminal />,
-                                label: translate('Terminals'),
-                                count: backgroundTerminals.terminals.length + commands.length,
-                              },
-                            ]
-                          : []),
-                        ...(liveGoal
-                          ? [{ key: 'goal', icon: createElement(goalIcon(liveGoal)), label: translate('Goal') }]
-                          : []),
-                      ]}
-                    >
+                    {/* Live work and the queue are chips in one row; what needs the person stays a full row above. */}
+                    <TrayStack>
                       {session && trayAgents.length > 0 && (
                         <AgentsSection
                           agents={trayAgents}
@@ -1143,24 +1118,24 @@ export const AgentView = memo(function AgentView({
                           }}
                         />
                       )}
+                      {(trayQueued.length > 0 || pending.length > 0) && (
+                        <QueuedMessages
+                          sessionId={view.sessionId}
+                          queued={trayQueued}
+                          readOnly={viewOnly}
+                          pending={pending}
+                          paused={queuePaused}
+                          waitingFor={queueWaitingFor ? (workspace.task(queueWaitingFor)?.title ?? null) : null}
+                          hostName={hostName}
+                          hostOffline={hostOffline}
+                          busyAgent={busyAgent}
+                          supportsSteering={supportsSteering}
+                          configuring={configuring}
+                          act={act}
+                          onRecall={recallIntoComposer}
+                        />
+                      )}
                     </TrayStack>
-                    {(trayQueued.length > 0 || pending.length > 0) && (
-                      <QueuedMessages
-                        sessionId={view.sessionId}
-                        queued={trayQueued}
-                        readOnly={viewOnly}
-                        pending={pending}
-                        paused={queuePaused}
-                        waitingFor={queueWaitingFor ? (workspace.task(queueWaitingFor)?.title ?? null) : null}
-                        hostName={hostName}
-                        hostOffline={hostOffline}
-                        busyAgent={busyAgent}
-                        supportsSteering={supportsSteering}
-                        configuring={configuring}
-                        act={act}
-                        onRecall={recallIntoComposer}
-                      />
-                    )}
                   </ComposerTray>
                 )}
                 {threadArchived && !viewOnly ? (
@@ -1280,7 +1255,12 @@ export const AgentView = memo(function AgentView({
                             onChange={changeSettings}
                             disabled={viewOnly}
                             running={working}
-                            trailing={<ContextMeter context={context} />}
+                            trailing={
+                              <>
+                                {autoResume && <AutoResumeMenu autoResume={autoResume} readOnly={viewOnly} />}
+                                <ContextMeter context={context} />
+                              </>
+                            }
                           />
                         )
                       }

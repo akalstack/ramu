@@ -7,11 +7,18 @@ import { type Turn } from '../types'
 const agentOutput = (block: Block) =>
   block.kind === 'tools' || ['thinking', 'text', 'content', 'agent'].includes(block.event.kind)
 
-/** One user message and everything the agent did in answer to it. */
+/** A message steered into a running turn: it continues that turn rather than starting a new one. */
+export const steerBlock = (block: Block) =>
+  block.kind === 'event' && block.event.kind === 'user' && !!block.event.steered
+
+/**
+ * One user message and everything the agent did in answer to it. Messages steered in while it ran stay inside it, so
+ * the turn keeps one start, one timer and one "Worked for".
+ */
 export function toTurns(blocks: Block[], events: AgentEvent[]): Turn[] {
   const turns: Turn[] = []
   blocks.forEach((block, index) => {
-    if (block.kind === 'event' && block.event.kind === 'user') {
+    if (block.kind === 'event' && block.event.kind === 'user' && !(block.event.steered && turns.length)) {
       turns.push({ key: index, user: block, items: [], ended: false, startedAt: block.event.at })
       return
     }
@@ -39,7 +46,7 @@ export function toTurns(blocks: Block[], events: AgentEvent[]): Turn[] {
   let user: AgentEvent | null = null
   for (const event of events) {
     if (event.agentId) continue
-    if (event.kind === 'user') user = event
+    if (event.kind === 'user' && !event.steered) user = event
     if (
       event.kind === 'state' &&
       ['idle', 'failed', 'stopped'].includes(event.state) &&
@@ -56,4 +63,13 @@ export function toTurns(blocks: Block[], events: AgentEvent[]): Turn[] {
     if (!turn.ended && index < turns.length - 1 && !ends.has(key)) turn.ended = true
   })
   return turns
+}
+
+/** A turn's items split at each steered message: the work before the first steer, then each steer and what followed. */
+export function turnParts(items: Block[]): { steer: Block | null; items: Block[] }[] {
+  const parts: { steer: Block | null; items: Block[] }[] = [{ steer: null, items: [] }]
+  for (const block of items)
+    if (steerBlock(block)) parts.push({ steer: block, items: [] })
+    else parts.at(-1)!.items.push(block)
+  return parts
 }

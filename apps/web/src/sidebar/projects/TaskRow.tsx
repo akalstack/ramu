@@ -1,4 +1,5 @@
 import { threadOriginLabel } from '@ramu/shared/workspace/threadOrigin'
+import { finishThreads } from '../../chat/FinishThreadDialog'
 import { animateThreadListChange } from '../../workspace/threadListMotion'
 import { useComputers } from '../../workspace/computers'
 import { useHost } from '../../workspace/HostProvider'
@@ -196,8 +197,11 @@ export function TaskRow({
     }
   }
   const markDone = async () => {
-    const changed = await run(() => host.invoke('tasks.done', task.id, true))
-    if (changed) offerThreadUndo('done', 1, () => run(() => host.invoke('tasks.done', task.id, false)))
+    let finished = false
+    const changed = await run(async () => {
+      finished = await finishThreads(host.invoke, [task.id])
+    })
+    if (changed && finished) offerThreadUndo('done', 1, () => run(() => host.invoke('tasks.done', task.id, false)))
   }
   const archive = async () => {
     const changed = await run(async () => {

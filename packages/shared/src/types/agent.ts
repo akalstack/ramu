@@ -420,7 +420,14 @@ type AgentEventBody =
       /** The thread whose turn holds the shared checkout, while these messages wait for it to finish. */
       waitingFor?: string
     }
-  | { kind: 'user'; text: string; attachments?: Attachment[]; from?: MessageOrigin }
+  | {
+      kind: 'user'
+      text: string
+      attachments?: Attachment[]
+      from?: MessageOrigin
+      /** Steered into a turn that was already running: it continues that turn instead of starting a new one. */
+      steered?: true
+    }
   | { kind: 'file-restore'; userSeq: number; fileCount: number }
   /** Recorded on a helper's session when it runs a custom agent, so its read-only choice holds across restarts. */
   | { kind: 'custom-agent'; name: string; readOnly: boolean }

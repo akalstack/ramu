@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { finishThreads } from '../chat/FinishThreadDialog'
 import { stageLabel } from '../git/PullRequestIcon'
 import { ChevronRight, CircleCheck } from 'lucide-react'
 import {
@@ -114,7 +115,7 @@ function BriefRowView({
         variant="ghost"
         size="xs"
         disabled={disabled}
-        onClick={() => run(() => invoke('tasks.done', row.chat.taskId, true))}
+        onClick={() => run(() => finishThreads(invoke, [row.chat.taskId]))}
       >
         {t('Mark done')}
       </Button>

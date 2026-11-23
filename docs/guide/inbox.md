@@ -4,6 +4,8 @@
 
 Home is for starting work. It has the message box and, when something needs you, one line such as **2 need you · 5 finished** that opens Inbox.
 
+Sending from Home with a project chosen opens the new thread right away, with your message and **Starting the agent…** while it sets up. With **Auto**, Home stays until it has picked the project. If the thread can't start, you're back on Home with your message still in the box.
+
 With **Auto**, a request that fits no project asks where to start. **New project** starts in No project and asks the agent to create one. The agent asks at most three questions, names the stack in one line, creates the folder, runs the framework's own generator and commits. The thread then moves into the new project and continues there with a goal checked by its build and tests ([Agents](working-with-agents.md#threads-started-by-agents)). **No project** (on the phone, **Standalone**) is for something that needs no project yet, such as a page or a question.
 
 On the desktop, **New project…** in the Project picker does the same, and a host with no projects shows **Start something new** beside **Open a folder**. Both also take a project name and stack. With a name, Ramu creates the project itself (the stack's generator, `ramu.json` and a first commit) and the thread starts in it with your message, with no agent turn spent on setup. The folder goes where your projects go (see below). **Change…** next to it opens the host's folder browser to put it somewhere else. **Start from a design** picks one of your Design artifacts instead: the project starts with it in `design/` and the agent builds the screens it shows.

@@ -6921,7 +6921,7 @@ test('mobile web startup applies its theme without calling a native-only Appeara
 })
 
 for (const os of ['ios', 'android']) {
-  test(`${os} Settings sections opt into the centered native title`, () => {
+  test(`${os} Settings sections center the title on iOS and lead with it on Android`, () => {
     const { default: Section } = load('app/settings/[section].tsx', os, {
       'expo-router': { useLocalSearchParams: () => ({ section: 'about' }) },
       '../../runtime/settingsModel': settingsModel,
@@ -6936,7 +6936,8 @@ for (const os of ['ios', 'android']) {
       'expo-router': { Stack: { ...Stack, Title: 'NativeTitle', Header: 'NativeHeader' } },
     })
     const native = screen.Header({ ...header.props, modal: true })
-    assert.equal(find(native, 'StackScreen').props.options.headerTitleAlign, 'center')
+    // Android's Material bar leads with the title, so a trailing host chip never crowds it.
+    assert.equal(find(native, 'StackScreen').props.options.headerTitleAlign, os === 'ios' ? 'center' : 'left')
     if (os === 'ios') {
       assert.equal(find(native, 'NativeTitle').props.children, header.props.title)
       assert.ok(find(native, 'ToolbarButton'), 'the native Close action remains available')

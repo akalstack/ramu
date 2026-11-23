@@ -382,3 +382,24 @@ test('a goal note stays where it happened instead of trailing every new step', (
   const done = [...withGoal, ...transcript([{ kind: 'text', text: 'done!', at: 65_000 }]), stop]
   assert.deepEqual(kinds(foldTurns(done, false, false)), ['user', 'summary', 'goal-set', 'text', 'stopped'])
 })
+
+test('a steered message stays in its turn: one "Worked for" for the whole turn and "Continued for" after the steer', () => {
+  const rows = foldTurns(
+    transcript([
+      { kind: 'user', text: 'go', at: 1_000 },
+      ...tool('a', 2_000),
+      { kind: 'user', text: 'also add tests', steered: true, at: 10_000 },
+      ...tool('b', 20_000),
+      { kind: 'text', text: 'done!', at: 40_000 },
+      { kind: 'result', isError: false, text: '', costUsd: null, at: 41_000 },
+    ]),
+    false,
+    false,
+  )
+  assert.deepEqual(
+    rows.map((r) => (r.kind === 'user' ? `user:${r.text}` : r.kind)),
+    ['user:go', 'summary', 'user:also add tests', 'summary', 'text'],
+  )
+  assert.equal(rows[1].label, 'Worked for 40s')
+  assert.equal(rows[3].label, 'Continued for 31s')
+})

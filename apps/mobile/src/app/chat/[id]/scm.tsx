@@ -62,7 +62,7 @@ import { ago, useSay } from '../../../i18n'
 import { useOpenFile } from '../../../runtime/openFile'
 import { Disclosure } from '../../../components/Motion'
 import { Header, HeaderButton, Screen, PageScrollView as ScrollView } from '../../../components/Screen'
-import { Glass, floatingChrome } from '../../../components/Glass'
+import { Glass } from '../../../components/Glass'
 import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
 import { CurrentPullRequest } from '../../../components/PullRequestSections'
 import { PublishRepository } from '../../../components/PublishRepository'
@@ -1459,20 +1459,20 @@ export default function SourceControl() {
           pointerEvents="none"
           style={{
             position: 'absolute',
-            left: space.l,
-            right: space.l,
+            left: space.m,
+            right: space.m,
             ...(toast.failed ? { top: belowHeader(insets.top) } : { bottom: Math.max(insets.bottom, space.m) }),
           }}
         >
           <Glass
-            radius={radius.full}
+            floating
+            radius={radius.l}
             style={{
               paddingHorizontal: space.l,
               paddingVertical: space.m,
               flexDirection: 'row',
               alignItems: 'center',
               gap: space.s,
-              backgroundColor: floatingChrome ? undefined : c.raised,
             }}
           >
             {toast.failed ? <CircleAlert size={15} color={c.bad} /> : <Check size={15} color={c.ok} />}

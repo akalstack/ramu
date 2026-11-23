@@ -86,7 +86,7 @@ vi.mock('../src/workspace/HostProvider', () => ({
 vi.mock('../src/chat/Notifications', () => ({ notifyError: () => {} }))
 vi.mock('../src/workspace/TaskPane', () => ({ errorText: (error: unknown) => String(error) }))
 
-const { ProviderRouteChip } = await import('../src/models/ProviderRoute')
+const { AutoResumeMenu, ProviderRouteChip } = await import('../src/models/ProviderRoute')
 const { autoResumeControl } = await import('../src/models/autoResumeMenu')
 
 const settings: AgentSettings = {
@@ -116,8 +116,8 @@ beforeEach(() => {
   state.calls = []
 })
 
-it('always offers Auto-resume, even far from any limit, as a quiet icon with the same three items', () => {
-  const html = render({})
+it('offers Auto-resume in the composer bar as a quiet icon with the same three items', () => {
+  const html = renderToStaticMarkup(createElement(AutoResumeMenu, { autoResume: control }))
   expect(html).toContain('data-menu="Auto-resume: On (default)"')
   const [menu] = state.menus
   expect(menu!.className).toContain('w-7')
@@ -131,7 +131,8 @@ it('always offers Auto-resume, even far from any limit, as a quiet icon with the
   ])
 })
 
-it('renders nothing when there is no control and nothing to warn about', () => {
+it('leaves the chip row empty when there is nothing to warn about, with or without Auto-resume', () => {
+  expect(render({})).toBe('')
   expect(render({ withControl: false })).toBe('')
 })
 
@@ -215,10 +216,9 @@ it('previews the next provider rather than another Claude subscription, and read
 })
 
 it('keeps provider status visible while disabling routing controls for a viewer', () => {
-  for (const limited of [false, true]) {
-    state.menus = []
-    const html = render({ limited, readOnly: true })
-    expect(html).toContain('data-menu=')
-    expect(state.menus.every((menu) => menu.disabled)).toBe(true)
-  }
+  const html = render({ limited: true, readOnly: true })
+  expect(html).toContain('data-menu=')
+  renderToStaticMarkup(createElement(AutoResumeMenu, { autoResume: control, readOnly: true }))
+  expect(state.menus.length).toBeGreaterThan(1)
+  expect(state.menus.every((menu) => menu.disabled)).toBe(true)
 })

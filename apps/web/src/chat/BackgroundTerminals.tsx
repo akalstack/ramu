@@ -115,6 +115,7 @@ export function BackgroundTerminalsSection({
       <ComposerTraySection
         aria-label={t('Background terminals')}
         title={t('Background terminals')}
+        chip={t('Terminals')}
         count={terminals.length + commands.length}
         icon={<SquareTerminal />}
         actions={

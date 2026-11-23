@@ -1,4 +1,4 @@
-import { CHAT_MOTION, SENT_MOTION, TOOL_MOTION } from '@ramu/shared/chat/presentation'
+import { CHAT_MOTION, SENT_MOTION, sweepDuration, TOOL_MOTION } from '@ramu/shared/chat/presentation'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AccessibilityInfo, LayoutAnimation, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native'
 import Reanimated, {
@@ -39,8 +39,9 @@ export function useReducedMotion() {
 const WINDOW = 0.28
 
 /**
- * The desktop's "Working…" shimmer: a highlight sweeping across muted text every 2.2 s. React Native cannot
- * clip a gradient to text without a native dependency, so each character brightens as the sweep passes it.
+ * The desktop's "Working…" shimmer: a highlight sweeping across muted text, at least 2.2 s a pass and slower across a
+ * long label, so it never streaks. React Native cannot clip a gradient to text without a native dependency, so each
+ * character brightens as the sweep passes it.
  */
 export function Shimmer({
   children,
@@ -55,19 +56,21 @@ export function Shimmer({
 }) {
   const reduced = useReducedMotion()
   const sweep = useSharedValue(-WINDOW)
+  const [width, setWidth] = useState(0)
+  const duration = sweepDuration(width, TOOL_MOTION.sweepMs, TOOL_MOTION.sweepPxPerSecond)
   useEffect(() => {
     if (reduced) return
     // Each pass rests off the end before the next, like the desktop's highlight that slides past the text.
     sweep.value = -WINDOW
     sweep.value = withRepeat(
       withSequence(
-        withTiming(1 + WINDOW, { duration: TOOL_MOTION.sweepMs, easing: ReEasing.inOut(ReEasing.quad) }),
+        withTiming(1 + WINDOW, { duration, easing: ReEasing.inOut(ReEasing.quad) }),
         withDelay(TOOL_MOTION.restMs, withTiming(-WINDOW, { duration: 0 })),
       ),
       -1,
     )
     return () => cancelAnimation(sweep)
-  }, [reduced, sweep])
+  }, [reduced, sweep, duration])
   const characters = useMemo(() => [...children], [children])
   const { c } = useTheme()
   if (reduced)
@@ -81,6 +84,7 @@ export function Shimmer({
       accessible
       accessibilityRole="text"
       accessibilityLabel={children}
+      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
       style={{ flexDirection: 'row', flexWrap: singleLine ? 'nowrap' : 'wrap' }}
     >
       {characters.map((character, index) => (
@@ -134,6 +138,9 @@ export function ActivityText({
   const shownAt = useRef(0)
   const progress = useSharedValue(1)
   const [width, setWidth] = useState(0)
+  // Read by the completion wipe without restarting it when layout settles mid-wipe.
+  const measured = useRef(0)
+  measured.current = width
   // The shimmer waits a moment: a command that finishes at once should never flash it.
   const [settled, setSettled] = useState(false)
   useEffect(() => {
@@ -160,7 +167,11 @@ export function ActivityText({
     progress.value = 0
     progress.value = withDelay(
       TOOL_MOTION.settleMs,
-      withTiming(1, { duration: TOOL_MOTION.finishMs, easing: ReEasing.linear }),
+      // Paced by the label's width, so a long command's highlight does not streak across it.
+      withTiming(1, {
+        duration: sweepDuration(measured.current, TOOL_MOTION.finishMs, TOOL_MOTION.finishPxPerSecond),
+        easing: ReEasing.linear,
+      }),
     )
     // A highlight cut short by the next tool would otherwise stay half drawn.
     return () => {

@@ -10,6 +10,10 @@ The command palette (Cmd/Ctrl+Shift+P, or `>` in Cmd/Ctrl+P) offers **Reload win
 
 Enter uses your Steer or Queue choice, and Cmd/Ctrl+Enter uses the other. **Steer** adds your message to the running turn. **Queue** waits for the turn to end. A steered message waits for running tools to finish. To redirect the agent sooner, choose **Stop turn and send now** from a queued message's menu, or tap its send button on the phone. The turn stops, that message starts the next one, and the rest of the queue follows. Agents can ask questions and keep working on independent parts while they wait for your answer.
 
+A steered message stays part of the turn it joined: the turn keeps one timer and folds under one **Worked for** with its whole time, and the work after each steer folds under **Continued for** below that message. A turn folds only once it has finished. A stopped turn says **Stopped after**.
+
+Only one thread works in a checkout at a time. A message sent to another thread in the same checkout waits, and a new thread whose first message waits shows it as its opening message with **Waiting for "…" in the same checkout** and **Open thread**, so you can answer what holds the other thread up.
+
 On the phone, **Settings → Threads** sets the choice, and the warning before changing model, for **All devices** (the host's own setting), **All mobile devices** (every phone paired with that host) or **This phone**. The narrowest one set wins, and the page shows where the current value comes from.
 
 ## Background commands

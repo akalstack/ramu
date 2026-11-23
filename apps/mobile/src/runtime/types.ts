@@ -60,6 +60,8 @@ export type TranscriptItem = (
       /** The text as sent, including any hidden <ramu-context>. */ raw?: string
       /** Another thread sent it, so it shows as a note from that thread, not the person's bubble. */
       from?: import('@ramu/shared/types').MessageOrigin
+      /** Steered into a running turn, which it continues instead of starting a new one. */
+      steered?: true
     }
   /** An image the agent returned (MCP or tool content). */
   | {

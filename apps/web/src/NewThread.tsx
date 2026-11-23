@@ -1,4 +1,5 @@
 import { pendingThreads } from './composer/pendingThreads'
+import { startingThreads } from './workspace/startingThreads'
 import { LoadingDots } from '@/components/loading-dots'
 import { BranchNameEditor } from './workspace/BranchNameEditor'
 import { WorkspaceNameDialog } from './workspace/WorkspaceNameDialog'
@@ -516,6 +517,8 @@ export function NewThread({
       status: auto && !chosen ? t('Choosing a project…') : t('Starting the agent…'),
     })
     let created: string | null = null
+    // The thread this send opened while its agent starts, to leave again if starting fails.
+    let opened: string | null = null
     let target = {
       projectId,
       mode,
@@ -681,12 +684,25 @@ export function NewThread({
         requestId: creationRequest.current.id,
       })
       created = task.id
+      // Outside Auto the destination is already known, so the thread opens now and shows its first message while
+      // setup and the agent start there, instead of Home holding a "Starting" line. Auto stays here to pick a project.
+      if (!auto) {
+        startingThreads.set(task.id, {
+          text: prompt.trim() || attachments.map((attachment) => attachment.name).join(', '),
+          status: t('Starting the agent…'),
+        })
+        await ws.refresh()
+        ws.openTask(task.id)
+        opened = task.id
+      }
       const bindings = target.mode === 'worktree' ? await host.invoke('tasks.setup', task.id) : []
       await ws.refresh()
       // Half-built worktrees keep the chat so "Retry setup" can finish it.
       if (bindings.some((b) => b.setupState !== 'ready')) {
         created = null
+        opened = null
         creationRequest.current = null
+        startingThreads.delete(task.id)
         ws.openTask(task.id)
         throw new Error(t('Worktree setup did not finish. Your message has not been sent.'))
       }
@@ -714,6 +730,8 @@ export function NewThread({
         if (!auto) clearWorkspaceDraft(projectId, draftStore(host.id), workspaceDraft.choice)
         agentDraft.consume()
       }
+      opened = null
+      startingThreads.delete(task.id)
       ws.openTask(task.id)
       ws.openView(task.id, { kind: 'agent', sessionId: session.id })
       void ws.refresh()
@@ -733,6 +751,12 @@ export function NewThread({
       sending.current = false
       setBusy(false)
       setPending(null)
+      // Starting failed after the thread opened: its empty thread is gone, so come back here, where the draft and the
+      // reason wait.
+      if (opened) {
+        startingThreads.delete(opened)
+        ws.newTask(projectId)
+      }
     }
   }
 

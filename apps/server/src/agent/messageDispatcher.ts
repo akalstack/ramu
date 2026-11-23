@@ -402,6 +402,7 @@ export class MessageDispatcher {
           text: combined.text,
           ...(combined.attachments.length ? { attachments: combined.attachments } : {}),
           ...(batch.length === 1 && batch[0]!.from ? { from: batch[0]!.from } : {}),
+          steered: true,
         })
       }
     } finally {

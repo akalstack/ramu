@@ -608,9 +608,11 @@ export function GoalQueueTray({
       {queue.map((q, index) => {
         // While a turn runs the quick action steers (it waits for active tools and keeps the turn); idle, it sends.
         const steerable = running && !!onSteer && q.mode !== 'steer'
+        // The host lets one thread write in a checkout at a time, so sending while another one works there would fail.
+        const sendable = !!onSendNow && (running || !waitingFor || !!queuePaused)
         const actions = [
           ...(steerable ? [{ id: 'steer', title: t.steer, image: 'arrow.turn.down.right' }] : []),
-          ...(onSendNow
+          ...(sendable
             ? [{ id: 'send', title: say(running ? 'Stop turn and send now' : 'Send now'), image: 'paperplane' }]
             : []),
           ...(onEdit ? [{ id: 'edit', title: say('Edit message'), image: 'pencil' }] : []),
@@ -650,8 +652,8 @@ export function GoalQueueTray({
                 <T size={font.control} tone="soft" numberOfLines={1} style={{ flex: 1 }}>
                   {q.text}
                 </T>
-                <T size={font.caption} tone="muted">
-                  {q.mode === 'steer' ? t.steer : t.queued}
+                <T size={font.caption} tone="muted" numberOfLines={1}>
+                  {q.mode === 'steer' ? t.steer : running ? say('Sends when this turn ends') : t.queued}
                 </T>
               </View>
             </MenuView>
@@ -663,8 +665,8 @@ export function GoalQueueTray({
                 tone="muted"
                 onPress={() => onSteer?.(q.id)}
               />
-            ) : onSendNow && !running ? (
-              <IconButton icon={Send} label={say('Send now')} size={28} tone="muted" onPress={() => onSendNow(q.id)} />
+            ) : sendable && !running ? (
+              <IconButton icon={Send} label={say('Send now')} size={28} tone="muted" onPress={() => onSendNow!(q.id)} />
             ) : null}
             <IconButton icon={X} label={say('Remove')} size={28} tone="muted" onPress={() => onRemove?.(q.id)} />
           </View>

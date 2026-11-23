@@ -100,6 +100,7 @@ export function BrowserActivity({ state }: { state: ReturnType<typeof useBrowser
       aria-label={t('Browser')}
       title={t('Browser')}
       count={state.tabs.length}
+      live={!state.stale && state.tabs.some((tab) => tab.controller === 'agent')}
       icon={<Globe />}
       actions={
         state.stale ? (
