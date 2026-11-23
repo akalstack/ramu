@@ -9,11 +9,14 @@ through its tunnel, never through this Worker.
 
 - **One slot per account.** A Ramu account session (checked with the account service, cached for five minutes by its
   hash) gets one slot for one host. A second host on the same account is told which host holds it.
-- **Tunnels exist only while hosts are online.** Cloudflare allows 1,000 tunnels per account, idle ones included, so a
-  host's tunnel is deleted on a clean shutdown or after 10 minutes down, and made again under the same address when the
-  host returns.
-- **A waitlist when full.** When every slot is taken, the host waits its turn, first come, first served, and takes the
-  next free slot when it asks again. A host offered a slot that does not come back within a day loses its place.
+- **Tunnels and DNS records exist only while hosts are online.** Cloudflare allows 1,000 tunnels per account, idle
+  ones included, so a host's tunnel and its CNAME are deleted on a clean shutdown or after 10 minutes down, and made
+  again under the same address when the host returns.
+- **Capacity counts hosts online at once.** An account keeps its address while its host is off, and that takes no room,
+  so the relay holds far more addresses than its capacity of hosts online.
+- **A waitlist when full.** When the relay already has as many hosts online as its capacity, a host waits its turn,
+  first come, first served, whether it is new or coming back under its address, and comes online when it asks again
+  after room frees. A host offered room that does not come back within a day loses its place.
 - **Idle addresses are released.** A host reports when a paired device reaches it through the link. With no such use
   for 21 days the slot is marked warned, and on day 28 it is released.
 - **Monthly traffic.** Once a day the relay adds each address's traffic from Cloudflare's analytics and suspends a link
@@ -29,9 +32,9 @@ All bodies are JSON of at most 4 KB. Host requests carry `Authorization: Bearer 
 
 | Request | Answer |
 | --- | --- |
-| `GET /v1/pool` | `{ capacity, used, waiting }`, cached for a minute |
+| `GET /v1/pool` | `{ capacity, used, waiting }`, where `used` is hosts online; cached for a minute |
 | `POST /v1/links` with `{ hostId, name, port, https }` | `active` (200) with `hostname`, `token`, `releasesAt` and `usage`; `waitlisted` (200) with `position`; `taken` (409); `suspended` (403) with `until`; `unavailable` (400, 401, 429 or 503) with a `reason` |
-| `DELETE /v1/links/:hostId/online` | 204: the tunnel is deleted, the slot and address kept |
+| `DELETE /v1/links/:hostId/online` | 204: the tunnel and its DNS record are deleted, the slot and address kept |
 | `DELETE /v1/links/:hostId` | 204: the slot is released, or the host leaves the waitlist |
 | `POST /v1/links/:hostId/seen` | 204: a paired device used the link; counted at most once an hour |
 

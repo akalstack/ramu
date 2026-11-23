@@ -3,14 +3,32 @@ import { admission, ingressFor, newSlot, nextMonth, promoteWaiting, PROMOTION_EX
 import { bearerOf, linkRequest } from '../src/validate'
 import { memoryStore } from './fakes'
 
-it('lets a newcomer in only when free slots outnumber everyone waiting', () => {
+it('lets a newcomer in only when free room outnumbers everyone waiting, counting only hosts online', () => {
   const store = memoryStore()
-  store.putSlot(newSlot('a', 'host-a', 'A', 's1', 0))
+  store.putSlot({ ...newSlot('a', 'host-a', 'A', 's1', 0), tunnelId: 'tunnel-a' })
+  // An address whose host is offline takes no room.
+  store.putSlot(newSlot('off', 'host-off', 'Off', 's2', 0))
   store.putWaiting({ userId: 'w', hostId: 'host-w', hostName: 'W', since: 1, promotedAt: null })
-  expect(admission(store, 'new', 'host-new', 2)).toEqual({ kind: 'wait', position: 2 })
-  expect(admission(store, 'w', 'host-w', 2)).toEqual({ kind: 'admit' })
-  expect(admission(store, 'new', 'host-new', 3)).toEqual({ kind: 'admit' })
-  expect(admission(store, 'a', 'host-a', 1).kind).toBe('slot')
+  expect(admission(store, 'new', 'host-new', 2, 0)).toEqual({ kind: 'wait', position: 2 })
+  expect(admission(store, 'w', 'host-w', 2, 0)).toEqual({ kind: 'admit' })
+  expect(admission(store, 'new', 'host-new', 3, 0)).toEqual({ kind: 'admit' })
+  expect(admission(store, 'a', 'host-a', 1, 0).kind).toBe('slot')
+})
+
+it('lets a host back online under its address while there is room, and in line behind others when there is not', () => {
+  const store = memoryStore()
+  store.putSlot({ ...newSlot('a', 'host-a', 'A', 's1', 0), tunnelId: 'tunnel-a' })
+  const off = newSlot('off', 'host-off', 'Off', 's2', 0)
+  store.putSlot(off)
+  expect(admission(store, 'off', 'host-off', 2, 0)).toEqual({ kind: 'slot', slot: off })
+  expect(admission(store, 'off', 'host-off', 1, 0)).toEqual({ kind: 'wait', position: 1 })
+  store.putWaiting({ userId: 'w', hostId: 'host-w', hostName: 'W', since: 1, promotedAt: null })
+  expect(admission(store, 'off', 'host-off', 2, 0)).toEqual({ kind: 'wait', position: 2 })
+  expect(admission(store, 'off', 'host-other', 2, 0)).toEqual({ kind: 'taken', hostName: 'Off' })
+  // Paused for its traffic, it gets its slot back to hear why, with no tunnel.
+  const paused = { ...off, suspendedUntil: 10 }
+  store.putSlot(paused)
+  expect(admission(store, 'off', 'host-off', 1, 5)).toEqual({ kind: 'slot', slot: paused })
 })
 
 it('marks waiting hosts free slots admit and drops those that never came back', () => {

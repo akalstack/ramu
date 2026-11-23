@@ -65,17 +65,31 @@ export type Admission =
   | { kind: 'wait'; position: number }
 
 /**
- * Whether an account gets a slot. The waitlist is first come, first served: a waiting host takes a slot only once the
- * free slots reach its place, and a newcomer only when free slots outnumber everyone waiting.
+ * Hosts online through the relay: each holds one Cloudflare Tunnel and one DNS record, which is what the account's
+ * limits count. A slot whose host is offline keeps only its address, which costs neither.
  */
-export function admission(store: Store, userId: string, hostId: string, capacity: number): Admission {
+export function online(store: Store): number {
+  return store.slots().filter((slot) => slot.tunnelId !== null).length
+}
+
+/**
+ * Whether a host may come online. Capacity counts hosts online at once, so an account keeps its address while its host
+ * is off and only needs room again to reconnect. The waitlist is first come, first served, for newcomers and returning
+ * hosts alike: a waiting host comes online once the free room reaches its place, and anyone else only when the free
+ * room outnumbers everyone waiting. A host already online, or one paused for its traffic (which gets no tunnel), always
+ * gets its slot back.
+ */
+export function admission(store: Store, userId: string, hostId: string, capacity: number, now: number): Admission {
   const held = store.slotOf(userId)
-  if (held) return held.hostId === hostId ? { kind: 'slot', slot: held } : { kind: 'taken', hostName: held.hostName }
-  const free = capacity - store.slots().length
+  if (held && held.hostId !== hostId) return { kind: 'taken', hostName: held.hostName }
+  if (held && (held.tunnelId !== null || (held.suspendedUntil !== null && held.suspendedUntil > now)))
+    return { kind: 'slot', slot: held }
+  const free = capacity - online(store)
   const queue = store.waiting()
   const index = queue.findIndex((entry) => entry.userId === userId)
-  if (index >= 0) return index < free ? { kind: 'admit' } : { kind: 'wait', position: index + 1 }
-  return free > queue.length ? { kind: 'admit' } : { kind: 'wait', position: queue.length + 1 }
+  const admitted = index >= 0 ? index < free : free > queue.length
+  if (!admitted) return { kind: 'wait', position: index >= 0 ? index + 1 : queue.length + 1 }
+  return held ? { kind: 'slot', slot: held } : { kind: 'admit' }
 }
 
 export function newSlot(userId: string, hostId: string, hostName: string, slug: string, now: number): Slot {
@@ -196,8 +210,8 @@ export function judgeIdle(store: Store, now: number): IdleVerdict {
 }
 
 /**
- * Marks the waiting hosts that free slots now admit, and drops those offered a slot a day ago that never came back for
- * it (the host is gone), so the next in line moves up.
+ * Marks the waiting hosts that free room now admits, and drops those offered it a day ago that never came back for it
+ * (the host is gone), so the next in line moves up.
  */
 export function promoteWaiting(store: Store, capacity: number, now: number): { promoted: number; dropped: number } {
   let dropped = 0
@@ -206,7 +220,7 @@ export function promoteWaiting(store: Store, capacity: number, now: number): { p
       store.deleteWaiting(entry.userId)
       dropped++
     }
-  const free = Math.max(0, capacity - store.slots().length)
+  const free = Math.max(0, capacity - online(store))
   let promoted = 0
   for (const entry of store.waiting().slice(0, free))
     if (entry.promotedAt === null) {

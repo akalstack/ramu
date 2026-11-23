@@ -11,6 +11,7 @@ import {
   judgeIdle,
   judgeTunnels,
   newSlot,
+  online,
   promoteWaiting,
   releasesAt,
   rollMonth,
@@ -87,21 +88,31 @@ export function createRelay(deps: RelayDeps) {
   }
 
   function pool(): LinkPool {
-    return { capacity: deps.capacity, used: store.slots().length, waiting: store.waiting().length }
+    return { capacity: deps.capacity, used: online(store), waiting: store.waiting().length }
   }
 
+  /**
+   * Takes a host offline: its tunnel and its DNS record go, so neither counts against the account's limits, and the
+   * slot keeps its address for when the host comes back.
+   */
   async function removeTunnel(slot: Slot): Promise<Slot> {
-    if (!slot.tunnelId) return slot
-    await cf.deleteTunnel(slot.tunnelId)
-    store.setDownSince(slot.tunnelId, null)
-    const next = { ...slot, tunnelId: null }
-    store.putSlot(next)
+    let next = slot
+    if (next.tunnelId) {
+      await cf.deleteTunnel(next.tunnelId)
+      store.setDownSince(next.tunnelId, null)
+      next = { ...next, tunnelId: null }
+      store.putSlot(next)
+    }
+    if (next.dnsRecordId) {
+      await cf.deleteRecord(next.dnsRecordId)
+      next = { ...next, dnsRecordId: null }
+      store.putSlot(next)
+    }
     return next
   }
 
   async function release(slot: Slot) {
-    const cleared = await removeTunnel(slot)
-    if (cleared.dnsRecordId) await cf.deleteRecord(cleared.dnsRecordId)
+    await removeTunnel(slot)
     store.deleteSlot(slot.userId)
   }
 
@@ -145,7 +156,7 @@ export function createRelay(deps: RelayDeps) {
     const { hostId, name, port, https } = parsed.data
     return serial(userId, async () => {
       const now = deps.now()
-      const decision = admission(store, userId, hostId, deps.capacity)
+      const decision = admission(store, userId, hostId, deps.capacity, now)
       if (decision.kind === 'taken')
         return json({ state: 'taken', hostName: decision.hostName } satisfies LinkReply, 409)
       if (decision.kind === 'wait') {
@@ -154,9 +165,9 @@ export function createRelay(deps: RelayDeps) {
         return json({ state: 'waitlisted', position: decision.position, capacity: deps.capacity } satisfies LinkReply)
       }
       let slot = decision.kind === 'slot' ? decision.slot : null
+      store.deleteWaiting(userId)
       if (!slot) {
         slot = newSlot(userId, hostId, name, deps.slug(), now)
-        store.deleteWaiting(userId)
         store.putSlot(slot)
       }
       try {

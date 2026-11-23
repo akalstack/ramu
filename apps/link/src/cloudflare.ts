@@ -80,7 +80,18 @@ export function cloudflare(config: CloudflareConfig): Cloudflare {
           // The record was removed by hand; make it again.
         }
       }
-      return (await call<{ id: string }>('POST', `${zone}/dns_records`, record)).result.id
+      try {
+        return (await call<{ id: string }>('POST', `${zone}/dns_records`, record)).result.id
+      } catch (error) {
+        // A record left by a removal that did not go through: take it over rather than failing on the name.
+        const found = await call<{ id: string }[]>(
+          'GET',
+          `${zone}/dns_records?type=CNAME&name=${encodeURIComponent(name)}`,
+        ).catch(() => null)
+        const existing = found?.result[0]?.id
+        if (!existing) throw error
+        return (await call<{ id: string }>('PATCH', `${zone}/dns_records/${existing}`, record)).result.id
+      }
     },
     async deleteRecord(recordId) {
       await call('DELETE', `${zone}/dns_records/${recordId}`).catch(() => undefined)

@@ -134,6 +134,28 @@ it('deletes the tunnel on a clean shutdown and makes a new one under the same ad
   expect([...cf.records.values()]).toEqual([{ name: 'ramu-slug1.akalstack.com', target: 'tunnel-3.cfargotunnel.com' }])
 })
 
+it('keeps an offline host’s address without a tunnel or DNS record, so only hosts online fill the relay', async () => {
+  const relay = relayWith(1)
+  await ask(relay, 'token-alice', host('mac'))
+  expect((await send(relay, 'token-alice', 'DELETE', '/v1/links/mac/online')).status).toBe(204)
+  expect(cf.tunnels.size).toBe(0)
+  expect(cf.records.size).toBe(0)
+  // Alice's address is kept, but takes no room: Bob comes online.
+  expect((await ask(relay, 'token-bob', host('b'))).body).toMatchObject({ state: 'active' })
+  const pool = (await (await relay.handle(new Request('https://ramu-link.akalstack.com/v1/pool'))).json()) as LinkPool
+  expect(pool).toEqual({ capacity: 1, used: 1, waiting: 0 })
+  // Back while the relay is full, Alice waits in line and keeps her address.
+  expect((await ask(relay, 'token-alice', host('mac'))).body).toEqual({ state: 'waitlisted', position: 1, capacity: 1 })
+  expect(store.slotOf('alice')).toMatchObject({ slug: 'slug1', tunnelId: null })
+  expect((await send(relay, 'token-bob', 'DELETE', '/v1/links/b/online')).status).toBe(204)
+  expect((await ask(relay, 'token-alice', host('mac'))).body).toMatchObject({
+    state: 'active',
+    hostname: 'ramu-slug1.akalstack.com',
+  })
+  expect(store.waiting()).toEqual([])
+  expect([...cf.records.values()].map((record) => record.name)).toEqual(['ramu-slug1.akalstack.com'])
+})
+
 it('reports a relay error without losing the slot when Cloudflare fails', async () => {
   const relay = relayWith(1)
   cf.fail = true
