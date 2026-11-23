@@ -48,6 +48,11 @@ export function collectAssets(source, destination, platform, arch) {
 }
 const isBot = (login) => !login || login.endsWith('[bot]')
 // GitHub's generated notes credit only pull requests, so authors who pushed commits directly are added beside them.
+/** The release body: the notes without their `# Ramu vX` title, which GitHub already shows as the release's name. */
+export function releaseBody(notes) {
+  return notes.replace(/^#\s+[^\n]*\n+/, '')
+}
+
 export function withCredits(notes, generated, commitAuthors) {
   const body = generated.trim()
   const named = new Set([...body.matchAll(/@([A-Za-z0-9-]+(?:\[bot\])?)/g)].map((match) => match[1]))
@@ -129,7 +134,7 @@ export function run(args) {
     const notesPath = resolve('releases', `${tag}.md`)
     if (!existsSync(notesPath)) throw new Error(`Missing release notes: ${notesPath}`)
     const { generated, authors } = releaseCredits(tag, repo)
-    process.stdout.write(withCredits(readFileSync(notesPath, 'utf8'), generated, authors))
+    process.stdout.write(withCredits(releaseBody(readFileSync(notesPath, 'utf8')), generated, authors))
     return
   }
   if (!['prepare', 'verify', 'draft'].includes(command)) throw new Error(`Unknown command: ${command}`)

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { collectAssets, compareVersions, run, versionOf, withCredits } from './release.mjs'
+import { collectAssets, compareVersions, releaseBody, run, versionOf, withCredits } from './release.mjs'
 import { importedPackages, npmManifest } from './npm-package.mjs'
 
 test('rejects malformed versions and tag/path injection', () => {
@@ -155,4 +155,9 @@ test('publishes the server with every dependency the bundle needs, versioned, an
     /imports left-pad/,
   )
   assert.throws(() => npmManifest(server, { catalog: {}, version: '1.2.3', imported: [], inlined }), /catalog/)
+})
+
+test('the release body leaves out the title GitHub already shows as the release name', () => {
+  assert.equal(releaseBody('# Ramu v2\n\n## Changed\n\n- A thing.\n'), '## Changed\n\n- A thing.\n')
+  assert.equal(releaseBody('## Changed\n'), '## Changed\n')
 })
