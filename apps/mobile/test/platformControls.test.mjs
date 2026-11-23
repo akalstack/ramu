@@ -5292,6 +5292,16 @@ test('iOS 26 large titles retain the transparent native surface required by UIKi
   assert.equal(find(chat, 'StackScreen').props.options.headerStyle.backgroundColor, 'window')
 })
 
+test('iOS point releases keep the transparent large title, even once its content has scrolled', () => {
+  const screen = load('components/Screen.tsx', 'ios', {
+    'react-native': { Platform: { OS: 'ios', Version: '26.0.1' } },
+  })
+  assert.equal(screen.liquidGlass, true)
+  const home = screen.Header({ title: 'Artifacts', large: true, scrollEdge: true, collapsed: true, back: false })
+  assert.equal(find(home, 'StackScreen').props.options.headerStyle.backgroundColor, 'transparent')
+  assert.equal(find(home, 'StackScreen').props.options.headerTransparent, true)
+})
+
 test('unchanged computer-use polls preserve context identity and do not notify consumers with new state', async () => {
   const hooks = hookHarness()
   let poll,
@@ -5388,13 +5398,45 @@ test('computer-use stop revokes only the displayed thread and refreshes the shar
 })
 
 test('tab and Settings stacks have blank initial titles and no generated back labels', () => {
-  for (const layout of ['(tabs)/(threads)', '(tabs)/inbox', '(tabs)/pulls', '(tabs)/compose', 'settings']) {
-    const { default: Layout } = load('app/' + layout + '/_layout.tsx', 'ios')
+  for (const layout of [
+    '(tabs)/(threads)',
+    '(tabs)/inbox',
+    '(tabs)/pulls',
+    '(tabs)/artifacts',
+    '(tabs)/compose',
+    'settings',
+  ]) {
+    const { default: Layout } = load('app/' + layout + '/_layout.tsx', 'ios', {
+      '../../../components/Screen': load('components/Screen.tsx', 'ios'),
+    })
     const options = Layout().props.screenOptions
     assert.equal(options.title, '')
     assert.equal(options.headerBackButtonDisplayMode, 'minimal')
     assert.equal(options.headerStyle.backgroundColor, 'window')
   }
+})
+
+test('each tab list starts under the same transparent large-title header it draws, not an opaque bar', () => {
+  const ios = { 'react-native': { Platform: { OS: 'ios', Version: '26.1' } } }
+  for (const tab of ['(threads)', 'inbox', 'pulls', 'artifacts']) {
+    const screen = load('components/Screen.tsx', 'ios', ios)
+    const { default: Layout } = load('app/(tabs)/' + tab + '/_layout.tsx', 'ios', {
+      ...ios,
+      '../../../components/Screen': screen,
+    })
+    const index = find(Layout(), 'StackScreen')
+    assert.equal(index.props.name, 'index')
+    assert.equal(index.props.options.headerTransparent, true)
+    assert.equal(index.props.options.headerStyle.backgroundColor, 'transparent')
+    const drawn = find(screen.Header({ title: tab, large: true, scrollEdge: true, back: false }), 'StackScreen')
+    assert.equal(drawn.props.options.headerTransparent, index.props.options.headerTransparent)
+    assert.equal(drawn.props.options.headerStyle.backgroundColor, index.props.options.headerStyle.backgroundColor)
+  }
+  const { default: Compose } = load('app/(tabs)/compose/_layout.tsx', 'ios', ios)
+  assert.equal(Compose().props.children, undefined)
+  const screen = load('components/Screen.tsx', 'ios', ios)
+  const compact = find(screen.Header({ title: 'Select threads', back: false }), 'StackScreen')
+  assert.equal(compact.props.options.headerLargeTitle, false)
 })
 
 for (const os of ['ios', 'android']) {

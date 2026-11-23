@@ -55,6 +55,9 @@ function hasNativeMarker() {
 const scrollViewMarker = hasNativeMarker()
 /** True when UIKit draws the scroll-edge effect and large title itself; otherwise screens use `TopFade` and `LargeTitle`. */
 export const nativeScrollEdge = scrollViewMarker
+// iOS reports its version as a string such as "26.0.1", which Number() turns into NaN, so compare the major version only.
+/** iOS 26 or later: Liquid Glass bars, which large titles need transparent and which stand taller than older bars. */
+export const liquidGlass = Platform.OS === 'ios' && parseInt(String(Platform.Version), 10) >= 26
 const scrollEdges = { top: 'soft', bottom: 'hidden', left: 'hidden', right: 'hidden' } as const
 function PrimaryScroll({ children }: { children: NonNullable<ReactNode> }) {
   if (Platform.OS === 'ios')
@@ -394,6 +397,8 @@ export function Header({
           options={{
             headerShown: true,
             headerTransparent: false,
+            // The tab stacks start their first screen with a large title (`tabRootHeaderOptions`); a compact bar turns it off.
+            headerLargeTitle: false,
             // UIKit's own Back stays, so holding it lists the earlier screens; the title it shows there is this one.
             title: label,
             headerBackVisible: back && !modal,
@@ -510,11 +515,7 @@ export function Header({
     // iOS 26 large titles require a transparent native bar; their scroll view supplies the native edge treatment.
     const underlap = !!large || scrollEdge
     const background =
-      underlap && Number(Platform.Version) >= 26
-        ? !nativeScrollEdge && scrolled
-          ? headerSurface
-          : 'transparent'
-        : headerSurface
+      underlap && liquidGlass ? (!nativeScrollEdge && scrolled ? headerSurface : 'transparent') : headerSurface
     return (
       <>
         <Stack.Screen
@@ -622,6 +623,22 @@ export function Header({
       </View>
     </View>
   )
+}
+
+/**
+ * The large-title header the tab lists (Threads, Inbox, Pull requests, Artifacts) draw with `Header large scrollEdge`,
+ * given to their stack before the screen mounts. UIKit sets a scroll view's inset from the bar it first lays out under;
+ * starting from an opaque compact bar and switching after mount can leave a tab's content parked under the bar.
+ */
+export function tabRootHeaderOptions(window: string) {
+  if (Platform.OS !== 'ios') return {}
+  return {
+    headerTransparent: true,
+    headerLargeTitle: nativeScrollEdge,
+    headerStyle: { backgroundColor: liquidGlass ? 'transparent' : window },
+    headerShadowVisible: false,
+    scrollEdgeEffects: scrollEdges,
+  }
 }
 
 export function Screen({ children, bg }: { children: ReactNode; bg?: 'window' | 'canvas'; scrollable?: boolean }) {

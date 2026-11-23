@@ -66,7 +66,7 @@ import { formatChatDate, needsChatDate } from '@ramu/shared/chat/chatDates'
 import { commitAndPush, pushBranch } from '../../../runtime/gitQuick'
 import { chooseCommitBranch } from '../../../runtime/commitBranchPrompt'
 import { STANDALONE } from '../../../runtime/types'
-import { Header, HeaderButton, HeaderMenu, Screen, PageLegendList } from '../../../components/Screen'
+import { Header, HeaderButton, HeaderMenu, Screen, PageLegendList, liquidGlass } from '../../../components/Screen'
 import type { LegendListRef } from '@legendapp/list/react-native'
 import Reanimated, { cancelAnimation, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import { scheduleOnRN } from 'react-native-worklets'
@@ -292,7 +292,7 @@ function ChatView({ id }: { id: string }) {
   // Native scroll-edge chrome overlays the list; UIKit supplies its top inset. Beside the thread list the page draws its
   // own header above the list instead, as on Android.
   const inPane = useInDetailPane()
-  const topInset = ios && !inPane ? insets.top + (Number(Platform.Version) >= 26 ? 54 : 44) : 0
+  const topInset = ios && !inPane ? insets.top + (liquidGlass ? 54 : 44) : 0
   // Where UIKit rests a chat that fits on screen: read from the list while it is short, since the bar's real height can
   // differ from the guess above.
   const measuredRest = useRef<number | null>(null)
