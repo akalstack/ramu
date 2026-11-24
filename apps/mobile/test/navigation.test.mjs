@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { backHistory, goBackOrHome } from '../src/runtime/navigation.ts'
+import { arrivalAnimation, backHistory, goBackOrHome } from '../src/runtime/navigation.ts'
 
 test('back returns to the previous screen when navigation history exists', () => {
   const actions = []
@@ -45,4 +45,12 @@ test('the back menu lists earlier screens nearest first, with how far back each 
 })
 test('the first screen of a stack has no back menu', () => {
   assert.deepEqual(backHistory({ routes: [{ key: 'only' }] }, new Map([['only', 'Only']])), [])
+})
+
+test('a thread started from New thread opens in its place, while every other way into a thread keeps the transition', () => {
+  assert.equal(arrivalAnimation('rise'), 'none')
+  assert.equal(arrivalAnimation('shown'), 'none')
+  assert.equal(arrivalAnimation(undefined), 'default')
+  // A link with an unknown value is an ordinary visit.
+  assert.equal(arrivalAnimation('later'), 'default')
 })

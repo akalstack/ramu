@@ -1,7 +1,12 @@
 import { pendingThreads, withRecalled, type PendingThread } from './composer/pendingThreads'
 import { QueuedThreads } from './composer/WaitingThreads'
-import { startingThreads } from './workspace/startingThreads'
-import { LoadingDots } from '@/components/loading-dots'
+import { startingThreads, type StartingThread } from './workspace/startingThreads'
+import { StartingAgentHeader } from './views/agent/components/AgentHeader'
+import { StartingTranscript } from './views/agent/components/StartingThread'
+import { COMPOSER_DOCK_CLASS } from './views/agent/styles'
+import { CHAT_MOTION, SENT_MOTION } from '@ramu/shared/chat/presentation'
+import { reducedMotion } from './workspace/panelMotion'
+import { ipcQueryKeyOn } from './dataQueries'
 import { BranchNameEditor } from './workspace/BranchNameEditor'
 import { WorkspaceNameDialog } from './workspace/WorkspaceNameDialog'
 import { t, useLanguage } from './i18n'
@@ -21,7 +26,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/desktop-button'
 import { Spinner } from '@/components/ui/spinner'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   resolveCheckoutMode,
   currentBranchChoice,
@@ -363,8 +368,26 @@ export function NewThread({
   const [prompt, setPrompt] = useState(() => loadDraft(draftKey.newChat(projectId), draftStore(host.id)))
   const consumeDraft = useDraftPersistence(draftKey.newChat(projectId), prompt, host.id)
   const [busy, setBusy] = useState(false)
-  // The message being started, shown as a temporary thread until the real one opens.
-  const [pending, setPending] = useState<{ text: string; status: string } | null>(null)
+  // The message being started, shown as the thread it starts (its header, transcript and message box where the thread
+  // draws them) until the real one opens.
+  const [pending, setPending] = useState<StartingThread | null>(null)
+  // Where the message box was when the message went out, so it slides once to the thread's place instead of jumping.
+  const composerBox = useRef<HTMLDivElement>(null)
+  const composerFrom = useRef<number | null>(null)
+  useLayoutEffect(() => {
+    const from = composerFrom.current
+    composerFrom.current = null
+    const box = composerBox.current
+    if (!pending || from === null || !box || reducedMotion()) return
+    const shift = from - box.getBoundingClientRect().top
+    if (Math.abs(shift) < 1) return
+    const slide = box.animate([{ transform: `translateY(${shift}px)` }, { transform: 'none' }], {
+      duration: SENT_MOTION.durationMs,
+      easing: `cubic-bezier(${CHAT_MOTION.easing.join(', ')})`,
+    })
+    return () => slide.cancel()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [pending !== null] by design: it slides once, when the send starts
+  }, [pending !== null])
   const [error, setError] = useState<string | null>(null)
   const [issue, setIssue] = useState<IssueLink | null>(null)
   const [renamingWorkspace, setRenamingWorkspace] = useState<{
@@ -518,11 +541,22 @@ export function NewThread({
     sending.current = true
     setError(null)
     setBusy(true)
-    setPending({
-      text: prompt.trim() || attachments.map((attachment) => attachment.name).join(', '),
+    composerFrom.current = composerBox.current?.getBoundingClientRect().top ?? null
+    let opening: StartingThread = {
+      text: prompt.trim(),
+      attachments,
+      sentAt: Date.now(),
       status: auto && !chosen ? t('Choosing a project…') : t('Starting the agent…'),
-    })
+      settings: agentDraft.settings,
+    }
+    setPending(opening)
     let created: string | null = null
+    /** What the start is doing now, on the line under the message, here and in the thread once it has opened. */
+    const showStatus = (status: string) => {
+      opening = { ...opening, status }
+      setPending(opening)
+      if (created) startingThreads.status(created, status)
+    }
     // The thread this send opened while its agent starts, to leave again if starting fails.
     let opened: string | null = null
     let target = {
@@ -561,13 +595,7 @@ export function NewThread({
           setSuggestNew(false)
           if (outcome.kind === 'resolved') {
             destination = outcome.projectId
-            setPending(
-              (current) =>
-                current && {
-                  ...current,
-                  status: t('Starting in {0}…', { 0: ws.projects.find((p) => p.id === destination)?.name ?? '' }),
-                },
-            )
+            showStatus(t('Starting in {0}…', { 0: ws.projects.find((p) => p.id === destination)?.name ?? '' }))
             setRouteNote(
               `${t('Starting in')} ${ws.projects.find((p) => p.id === destination)?.name ?? ''} — ${outcome.reason}`,
             )
@@ -645,7 +673,7 @@ export function NewThread({
         setChoices(null)
       }
       if (newName) {
-        setPending((current) => current && { ...current, status: t('Creating {0}…', { '0': newName }) })
+        showStatus(t('Creating {0}…', { '0': newName }))
         let made = madeProject.current?.name === newName ? madeProject.current : null
         if (!made) {
           const { project: createdProject } = await host.invoke('projects.create', {
@@ -690,18 +718,18 @@ export function NewThread({
         requestId: creationRequest.current.id,
       })
       created = task.id
+      opening = { ...opening, settings: sendSettings }
+      startingThreads.set(task.id, opening)
       // Outside Auto the destination is already known, so the thread opens now and shows its first message while
-      // setup and the agent start there, instead of Home holding a "Starting" line. Auto stays here to pick a project.
+      // setup and the agent start there. Auto stays here to pick a project, drawn the same way.
       if (!auto) {
-        startingThreads.set(task.id, {
-          text: prompt.trim() || attachments.map((attachment) => attachment.name).join(', '),
-          status: t('Starting the agent…'),
-        })
         await ws.refresh()
         ws.openTask(task.id)
         opened = task.id
       }
+      if (target.mode === 'worktree') showStatus(t('Creating worktrees…'))
       const bindings = target.mode === 'worktree' ? await host.invoke('tasks.setup', task.id) : []
+      if (target.mode === 'worktree') showStatus(t('Starting the agent…'))
       await ws.refresh()
       // Half-built worktrees keep the chat so "Retry setup" can finish it.
       if (bindings.some((b) => b.setupState !== 'ready')) {
@@ -737,11 +765,14 @@ export function NewThread({
         agentDraft.consume()
       }
       opened = null
-      startingThreads.delete(task.id)
+      // The thread draws its message box with the session's own controls from its first frame, as here.
+      queryClient.setQueryData(ipcQueryKeyOn(host.id, 'agent.get', session.id), session)
+      // The started thread keeps drawing the first message until the host's copy reaches it (see AgentView).
       ws.openTask(task.id)
       ws.openView(task.id, { kind: 'agent', sessionId: session.id })
       void ws.refresh()
     } catch (e) {
+      if (created) startingThreads.delete(created)
       // A chat exists only with its first message: don't leave an empty one behind (and a retry a duplicate).
       if (created) {
         await host.invoke('tasks.delete', created, target.mode === 'worktree' && !target.workspaceId).then(
@@ -831,10 +862,22 @@ export function NewThread({
       ? { label: workspaceDraft.choice.name ?? t('Workspace unavailable'), Icon: GitBranch }
       : MODES.find((m) => m.id === mode)!
 
+  // Once a message is sent, this view is drawn as the thread it starts until that thread opens: the thread's header, its
+  // first message and status line where the thread puts them, and the same message box (kept mounted, so a failed start
+  // shows its reason there with the draft back in it) moved once to the thread's place.
   const start = (
-    <div className="start-view flex-1 flex flex-col min-h-0 min-w-0">
-      <div className="start-hero [&_h1]:m-0 [&_h1]:text-hero [&_h1]:text-center [&_h1]:leading-[1.3] [&_h1]:font-semibold [&_h1]:tracking-[-0.022em] flex-1 flex flex-col items-center justify-center gap-2.5 p-6">
-        {/* While a sent message is routed, it stands in for the thread to come; the welcome would only compete with it. */}
+    <div
+      className={pending ? 'flex flex-col flex-1 min-h-0 min-w-0' : 'start-view flex-1 flex flex-col min-h-0 min-w-0'}
+    >
+      {pending && <StartingAgentHeader />}
+      <div
+        className={
+          pending
+            ? 'flex flex-col flex-1 min-h-0 min-w-0'
+            : 'start-hero [&_h1]:m-0 [&_h1]:text-hero [&_h1]:text-center [&_h1]:leading-[1.3] [&_h1]:font-semibold [&_h1]:tracking-[-0.022em] flex-1 flex flex-col items-center justify-center gap-2.5 p-6'
+        }
+      >
+        {pending && <StartingTranscript thread={pending} start />}
         {!pending && (
           <>
             <AnimatedMark
@@ -884,8 +927,14 @@ export function NewThread({
           </>
         )}
       </div>
-      <div className="start-dock [&_.composer]:relative [&_.composer]:z-1 flex-none flex flex-col gap-2 w-full m-[0_auto] p-[0_20px_22px] max-w-[780px] pb-3.5">
-        {!general && workspaceDraft.problem && (
+      <div
+        className={
+          pending
+            ? COMPOSER_DOCK_CLASS
+            : 'start-dock [&_.composer]:relative [&_.composer]:z-1 flex-none flex flex-col gap-2 w-full m-[0_auto] p-[0_20px_22px] max-w-[780px] pb-3.5'
+        }
+      >
+        {!pending && !general && workspaceDraft.problem && (
           <p
             className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1 px-3 text-caption leading-[1.45] text-muted-foreground"
             role="status"
@@ -902,12 +951,13 @@ export function NewThread({
             )}
           </p>
         )}
-        {workspaceId && !existingWorkspace && (
+        {!pending && workspaceId && !existingWorkspace && (
           <p className="m-0 px-3 text-caption leading-[1.45] text-muted-foreground" role="status">
             {t('Saved workspace is unavailable. Choose another workspace.')}
           </p>
         )}
-        {!general &&
+        {!pending &&
+          !general &&
           !workspaceId &&
           (!options.data ||
             options.data.defaultCheckoutMode === 'worktree' ||
@@ -926,7 +976,7 @@ export function NewThread({
                 : t('Loading workspace settings…')}
             </p>
           )}
-        {!general && mode === 'worktree' && !workspaceId && (
+        {!pending && !general && mode === 'worktree' && !workspaceId && (
           <NewWorktreeSummary
             projectId={projectId}
             repos={repos}
@@ -963,185 +1013,179 @@ export function NewThread({
             location={projectParent}
           />
         )}
-        <QueuedThreads
-          hostId={host.id}
-          hostName={currentHostName}
-          projectName={queuedProjectName}
-          onEdit={editQueued}
-        />
-        {pending && (
-          <div className="flex flex-col items-end gap-2 px-1 pb-1" role="status" aria-live="polite">
-            {pending.text && (
-              <div className="line-clamp-6 max-w-[78%] whitespace-pre-wrap break-words rounded-[calc(var(--radius-l)_-_2px)] rounded-br-(--radius-xs) bg-(--bubble) px-3.5 py-2.5 text-chat leading-[1.55] text-(--text-body)">
-                {pending.text}
-              </div>
-            )}
-            <span className="flex items-center gap-2 px-2 text-caption text-muted-foreground">
-              <LoadingDots />
-              {pending.status}
-            </span>
-          </div>
+        {!pending && (
+          <QueuedThreads
+            hostId={host.id}
+            hostName={currentHostName}
+            projectName={queuedProjectName}
+            onEdit={editQueued}
+          />
         )}
-        <ComposerStack>
-          <ComposerTray className="start-chips">
-            <div className="start-context flex min-w-0 flex-1 flex-wrap items-center gap-0.5">
-              {computerItems.length > 1 && (
-                <Menu
-                  label={t('Host')}
-                  className={CHIP}
-                  icon={
-                    <>
-                      {currentComputer?.local ? <Monitor size={13} /> : <Network size={13} />}{' '}
-                      <span className="chip-label">{currentComputer?.name}</span>
-                    </>
-                  }
-                  items={computerItems}
+        <ComposerStack ref={composerBox}>
+          {!pending && (
+            <ComposerTray className="start-chips">
+              <div className="start-context flex min-w-0 flex-1 flex-wrap items-center gap-0.5">
+                {computerItems.length > 1 && (
+                  <Menu
+                    label={t('Host')}
+                    className={CHIP}
+                    icon={
+                      <>
+                        {currentComputer?.local ? <Monitor size={13} /> : <Network size={13} />}{' '}
+                        <span className="chip-label">{currentComputer?.name}</span>
+                      </>
+                    }
+                    items={computerItems}
+                  />
+                )}
+                <Combobox
+                  label={t('Project')}
+                  searchPlaceholder={t('Search projects…')}
+                  value={startingNew ? NEW_PROJECT : auto ? AUTO_PROJECT : (project?.id ?? NO_PROJECT)}
+                  icon={<FolderClosed size={13} />}
+                  bare
+                  className={`${CHIP} max-w-[220px]`}
+                  options={projectOptions}
+                  onChange={(id) => {
+                    if (id === NEW_PROJECT) return setStartingNew(true)
+                    setStartingNew(false)
+                    // The pick survives a restart with the draft, until that draft is sent.
+                    rememberDraftDestination(id, hostStorageFor(host.id))
+                    onProjectChange(id)
+                  }}
                 />
-              )}
-              <Combobox
-                label={t('Project')}
-                searchPlaceholder={t('Search projects…')}
-                value={startingNew ? NEW_PROJECT : auto ? AUTO_PROJECT : (project?.id ?? NO_PROJECT)}
-                icon={<FolderClosed size={13} />}
-                bare
-                className={`${CHIP} max-w-[220px]`}
-                options={projectOptions}
-                onChange={(id) => {
-                  if (id === NEW_PROJECT) return setStartingNew(true)
-                  setStartingNew(false)
-                  // The pick survives a restart with the draft, until that draft is sent.
-                  rememberDraftDestination(id, hostStorageFor(host.id))
-                  onProjectChange(id)
-                }}
-              />
-              {!general && (
-                <Menu
-                  label={t('Where the work happens')}
-                  className={CHIP}
-                  icon={
-                    <>
-                      <current.Icon size={13} />{' '}
-                      <span className="chip-label">{existingWorkspace ? current.label : t(current.label)}</span>
-                    </>
-                  }
-                  items={[
-                    {
-                      key: 'default',
-                      label: t('Use default'),
-                      onSelect: () => {
-                        workspaceDraft.choose({ mode: null, branch: workspaceDraft.choice.branch })
+                {!general && (
+                  <Menu
+                    label={t('Where the work happens')}
+                    className={CHIP}
+                    icon={
+                      <>
+                        <current.Icon size={13} />{' '}
+                        <span className="chip-label">{existingWorkspace ? current.label : t(current.label)}</span>
+                      </>
+                    }
+                    items={[
+                      {
+                        key: 'default',
+                        label: t('Use default'),
+                        onSelect: () => {
+                          workspaceDraft.choose({ mode: null, branch: workspaceDraft.choice.branch })
+                        },
                       },
-                    },
-                    ...MODES.map((m) => ({
-                      key: m.id,
-                      disabled: m.id === 'worktree' && Boolean(options.data?.worktreeUnavailable),
-                      label: (
-                        <>
-                          <m.Icon size={14} />
-                          <span>
-                            {t(m.label)}
-                            <span className="muted text-muted-foreground block block">{t(m.hint)}</span>
-                          </span>
-                        </>
-                      ),
-                      onSelect: () => {
-                        workspaceDraft.choose({ mode: m.id, branch: workspaceDraft.choice.branch })
-                      },
-                    })),
-                    ...ws.workspaces
-                      .filter((w) => w.projectId === projectId)
-                      .map((w) => ({
-                        key: w.id,
+                      ...MODES.map((m) => ({
+                        key: m.id,
+                        disabled: m.id === 'worktree' && Boolean(options.data?.worktreeUnavailable),
                         label: (
                           <>
-                            <GitBranch size={14} />
-                            <span className="menu-label [.chat-switch-menu_&]:flex-1 [.chat-switch-menu_&]:max-w-[none] [.chat-switch-menu_&]:leading-[18px] [.chat-switch-menu_&]:font-medium [.chat-switch-menu_&]:min-w-0 [.dropdown-menu_&]:min-w-0 [.dropdown-menu_&]:max-w-[none] [.dropdown-menu_&]:whitespace-nowrap [.project-switch-menu_&]:max-w-[none] [.project-switch-menu_&]:leading-[18px] [.project-switch-menu_&]:font-medium [.project-switch-menu_&]:min-w-0 [.project-switch-menu_&_.block]:max-w-[none] [.project-switch-menu_&_.block]:overflow-hidden [.project-switch-menu_&_.block]:text-ellipsis [.project-switch-menu_&_.block]:whitespace-nowrap [.project-switch-menu_&_.block]:m-[2px_0_0] [.project-switch-menu_&_.block]:text-caption [.project-switch-menu_&_.block]:leading-[16px] [.project-switch-menu_&_.block]:font-normal [.project-switch-menu_&_.block]:text-muted-foreground [.chat-switch-menu_&_.block]:overflow-hidden [.chat-switch-menu_&_.block]:text-ellipsis [.chat-switch-menu_&_.block]:whitespace-nowrap [.chat-switch-menu_&_.block]:m-[2px_0_0] [.chat-switch-menu_&_.block]:text-caption [.chat-switch-menu_&_.block]:leading-[16px] [.chat-switch-menu_&_.block]:font-normal [.chat-switch-menu_&_.block]:text-muted-foreground max-w-[220px] overflow-hidden text-ellipsis">
-                              {w.name}
-                              <span className="muted text-muted-foreground block block">
-                                {t('Existing isolated worktree')}
-                              </span>
+                            <m.Icon size={14} />
+                            <span>
+                              {t(m.label)}
+                              <span className="muted text-muted-foreground block block">{t(m.hint)}</span>
                             </span>
                           </>
                         ),
                         onSelect: () => {
-                          workspaceDraft.choose({ mode: 'worktree', workspaceId: w.id, name: w.name })
+                          workspaceDraft.choose({ mode: m.id, branch: workspaceDraft.choice.branch })
                         },
                       })),
-                    ...(existingWorkspace
-                      ? [
-                          {
-                            key: 'rename-workspace',
-                            label: t('Rename workspace…'),
-                            disabled: busy || host.status !== 'connected',
-                            onSelect: () =>
-                              setRenamingWorkspace({
-                                host: host.id,
-                                project: projectId,
-                                openedOn: activeHost,
-                                workspace: existingWorkspace,
-                              }),
+                      ...ws.workspaces
+                        .filter((w) => w.projectId === projectId)
+                        .map((w) => ({
+                          key: w.id,
+                          label: (
+                            <>
+                              <GitBranch size={14} />
+                              <span className="menu-label [.chat-switch-menu_&]:flex-1 [.chat-switch-menu_&]:max-w-[none] [.chat-switch-menu_&]:leading-[18px] [.chat-switch-menu_&]:font-medium [.chat-switch-menu_&]:min-w-0 [.dropdown-menu_&]:min-w-0 [.dropdown-menu_&]:max-w-[none] [.dropdown-menu_&]:whitespace-nowrap [.project-switch-menu_&]:max-w-[none] [.project-switch-menu_&]:leading-[18px] [.project-switch-menu_&]:font-medium [.project-switch-menu_&]:min-w-0 [.project-switch-menu_&_.block]:max-w-[none] [.project-switch-menu_&_.block]:overflow-hidden [.project-switch-menu_&_.block]:text-ellipsis [.project-switch-menu_&_.block]:whitespace-nowrap [.project-switch-menu_&_.block]:m-[2px_0_0] [.project-switch-menu_&_.block]:text-caption [.project-switch-menu_&_.block]:leading-[16px] [.project-switch-menu_&_.block]:font-normal [.project-switch-menu_&_.block]:text-muted-foreground [.chat-switch-menu_&_.block]:overflow-hidden [.chat-switch-menu_&_.block]:text-ellipsis [.chat-switch-menu_&_.block]:whitespace-nowrap [.chat-switch-menu_&_.block]:m-[2px_0_0] [.chat-switch-menu_&_.block]:text-caption [.chat-switch-menu_&_.block]:leading-[16px] [.chat-switch-menu_&_.block]:font-normal [.chat-switch-menu_&_.block]:text-muted-foreground max-w-[220px] overflow-hidden text-ellipsis">
+                                {w.name}
+                                <span className="muted text-muted-foreground block block">
+                                  {t('Existing isolated worktree')}
+                                </span>
+                              </span>
+                            </>
+                          ),
+                          onSelect: () => {
+                            workspaceDraft.choose({ mode: 'worktree', workspaceId: w.id, name: w.name })
                           },
-                        ]
-                      : []),
-                  ]}
-                />
-              )}
-              {!general && issues.length > 0 && (
-                <Combobox
-                  label={t('Start from an issue')}
-                  searchPlaceholder={t('Search issues…')}
-                  value={issue ? issueValue(issue) : ''}
-                  icon={<CircleDot size={13} />}
-                  className="h-7 min-h-7 p-[0_10px] rounded-full bg-transparent text-soft text-control max-w-[260px]"
-                  title={issue?.title}
-                  disabled={busy}
-                  options={[
-                    { value: '', label: t('No issue') },
-                    ...issues.map((entry) => ({
-                      value: issueValue(entry),
-                      label: `${repos.length > 1 ? `${entry.repoName} ` : ''}#${entry.number} ${entry.title}`,
-                    })),
-                  ]}
-                  onChange={(value) => void pickIssue(value)}
-                />
-              )}
-            </div>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center tray-settings"
-              aria-label={t('Thread settings')}
-              title={t('Thread settings')}
-              onClick={() => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'git' } }))}
-            >
-              <Settings size={14} />
-            </Button>
-          </ComposerTray>
+                        })),
+                      ...(existingWorkspace
+                        ? [
+                            {
+                              key: 'rename-workspace',
+                              label: t('Rename workspace…'),
+                              disabled: busy || host.status !== 'connected',
+                              onSelect: () =>
+                                setRenamingWorkspace({
+                                  host: host.id,
+                                  project: projectId,
+                                  openedOn: activeHost,
+                                  workspace: existingWorkspace,
+                                }),
+                            },
+                          ]
+                        : []),
+                    ]}
+                  />
+                )}
+                {!general && issues.length > 0 && (
+                  <Combobox
+                    label={t('Start from an issue')}
+                    searchPlaceholder={t('Search issues…')}
+                    value={issue ? issueValue(issue) : ''}
+                    icon={<CircleDot size={13} />}
+                    className="h-7 min-h-7 p-[0_10px] rounded-full bg-transparent text-soft text-control max-w-[260px]"
+                    title={issue?.title}
+                    disabled={busy}
+                    options={[
+                      { value: '', label: t('No issue') },
+                      ...issues.map((entry) => ({
+                        value: issueValue(entry),
+                        label: `${repos.length > 1 ? `${entry.repoName} ` : ''}#${entry.number} ${entry.title}`,
+                      })),
+                    ]}
+                    onChange={(value) => void pickIssue(value)}
+                  />
+                )}
+              </div>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center tray-settings"
+                aria-label={t('Thread settings')}
+                title={t('Thread settings')}
+                onClick={() => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'git' } }))}
+              >
+                <Settings size={14} />
+              </Button>
+            </ComposerTray>
+          )}
           <Composer
             scopeId={workspaceId ? `worktree:${workspaceId}` : `project:${projectId}`}
-            attachments={attachments}
+            // The message is in the transcript above while it starts; the draft stays, to come back if starting fails.
+            attachments={pending ? [] : attachments}
             onAttachmentsChange={setAttachments}
             autoFocus
             controls={<AgentControls settings={settings} onChange={agentDraft.change} disabled={busy} />}
-            value={prompt}
+            value={pending ? '' : prompt}
             onChange={(v) => {
               setPrompt(v)
             }}
             onSubmit={send}
             disabled={busy || needsRepository}
             placeholder={
-              startingNew
-                ? t('Describe what to build')
-                : needsRepository
-                  ? t('Add a repository to this project first')
-                  : queues
-                    ? t('Message · starts when {0} is back', { '0': currentHostName })
-                    : t('Message the agent')
+              pending
+                ? t('Reply to the agent')
+                : startingNew
+                  ? t('Describe what to build')
+                  : needsRepository
+                    ? t('Add a repository to this project first')
+                    : queues
+                      ? t('Message · starts when {0} is back', { '0': currentHostName })
+                      : t('Message the agent')
             }
             submitLabel={t('Start thread')}
           />
         </ComposerStack>
-        {routeNote && (
+        {!pending && routeNote && (
           <p className="m-0 px-3 text-caption leading-[1.45] text-muted-foreground" role="status">
             {routeNote}
           </p>
@@ -1256,12 +1300,22 @@ export function NewThread({
         event.preventDefault()
         void addProject.addDropped([...event.dataTransfer.files])
       }}
-      className={`home-page${folderOver ? ' outline-dashed outline-1 -outline-offset-4 outline-(--line-strong)' : ''} [&_.composer_[data-composer-input]]:text-chat [&_.composer_[data-composer-input]]:leading-[1.55] [&_.composer_[data-composer-input]]:p-[2px_4px_6px_0] [&_.composer_[data-composer-input]]:min-h-[26px] [&_.composer_[data-composer-input]]:text-foreground [&_.composer_[data-composer-input]]:text-chat [&_.composer_[data-composer-input]]:leading-[1.55] [&_.composer_[data-composer-input]]:p-[2px_4px_6px_0] [&_.composer_[data-composer-input]]:min-h-[26px] [&_.composer_[data-composer-input]]:text-foreground [&_.composer-bar_.dropdown-trigger.control-btn]:h-[30px] [&_.composer-bar_.dropdown-trigger.control-btn]:min-h-[30px] [&_.composer-bar_.dropdown-trigger.control-btn]:p-[4px_8px] [&_.composer-bar_.dropdown-trigger.control-btn]:bg-transparent [&_.composer-bar_.dropdown-trigger.control-btn]:text-control [&_.composer-bar_.dropdown-trigger.control-btn]:leading-[normal] w-full h-full overflow-auto flex flex-col items-stretch p-[0_24px_24px]`}
+      className={
+        pending
+          ? 'home-page flex flex-col w-full h-full min-h-0 overflow-hidden'
+          : `home-page${folderOver ? ' outline-dashed outline-1 -outline-offset-4 outline-(--line-strong)' : ''} [&_.composer_[data-composer-input]]:text-chat [&_.composer_[data-composer-input]]:leading-[1.55] [&_.composer_[data-composer-input]]:p-[2px_4px_6px_0] [&_.composer_[data-composer-input]]:min-h-[26px] [&_.composer_[data-composer-input]]:text-foreground [&_.composer_[data-composer-input]]:text-chat [&_.composer_[data-composer-input]]:leading-[1.55] [&_.composer_[data-composer-input]]:p-[2px_4px_6px_0] [&_.composer_[data-composer-input]]:min-h-[26px] [&_.composer_[data-composer-input]]:text-foreground [&_.composer-bar_.dropdown-trigger.control-btn]:h-[30px] [&_.composer-bar_.dropdown-trigger.control-btn]:min-h-[30px] [&_.composer-bar_.dropdown-trigger.control-btn]:p-[4px_8px] [&_.composer-bar_.dropdown-trigger.control-btn]:bg-transparent [&_.composer-bar_.dropdown-trigger.control-btn]:text-control [&_.composer-bar_.dropdown-trigger.control-btn]:leading-[normal] w-full h-full overflow-auto flex flex-col items-stretch p-[0_24px_24px]`
+      }
     >
-      <div className="home-start [&_.start-view]:min-h-[min(560px,_72vh)] [.home-page:has(.home-section)_&_.start-view]:min-h-[min(400px,_50vh)] [&_.start-view]:pt-2 [&_.start-hero]:mb-[22px] [&_.start-hero_h1]:text-hero [&_.start-mark]:block [&_.start-dock]:pl-0 [&_.start-dock]:pr-0 [&_.start-dock]:max-w-[none] w-full max-w-[760px] m-[0_auto] [border:0]">
+      <div
+        className={
+          pending
+            ? 'flex flex-col flex-1 min-h-0 w-full'
+            : 'home-start [&_.start-view]:min-h-[min(560px,_72vh)] [.home-page:has(.home-section)_&_.start-view]:min-h-[min(400px,_50vh)] [&_.start-view]:pt-2 [&_.start-hero]:mb-[22px] [&_.start-hero_h1]:text-hero [&_.start-mark]:block [&_.start-dock]:pl-0 [&_.start-dock]:pr-0 [&_.start-dock]:max-w-[none] w-full max-w-[760px] m-[0_auto] [border:0]'
+        }
+      >
         {start}
       </div>
-      <HomeFeed />
+      {!pending && <HomeFeed />}
     </div>
   )
 }

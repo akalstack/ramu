@@ -1,7 +1,7 @@
 import { projectIdentity, useHostIdentities } from '../../../runtime/identities'
 import { deliveryVisible, visibleText } from '../../../runtime/transcript'
 import { finishedAnswerRow, transcriptScrollState } from '../../../runtime/chatViewport'
-import { goBackOrHome } from '../../../runtime/navigation'
+import { goBackOrHome, type ThreadArrival } from '../../../runtime/navigation'
 import { shareRows } from '../../../runtime/shareRows'
 import { VIEW_ONLY_WRITE_NOTICE } from '../../../runtime/viewerAccess'
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from 'react'
@@ -151,15 +151,15 @@ function keepsSettings(chat: Chat, m: import('../../../components/Composer').Mod
  * another thread picked there replaces this one in place.
  */
 export default function ChatScreen() {
-  const { id, from } = useLocalSearchParams<{ id: string; from?: string }>()
+  const { id, from, started } = useLocalSearchParams<{ id: string; from?: string; started?: ThreadArrival }>()
   return (
     <ThreadSplit id={id} from={from}>
-      <ChatView key={id} id={id} />
+      <ChatView key={id} id={id} started={started} />
     </ThreadSplit>
   )
 }
 
-function ChatView({ id }: { id: string }) {
+function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
   const tr = useSay()
   const chat = useChat(id)
   const hostIdentities = useHostIdentities(chat?.computerId)
@@ -207,7 +207,15 @@ function ChatView({ id }: { id: string }) {
   const following = useRef(true)
   // A long thread renders top-down in batches; jumping to its end after each batch showed the whole transcript
   // scrolling past. It stays hidden until its size settles at the end, then appears already there.
-  const [revealed, setRevealed] = useState(false)
+  // How this screen opened, kept past the route parameter, which is cleared so Back and later visits use the usual
+  // transition. A thread just started from New thread holds only its first message, so it is drawn at once, as that
+  // screen left it.
+  const arrival = useRef(started).current
+  useEffect(() => {
+    if (arrival) router.setParams({ started: undefined })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [mount only] by design; the router is stable
+  }, [])
+  const [revealed, setRevealed] = useState(!!arrival)
   const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const revealCap = useRef<ReturnType<typeof setTimeout> | null>(null)
   const settleReveal = () => {
@@ -710,7 +718,13 @@ function ChatView({ id }: { id: string }) {
     if (item.kind === 'pending')
       return (
         // Inside the rise, as the host's copy carries its label, so the row keeps one shape when the copy arrives.
-        <SentArrive identity={key} start={fresh && item.outbox.createdAt >= openedAt.current}>
+        // A new thread's first message left New thread's message box as this screen opened, so it rises from it here.
+        <SentArrive
+          identity={key}
+          start={
+            fresh && (item.outbox.createdAt >= openedAt.current || (arrival === 'rise' && item.outbox.kind === 'chat'))
+          }
+        >
           {item.id === pendingDate?.id ? <ChatDateLabel date={pendingDate.date} /> : null}
           <PendingBubble item={item.outbox} computer={computer?.name ?? 'the host'} onEdit={editPending} />
         </SentArrive>

@@ -1,6 +1,6 @@
 import { needsChatDate } from '@ramu/shared/chat/chatDates'
 import { questionState, requestOutcomes, type QuestionState } from '@ramu/shared/chat/questions'
-import type { AgentEvent, ChatGoal } from '@ramu/shared/types'
+import type { AgentEvent, ChatGoal, QueuedMessage } from '@ramu/shared/types'
 import type { Turn } from '../types'
 import { blockAt } from './blocks'
 
@@ -67,3 +67,10 @@ export function nextTurnDate(turns: Turn[], at: number): number | undefined {
 /** The day separator for the turn at `pageIndex` on the drawn page; `turnDates` covers every turn, `hiddenTurns` of which are not drawn. */
 export const pageTurnDate = (turnDates: (number | undefined)[], hiddenTurns: number, pageIndex: number) =>
   turnDates[hiddenTurns + pageIndex]
+
+/**
+ * The host has a new thread's first message: as the thread's own message, or held in its queue (shown as the queued
+ * opening). Until then the thread draws the copy Home sent.
+ */
+export const openingLanded = (events: readonly AgentEvent[], queued: readonly QueuedMessage[]) =>
+  queued.length > 0 || events.some((event) => event.kind === 'user' && !event.agentId)

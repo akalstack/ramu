@@ -20,6 +20,7 @@ import {
   useRouter,
 } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
+import { arrivalAnimation } from '../runtime/navigation'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { KeyboardMotion } from '../components/Keyboard'
 import { ThemeProvider, useTheme } from '../theme'
@@ -110,7 +111,12 @@ function Navigator() {
           <Stack.Screen name="explorer" />
           <Stack.Screen name="file" />
           <Stack.Screen name="host-files" />
-          <Stack.Screen name="chat/[id]/index" />
+          <Stack.Screen
+            name="chat/[id]/index"
+            options={({ route }) => ({
+              animation: arrivalAnimation((route.params as { started?: string } | undefined)?.started),
+            })}
+          />
           <Stack.Screen name="chat/[id]/changes" />
           <Stack.Screen name="chat/[id]/file" />
           <Stack.Screen name="chat/[id]/aside" />

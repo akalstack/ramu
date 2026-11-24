@@ -98,6 +98,7 @@ import {
   questionStatesOf,
   toolResultsOf,
   nextTurnDate,
+  openingLanded,
   turnDatesOf,
 } from './agent/lib/derive'
 import { outboxFullError, quoteLines, visibleText } from './agent/lib/messages'
@@ -127,6 +128,9 @@ import { QueuedMessages } from './agent/components/QueuedMessages'
 import { QueuedOpening } from './agent/components/QueuedOpening'
 import { ErrorNote } from './agent/components/ErrorNote'
 import { TranscriptTurn, TurnDate } from './agent/components/TranscriptTurn'
+import { OpeningTurn } from './agent/components/StartingThread'
+import { COMPOSER_DOCK_CLASS, TRANSCRIPT_COLUMN_CLASS, TRANSCRIPT_VIEWPORT_CLASS } from './agent/styles'
+import type { StartingThread } from '../workspace/startingThreads'
 import { isLiveToolGroup } from './agent/lib/toolThinking'
 import { useTranscriptArrival } from './agent/hooks/useTranscriptArrival'
 import { ChatStatus, ChatSyncStatus } from '../chat/ChatMotion'
@@ -151,10 +155,15 @@ export const AgentView = memo(function AgentView({
   view,
   history,
   visible = true,
+  opening,
+  onOpeningLanded,
 }: {
   view: AgentViewDesc
   history?: React.ReactNode
   visible?: boolean
+  /** The first message of a thread Home just started, drawn where it will stay until the host's copy arrives. */
+  opening?: StartingThread
+  onOpeningLanded?: () => void
 }) {
   useLanguage()
   const host = useHost()
@@ -213,6 +222,11 @@ export const AgentView = memo(function AgentView({
   // Reordering the host's queue waits while a send is on its way, so the new message lands where it was sent.
   const configuring = submissions.some((item) => item.state === 'sending')
   const { tray: trayQueued, steering } = splitSteering(queued)
+  const landed = openingLanded(sourceEvents, trayQueued)
+  const openingShown = opening && !landed ? opening : undefined
+  useEffect(() => {
+    if (opening && landed) onOpeningLanded?.()
+  }, [opening, landed, onOpeningLanded])
   const [dropping, setDropping] = useState(false)
   const root = useRef<HTMLDivElement>(null)
   const { scroller, stick, onScroll } = useTranscriptScroll({
@@ -364,6 +378,11 @@ export const AgentView = memo(function AgentView({
     ? 'Compacting context…'
     : (agentActivityLabel(session?.state, events) ??
       (shownSubmissions.some((item) => item.state !== 'failed') ? 'Sending…' : null))
+  // Until the thread reports more than starting, the line keeps saying what the start is doing (setup, the agent).
+  const statusLabel =
+    openingShown && (!session || session.state === 'starting')
+      ? openingShown.status
+      : activityLabel && translate(activityLabel)
   const turns = useMemo(() => toTurns(blocks, events), [blocks, events])
   const { hiddenTurns, pageTurns, showEarlierTurns } = useTurnPaging({
     view,
@@ -929,14 +948,14 @@ export const AgentView = memo(function AgentView({
                   <TranscriptFollowState viewport={scroller} />
                   <div className="transcript-frame [&_>_.agent-panel]:relative [&_>_.agent-panel]:inset-auto [&_>_.agent-panel]:flex-none [&_>_.agent-panel]:w-[min(440px,_45%)] [&_>_.agent-panel]:h-auto [&_>_.agent-panel]:[box-shadow:none] [&_>_.agent-panel]:[animation:none] [&_>_.agent-panel]:[border-left:var(--pane-border-width)_solid_var(--pane-border-color)] relative flex-1 min-h-0 min-w-0 flex [container:transcript-frame_/_inline-size] flex-col">
                     <MessageScroller
-                      className={`transcript min-h-0 min-w-0 flex-1 ${hydrating && !turns.length ? 'chat-loading' : ''}`}
+                      className={`transcript min-h-0 min-w-0 flex-1 ${hydrating && !turns.length && !openingShown ? 'chat-loading' : ''}`}
                     >
                       <MessageScrollerViewport
                         ref={scroller}
                         onScroll={onScroll}
                         data-working={working || undefined}
                         aria-label={translate('Conversation')}
-                        className={`scroll-fade-y px-6 pt-3 pb-7 outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--line)] ${shownSubmissions.length ? 'motion-safe:scroll-smooth' : ''}`}
+                        className={`${TRANSCRIPT_VIEWPORT_CLASS} ${shownSubmissions.length ? 'motion-safe:scroll-smooth' : ''}`}
                       >
                         {hiddenTurns > 0 && (
                           <Button
@@ -951,11 +970,11 @@ export const AgentView = memo(function AgentView({
                           </Button>
                         )}
                         <MessageScrollerContent
-                          className={`${hydrating && !turns.length ? 'justify-center' : ''} transcript-col mx-auto max-w-[var(--chat-column-width)] gap-3.5`}
+                          className={`${hydrating && !turns.length && !openingShown ? 'justify-center' : ''} ${TRANSCRIPT_COLUMN_CLASS}`}
                         >
                           {/* The window already carries the brand; a chat that opens at once shows nothing, a slow one a
                             small spinner. */}
-                          {slowHydration && !turns.length && (
+                          {slowHydration && !turns.length && !openingShown && (
                             <div className="flex items-center justify-center text-muted-foreground">
                               <Spinner aria-label={translate('Loading conversation')} />
                             </div>
@@ -999,6 +1018,14 @@ export const AgentView = memo(function AgentView({
                                 <QueuedOpening message={message} />
                               </MessageScrollerItem>
                             ))}
+                          {openingShown && (
+                            <OpeningTurn
+                              text={openingShown.text}
+                              attachments={openingShown.attachments}
+                              sentAt={openingShown.sentAt}
+                              now={dateNow}
+                            />
+                          )}
                           {steering.map((message) => (
                             <MessageScrollerItem key={message.id} messageId={`steering-${message.id}`}>
                               <SteeringMessage
@@ -1027,11 +1054,13 @@ export const AgentView = memo(function AgentView({
                               </MessageScrollerItem>
                             )
                           })}
-                          {activityLabel && (
+                          {statusLabel && (
                             <ChatStatus
-                              label={translate(activityLabel)}
+                              label={statusLabel}
                               compacting={compacting}
                               quiet={!compacting && liveGroup}
+                              // The starting thread's view drew this line already; it stays rather than fading in again.
+                              enter={!openingShown}
                             />
                           )}
                           {syncShown && <ChatSyncStatus label={translate('Syncing messages…')} />}
@@ -1050,7 +1079,7 @@ export const AgentView = memo(function AgentView({
                 </MessageScrollerProvider>
               </ThreadAgents.Provider>
             </ChatMentions.Provider>
-            <div className="composer-dock [&_.error]:mb-1.5 [&_.error]:text-control flex-none p-[0_calc(16px_+_var(--chat-scrollbar-width,_0px))_10px_16px]">
+            <div className={COMPOSER_DOCK_CLASS}>
               <ComposerStack>
                 {error && <ErrorNote message={error} title={translate('That didn’t work')} />}
                 <ComputerGrantDialog state={computerActivity} />

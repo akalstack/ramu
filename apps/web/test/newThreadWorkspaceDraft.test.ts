@@ -143,6 +143,9 @@ vi.mock('../src/chat/Notifications', () => ({ notifyError() {} }))
 vi.mock('../src/workspace/TaskPane', () => ({ errorText: String }))
 vi.mock('../src/Home', () => ({ HomeFeed: () => null }))
 vi.mock('../src/Brand', () => ({ AnimatedMark: () => null }))
+vi.mock('../src/views/agent/components/AgentHeader', () => ({ StartingAgentHeader: () => null }))
+vi.mock('../src/views/agent/components/StartingThread', () => ({ StartingTranscript: () => null }))
+vi.mock('../src/dataQueries', () => ({ ipcQueryKeyOn: (...key: unknown[]) => key }))
 vi.mock('../src/chat/AgentControls', () => ({ AgentControls: () => null }))
 vi.mock('../src/composer/Composer', () => ({
   Composer: (props: { onSubmit: (context: FileContext[]) => Promise<void> }) => {
@@ -168,7 +171,7 @@ vi.mock('../src/components/desktop-button', () => ({
   Button: ({ children }: { children?: ReactNode }) => createElement('button', null, children),
 }))
 vi.mock('@tanstack/react-query', () => ({
-  useQueryClient: () => ({ invalidateQueries: async () => {} }),
+  useQueryClient: () => ({ invalidateQueries: async () => {}, setQueryData() {} }),
   useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) => ({
     data:
       queryKey[0] === 'workspace-options'
@@ -183,6 +186,7 @@ vi.mock('@tanstack/react-query', () => ({
   }),
 }))
 import { NewThread } from '../src/NewThread'
+import { startingThreads } from '../src/workspace/startingThreads'
 
 beforeEach(() => {
   state.openedTasks = []
@@ -260,6 +264,19 @@ it('retains the unsent snapshot and reports rejection when starting the agent fa
   // The thread opened while its agent started; failing to start brings the person back to New thread and the draft.
   expect(state.openedTasks.length).toBeGreaterThan(0)
   expect(state.returnedTo).toEqual(['p'])
+})
+
+it('hands the opened thread its first message to draw until the host has it, and takes it back when starting fails', async () => {
+  render()
+  await state.composer!.onSubmit([])
+  // The thread draws the message from the send to the host's copy; the thread view lets it go when that copy arrives.
+  expect(startingThreads.get('created')).toMatchObject({ text: 'Fix login', attachments: [] })
+  startingThreads.delete('created')
+
+  state.failMethod = 'agent.start'
+  render()
+  await expect(state.composer!.onSubmit([])).rejects.toThrow('Delivery rejected')
+  expect(startingThreads.get('created')).toBeUndefined()
 })
 
 it('does not acknowledge a send when worktree setup failed and retains the workspace for recovery', async () => {

@@ -68,3 +68,16 @@ export const ASIDE_ROW_QUOTE_CLASS =
 /** A quiet line at the end of a turn; add `error text-bad` for a failure. */
 export const TURN_END_CLASS =
   'turn-end [&_svg]:text-ok [&_svg]:flex-none [&_svg]:w-3.5 [&_svg]:h-3.5 [&_svg]:p-0.5 [&_svg]:rounded-full [&_svg]:[background:var(--ok-wash)] [&.error_svg]:text-bad [&.error_svg]:[background:var(--bad-wash)] [&.chat-note]:m-[8px_0] [&.chat-note_svg]:text-muted-foreground [&_.muted]:ml-auto [&_.muted]:tabular-nums [&.error]:[border-top:none] [&.error]:text-bad flex items-center text-caption text-muted-foreground gap-2 p-[6px_0_2px] [border-top:1px_solid_var(--line)] mt-1'
+
+/** The toolbar row above a chat; it hides itself while it holds nothing but its spacer. */
+export const AGENT_HEADER_CLASS =
+  'agent-header [&_.path]:flex-1 [&:not(:has(>_:not(.grow)))]:hidden [&_.grow]:hidden [&_.state]:mr-auto [&_.small]:gap-1.5 [&_.small]:text-soft [&_>_*]:flex-none [&_>_*]:whitespace-nowrap flex items-center flex-none text-control min-w-0 justify-end h-auto min-h-[36px] p-[4px_10px_0] gap-1.5 flex-wrap gap-y-1 pb-1'
+
+/** The transcript's scrolling area and its reading column. */
+export const TRANSCRIPT_VIEWPORT_CLASS =
+  'scroll-fade-y px-6 pt-3 pb-7 outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--line)]'
+export const TRANSCRIPT_COLUMN_CLASS = 'transcript-col mx-auto max-w-[var(--chat-column-width)] gap-3.5'
+
+/** The strip under the transcript that holds a chat's message box. */
+export const COMPOSER_DOCK_CLASS =
+  'composer-dock [&_.error]:mb-1.5 [&_.error]:text-control flex-none p-[0_calc(16px_+_var(--chat-scrollbar-width,_0px))_10px_16px]'

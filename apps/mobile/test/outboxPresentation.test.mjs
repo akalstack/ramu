@@ -42,7 +42,8 @@ test('delivery shows the complete submitted text immediately without offering an
   assert.equal(tree.props.disabled, true)
   assert.equal(tree.props.accessibilityLabel, 'Sending: Hello')
   // Drawn as the sent message will be, so the swap does not move the transcript.
-  assert.equal(tree.props.children[0].props.children.props.text, 'Hello')
+  assert.equal(tree.props.children[0].props.text, 'Hello')
+  assert.equal(tree.props.children[0].props.waiting, false)
   // On its way it reads as the sent message: no status words under the bubble.
   assert.equal(tree.props.children[1], null)
 })
@@ -57,14 +58,18 @@ test('offline and uncertain messages remain available to review or cancel', () =
 test('acknowledged delivery stays visible as sent while the phone reconnects', () => {
   const tree = bubble(false, 'accepted')
   assert.equal(tree.props.disabled, true)
-  assert.equal(tree.props.children[0].props.children.props.text, 'Hello')
+  assert.equal(tree.props.children[0].props.text, 'Hello')
   assert.equal(tree.props.children[1], null)
+})
+
+test('a message held on the phone is marked as waiting', () => {
+  assert.equal(bubble(false, 'waiting').props.children[0].props.waiting, true)
 })
 
 test('a long message still on its way opens and closes with Show more', () => {
   const updates = []
-  const tree = bubble(true, 'sending', (update) => updates.push(update))
-  const message = tree.props.children[0].props.children.props
+  const message = load({ setState: (update) => updates.push(update) }).SentBubble({ text: 'Hello' }).props.children
+    .props
   assert.equal(message.expanded, false)
   assert.equal(message.label, 'Show more')
   message.onToggle()

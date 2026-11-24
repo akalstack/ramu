@@ -34,3 +34,14 @@ export function backHistory(
   }
   return entries
 }
+
+/**
+ * How a thread opened by its first message arrives on the chat screen: `rise` while the message is still in New thread's
+ * message box (it rises into the thread as any sent message does), `shown` once New thread already drew it in the
+ * thread's place while it chose a project.
+ */
+export type ThreadArrival = 'rise' | 'shown'
+
+/** The chat screen takes over from New thread in place, with no transition, since it draws what was already there. */
+export const arrivalAnimation = (arrival: unknown): 'none' | 'default' =>
+  arrival === 'rise' || arrival === 'shown' ? 'none' : 'default'

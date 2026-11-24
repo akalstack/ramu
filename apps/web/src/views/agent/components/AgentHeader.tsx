@@ -23,7 +23,7 @@ import { SessionChangesButton } from '../../../Changes'
 import { SessionCheckpointButton } from '../../../chat/SessionCheckpoint'
 import { STATE_LABEL } from '../constants'
 import { ThreadOriginChip } from './StartedThreads'
-import { GHOST_TEXT_BUTTON_CLASS, ICON_BUTTON_CLASS } from '../styles'
+import { AGENT_HEADER_CLASS, GHOST_TEXT_BUTTON_CLASS, ICON_BUTTON_CLASS } from '../styles'
 
 /**
  * The toolbar above a chat: thread-level actions only (changes, checkpoint, state, Questions while any wait, Aside,
@@ -119,7 +119,7 @@ export function AgentHeader({
     })),
   ]
   return (
-    <div className="agent-header [&_.path]:flex-1 [&:not(:has(>_:not(.grow)))]:hidden [&_.grow]:hidden [&_.state]:mr-auto [&_.small]:gap-1.5 [&_.small]:text-soft [&_>_*]:flex-none [&_>_*]:whitespace-nowrap flex items-center flex-none text-control min-w-0 justify-end h-auto min-h-[36px] p-[4px_10px_0] gap-1.5 flex-wrap gap-y-1 pb-1">
+    <div className={AGENT_HEADER_CLASS}>
       {history}
       <SessionChangesButton sessionId={sessionId} taskId={taskId} />
       {taskId && !readOnly && <CommitPushButton taskId={taskId} />}
@@ -218,6 +218,31 @@ export function AgentHeader({
           ]}
         />
       )}
+    </div>
+  )
+}
+
+/**
+ * The toolbar of a thread that is still being started: the same row, with Aside and Find waiting for the thread, so the
+ * conversation under it is already where the thread will show it.
+ */
+export function StartingAgentHeader() {
+  useLanguage()
+  return (
+    <div className={AGENT_HEADER_CLASS}>
+      <span className="grow flex-1 min-w-0 text-left" />
+      <Button variant="ghost" size="icon-xs" className={ICON_BUTTON_CLASS} aria-label={translate('Aside')} disabled>
+        <MessageCircle size={14} />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        className={ICON_BUTTON_CLASS}
+        aria-label={translate('Find in conversation')}
+        disabled
+      >
+        <Search size={14} />
+      </Button>
     </div>
   )
 }

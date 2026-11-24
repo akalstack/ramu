@@ -1,4 +1,4 @@
-import { goBackOrHome } from '../runtime/navigation'
+import { goBackOrHome, type ThreadArrival } from '../runtime/navigation'
 import { ReadableColumn } from '../components/ReadableColumn'
 import { translate } from '@ramu/shared/i18n'
 import {
@@ -26,7 +26,7 @@ import {
   routingSnapshot,
 } from '../runtime/routingDraft'
 import { useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, Keyboard, Platform, Pressable, View } from 'react-native'
+import { ActivityIndicator, Alert, Keyboard, Platform, Pressable, ScrollView, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { AGENT_PROVIDERS } from '@ramu/shared/providers/providers'
@@ -53,6 +53,10 @@ import { useT, useSay } from '../i18n'
 import { Header, HeaderButton, PageScrollView, Screen } from '../components/Screen'
 import { KeyboardPadding } from '../components/Keyboard'
 import { AnimatedMark } from '../components/AnimatedMark'
+import { SentArrive, Shimmer } from '../components/Motion'
+import { SENT_ROW, SentBubble } from '../components/Outbox'
+import { ChatDateLabel } from '../components/Transcript'
+import { formatChatDate } from '@ramu/shared/chat/chatDates'
 import { Composer, type ModelChoice } from '../components/Composer'
 import { Row, Sheet, T, tap } from '../components/ui'
 import { SheetGroup, SheetOption } from '../components/SheetOptions'
@@ -153,8 +157,8 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
   const pending = useRef<{ text: string; attachments: unknown; context: unknown } | null>(null)
   const routeRevision = useRef(0)
   const routingStart = useRef(false)
-  // The message being routed, shown as a temporary thread while a project is chosen.
-  const [routing, setRouting] = useState<{ text: string; status: string } | null>(null)
+  // The message being routed, drawn as the thread it starts while a project is chosen.
+  const [routing, setRouting] = useState<{ text: string; status: string; sentAt: number } | null>(null)
   // Auto also weighs projects on the other online hosts; a prompt that needs several projects is reviewed as a list,
   // kept on the phone until it is started or cancelled.
   const others = otherHostTargets(selected, computers, projects)
@@ -389,6 +393,11 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
       params: { id: storeRef.current.resolveChat(target.computerId, started.taskId) },
     })
   }
+  /** Opens the thread just started, in this screen's place: it draws the first message where this screen left it. */
+  const openThread = (id: string, started: ThreadArrival) => {
+    if (asTab) router.push({ pathname: '/chat/[id]', params: { id, started } })
+    else router.replace({ pathname: '/chat/[id]', params: { id, started } })
+  }
   /** Routes the first message, then starts the thread in the chosen project, or asks when no single project fits. */
   const startInAuto = async (
     text: string,
@@ -404,7 +413,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
         setPicker('project')
         throw new Error(say('Choose a project to start while this host is offline.'))
       }
-      setRouting({ text, status: say('Choosing a project…') })
+      setRouting({ text, status: say('Choosing a project…'), sentAt: Date.now() })
       const revision = ++routeRevision.current
       const verified = await agentDraft.verify()
       if (revision !== routeRevision.current)
@@ -464,8 +473,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
         pending.current = null
         storeRef.current.setDraft(routeChoiceKey, '')
         if (storeRef.current.drafts[composerKey] === text) agentDraft.consume()
-        if (asTab) router.push({ pathname: '/chat/[id]', params: { id } })
-        else router.replace({ pathname: '/chat/[id]', params: { id } })
+        openThread(id, 'shown')
         return
       }
       const destinationProject = list.find((p) => rawId(p.id) === raw)
@@ -519,8 +527,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
       pending.current = null
       storeRef.current.setDraft(routeChoiceKey, '')
       if (storeRef.current.drafts[composerKey] === text) agentDraft.consume()
-      if (asTab) router.push({ pathname: '/chat/[id]', params: { id } })
-      else router.replace({ pathname: '/chat/[id]', params: { id } })
+      openThread(id, 'shown')
     } finally {
       routingStart.current = false
       setRouting(null)
@@ -691,39 +698,35 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
       <KeyboardPadding gap={asTab ? space.m : 0} style={{ flex: 1, display: picker === 'project' ? 'none' : 'flex' }}>
         {/* Nothing here scrolls: the hero simply centers in the space above the composer. */}
         {routing ? (
-          <View
-            style={{
-              flex: 1,
-              justifyContent: 'flex-end',
-              alignItems: 'flex-end',
-              paddingHorizontal: space.l,
-              paddingBottom: space.m,
-              gap: space.s,
-            }}
-            accessibilityLiveRegion="polite"
+          // Laid out as the thread draws its first message (the list's padding and header gap, the day label, the bubble
+          // and the status line under it), so the thread that opens in this screen's place shows it where it already is.
+          <ScrollView
+            style={{ flex: 1 }}
+            scrollEnabled={false}
+            contentInsetAdjustmentBehavior="automatic"
+            contentContainerStyle={{ padding: space.l }}
           >
-            {/* Drawn like the thread's own message bubble, so opening the thread does not visibly swap it. */}
-            {routing.text ? (
+            <View style={{ paddingBottom: space.m }} />
+            <SentArrive identity={`routing:${routing.sentAt}`} start>
+              <ChatDateLabel date={formatChatDate(routing.sentAt, Date.now(), store.language)} />
+              {routing.text ? (
+                <View style={SENT_ROW}>
+                  <SentBubble text={routing.text} />
+                </View>
+              ) : null}
+            </SentArrive>
+            <View style={{ paddingTop: space.m }}>
               <View
-                style={{
-                  maxWidth: '86%',
-                  backgroundColor: c.bubble,
-                  borderRadius: radius.l - 2,
-                  borderBottomRightRadius: radius.xs,
-                  paddingHorizontal: space.m + 2,
-                  paddingVertical: space.s + 2,
-                }}
+                accessibilityRole="text"
+                accessibilityLiveRegion="polite"
+                style={{ height: 24, justifyContent: 'center' }}
               >
-                <T numberOfLines={8}>{routing.text}</T>
+                <Shimmer size={font.control} singleLine>
+                  {routing.status}
+                </Shimmer>
               </View>
-            ) : null}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, paddingRight: space.xs }}>
-              <ActivityIndicator size="small" color={c.muted} />
-              <T tone="muted" size={font.caption}>
-                {routing.status}
-              </T>
             </View>
-          </View>
+          </ScrollView>
         ) : (
           <View style={{ flex: 1, justifyContent: 'center', padding: space.l }}>
             {/* The desktop's start screen: the animated mark (tap it) over the same question, centred. One size with the
@@ -877,8 +880,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
                   JSON.stringify({ version: 1, auto: false, projectId: STANDALONE }),
                 )
               }
-              if (asTab) router.push({ pathname: '/chat/[id]', params: { id } })
-              else router.replace({ pathname: '/chat/[id]', params: { id } })
+              openThread(id, 'rise')
             }}
           />
         </ReadableColumn>
