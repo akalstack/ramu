@@ -366,7 +366,9 @@ const REPO = 'https://github.com/akalstack/ramu'
 function About() {
   const say = useSay()
   const { c } = useTheme()
-  const version = Constants.expoConfig?.version ?? '0.1.0'
+  // The Ramu release this build came from, as the desktop and the host show it, rather than the store's plain number.
+  const release = Constants.expoConfig?.extra?.releaseVersion
+  const version = typeof release === 'string' ? release : (Constants.expoConfig?.version ?? '0.1.0')
   const links: { title: string; help: string; url: string }[] = [
     { title: 'What’s new', help: 'Release notes for this version.', url: `${REPO}/releases/tag/v${version}` },
     { title: 'Documentation', help: 'Guides to every feature.', url: `${REPO}/tree/main/docs/guide` },
@@ -386,7 +388,7 @@ function About() {
       <Card style={{ marginHorizontal: space.l }}>
         <Row>
           <T style={{ flex: 1 }}>{say('Version')}</T>
-          <T tone="muted">{version} · alpha</T>
+          <T tone="muted">{version}</T>
         </Row>
       </Card>
       <SectionLabel>{say('Help & feedback')}</SectionLabel>
