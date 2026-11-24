@@ -162,12 +162,19 @@ export const gigabytes = (bytes: number) => {
 
 export type ThreadActivity = 'working' | 'idle' | 'left-running'
 
+/**
+ * Whether resources belong to a project's or worktree's own panel (its terminals), not a thread. Those have no thread to
+ * finish, so they are the person's open terminals, never something left behind.
+ */
+export const isWorkspaceContext = (taskId: string) => taskId.startsWith('project:') || taskId.startsWith('worktree:')
+
 /** Terminals and commands still alive under finished or archived work get a label, so forgotten dev servers are found. */
 export function threadActivity(
   task: { status: string; doneAt?: number | null } | undefined,
-  thread: Pick<ThreadResources, 'items'>,
+  thread: Pick<ThreadResources, 'items'> & { taskId?: string },
 ): ThreadActivity {
   if (task?.status === 'running' || task?.status === 'needs-input') return 'working'
+  if (thread.taskId && isWorkspaceContext(thread.taskId)) return 'idle'
   const finished = !task || !!task.doneAt || task.status === 'archived'
   return finished && thread.items.some((item) => item.kind !== 'agent') ? 'left-running' : 'idle'
 }

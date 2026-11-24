@@ -4,6 +4,7 @@ import {
   cpuPercent,
   isBusy,
   isLowMemory,
+  isWorkspaceContext,
   leftoverLabel,
   memoryBreakdown,
   memorySize,
@@ -315,7 +316,9 @@ function ThreadRow({
       }
     })().catch(() => {})
   }
-  const title = task?.title ?? leftoverLabel(thread) ?? say('Untitled thread')
+  const title =
+    task?.title ??
+    (isWorkspaceContext(thread.taskId) ? say('Project terminal') : (leftoverLabel(thread) ?? say('Untitled thread')))
   const pill =
     activity === 'working'
       ? { text: say('Working'), color: c.accent, background: c.accentWash }

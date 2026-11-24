@@ -5748,6 +5748,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'of {0} cores': 'dari {0} core',
   '{0} CPU': 'CPU {0}',
   'Left running': 'Masih berjalan',
+  'Project terminal': 'Terminal proyek',
   'Untitled thread': 'Thread tanpa judul',
   'Running in threads': 'Berjalan di thread',
   'Clone as project': 'Clone sebagai proyek',

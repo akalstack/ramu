@@ -91,6 +91,10 @@ it('labels commands left running under finished work, and stops each kind its ow
   expect(threadActivity({ status: 'archived' }, { items })).toBe('left-running')
   expect(threadActivity({ status: 'idle', doneAt: 1 }, { items })).toBe('left-running')
   expect(threadActivity({ status: 'idle' }, { items })).toBe('idle')
+  // A project's own terminal panel has no thread to finish.
+  expect(threadActivity(undefined, { taskId: 'project:p1', items })).toBe('idle')
+  expect(threadActivity(undefined, { taskId: 'worktree:w1', items })).toBe('idle')
+  expect(threadActivity(undefined, { taskId: 'deleted-thread', items })).toBe('left-running')
   expect(stopItemCall('t', { kind: 'agent', id: 's' })).toEqual(['agent.stop', 's'])
   expect(stopItemCall('t', { kind: 'terminal', id: 'x' })).toEqual(['term.close', 'x'])
   expect(stopItemCall('t', { kind: 'command', id: 'c' })).toEqual(['term.background.stop', 't', 'c'])

@@ -5,6 +5,7 @@ import {
   cpuPercent,
   isBusy,
   isLowMemory,
+  isWorkspaceContext,
   leftoverLabel,
   memoryBreakdown,
   memorySize,
@@ -357,7 +358,9 @@ function ThreadRow({
       setStopping(false)
     }
   }
-  const title = task?.title ?? leftoverLabel(thread) ?? t('Untitled thread')
+  const title =
+    task?.title ??
+    (isWorkspaceContext(thread.taskId) ? t('Project terminal') : (leftoverLabel(thread) ?? t('Untitled thread')))
   const parts = thread.items.length + servers.length
   return (
     <li className="flex flex-col rounded-(--radius-s) border border-line bg-foreground/[0.02]">
