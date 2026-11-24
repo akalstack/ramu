@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { pageTurnDate, turnDatesOf } from '../src/views/agent/lib/derive'
+import { nextTurnDate, pageTurnDate, turnDatesOf } from '../src/views/agent/lib/derive'
 import type { Turn } from '../src/views/agent/types'
 
 const DAY = 24 * 60 * 60 * 1000
@@ -26,4 +26,17 @@ it('reads the same dates when nothing is hidden', () => {
   const start = new Date(2026, 0, 10, 9, 0).getTime()
   const dates = turnDatesOf([turn(0, start), turn(1, start + DAY)])
   expect([0, 1].map((ti) => pageTurnDate(dates, 0, ti))).toEqual(dates)
+})
+
+it('gives a message just sent the day separator its turn will have once the host echoes it', () => {
+  const start = new Date(2026, 0, 10, 9, 0).getTime()
+  // The first message of a new thread is dated, as its turn will be.
+  expect(nextTurnDate([], start)).toBe(start)
+  // A follow-up soon after is not; one the next day is.
+  const turns = [turn(0, start)]
+  expect(nextTurnDate(turns, start + 60_000)).toBeUndefined()
+  expect(nextTurnDate(turns, start + DAY)).toBe(start + DAY)
+  // The same rule as the turn it becomes.
+  const echoed = [...turns, turn(1, start + DAY)]
+  expect(turnDatesOf(echoed).at(-1)).toBe(nextTurnDate(turns, start + DAY))
 })

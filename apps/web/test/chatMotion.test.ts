@@ -78,7 +78,20 @@ it('keeps a stable polite live region around changing status text', () => {
   expect(before.type).toBe(after.type)
   expect(after.props.role).toBe('status')
   expect(after.props['aria-live']).toBe('polite')
-  expect((after.props.children as ReactElement<{ identity: string }>).props.identity).toBe('Working')
+  const fade = (status: ReactElement<{ children: ReactElement<{ children: ReactElement<{ identity: string }> }> }>) =>
+    status.props.children.props.children
+  expect(fade(after as never).props.identity).toBe('Working')
+})
+
+it('keeps the status line in place while a live tool group speaks for it, hiding only its words', () => {
+  const shown = ChatStatus({ label: 'Working' }) as ReactElement<{ className: string; children: ReactElement }>
+  const quiet = ChatStatus({ label: 'Working', quiet: true }) as ReactElement<{
+    className: string
+    children: ReactElement<{ className?: string; 'aria-hidden'?: boolean }>
+  }>
+  expect(quiet.props.className).toBe(shown.props.className)
+  expect(quiet.props.children.props.className).toBe('invisible')
+  expect(quiet.props.children.props['aria-hidden']).toBe(true)
 })
 
 const useMountedSent = (start: boolean, at: number) => {

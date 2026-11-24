@@ -97,6 +97,7 @@ import {
   pageTurnDate,
   questionStatesOf,
   toolResultsOf,
+  nextTurnDate,
   turnDatesOf,
 } from './agent/lib/derive'
 import { outboxFullError, quoteLines, visibleText } from './agent/lib/messages'
@@ -125,7 +126,8 @@ import { PendingQuestionsBar } from './agent/components/PendingQuestionsBar'
 import { QueuedMessages } from './agent/components/QueuedMessages'
 import { QueuedOpening } from './agent/components/QueuedOpening'
 import { ErrorNote } from './agent/components/ErrorNote'
-import { TranscriptTurn } from './agent/components/TranscriptTurn'
+import { TranscriptTurn, TurnDate } from './agent/components/TranscriptTurn'
+import { isLiveToolGroup } from './agent/lib/toolThinking'
 import { useTranscriptArrival } from './agent/hooks/useTranscriptArrival'
 import { ChatStatus, ChatSyncStatus } from '../chat/ChatMotion'
 import { useDelayedStatus } from '../lib/useDelayedStatus'
@@ -380,6 +382,8 @@ export const AgentView = memo(function AgentView({
   })
   const statusGroup =
     working && !turns.at(-1)?.ended ? turns.at(-1)?.items.findLast((block) => block.kind === 'tools') : undefined
+  // A live tool group's headline already says what the agent is doing, so the status line under it goes quiet.
+  const liveGroup = !!statusGroup && isLiveToolGroup(statusGroup, statusGroup, turns.at(-1)!.items)
   const completedGoals = useMemo(() => completedGoalsByTurn(events), [events])
   const turnReviews = useMemo(
     () =>
@@ -672,6 +676,7 @@ export const AgentView = memo(function AgentView({
         attachments: submittedFiles,
         afterEvent: sourceEvents.length,
         queuedIds: queued.map((message) => message.id),
+        sentAt: Date.now(),
         state: 'sending',
         payload: {
           outgoing,
@@ -1004,18 +1009,30 @@ export const AgentView = memo(function AgentView({
                               />
                             </MessageScrollerItem>
                           ))}
-                          {shownSubmissions.map((item) => (
-                            <MessageScrollerItem key={item.id} messageId={`pending-submission-${item.id}`}>
-                              <PendingSubmission
-                                submission={item}
-                                onRetry={() => retrySubmission(item.id)}
-                                onEdit={() => editSubmission(item)}
-                                onRemove={() => removeSubmission(item.id)}
-                              />
-                            </MessageScrollerItem>
-                          ))}
-                          {activityLabel && (compacting || !statusGroup) && (
-                            <ChatStatus label={translate(activityLabel)} compacting={compacting} />
+                          {shownSubmissions.map((item, index) => {
+                            // Laid out as the turn it becomes, day separator included, so the host's copy lands in
+                            // the same place instead of pushing it down.
+                            const date = index === 0 ? nextTurnDate(turns, item.sentAt) : undefined
+                            return (
+                              <MessageScrollerItem key={item.id} messageId={`pending-submission-${item.id}`}>
+                                <div className="turn flex flex-col gap-3.5 min-w-0">
+                                  {date !== undefined && <TurnDate at={date} now={dateNow} />}
+                                  <PendingSubmission
+                                    submission={item}
+                                    onRetry={() => retrySubmission(item.id)}
+                                    onEdit={() => editSubmission(item)}
+                                    onRemove={() => removeSubmission(item.id)}
+                                  />
+                                </div>
+                              </MessageScrollerItem>
+                            )
+                          })}
+                          {activityLabel && (
+                            <ChatStatus
+                              label={translate(activityLabel)}
+                              compacting={compacting}
+                              quiet={!compacting && liveGroup}
+                            />
                           )}
                           {syncShown && <ChatSyncStatus label={translate('Syncing messages…')} />}
                         </MessageScrollerContent>

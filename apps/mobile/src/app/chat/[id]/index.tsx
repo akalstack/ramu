@@ -92,6 +92,7 @@ import { sameAgentSettings } from '@ramu/shared/chat/settingsChanges'
 import type { AgentSettings, QueuedMessage } from '@ramu/shared/types'
 import {
   CancelPendingSettings,
+  ChatDateLabel,
   ChatMentions,
   MessageMenu,
   RowToggle,
@@ -708,7 +709,9 @@ function ChatView({ id }: { id: string }) {
     if (item.kind === 'opening') return <QueuedOpening message={item.message} />
     if (item.kind === 'pending')
       return (
+        // Inside the rise, as the host's copy carries its label, so the row keeps one shape when the copy arrives.
         <SentArrive identity={key} start={fresh && item.outbox.createdAt >= openedAt.current}>
+          {item.id === pendingDate?.id ? <ChatDateLabel date={pendingDate.date} /> : null}
           <PendingBubble item={item.outbox} computer={computer?.name ?? 'the host'} onEdit={editPending} />
         </SentArrive>
       )
@@ -911,6 +914,17 @@ function ChatView({ id }: { id: string }) {
         ]
       : pageRows
   shownKeys.current = listRows.map(rowKey)
+  // A message on its way carries the day label its own row will have (the rule `itemMeta` follows), so the host's copy
+  // lands where it was drawn instead of a label appearing above it and pushing it down.
+  const firstPending = pending[0]
+  const lastUserAt = pageRows.findLast((row) => row.kind === 'user' && row.at)
+  const pendingDate =
+    firstPending && needsChatDate(firstPending.createdAt, lastUserAt?.kind === 'user' ? lastUserAt.at : undefined)
+      ? {
+          id: `pending:${firstPending.id}`,
+          date: formatChatDate(firstPending.createdAt, Date.now(), store.language),
+        }
+      : undefined
   const editPending = (text: string) => setRestore((r) => ({ text, n: (r?.n ?? 0) + 1 }))
   // Editing a queued message takes it out of the queue first, so it is not sent while being changed.
   const editQueued = (message: QueuedMessage) => {

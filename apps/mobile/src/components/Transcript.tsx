@@ -516,19 +516,24 @@ function sameRow(previous: RowProps, next: RowProps): boolean {
   )
 }
 
+/** The day label above a turn, and above a message on its way that will start one. */
+export function ChatDateLabel({ date }: { date: string }) {
+  return (
+    <T
+      size={font.caption}
+      tone="muted"
+      style={{ textAlign: 'center', marginBottom: space.l, fontVariant: ['tabular-nums'] }}
+      accessibilityRole="header"
+    >
+      {date}
+    </T>
+  )
+}
+
 export function TranscriptItemView({ item, chat, meta }: { item: TranscriptItem; chat: Chat; meta?: ItemMeta }) {
   return (
     <ChatReferences chat={chat}>
-      {meta?.date ? (
-        <T
-          size={font.caption}
-          tone="muted"
-          style={{ textAlign: 'center', marginBottom: space.l, fontVariant: ['tabular-nums'] }}
-          accessibilityRole="header"
-        >
-          {meta.date}
-        </T>
-      ) : null}
+      {meta?.date ? <ChatDateLabel date={meta.date} /> : null}
       <TranscriptBlock item={item} chat={chat} meta={meta} />
     </ChatReferences>
   )

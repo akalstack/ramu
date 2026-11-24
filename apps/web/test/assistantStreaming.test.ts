@@ -93,6 +93,7 @@ it('shows the outgoing message immediately without a Sending label', () => {
         attachments: [],
         afterEvent: 0,
         queuedIds: [],
+        sentAt: 1,
         state: 'sending',
         payload: { outgoing: 'My message', mode: 'queue', context: [], compactFirst: false, reviews: [] },
       },

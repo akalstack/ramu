@@ -24,6 +24,8 @@ export interface PendingSubmission {
   /** Transcript length and queue ids when it was sent: echoes are looked for only after these. */
   afterEvent: number
   queuedIds: string[]
+  /** When it was sent, so it carries the day separator its turn will have. */
+  sentAt: number
   state: 'sending' | 'sent' | 'failed'
   error?: string
   payload: SubmissionPayload

@@ -36,16 +36,32 @@ export function completedGoalsByTurn(events: AgentEvent[]): Map<AgentEvent | nul
   return byTurn
 }
 
+/** When a turn's activity ended, measured from its last step so a long-running answer counts. */
+const turnEnd = (turn: Turn, at: number | undefined) =>
+  turn.endedAt ?? turn.items.map(blockAt).findLast((value) => value !== undefined) ?? at
+
 /** For each turn, the time to show as a day separator above it, or undefined when it follows closely on the last one. */
 export function turnDatesOf(turns: Turn[]): (number | undefined)[] {
   let previousAt: number | undefined
   return turns.map((turn) => {
     const at = turn.startedAt ?? turn.items.map(blockAt).find((value) => value !== undefined)
     const separator = needsChatDate(at, previousAt) ? at : undefined
-    // Measure the pause from the last activity, including a long-running answer.
-    previousAt = turn.endedAt ?? turn.items.map(blockAt).findLast((value) => value !== undefined) ?? at ?? previousAt
+    previousAt = turnEnd(turn, at) ?? previousAt
     return separator
   })
+}
+
+/**
+ * The day separator for a message sent at `at` that the host has not echoed yet, by the rule its turn will follow, so
+ * the message does not move down when its copy arrives with a separator above it.
+ */
+export function nextTurnDate(turns: Turn[], at: number): number | undefined {
+  let previousAt: number | undefined
+  for (const turn of turns) {
+    const started = turn.startedAt ?? turn.items.map(blockAt).find((value) => value !== undefined)
+    previousAt = turnEnd(turn, started) ?? previousAt
+  }
+  return needsChatDate(at, previousAt) ? at : undefined
 }
 
 /** The day separator for the turn at `pageIndex` on the drawn page; `turnDates` covers every turn, `hiddenTurns` of which are not drawn. */

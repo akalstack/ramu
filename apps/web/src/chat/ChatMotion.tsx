@@ -71,13 +71,19 @@ export function useSentRise<T extends HTMLElement>(start: boolean) {
   return node
 }
 
-/** Status phases share the same entrance motion as messages; token and elapsed updates keep their identity. */
-export function ChatStatus({ label, compacting }: { label: string; compacting?: boolean }) {
+/**
+ * Status phases share the same entrance motion as messages; token and elapsed updates keep their identity. From the
+ * send to the turn's end the line keeps its place, as on the phone: `quiet` (a live tool group above already says what
+ * the agent is doing) hides the words but not the line, so the reply never swaps places with it.
+ */
+export function ChatStatus({ label, compacting, quiet }: { label: string; compacting?: boolean; quiet?: boolean }) {
   return (
     <div className={WORKING_CLASS} role="status" aria-live="polite" data-compacting={compacting || undefined}>
-      <ChatFade identity={label} animate>
-        <WorkingText>{label}</WorkingText>
-      </ChatFade>
+      <span className={quiet ? 'invisible' : undefined} aria-hidden={quiet || undefined}>
+        <ChatFade identity={label} animate>
+          <WorkingText>{label}</WorkingText>
+        </ChatFade>
+      </span>
     </div>
   )
 }

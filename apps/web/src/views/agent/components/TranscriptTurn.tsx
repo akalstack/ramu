@@ -126,6 +126,24 @@ function TranscriptBlock({
   )
 }
 
+/** The day separator above a turn, and above a message just sent that will start one. */
+export function TurnDate({ at, now }: { at: number; now: number }) {
+  useLanguage()
+  return (
+    <Marker className="mt-5 mb-6 justify-center text-control [.turn:first-child_&]:mt-1">
+      <MarkerContent>
+        <time
+          className="text-muted-foreground"
+          dateTime={new Date(at).toISOString()}
+          title={new Date(at).toLocaleString(formatLocale())}
+        >
+          {formatChatDate(at, now, currentLanguage())}
+        </time>
+      </MarkerContent>
+    </Marker>
+  )
+}
+
 /**
  * One turn of the transcript: an optional day separator, the user's message, the work the agent did (folded into
  * "Worked for 35s" once it is done), its answer, and the file changes and goals that belong to the turn.
@@ -210,19 +228,7 @@ export function TranscriptTurn({
   const stopped = finished && (!!turn.interrupted || (isLast && !!ctx.stopped))
   return (
     <div className="turn [&_>_[data-block-index]:has(.msg.user)]:flex [&_>_[data-block-index]:has(.msg.user)]:justify-end flex flex-col gap-3.5 min-w-0">
-      {dateSeparator !== undefined && (
-        <Marker className="mt-5 mb-6 justify-center text-control [.turn:first-child_&]:mt-1">
-          <MarkerContent>
-            <time
-              className="text-muted-foreground"
-              dateTime={new Date(dateSeparator).toISOString()}
-              title={new Date(dateSeparator).toLocaleString(formatLocale())}
-            >
-              {formatChatDate(dateSeparator, dateNow, currentLanguage())}
-            </time>
-          </MarkerContent>
-        </Marker>
-      )}
+      {dateSeparator !== undefined && <TurnDate at={dateSeparator} now={dateNow} />}
       {turn.user && renderBlock(turn.user, isLast && !answer.length && !kept.length && !folded.length)}
       {/* A running turn's status is the line above the composer; a stopped one keeps its duration here. */}
       {finished && (!turn.ended || turn.interrupted) && !folded.length && (

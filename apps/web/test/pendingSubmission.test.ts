@@ -7,6 +7,7 @@ const pending: PendingSubmission = {
   attachments: [],
   afterEvent: 1,
   queuedIds: ['older'],
+  sentAt: 1,
   state: 'sending',
   payload: { outgoing: 'Hello', mode: 'queue', context: [], compactFirst: false, reviews: [] },
 }
