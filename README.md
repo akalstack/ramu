@@ -32,7 +32,6 @@
 Ramu puts your coding agents, editor, terminals, Git and review in one window. Bring **Claude Code, Codex, OpenCode, Cursor or Antigravity** with the plans you already pay for. When one plan runs out, the thread moves to the next with its context, and the phone app keeps you with the work when you step away.
 
 - **No Ramu account.** Signing in is optional: it adds encrypted settings backups and lets your devices find your hosts.
-- **No subscription.** Ramu is free and resells nothing.
 - **Nothing to host.** Agents run on your own computer.
 
 Open a project, say what you want, review the result. The defaults work as they are, and **Settings** has the rest.
@@ -173,7 +172,7 @@ Built with Electron, React, React Native and TypeScript. Start with the [archite
 
 ## Support Ramu
 
-Ramu is free and stays free. If it saves you time, chip in through [GitHub Sponsors](https://github.com/sponsors/akalstack) or [Trakteer](https://trakteer.id/akalstack).
+If Ramu saves you time, chip in through [GitHub Sponsors](https://github.com/sponsors/akalstack) or [Trakteer](https://trakteer.id/akalstack).
 
 ## Acknowledgments
 
