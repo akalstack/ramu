@@ -25,6 +25,14 @@ function grantText(grant: PermissionGrant, t: (text: string, values?: Record<str
 // Agents is for another computer's agents; a phone has none to bring.
 const PHONE_PERMISSIONS = DEVICE_PERMISSIONS.filter((permission) => permission !== 'agents')
 
+/** What each permission lets this phone do on the host, said from the phone's side: none of them is about the phone. */
+const PHONE_PERMISSION_HELP: Record<Exclude<DevicePermission, 'agents'>, string> = {
+  computer: 'Watch and control its screen and apps from this phone.',
+  browser: 'Use its browser and open its dev servers on this phone.',
+  terminal: 'Open and type into its terminals from this phone.',
+  settings: 'Change its settings, providers and connections from this phone.',
+}
+
 /**
  * What this phone may do on a host, with a request for anything missing. A person at the host decides, and the answer
  * shows here as soon as they give it.
@@ -33,12 +41,15 @@ export function PhonePermissions({ computerId }: { computerId: string }) {
   const store = useStore()
   const t = (text: string, values?: Record<string, string>) => translate(store.language, text, values)
   const view = store.permissions[computerId]
+  const host = store.computers.find((computer) => computer.id === computerId)?.name
   if (!view) return null
   const now = Date.now()
   const waiting = view.pending.length > 0
   return (
     <>
-      <SectionLabel>{t('Permissions on this host')}</SectionLabel>
+      <SectionLabel>
+        {host ? t('What this phone can do on {0}', { 0: host }) : t('What this phone can do on this host')}
+      </SectionLabel>
       <Card style={{ marginHorizontal: space.l }}>
         {PHONE_PERMISSIONS.map((permission, index) => {
           const grant = view.permissions[permission]
@@ -51,6 +62,7 @@ export function PhonePermissions({ computerId }: { computerId: string }) {
               <Row style={{ paddingVertical: space.m }}>
                 <RowLabel
                   title={t(PERMISSION_LABEL[permission])}
+                  description={t(PHONE_PERMISSION_HELP[permission])}
                   help={
                     held
                       ? grantText(held, t)

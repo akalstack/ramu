@@ -1,3 +1,29 @@
+diff --git a/ios/utils/CodeBackground.m b/ios/utils/CodeBackground.m
+index 5e5d5bf06370c9a94ed5645ccba4436894fe2bdb..dd4d917cd9b2bff9b4d950ed6b3e1482808e0167 100644
+--- a/ios/utils/CodeBackground.m
++++ b/ios/utils/CodeBackground.m
+@@ -4,7 +4,7 @@
+ 
+ NSString *const CodeAttributeName = @"Code";
+ 
+-static const CGFloat kCodeBackgroundCornerRadius = 2.0;
++static const CGFloat kCodeBackgroundCornerRadius = 6.0;
+ static const CGFloat kCodeBackgroundBorderWidth = 0.5;
+ 
+ @implementation CodeBackground {
+@@ -99,6 +99,12 @@ - (void)drawCodeBackgroundForRange:(NSRange)range
+                                  if (finalRect.size.height < referenceHeight) {
+                                    finalRect.size.height = referenceHeight;
+                                  }
++                                 // A tall line height would make the chip fill the whole line, so code wrapped onto the
++                                 // next line touched the chip above it; keep it a little taller than the code text.
++                                 CGFloat chipHeight = ceil(self->_config.codeFontSize * 1.5);
++                                 if (finalRect.size.height > chipHeight) {
++                                   finalRect = CGRectInset(finalRect, 0, (finalRect.size.height - chipHeight) / 2.0);
++                                 }
+ 
+                                  [self drawBackgroundAndBorders:finalRect
+                                                 backgroundColor:backgroundColor
 diff --git a/ios/views/ENRMMarkdownTextView.m b/ios/views/ENRMMarkdownTextView.m
 index c790eb1896c04ee40456649a8b375558ad7a09f3..8a5ec2fc2ceade787d2a2e7257b1d4af4df69d72 100644
 --- a/ios/views/ENRMMarkdownTextView.m

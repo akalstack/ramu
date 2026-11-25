@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useRouter } from 'expo-router'
-import { Network, Plus } from 'lucide-react-native'
+import { Network, Plus, Settings } from 'lucide-react-native'
 import { counts, useStore } from '../runtime/store'
 import { ago, useT } from '../i18n'
 import { Chip, ConnectionDot, Sheet } from './ui'
@@ -97,6 +97,7 @@ export function HostSheet({ open, onClose, all = false, onAll }: AllHosts & { op
       </SheetGroup>
       <SheetGroup>
         <SheetOption icon={Plus} title={t.pair} onPress={() => choose(() => router.push('/pair'))} />
+        <SheetOption icon={Settings} title={t.manageHosts} onPress={() => choose(() => router.push('/computers'))} />
       </SheetGroup>
     </Sheet>
   )

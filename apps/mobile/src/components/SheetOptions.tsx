@@ -82,6 +82,12 @@ export function SheetOption({
       }
       style={{ minHeight: 52, paddingVertical: space.s + 2, opacity: disabled ? 0.45 : 1 }}
     >
+      {/* A choice among several marks the chosen one first, where the eye starts; every choice keeps the room for it. */}
+      {selected === undefined ? null : (
+        <View style={{ width: 17, alignItems: 'center' }}>
+          {selected ? <Check size={17} color={c.accent} strokeWidth={2.2} /> : null}
+        </View>
+      )}
       {I ? (
         <View
           style={{
@@ -107,7 +113,6 @@ export function SheetOption({
         ) : null}
       </View>
       {trailing}
-      {selected ? <Check size={17} color={c.accent} strokeWidth={2.2} /> : null}
     </Row>
   )
 }
