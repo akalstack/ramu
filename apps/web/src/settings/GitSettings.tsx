@@ -8,6 +8,7 @@ import { ModelChoice } from './ModelChoice'
 import { SETTINGS_FORM_CLASS } from './constants'
 import { ToggleRow, type DraftProps } from './ToggleRow'
 import { HostingAccounts } from './HostingAccounts'
+import { LivePullRequestsSetting } from './LivePullRequests'
 
 export function GitSettings({ draft, onChange, busy }: DraftProps) {
   const toggleProps = { draft, onChange, busy }
@@ -121,6 +122,7 @@ export function GitSettings({ draft, onChange, busy }: DraftProps) {
         title="Automatically watch pull requests"
         description="Watch pull requests you create from a thread. New failures and requested changes go back to that thread, and you review and push. Manage existing watches in Source Control."
       />
+      <LivePullRequestsSetting />
       <SettingsGroupTitle>{t('Generated text')}</SettingsGroupTitle>
       <ToggleRow
         {...toggleProps}

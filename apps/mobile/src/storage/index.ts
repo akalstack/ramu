@@ -209,6 +209,19 @@ export function saveFailuresSeen(seen: Record<string, number>) {
   }
 }
 
+const usageRevealKey = 'ramu.mobile.usage.accounts'
+/** Whether Plan usage names logins by label and email on this phone; hidden until asked for. */
+export function readUsageReveal(): boolean {
+  return readSmall(usageRevealKey) === 'shown'
+}
+export function saveUsageReveal(shown: boolean) {
+  try {
+    writeSmall(usageRevealKey, shown ? 'shown' : 'hidden')
+  } catch {
+    // Not remembering it only means the names are hidden again next time.
+  }
+}
+
 /** A separate, bounded content cache; never rewrites account/draft storage. */
 export const contentStorage = {
   getItem(key: string): string | null {

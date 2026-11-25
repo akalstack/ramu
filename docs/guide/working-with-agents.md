@@ -115,7 +115,7 @@ An agent can start separate threads you own: a follow-up, the matching change in
 
 - In Full access, one thread in the same project starts at once. Anything wider shows one approval card.
 - Started threads can start one more level, and a thread can start 8 an hour.
-- Asked to build something new, the agent can create the project (`project_create`): a folder beside your other repositories (or in the folder you name), the framework's own generator (Next.js, Vite, Astro, Expo, a Node or Python service, Rails or Go), a `.gitignore`, the stack in `ramu.json` and a first commit.
+- Asked to build something new, the agent can create the project (`project_create`): a folder beside your other repositories (or in the folder you name), the framework's own generator (Next.js, Vite, Astro, Expo, a Node or Python service, Rails, Go, Rust, Swift, Tauri, Electron or Flutter, or any other framework whose official create command the agent looks up on the web; you always approve those commands, shown with their sources), a `.gitignore`, the stack in `ramu.json` and a first commit.
   - Asked from a thread with no project, that same thread moves into the new project when the turn ends and continues there with a goal checked by the project's build and tests. The next turn starts a fresh provider session that is handed the conversation. Files written before the move stay in the old folder.
   - Asked from a thread in another project, a linked thread starts in the new project with the brief and that goal.
   - Outside Full access it asks first, naming the folder and the generator.

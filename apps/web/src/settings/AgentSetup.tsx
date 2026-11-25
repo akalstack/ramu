@@ -1,6 +1,4 @@
-import { ManagedSkills } from './IntelligenceSettings'
 import { MovedToCustomize } from '../customize/openCustomize'
-import { libraryFocusWaiting } from '../summaries/libraryFocus'
 import { InlineAction } from '@/components/inline-action'
 import { useStaging } from './stagedChanges'
 import { useContext, useEffect, useRef, useState, type ReactNode } from 'react'
@@ -324,9 +322,7 @@ export function AgentSetup({
     enabled: ready,
   })
   const status = useQuery({ queryKey: ['mcp-settings', hostKey], queryFn: () => invoke('mcp.status'), enabled: ready })
-  const [view, setView] = useState<SetupView>(() =>
-    libraryFocusWaiting('skill') ? 'skills' : (show?.view ?? initialView),
-  )
+  const [view, setView] = useState<SetupView>(() => show?.view ?? initialView)
   useEffect(() => {
     if (show) setView(show.view)
   }, [show])
@@ -641,9 +637,10 @@ export function AgentSetup({
             {skillList('project')}
           </Group>
         )}
-        {/* Ramu's own skills (installed, learned or written here) sit with the provider's skill files: all of them
-            are instructions agents load. */}
-        <ManagedSkills />
+        <MovedToCustomize
+          section="skills"
+          text={t('Skills you write or install, and the ones Ramu learned, are in Customize → Skills.')}
+        />
       </TabsContent>
       {environment && (
         <TabsContent value="environment" className="flex flex-col">

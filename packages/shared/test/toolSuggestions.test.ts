@@ -60,6 +60,19 @@ describe('links', () => {
 describe('stacks', () => {
   it('takes the stack ramu.json names, then what the root files show', () => {
     expect(detectStack({ configured: 'rails', files: ['package.json'], manifests: {} })).toBe('rails')
+    const npm = (deps: Record<string, string>) => ({ 'package.json': JSON.stringify({ devDependencies: deps }) })
+    expect(detectStack({ files: [], manifests: npm({ '@tauri-apps/cli': '2', vite: '7', react: '19' }) })).toBe('tauri')
+    expect(detectStack({ files: [], manifests: npm({ electron: '39', vite: '7' }) })).toBe('electron')
+    expect(detectStack({ files: ['Cargo.toml'], manifests: {} })).toBe('rust')
+    expect(detectStack({ files: ['pubspec.yaml'], manifests: {} })).toBe('flutter')
+    expect(detectStack({ files: [], manifests: npm({ vite: '7', typescript: '5' }) })).toBe('vite-vanilla')
+    expect(detectStack({ files: [], manifests: npm({ nuxt: '4', vue: '3' }) })).toBe('nuxt')
+    expect(detectStack({ files: [], manifests: npm({ vite: '7', vue: '3' }) })).toBe('vite-vue')
+    // A router is a library on Vite + React, not a stack of its own.
+    expect(detectStack({ files: [], manifests: npm({ vite: '7', react: '19', '@tanstack/react-router': '1' }) })).toBe(
+      'vite-react',
+    )
+    expect(detectStack({ files: ['Package.swift'], manifests: {} })).toBe('swift')
     expect(
       detectStack({
         files: ['package.json'],

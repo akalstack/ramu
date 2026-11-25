@@ -277,6 +277,7 @@ export function SettingsPanel({
                     />
                     <LearningSettings
                       value={appDraft.intelligence}
+                      memory={appDraft.memory.enabled}
                       onChange={(intelligence) => setAppDraft({ ...appDraft, intelligence })}
                     />
                     <MaintenanceModelSettings

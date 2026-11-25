@@ -6,13 +6,7 @@ import { BASE_CHANNELS, ON_DEMAND_CHANNELS, hostSubscription } from '../src/runt
 test('with no screen asking, frequent single-screen channels and unused ones are not requested', () => {
   const idle = hostSubscription([])
   assert.equal(idle.keys, undefined)
-  for (const channel of [
-    ...ON_DEMAND_CHANNELS,
-    'memory:changed',
-    'mcp:changed',
-    'providers:updates',
-    'background:connection',
-  ])
+  for (const channel of [...ON_DEMAND_CHANNELS, 'mcp:changed', 'providers:updates', 'background:connection'])
     assert.ok(!idle.channels.includes(channel), `${channel} is not requested`)
   for (const channel of [
     'agent:event',
@@ -22,6 +16,8 @@ test('with no screen asking, frequent single-screen channels and unused ones are
     'term:exit',
     'term:changed',
     'usage:changed',
+    // Learning reviews change on it; Inbox's Learned and the line under a turn update from it.
+    'memory:changed',
   ])
     assert.ok(idle.channels.includes(channel), `${channel} stays subscribed`)
 })

@@ -24,6 +24,7 @@ import * as viewerAccess from '../src/runtime/viewerAccess.ts'
 import * as scheduleModel from '../src/runtime/scheduleModel.ts'
 import * as branchActions from '../src/runtime/branchActions.ts'
 import * as navigation from '../src/runtime/navigation.ts'
+import * as usageAcrossHosts from '../../../packages/shared/src/usageAcrossHosts.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -209,6 +210,9 @@ function load(file, os, overrides = {}, globals = {}) {
         }
       // Logins name themselves only when a host answers; tests that need names supply them.
       if (id.endsWith('/useAccountLogins')) return { useAccountLogins: () => ({}) }
+      // Login names stay hidden until a test shows them.
+      if (id.endsWith('/usageReveal')) return { useUsageReveal: () => false, setUsageReveal() {} }
+      if (id === '@ramu/shared/usageAcrossHosts') return usageAcrossHosts
       if (id === '@ramu/shared/types')
         return {
           DEFAULT_AGENT_SETTINGS: {
@@ -1574,6 +1578,8 @@ function hookHarness() {
     },
   }
 }
+/** Each login card Plan usage lists; its windows are the readings of its row. */
+const logins = (tree) => nodes(tree).filter((node) => node.type?.name === 'LoginCard')
 const settle = async () => {
   for (let i = 0; i < 8; i++) await Promise.resolve()
   await new Promise((resolve) => setTimeout(resolve, 0))
@@ -1616,7 +1622,7 @@ for (const os of ['ios', 'android']) {
         return () => listeners.delete(host)
       },
     }
-    const { PlanUsageSheet, PlanUsageReading } = load('components/PlanUsage.tsx', os, {
+    const { PlanUsageSheet } = load('components/PlanUsage.tsx', os, {
       './SheetOptions': { SheetGroup: 'SheetGroup', SheetOption: 'SheetOption' },
       react: hooks.react,
       '@ramu/shared/usage/presentation': presentation,
@@ -1626,10 +1632,7 @@ for (const os of ['ios', 'android']) {
     })
     let props = { hosts: ['a'], open: true, onClose() {} }
     const render = () => hooks.render(() => PlanUsageSheet(props))
-    const readings = () =>
-      nodes(render())
-        .filter((node) => node.type === PlanUsageReading)
-        .map((node) => node.props.reading)
+    const readings = () => logins(render()).flatMap((node) => node.props.row.readings)
     render()
     assert.equal(requests[0].method, 'usage.accounts')
     listeners.get('a')('usage:changed')
@@ -1707,7 +1710,7 @@ test('usage refresh explains a failure, preserves data and opens the selected ho
       return [reading]
     },
   }
-  const { PlanUsageSheet, PlanUsageReading } = load('components/PlanUsage.tsx', 'android', {
+  const { PlanUsageSheet } = load('components/PlanUsage.tsx', 'android', {
     './SheetOptions': { SheetGroup: 'SheetGroup', SheetOption: 'SheetOption' },
     react: hooks.react,
     'expo-router': { useRouter: () => ({ push: (path) => destinations.push(path) }) },
@@ -1726,14 +1729,13 @@ test('usage refresh explains a failure, preserves data and opens the selected ho
         },
       }),
     )
-  const action = (tree, label) =>
-    nodes(tree).find((node) => node.type === 'Row' && nodes(node).some((child) => child.props?.children === label))
+  const action = (tree, label) => nodes(tree).find((node) => node.type === 'Chip' && node.props.label === label)
   render()
   await settle()
   action(render(), 'Refresh Claude usage').props.onPress()
   await settle()
   const tree = render()
-  assert.equal(nodes(tree).find((node) => node.type === PlanUsageReading).props.reading.usedPercent, 15)
+  assert.equal(logins(tree)[0].props.row.readings[0].usedPercent, 15)
   assert.deepEqual(calls, [
     ['a', 'usage.accounts'],
     ['a', 'usage.refresh'],
@@ -3784,7 +3786,7 @@ test('usage refresh recovers after transient failure and reconnect without losin
       ]
     },
   }
-  const { PlanUsageSheet, PlanUsageReading } = load('components/PlanUsage.tsx', 'android', {
+  const { PlanUsageSheet } = load('components/PlanUsage.tsx', 'android', {
     './SheetOptions': { SheetGroup: 'SheetGroup', SheetOption: 'SheetOption' },
     react: hooks.react,
     'expo-router': { useRouter: () => ({ push() {} }) },
@@ -3793,11 +3795,9 @@ test('usage refresh recovers after transient failure and reconnect without losin
     '../runtime/store': { useStore: () => store },
   })
   const render = () => hooks.render(() => PlanUsageSheet({ hosts: ['a'], open: true, onClose() {} }))
-  const reading = () => nodes(render()).find((node) => node.type === PlanUsageReading).props.reading
+  const reading = () => logins(render())[0].props.row.readings[0]
   const refresh = () =>
-    nodes(render()).find(
-      (node) => node.type === 'Row' && nodes(node).some((child) => child.props?.children === 'Refresh Claude usage'),
-    )
+    nodes(render()).find((node) => node.type === 'Chip' && node.props.label === 'Refresh Claude usage')
   const hasError = () => nodes(render()).some((node) => node.props?.tone === 'bad')
   render()
   await settle()
@@ -4505,7 +4505,7 @@ test('mobile answered questions keep the bold answer outside the collapsed origi
   assert.equal(find(history, 'Pressable').props.accessibilityState.expanded, true)
 })
 
-test('mobile grouped tool rows expand with the same disclosure and preserve every tool', () => {
+test('mobile grouped tool rows open at once, without a height animation, and preserve every tool', () => {
   const view = chatView()
   const tools = [
     { kind: 'tool', id: 'first', tool: 'read', verb: 'Read', subject: 'a.ts', status: 'completed' },
@@ -4513,11 +4513,11 @@ test('mobile grouped tool rows expand with the same disclosure and preserve ever
   ]
   const item = { kind: 'tools', id: 'first', tools, entries: tools }
   let tree = view.block(item)
-  assert.equal(find(tree, 'Collapse').props.open, false)
-  assert.equal(nodes(tree).filter((node) => node.type?.name === 'ToolRow').length, 2)
+  assert.equal(nodes(tree).filter((node) => node.type?.name === 'ToolRow').length, 0)
   find(tree, 'Pressable').props.onPress()
   tree = view.block(item)
-  assert.equal(find(tree, 'Collapse').props.open, true)
+  assert.equal(find(tree, 'Collapse'), undefined)
+  assert.equal(nodes(tree).filter((node) => node.type?.name === 'ToolRow').length, 2)
   assert.equal(find(tree, 'Pressable').props.accessibilityState.expanded, true)
 })
 
@@ -7226,7 +7226,7 @@ for (const os of ['ios', 'android']) {
   })
 }
 
-test('plan usage uses a full-screen settings surface and groups windows under readable account names', async () => {
+test('plan usage lists each login once with its windows and hides names until shown', async () => {
   const presentation = await import('../../../packages/shared/src/usage/presentation.ts')
   const providers = await import('../../../packages/shared/src/providers/providers.ts')
   const hooks = hookHarness()
@@ -7244,16 +7244,13 @@ test('plan usage uses a full-screen settings surface and groups windows under re
   const store = {
     language: 'en',
     computers: [{ id: 'host', name: 'Laptop' }],
-    appPreferences: {},
+    appPreferences: { host: { providerBinaries: { 'claude-code': { accountId: account } } } },
     usage: { host: readings },
-    drafts: {},
-    setDraft: (key, value) => {
-      store.drafts[key] = value
-    },
     isOnline: () => false,
     mayUse: () => true,
   }
-  const { PlanUsageSheet, PlanUsageReading } = load('components/PlanUsage.tsx', 'ios', {
+  let shown = false
+  const { PlanUsageSheet } = load('components/PlanUsage.tsx', 'ios', {
     react: hooks.react,
     '@ramu/shared/usage/presentation': presentation,
     '@ramu/shared/providers/providers': providers,
@@ -7262,29 +7259,33 @@ test('plan usage uses a full-screen settings surface and groups windows under re
     '../runtime/useAccountLogins': {
       useAccountLogins: () => ({ host: { 'claude-code': { [account]: { email: 'me@work.com', apiKey: true } } } }),
     },
+    '../runtime/usageReveal': {
+      useUsageReveal: () => shown,
+      setUsageReveal: (next) => {
+        shown = next
+      },
+    },
   })
   const render = () => hooks.render(() => PlanUsageSheet({ hosts: ['host'], open: true, onClose() {} }))
-  const tree = render()
+  let tree = render()
   assert.equal(find(tree, 'Sheet').props.presentation, 'screen')
-  const headings = nodes(tree)
-    .filter((node) => node.type === 'T' && node.props.weight === '600')
-    .map((node) => [node.props.children].flat().join(''))
-  assert.deepEqual(headings, ['Claude Code · Default CLI account', 'Claude Code · me@work.com · API key'])
-  assert.equal(
-    nodes(tree).filter((node) => node.type === PlanUsageReading).length,
-    4,
-    'every quota window remains visible',
+  const cards = logins(tree)
+  assert.equal(cards.length, 2, 'one card per login')
+  assert.equal(cards.flatMap((card) => card.props.row.readings).length, 4, 'every quota window remains visible')
+  assert.deepEqual(
+    cards.map((card) => [card.props.title, card.props.row.inUse]),
+    [
+      ['Account 1 · API key', true],
+      ['Default CLI account', false],
+    ],
+    'the login threads use comes first, and its email stays hidden while sharing a screen',
   )
-  assert.equal(
-    nodes(tree).filter((node) => node.type === 'T' && node.props.weight === '600').length,
-    2,
-    'one heading per account',
-  )
-  assert.ok(
-    !nodes(tree).some((node) => node.props?.children === account),
-    'opaque IDs stay out of the normal reading flow',
-  )
-  assert.ok(!nodes(tree).some((node) => node.type === 'Toggle'), 'account details show on the plan, with no toggle')
+  assert.ok(!JSON.stringify(cards.map((card) => card.props.title)).includes(account), 'opaque IDs never show')
+  const toggle = nodes(tree).find((node) => node.type === 'Chip' && node.props.label === 'Show accounts')
+  toggle.props.onPress()
+  tree = render()
+  assert.equal(logins(tree)[0].props.title, 'me@work.com · API key')
+  assert.ok(nodes(tree).some((node) => node.type === 'Chip' && node.props.label === 'Hide accounts'))
   hooks.dispose()
 })
 
@@ -8762,44 +8763,48 @@ test('saved approvals list the host’s Always allow rules and remove one from t
   hooks.dispose()
 })
 
-test('learning reviews show only what waits for the person, and Apply applies that review', async () => {
+test('a learned turn offers Undo and says what Undo left because it changed since', async () => {
   const hooks = hookHarness(),
-    calls = []
-  const job = (id, status) => ({ id, status, sessionId: 's', projectId: null, seq: 1, createdAt: 1, error: null })
-  const store = hostStore(
-    {
-      'learning.get': () => ({
-        skills: [],
-        running: false,
-        jobs: [
-          {
-            ...job('pending-1', 'pending'),
-            sessionTitle: 'Fix login',
-            proposal: JSON.stringify({ memories: [{ title: 'Use pnpm', reason: 'The repo has a pnpm lockfile' }] }),
-          },
-          job('applied-1', 'applied'),
-        ],
+    calls = [],
+    toasts = []
+  const shared = load('../../../packages/shared/src/learningReviews.ts', 'ios')
+  const { LearningTurnLine } = load('components/LearningReviews.tsx', 'ios', {
+    react: hooks.react,
+    '@ramu/shared/learningReviews': shared,
+    '../runtime/learningLines': load('runtime/learningLines.ts', 'ios', { '@ramu/shared/learningReviews': shared }),
+    '../runtime/store': { useStore: () => hostStore({}, []) },
+    '../runtime/automation': {
+      useAutomation: () => ({
+        actLearning: async (...args) => {
+          calls.push(args)
+          return 1
+        },
       }),
     },
-    calls,
-  )
-  const { LearningReviews } = load('components/LearningReviews.tsx', 'ios', {
-    react: hooks.react,
-    '../runtime/store': { useStore: () => store },
-    '../runtime/toast': { showToast() {} },
+    '../runtime/toast': { showToast: (message) => toasts.push(message), showError() {} },
     './ui': new Proxy({ tap() {} }, { get: (target, key) => (key in target ? target[key] : String(key)) }),
   })
-  const render = () => hooks.render(() => LearningReviews({ hostId: 'host', locked: false }))
-  render()
-  await settle()
+  const counts = (notes, newSkills) => ({ notes, newSkills, updatedSkills: 0 })
+  const render = () =>
+    hooks.render(() =>
+      LearningTurnLine({
+        computerId: 'host',
+        item: {
+          kind: 'learning',
+          id: 'learning-j',
+          jobId: 'j',
+          line: { state: 'saved', saved: counts(1, 1), waiting: counts(0, 0) },
+        },
+      }),
+    )
   const tree = render()
   const texts = nodes(tree).map((node) => [node.props?.children].flat().join(''))
-  assert.ok(texts.includes('Fix login · pending'))
-  assert.ok(texts.includes('Memory: Use pnpm — The repo has a pnpm lockfile'))
-  assert.ok(!texts.some((text) => text.includes('applied')), 'an applied review stays on the desktop’s full list')
-  pressByText(tree, 'Apply')
+  assert.ok(texts.includes('Learned 1 note · 1 new skill'))
+  for (const action of ['Apply', 'Dismiss']) assert.ok(!texts.includes(action))
+  pressByText(tree, 'Undo')
   await settle()
-  assert.deepEqual(calls[1], ['learning.apply', 'pending-1'])
+  assert.deepEqual(calls, [['host', 'undo', 'j']])
+  assert.deepEqual(toasts, ['Undone. 1 item changed since, so it was kept.'])
   hooks.dispose()
 })
 

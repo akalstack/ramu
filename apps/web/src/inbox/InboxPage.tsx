@@ -21,6 +21,9 @@ import { timeAgo } from '../Menu'
 import { StateDot } from '../sidebar/projects/TaskStateIcon'
 import type { InboxTab } from '@ramu/shared/hostInbox'
 import { saveInboxTab, savedInboxTab } from './navigation'
+import { LearningReviewList } from './LearningReviews'
+import { useLearningReviews } from '../learning/learningQueries'
+import { ShipActivityList } from './ShipActivity'
 
 /** What Ramu learned, one row per summary: the headline, how many changes, and its age or an unread dot. */
 function LearnedList({ summaries }: { summaries: LibrarySummary[] }) {
@@ -71,7 +74,9 @@ export function InboxPage() {
 function CurrentHostInbox() {
   useLanguage()
   const { groups, error } = useAgentOverview()
-  const { model } = useInboxModel()
+  const host = useHost()
+  const reviews = useLearningReviews([host.id])
+  const { model } = useInboxModel({ reviews })
   const recaps = useRecaps()
   const { snapshot } = useSummaries()
   const [tab, setTab] = useState<InboxTab>(savedInboxTab)
@@ -94,8 +99,8 @@ function CurrentHostInbox() {
   const tabs: { id: InboxTab; label: string; count: number }[] = [
     { id: 'brief', label: t('Brief'), count: model.needsYou },
     { id: 'running', label: t('Running'), count: running.length },
-    { id: 'learned', label: t('Learned'), count: unread },
-    { id: 'completed', label: t('Completed'), count: 0 },
+    { id: 'learned', label: t('Learned'), count: unread + model.learningReviews.length },
+    { id: 'completed', label: t('Done'), count: 0 },
   ]
   return (
     <div className="inbox-page flex min-h-0 flex-1 flex-col overflow-auto">
@@ -128,9 +133,17 @@ function CurrentHostInbox() {
           <TabsContent value="learned" className="flex flex-col gap-6">
             {tab === 'learned' && (
               <>
+                <LearningReviewList
+                  reviews={model.learningReviews}
+                  taskOf={(_, sessionId) =>
+                    Object.values(groups)
+                      .flat()
+                      .find((agent) => agent.id === sessionId)?.taskId
+                  }
+                />
                 {summaries.length > 0 ? (
                   <LearnedList summaries={summaries} />
-                ) : (
+                ) : model.learningReviews.length ? null : (
                   <InboxEmpty
                     icon={<Sparkles />}
                     title={t('No summaries yet')}
@@ -183,6 +196,7 @@ function CurrentHostInbox() {
                     {recaps.recap.error}
                   </p>
                 )}
+                <ShipActivityList />
                 {days.map((day) => (
                   <FeedSection key={day.label} title={day.label} count={day.items.length}>
                     <AgentList items={day.items} recapOf={recaps.recapOf} />

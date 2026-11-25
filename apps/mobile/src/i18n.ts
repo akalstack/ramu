@@ -368,7 +368,7 @@ const en = {
   tabRunning: 'Running',
   tabRecaps: 'Recaps',
   tabLearned: 'Learned',
-  tabCompleted: 'Completed',
+  tabCompleted: 'Done',
   waitingForInput: 'Waiting for your input',
   textSizeLabel: 'Text size',
   textSizeDefault: 'Default',

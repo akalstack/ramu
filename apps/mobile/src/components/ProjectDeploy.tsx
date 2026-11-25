@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, Linking, View } from 'react-native'
 import { ExternalLink } from 'lucide-react-native'
-import { translate } from '@ramu/shared/i18n'
+import { translate, type TranslationValues } from '@ramu/shared/i18n'
+import { FINISH_LINE_LABEL, reachableFinishLines, shipExplanation, type FinishLine } from '@ramu/shared/ship'
 import type { DeployStatus, UptimeStatus } from '@ramu/shared/types/deploy'
+import type { ShipProjectStatus } from '@ramu/shared/types/ship'
 import { deployCheckRows, uptimeLines } from '../runtime/projectDeploy'
 import { useStore } from '../runtime/store'
 import { VIEW_ONLY_WRITE_NOTICE } from '../runtime/viewerAccess'
 import { font, space, useTheme } from '../theme'
-import { Button, Divider, SectionLabel, Sheet, T, Toggle } from './ui'
+import { Button, Chip, Divider, SectionLabel, Sheet, T, Toggle } from './ui'
 
 const time = (at: number) => new Date(at).toLocaleString()
 const open = (url: string) => void Linking.openURL(url).catch(() => {})
@@ -17,12 +19,13 @@ interface Loaded {
   status?: DeployStatus
   uptime?: UptimeStatus | null
   database?: { command: string | null; addressSaved: boolean } | null
+  ship?: ShipProjectStatus | null
   error?: string
 }
 
 /**
- * A project's Live app view on its host, mirroring the desktop's Live app sheet: the latest deploy as the Git host
- * reports it, and the live address watch, which can be turned on or off here. The live address and the production
+ * A project's Live app view on its host, mirroring the desktop's Live app sheet: where Ship stops, the latest deploy
+ * as the Git host reports it, and the live address watch. The finish line and the watch can be changed here. The live address and the production
  * database address are set on a computer.
  */
 export function ProjectDeploy({
@@ -40,7 +43,7 @@ export function ProjectDeploy({
 }) {
   const store = useStore()
   const { c } = useTheme()
-  const t = (key: string, values?: Record<string, string>) => translate(store.language, key, values)
+  const t = (key: string, values?: TranslationValues) => translate(store.language, key, values)
   const key = JSON.stringify([hostId, projectId])
   const active = useRef(key)
   active.current = key
@@ -54,12 +57,14 @@ export function ProjectDeploy({
   const read = useCallback(async () => {
     const mine = key
     try {
-      const [status, uptime, database] = await Promise.all([
+      const [status, uptime, database, ship] = await Promise.all([
         runtime.current.invoke(hostId, 'deploy.status', projectId),
         runtime.current.invoke(hostId, 'deploy.uptime', projectId).catch(() => null),
         runtime.current.invoke(hostId, 'deploy.migrations', projectId).catch(() => null),
+        // An older host has no Ship; the sheet leaves the section out.
+        runtime.current.invoke(hostId, 'ship.project', projectId).catch(() => null),
       ])
-      if (active.current === mine) setData({ key: mine, status, uptime, database })
+      if (active.current === mine) setData({ key: mine, status, uptime, database, ship })
     } catch (reason) {
       if (active.current === mine)
         setData({ key: mine, error: reason instanceof Error ? reason.message : String(reason) })
@@ -91,6 +96,22 @@ export function ProjectDeploy({
       .finally(() => setBusy(false))
   }
 
+  const setFinishLine = (finishLine: FinishLine | null) => {
+    if (busy || active.current !== key || !runtime.current.isOnline(hostId) || viewOnly) return
+    setBusy(true)
+    void runtime.current
+      .invoke(hostId, 'ship.setFinishLine', projectId, finishLine)
+      .then(
+        (next) => {
+          if (active.current === key) setData((current) => ({ ...current, ship: next }))
+        },
+        (reason: unknown) =>
+          Alert.alert(t('That didn’t work'), reason instanceof Error ? reason.message : String(reason)),
+      )
+      .finally(() => setBusy(false))
+  }
+  const ship = loaded.ship
+
   return (
     <Sheet open={visible} onClose={onClose} title={t('Live app')}>
       <View style={{ padding: space.m, gap: space.m }}>
@@ -100,6 +121,40 @@ export function ProjectDeploy({
         {loaded.error ? <T tone="bad">{loaded.error}</T> : null}
         {online && !viewOnly && !status && !loaded.error ? <ActivityIndicator color={c.accent} /> : null}
       </View>
+      {ship ? (
+        <>
+          <SectionLabel>{t('Ship')}</SectionLabel>
+          <View style={{ paddingHorizontal: space.m, gap: space.s }}>
+            <View
+              style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, opacity: online ? 1 : 0.5 }}
+              accessibilityLabel={t('Finish line')}
+              accessibilityState={{ disabled: !online }}
+              pointerEvents={online && !busy ? 'auto' : 'none'}
+            >
+              <Chip
+                small
+                label={t('Suggested: {0}', { 0: t(FINISH_LINE_LABEL[ship.suggested]) })}
+                selected={ship.chosen === null}
+                onPress={() => setFinishLine(null)}
+              />
+              {reachableFinishLines(ship).map((line) => (
+                <Chip
+                  key={line}
+                  small
+                  label={t(FINISH_LINE_LABEL[line])}
+                  selected={ship.chosen === line}
+                  onPress={() => setFinishLine(line)}
+                />
+              ))}
+            </View>
+            {shipExplanation(ship, t).map((line) => (
+              <T key={line} size={font.caption} tone="muted">
+                {line}
+              </T>
+            ))}
+          </View>
+        </>
+      ) : null}
       {status ? (
         <>
           <SectionLabel>{t('Latest deploy')}</SectionLabel>

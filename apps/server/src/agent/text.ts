@@ -23,6 +23,19 @@ export function truncate(s: string, n = 400): string {
 }
 
 /**
+ * A failed command's output cut to about `n` characters, keeping its first line (where the exit code is) and its end
+ * (where the error is), since the start of a long log rarely says what went wrong.
+ */
+export function truncateFailure(s: string, n = 400): string {
+  if (s.length <= n) return s
+  const first = clipText(s.split('\n', 1)[0] ?? '', 120)
+  const tail = s.slice(-(n - first.length - 3))
+  // Start the end at a whole line where one begins close enough.
+  const cut = tail.indexOf('\n')
+  return `${first}\n…\n${cut >= 0 && cut < tail.length / 2 ? tail.slice(cut + 1) : tail}`
+}
+
+/**
  * Drops a leading line that is only an inline code span, such as a model router's `auto → flash · low` banner.
  * A ``` fence is left alone: that is real content.
  */

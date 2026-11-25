@@ -91,6 +91,38 @@ const execBuffer = promisify(execFile) as unknown as (
   args: string[],
   options: { cwd: string; maxBuffer: number; timeout: number; encoding: 'buffer' },
 ) => Promise<{ stdout: Buffer }>
+/**
+ * Paths changed by commits that reached the checkout during a turn but were made before it began: what a pull, merge or
+ * rebase brought in, which is not the turn's own work. A commit made during the turn (the agent's, or a merge it made)
+ * has a later commit date and is left out.
+ */
+async function arrivedPaths(cwd: string, from: string, turnStartedAt: number): Promise<Set<string>> {
+  try {
+    const { stdout } = await exec(
+      'git',
+      [
+        'log',
+        '-z',
+        '--format=',
+        '--name-only',
+        '--no-renames',
+        `--before=@${Math.floor(turnStartedAt / 1000) - 2}`,
+        `${from}..HEAD`,
+        '--',
+      ],
+      { cwd, maxBuffer: 16000000, timeout: 30000 },
+    )
+    return new Set(
+      stdout
+        .split('\0')
+        .map((path) => path.trim())
+        .filter(Boolean),
+    )
+  } catch {
+    return new Set()
+  }
+}
+
 /** Paths in a Git checkout that differ from HEAD; undefined for non-Git folders. */
 async function dirtyPaths(root: { cwd: string }): Promise<{ paths: string[]; head: boolean } | undefined> {
   if (!existsSync(join(root.cwd, '.git'))) return
@@ -547,6 +579,7 @@ export class ReviewService {
                 .split('\0')
                 .filter(Boolean)
             } catch {}
+            const arrived = moved.length ? await arrivedPaths(root.cwd, head, review.createdAt) : new Set<string>()
             const candidates = new Set(
               [...before, ...after]
                 .filter((f) => f.repoId === root.repoId)
@@ -556,7 +589,9 @@ export class ReviewService {
             for (const path of candidates) {
               const id = key({ repoId: root.repoId, path })
               if (!oldFiles.has(id)) {
-                const old = await this.headEntry(root, head, path, budget)
+                // A file a pull, merge or rebase brought in is measured from what arrived, so only this turn's own
+                // edits on top of it count as its changes.
+                const old = await this.headEntry(root, arrived.has(path) ? 'HEAD' : head, path, budget)
                 if (old) oldFiles.set(id, old)
               }
               if (!newFiles.has(id)) {

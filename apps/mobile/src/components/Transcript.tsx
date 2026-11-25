@@ -43,6 +43,7 @@ import {
   Play,
   CirclePause,
   CircleAlert,
+  CircleX,
   AppWindow,
   FolderOpen,
 } from 'lucide-react-native'
@@ -50,7 +51,9 @@ import { pickFolder } from '../runtime/folderPick'
 import { font, radius, space, useTheme } from '../theme'
 import { fill, useT, useSay } from '../i18n'
 import { agentErrorView } from '@ramu/shared/chat/agentErrorView'
+import { toolFailure } from '@ramu/shared/chat/toolFailure'
 import { endedOnError, formatDuration } from '../runtime/turns'
+import { limitWaitOf } from '../runtime/limitTray'
 import { showError } from '../runtime/toast'
 import { accountName } from '@ramu/shared/providers/providers'
 import { providerNames, type Chat, type ToolKind, type TranscriptItem } from '../runtime/types'
@@ -89,6 +92,7 @@ import { PullRequestWritesCard } from './PullRequestWritesCard'
 import { TestDeviceWaitCard } from './TestDeviceWaitCard'
 import { SettingsChangeCard } from './SettingsChangeCard'
 import { ToolSuggestionCard } from './ToolSuggestionCard'
+import { LearningTurnLine } from './LearningReviews'
 
 /** Drops the model change waiting for the next send; set by the chat screen that holds it. */
 export const CancelPendingSettings = createContext<() => void>(() => {})
@@ -588,9 +592,11 @@ function ErrorCard({ message, last, chat }: { message: string; last: boolean; ch
   const say = useSay()
   const store = useStore()
   const { title, action } = agentErrorView(message)
+  // While a usage limit holds the thread, the tray above the composer owns trying again.
   const canRetry =
     action === 'retry' &&
     last &&
+    !limitWaitOf(chat.items, chat.doneAt) &&
     !!chat.sessionId &&
     chat.status !== 'running' &&
     chat.status !== 'needs-input' &&
@@ -723,6 +729,8 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
       )
     case 'note':
       return item.goalNote ? <GoalNote item={item} /> : <NoteRow item={item} chat={chat} />
+    case 'learning':
+      return <LearningTurnLine item={item} computerId={chat.computerId} />
     case 'end':
       return null
   }
@@ -1302,13 +1310,14 @@ function ToolGroup({ item, live }: { item: Extract<TranscriptItem, { kind: 'tool
     : live || running || failed
       ? `${words?.verb ?? ''} ${words?.subject ?? ''}`.trim()
       : [...counts].map(([verb, count]) => `${verb}${count > 1 ? ` ×${count}` : ''}`).join(' · ')
+  const lastFailed = item.tools.findLast((tool) => tool.status === 'failed')
+  const lastFailedWords = lastFailed ? toolWords(lastFailed, language, false) : { verb: '', subject: '' }
+  const lastFailedLine = lastFailed ? toolFailure(lastFailed.detail).lines.at(-1) : undefined
   // A group of Ramu's own tools wears its mark, as each of its rows does.
   const ramuGroup = item.tools.every((tool) => tool.ramu)
   const Icon = shown ? toolIcons[shown.tool] : Wrench
   // While working, only the words shimmer; the icon stays still, as on the desktop.
   const tint = failed ? c.bad : c.muted
-  // Tools already here when the group appeared stay still; ones that arrive later fade in.
-  const initial = useRef(new Set(item.tools.map((tool) => tool.id))).current
   // Only the folded live row holds its height: that is where lines come and go as calls start and finish. Opened, the
   // group reads as the person left it.
   const held = useHeldHeight(live && !open, item.id)
@@ -1349,6 +1358,20 @@ function ToolGroup({ item, live }: { item: Extract<TranscriptItem, { kind: 'tool
         ) : null}
         <Disclosure open={open} color={c.muted} />
       </Pressable>
+      {!open && !running && lastFailed ? (
+        // A closed group names its latest failure and what it said, so a failed step is never hidden behind a count.
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.s }}>
+          <CircleX size={12} color={c.bad} style={{ marginTop: 3 }} />
+          <T size={font.caption} tone="soft" numberOfLines={2} style={{ flex: 1, minWidth: 0 }}>
+            {say('Failed')}: {`${lastFailedWords.verb} ${lastFailedWords.subject}`.trim()}
+            {lastFailedLine ? (
+              <T size={font.caption} mono tone="muted">
+                {` — ${lastFailedLine}`}
+              </T>
+            ) : null}
+          </T>
+        </View>
+      ) : null}
       {!open && lastThoughtLine ? (
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.s }}>
           <Brain size={12} color={c.muted} style={{ marginTop: 3 }} />
@@ -1357,21 +1380,21 @@ function ToolGroup({ item, live }: { item: Extract<TranscriptItem, { kind: 'tool
           </T>
         </View>
       ) : null}
-      <Collapse open={open}>
+      {/* Opens and closes at once, as T3 Code's work log does, and rows that arrive while it is open simply appear: a
+          height animation here would replay with every new call and move the reply below while the person reads. */}
+      {open ? (
         <RowToggle.Provider value={toggledInside}>
           <View style={{ gap: space.xs }}>
             {item.entries.map((entry, index) =>
               entry.kind === 'thinking' ? (
                 <ThinkingRow key={entry.id} text={entry.text} live={live && index === item.entries.length - 1} />
               ) : (
-                <Arrive key={entry.id} animate={!initial.has(entry.id)}>
-                  <ToolRow item={entry} />
-                </Arrive>
+                <ToolRow key={entry.id} item={entry} />
               ),
             )}
           </View>
         </RowToggle.Provider>
-      </Collapse>
+      ) : null}
     </View>
   )
 }
@@ -1430,6 +1453,30 @@ function PlanCard({ item }: { item: Extract<TranscriptItem, { kind: 'plan' }> })
           ))}
         </View>
       </Collapse>
+    </View>
+  )
+}
+
+/** What a failed call said, under its closed row: the exit code and the output's last lines, so the reason reads at once. */
+function ToolFailureLines({ output }: { output: string | undefined }) {
+  const { c } = useTheme()
+  const say = useSay()
+  const { exit, lines } = toolFailure(output)
+  if (!lines.length && exit === undefined) return null
+  return (
+    <View
+      style={{ marginLeft: 22, marginBottom: 4, paddingLeft: space.s, borderLeftWidth: 2, borderLeftColor: c.badWash }}
+    >
+      {exit !== undefined ? (
+        <T size={font.caption} mono tone="bad">
+          {say('Exit code {0}', { 0: exit })}
+        </T>
+      ) : null}
+      {lines.map((line, index) => (
+        <T key={index} size={font.caption} mono tone="soft" numberOfLines={1}>
+          {line}
+        </T>
+      ))}
     </View>
   )
 }
@@ -1514,96 +1561,99 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
         ) : null}
         {openable ? <Disclosure open={open} color={c.muted} /> : null}
       </Pressable>
-      <Collapse open={open}>
-        {/* Opened, a file tool shows where the file lives and opens it; an edit shows its diff instead of raw input. */}
-        {filePath ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`${translate(storeLanguage, 'Open file')} ${filePath}`}
-            onPress={() => {
-              tap()
-              references.openFile(filePath)
-            }}
-            hitSlop={6}
-            style={{ marginTop: 2, flexDirection: 'row', gap: space.s, alignItems: 'center' }}
-          >
-            <T size={font.caption} mono tone="muted" numberOfLines={1} ellipsizeMode="head" style={{ flexShrink: 1 }}>
-              {filePath}
-            </T>
-            <T size={font.caption} weight="600" tone="accent">
-              {translate(storeLanguage, 'Open file')}
-            </T>
-          </Pressable>
-        ) : null}
-        {facts.length ? (
-          <View style={{ marginTop: 4, gap: 4 }}>
-            {facts.map((fact) => (
-              <View key={fact.label} style={{ flexDirection: 'row', gap: space.m }}>
-                <T size={font.caption} tone="muted" style={{ width: 64 }}>
-                  {translate(storeLanguage, fact.label)}
-                </T>
-                <T size={font.caption} tone="soft" style={{ flex: 1 }} numberOfLines={4}>
-                  {fact.value}
-                </T>
-              </View>
-            ))}
-          </View>
-        ) : null}
-        {diffs.map((diff, index) => (
-          <View key={index} style={{ marginTop: 4 }}>
-            <DiffLines file={changedFile(diff.path, '', diff.oldText ?? '', diff.newText)} />
-          </View>
-        ))}
-        {(!diffs.length && !facts.length) || failed ? (
-          <View
-            style={{
-              marginTop: 4,
-              padding: space.s + 2,
-              backgroundColor: c.code,
-              borderRadius: radius.s,
-            }}
-          >
-            {item.input ? (
-              <View style={{ gap: space.xs, marginBottom: item.detail ? space.s : 0 }}>
-                <T size={font.caption} weight="600" tone="muted">
-                  {say('Input')}
-                </T>
-                <T size={font.caption} mono copyable={item.input}>
-                  {item.input}
-                </T>
-              </View>
-            ) : null}
-            <T size={font.caption} weight="600" tone="muted">
-              {say('Output')}
-            </T>
-            <T
-              size={font.caption}
-              mono
-              tone={failed ? 'bad' : 'soft'}
-              numberOfLines={PREVIEW_LINES}
-              ellipsizeMode="tail"
+      {failed && !open ? <ToolFailureLines output={item.detail} /> : null}
+      {open ? (
+        <>
+          {/* Opened, a file tool shows where the file lives and opens it; an edit shows its diff instead of raw input. */}
+          {filePath ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${translate(storeLanguage, 'Open file')} ${filePath}`}
+              onPress={() => {
+                tap()
+                references.openFile(filePath)
+              }}
+              hitSlop={6}
+              style={{ marginTop: 2, flexDirection: 'row', gap: space.s, alignItems: 'center' }}
             >
-              {item.detail || (running ? say('Running…') : say('No output'))}
-            </T>
-            {long ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={say('Show full log')}
-                onPress={() => {
-                  tap()
-                  setFull(true)
-                }}
-                hitSlop={8}
-                style={{ alignSelf: 'flex-start', paddingTop: space.s }}
+              <T size={font.caption} mono tone="muted" numberOfLines={1} ellipsizeMode="head" style={{ flexShrink: 1 }}>
+                {filePath}
+              </T>
+              <T size={font.caption} weight="600" tone="accent">
+                {translate(storeLanguage, 'Open file')}
+              </T>
+            </Pressable>
+          ) : null}
+          {facts.length ? (
+            <View style={{ marginTop: 4, gap: 4 }}>
+              {facts.map((fact) => (
+                <View key={fact.label} style={{ flexDirection: 'row', gap: space.m }}>
+                  <T size={font.caption} tone="muted" style={{ width: 64 }}>
+                    {translate(storeLanguage, fact.label)}
+                  </T>
+                  <T size={font.caption} tone="soft" style={{ flex: 1 }} numberOfLines={4}>
+                    {fact.value}
+                  </T>
+                </View>
+              ))}
+            </View>
+          ) : null}
+          {diffs.map((diff, index) => (
+            <View key={index} style={{ marginTop: 4 }}>
+              <DiffLines file={changedFile(diff.path, '', diff.oldText ?? '', diff.newText)} />
+            </View>
+          ))}
+          {(!diffs.length && !facts.length) || failed ? (
+            <View
+              style={{
+                marginTop: 4,
+                padding: space.s + 2,
+                backgroundColor: c.code,
+                borderRadius: radius.s,
+              }}
+            >
+              {item.input ? (
+                <View style={{ gap: space.xs, marginBottom: item.detail ? space.s : 0 }}>
+                  <T size={font.caption} weight="600" tone="muted">
+                    {say('Input')}
+                  </T>
+                  <T size={font.caption} mono copyable={item.input}>
+                    {item.input}
+                  </T>
+                </View>
+              ) : null}
+              <T size={font.caption} weight="600" tone="muted">
+                {say('Output')}
+              </T>
+              <T
+                size={font.caption}
+                mono
+                tone={failed ? 'bad' : 'soft'}
+                numberOfLines={PREVIEW_LINES}
+                ellipsizeMode="tail"
               >
-                <T size={font.caption} weight="600" tone="accent">
-                  {say('Show full log')}
-                </T>
-              </Pressable>
-            ) : null}
-          </View>
-        ) : null}
-      </Collapse>
+                {item.detail || (running ? say('Running…') : say('No output'))}
+              </T>
+              {long ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={say('Show full log')}
+                  onPress={() => {
+                    tap()
+                    setFull(true)
+                  }}
+                  hitSlop={8}
+                  style={{ alignSelf: 'flex-start', paddingTop: space.s }}
+                >
+                  <T size={font.caption} weight="600" tone="accent">
+                    {say('Show full log')}
+                  </T>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+        </>
+      ) : null}
       {item.detail ? (
         <Sheet open={full} onClose={() => setFull(false)} title={title.trim()}>
           <Card style={{ marginHorizontal: space.l, padding: space.m }}>

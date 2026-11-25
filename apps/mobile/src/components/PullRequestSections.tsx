@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Pressable, View } from 'react-native'
+import { AppState, Pressable, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Eye, ChevronDown, ChevronRight, GitPullRequest, MessageSquare, PanelRight, Wrench } from 'lucide-react-native'
 import type {
@@ -113,7 +113,14 @@ export function CurrentPullRequest({
     // them with the thread lists. An open pull request reads only its drafts and watch again: every workspace change
     // re-reading it would spend the service's rate limit.
     let timer: ReturnType<typeof setTimeout> | undefined
+    // The host announces a push or a `gh pr` command the agent ran: the card reads its pull request at once.
+    const unwatch = store.watch(computerId, ['forge:changed'])
     const off = store.subscribe(computerId, (...[channel]) => {
+      if (channel === 'forge:changed') {
+        clearTimeout(timer)
+        timer = setTimeout(() => void read().catch(() => {}), 200)
+        return
+      }
       if (channel !== 'workspace:changed') return
       clearTimeout(timer)
       timer = setTimeout(() => {
@@ -128,9 +135,27 @@ export function CurrentPullRequest({
     return () => {
       clearTimeout(timer)
       off()
+      unwatch()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the store's invoke is stable for a host
   }, [read, computerId, taskId, repoId, openUrl])
+
+  useEffect(() => {
+    // Coming back to the app reads it again; an open one is also read every 30 seconds while the app is in front. The
+    // host shares one read between every view, so this costs the service nothing extra.
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void read().catch(() => {})
+    })
+    const timer = openUrl
+      ? setInterval(() => {
+          if (AppState.currentState === 'active') void read().catch(() => {})
+        }, 30_000)
+      : undefined
+    return () => {
+      sub.remove()
+      clearInterval(timer)
+    }
+  }, [read, openUrl])
 
   const pr = status?.pullRequest ?? null
   const note = status ? unavailableText(status.availability) : null

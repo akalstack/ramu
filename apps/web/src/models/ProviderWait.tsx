@@ -61,10 +61,11 @@ export function LimitTrayRow({
       className="provider-wait flex flex-wrap items-center gap-2 min-h-7 px-1 text-caption"
     >
       <Clock3 size={14} className="flex-none text-muted-foreground" aria-hidden="true" />
-      <strong className="flex-none font-medium text-foreground">{title}</strong>
-      <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-muted-foreground">
-        {detail}
-      </span>
+      <strong className={`flex-none font-medium ${view.case === 'reset-off' ? 'text-foreground' : 'text-warn'}`}>
+        {title}
+      </strong>
+      {/* The detail is the when and the how; it wraps rather than truncating, and the actions drop below it only on a narrow pane. */}
+      <span className="min-w-48 flex-1 break-words text-muted-foreground">{detail}</span>
       <Button
         variant={view.primary ? 'default' : 'ghost'}
         size="xs"

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { afterEach, expect, it, vi } from 'vitest'
 import { openDb } from '../src/db'
 import { Workspace } from '../src/workspace/workspace'
-import { loadProjectConfig } from '../src/workspace/projectConfig'
+import { committedShipConfig, loadProjectConfig } from '../src/workspace/projectConfig'
 import { createDispatcher, type Services } from '../src/ipc'
 import { DEFAULT_APP_PREFERENCES, type ProjectAction, type ProjectActionSettings } from '@ramu/shared/types'
 import { ProjectActions } from '../src/workspace/projectActions'
@@ -321,4 +321,25 @@ it('announces successful action mutations to other clients while reads and faile
   expect(f.send).not.toHaveBeenCalled()
   f.save([...f.list(), f.local])
   await vi.waitFor(() => expect(f.send).toHaveBeenCalledWith('workspace:changed', {}))
+})
+
+it('reads Ship’s limit from the default branch, not from a branch an agent changed', async () => {
+  const root = directory()
+  const run = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'pipe' })
+  run('init', '-q', '-b', 'main')
+  run('config', 'user.email', 'test@example.com')
+  run('config', 'user.name', 'Test')
+  writeFileSync(join(root, 'ramu.json'), JSON.stringify({ ship: { finishLine: 'review', maxCiFixes: 2 } }))
+  run('add', 'ramu.json')
+  run('commit', '-q', '-m', 'Ship limit')
+  run('checkout', '-q', '-b', 'agent-work')
+  writeFileSync(join(root, 'ramu.json'), JSON.stringify({ ship: { finishLine: 'live' } }))
+  run('commit', '-q', '-am', 'Raise it')
+  expect(await committedShipConfig(root)).toEqual({ finishLine: 'review', maxCiFixes: 2 })
+  // A limit the team wrote that Ramu cannot read stops at the earliest line.
+  run('checkout', '-q', 'main')
+  writeFileSync(join(root, 'ramu.json'), JSON.stringify({ ship: { finishLine: 'somewhere' } }))
+  run('commit', '-q', '-am', 'Typo')
+  expect(await committedShipConfig(root)).toEqual({ finishLine: 'pull-request' })
+  expect(loadProjectConfig(root).error).toBeDefined()
 })

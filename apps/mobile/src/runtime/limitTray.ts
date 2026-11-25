@@ -8,8 +8,12 @@ import { effectiveAutoResume, limitTrayView, type LimitTrayCase } from '@ramu/sh
 import type { AgentSettings, AppPreferences } from '@ramu/shared/types'
 import type { TranscriptItem } from './types'
 
-/** The open limit wait in a thread's transcript, or null when it is not at a limit. */
-export function limitWaitOf(items: readonly TranscriptItem[]) {
+/**
+ * The open limit wait in a thread's transcript, or null when it is not at a limit. A done thread waits on nothing: it
+ * continues only when the person reopens it or sends a message.
+ */
+export function limitWaitOf(items: readonly TranscriptItem[], doneAt?: number | null) {
+  if (doneAt) return null
   const note = items.findLast((item) => item.kind === 'note' && item.wait && item.limit)
   return note?.kind === 'note' && note.limit ? note.limit : null
 }

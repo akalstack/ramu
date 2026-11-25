@@ -11,7 +11,9 @@ import { BranchNameEditor } from './workspace/BranchNameEditor'
 import { WorkspaceNameDialog } from './workspace/WorkspaceNameDialog'
 import { t, useLanguage } from './i18n'
 import { clipText } from '@ramu/shared/text'
-import { useModelSets } from './models/ModelSets'
+import { settingsNames, useModelSets } from './models/ModelSets'
+import { useUsage } from './settings/Usage'
+import { providerName } from '@ramu/shared/providers/providers'
 import {
   ChevronRight,
   CircleAlert,
@@ -82,7 +84,14 @@ import { routingLabels, type RoutingOutcome } from '@ramu/shared/workspace/proje
 import { useOtherHostTargets } from './workspace/otherHostTargets'
 import { routedAgentSettings } from '@ramu/shared/workspace/agentDefaults'
 import { PROJECT_NAME } from '@ramu/shared/stacks'
-import { NewProjectFields, type NewProjectDraft } from './composer/NewProjectFields'
+import { NewProjectFields } from './composer/NewProjectFields'
+import {
+  EMPTY_PROJECT_DRAFT,
+  catalogStack,
+  newProjectRequest,
+  ramuMakesProject,
+  type NewProjectDraft,
+} from './composer/newProjectDraft'
 import { useProjectParent } from './workspace/ProjectParentField'
 import { hasOfflineCopy } from './workspace/offlineCopy'
 import { canOpenOffline } from './workspace/selectionRoute'
@@ -290,7 +299,7 @@ export function NewThread({
   // Start something new: the next message starts in No project and asks the agent to create the project.
   const [startingNew, setStartingNew] = useState(false)
   // With a name, Ramu creates the project itself and the thread starts in it; without one the agent creates it.
-  const [newProject, setNewProject] = useState<NewProjectDraft>({ name: '', stack: '' })
+  const [newProject, setNewProject] = useState<NewProjectDraft>(EMPTY_PROJECT_DRAFT)
   const projectParent = useProjectParent(host.id)
   // Designs a new project can start from; its first screens are built to match the chosen one.
   const [designs, setDesigns] = useState<{ id: string; title: string }[]>([])
@@ -330,9 +339,28 @@ export function NewThread({
   // A copy of an away host may not list its repositories; the host checks them when the thread starts.
   const needsRepository = !general && !repos.length && !queues
   const project = ws.projects.find((p) => p.id === projectId)
-  const { initialSettings } = useModelSets()
+  const { initialSettings, catalogs } = useModelSets()
   const agentDraft = useAgentDraft(scopeProject, initialSettings)
   const settings = agentDraft.settings
+  // A model at its usage limit is switched before the first message, as the host would on start, and said here so the
+  // person sees where the thread will run without moving the picker themselves.
+  const usage = useUsage()
+  const usageKey = usage
+    .map((r) => `${r.provider}:${r.accountId ?? ''}:${r.window}:${r.usedPercent}:${r.status}`)
+    .join()
+  const startRoute = useQuery({
+    queryKey: ['start-route', host.id, JSON.stringify(settings), usageKey],
+    enabled: host.status === 'connected',
+    retry: false,
+    staleTime: 30_000,
+    queryFn: () => host.invoke('agent.startRoute', settings),
+  })
+  const limitSwitch = startRoute.data
+    ? t('{0} — this thread starts on {1}', {
+        0: startRoute.data.reason,
+        1: `${providerName(startRoute.data.settings.provider)} · ${settingsNames(startRoute.data.settings, catalogs).model}`,
+      })
+    : null
   const workspaceDraft = useWorkspaceDraft(host.id, scopeProject, general ? null : ws.composingWorkspace)
   const workspaceId = general ? null : (workspaceDraft.choice.workspaceId ?? null)
   const manualMode = general ? null : workspaceDraft.choice.mode
@@ -494,11 +522,16 @@ export function NewThread({
     if (sending.current) throw new Error(t('A message is already being sent.'))
     const startsProject = picked === NEW_PROJECT || startingNew
     const chosen = startsProject ? NO_PROJECT : picked
-    const newName = startingNew ? newProject.name.trim() : ''
-    if (newName && !PROJECT_NAME.test(newName))
+    const namedProject = startingNew ? newProject.name.trim() : ''
+    if (namedProject && !PROJECT_NAME.test(namedProject))
       throw new Error(t('Use a folder name of letters, digits, dots, dashes or underscores.'))
+    // Ramu makes the project itself only for a stack it knows; otherwise the agent recommends or looks one up.
+    const newName = ramuMakesProject(newProject) ? namedProject : ''
     // The agent reads this as the request to make a project; the person sees the same words in the thread.
-    const agentPrompt = startsProject && !newName ? t('Start a new project: {0}', { '0': prompt.trim() }) : prompt
+    const agentPrompt =
+      startsProject && !newName
+        ? newProjectRequest(startingNew ? newProject : EMPTY_PROJECT_DRAFT, prompt.trim(), projectParent.chosen)
+        : prompt
     if (needsRepository) throw new Error(t('Add a repository to this project first'))
     const messageTitle =
       title ||
@@ -678,7 +711,7 @@ export function NewThread({
         if (!made) {
           const { project: createdProject } = await host.invoke('projects.create', {
             name: newName,
-            ...(newProject.stack ? { stack: newProject.stack } : {}),
+            ...(catalogStack(newProject) ? { stack: catalogStack(newProject)! } : {}),
             ...(projectParent.chosen ? { parent: projectParent.chosen } : {}),
           })
           made = madeProject.current = { name: newName, projectId: createdProject.id }
@@ -751,7 +784,7 @@ export function NewThread({
       created = null
       creationRequest.current = null
       setStartingNew(false)
-      setNewProject({ name: '', stack: '' })
+      setNewProject(EMPTY_PROJECT_DRAFT)
       madeProject.current = null
       if (!auto) rememberStartProject(projectId, hostStorageFor(host.id))
       clearDraftDestination(hostStorageFor(host.id))
@@ -1185,6 +1218,11 @@ export function NewThread({
             submitLabel={t('Start thread')}
           />
         </ComposerStack>
+        {!pending && limitSwitch && (
+          <p className="m-0 px-3 text-caption leading-[1.45] text-warn" role="status">
+            {limitSwitch}
+          </p>
+        )}
         {!pending && routeNote && (
           <p className="m-0 px-3 text-caption leading-[1.45] text-muted-foreground" role="status">
             {routeNote}

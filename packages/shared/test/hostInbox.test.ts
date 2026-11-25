@@ -458,3 +458,30 @@ it('keeps one recent recap per thread, its newest, while decisions stay one per 
   expect(model.recent.map((r) => r.item.id)).toEqual(['new'])
   expect(model.attention.map((r) => r.item.id)).toEqual(['ask'])
 })
+
+it('leads Learned with reviews waiting for Apply on the hosts in scope, and counts them on the tab', () => {
+  const proposal = JSON.stringify({ memories: [{ title: 'Note' }], skills: [], archive: [] })
+  const job = (id: string, status: 'pending' | 'applied', createdAt: number) => ({
+    id,
+    sessionId: 's',
+    projectId: null,
+    seq: 3,
+    status,
+    createdAt,
+    error: null,
+    proposal,
+  })
+  const reviews = [
+    { computerId: 'a', job: job('old', 'pending', 1) },
+    { computerId: 'a', job: job('new', 'pending', 2) },
+    { computerId: 'a', job: job('saved', 'applied', 3) },
+    { computerId: 'b', job: job('elsewhere', 'pending', 4) },
+  ]
+  const all = buildInbox({ chats: [], recaps: [], summaries: [], reviews, now })
+  expect(all.learningReviews.map((review) => review.job.id)).toEqual(['elsewhere', 'new', 'old'])
+  expect(all.learnedCount).toBe(3)
+  expect(all.empty).toBe(false)
+  const scoped = buildInbox({ chats: [], recaps: [], summaries: [], reviews, computerId: 'a', now })
+  expect(scoped.learningReviews.map((review) => review.job.id)).toEqual(['new', 'old'])
+  expect(buildInbox({ chats: [], recaps: [], summaries: [], now }).learnedCount).toBe(0)
+})

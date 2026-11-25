@@ -25,6 +25,12 @@ export interface AppUpdateStatus {
   waiting?: { version: string; notesUrl: string; settlesAt: string } | null
 }
 
+/** What a desktop app tells the service on its host: the version installed there, and whether it installs updates itself. */
+export interface InstalledApp {
+  version: string
+  canInstall: boolean
+}
+
 /** A downloaded update this app can install by itself, without the person downloading an installer. */
 export const installsUnattended = (status: AppUpdateStatus): boolean =>
   APP_AUTO_UPDATE && status.phase === 'ready' && !!status.nativeReady && status.supported !== false

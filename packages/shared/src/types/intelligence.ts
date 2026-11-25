@@ -85,10 +85,24 @@ export interface LearningJob {
   sessionId: string
   projectId: string | null
   seq: number
-  status: 'queued' | 'running' | 'pending' | 'applied' | 'dismissed' | 'failed'
+  /**
+   * `pending` waits for the person. In Save automatically a review is applied straight away, new skills included, and
+   * `changes` records what it saved so Undo can take it back.
+   */
+  status: 'queued' | 'running' | 'pending' | 'applied' | 'dismissed' | 'failed' | 'undone'
   createdAt: number
   error: string | null
   proposal: string | null
+  /** Automatic retries already spent on a failed review. */
+  attempts?: number
+  /** What applying saved, so Undo can take exactly that back. */
+  changes?: LearningChanges
+}
+export interface LearningChanges {
+  /** `updatedAt` is the note's version right after the save; Undo leaves a note changed since then alone. */
+  memories: { id: string; title: string; action: 'added' | 'updated'; updatedAt: number }[]
+  /** `before` is null for a skill the review created. */
+  skills: { id: string; name: string; before: number | null; after: number }[]
 }
 export interface LearningSnapshot {
   skills: ManagedSkill[]

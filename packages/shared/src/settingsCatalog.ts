@@ -170,6 +170,12 @@ export const SETTINGS_CATALOG: SettingsCatalogEntry[] = [
   },
   {
     section: 'git',
+    title: 'Live pull request updates',
+    help: 'Reviews, finished checks and merges show at once instead of at the next check. Uses the Ramu GitHub App where it is installed, and otherwise adds a webhook to the repository, which needs admin rights there and a public address for this computer (Ramu Link).',
+    words: 'pr webhook github app realtime instant events checks reviews',
+  },
+  {
+    section: 'git',
     title: 'Remove agent credits',
     path: 'removeAgentCredits',
     help: 'Keep AI agent Co-authored-by trailers and Generated with lines out of commits and pull requests. Agents are told not to add them, and Ramu strips any that remain. Credits for people stay.',
@@ -212,7 +218,7 @@ export const SETTINGS_CATALOG: SettingsCatalogEntry[] = [
     section: 'memory',
     title: 'Automatic learning',
     path: 'intelligence.learning',
-    help: 'After a thread, look for lasting notes and reusable skills. Uses model tokens when idle.',
+    help: 'When a thread’s task is finished, save lasting notes and reusable skills. Uses model tokens when idle.',
     words: 'self improve skills consolidate review maintenance ask first',
   },
   {

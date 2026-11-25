@@ -3,7 +3,7 @@ import { chatMarkdownComponents } from '../../../chat/ChatMarkdown'
 import { ChatLink } from '../../../chat/ChatReferences'
 import { parseThreadReference, remarkChatReferences, SKILL_REFERENCE_PREFIX } from '@ramu/shared/chat/chatReferences'
 import { useLanguage } from '../../../i18n'
-import { memo, useMemo, useRef, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { MarkdownText } from '../../../chat/MarkdownText'
@@ -16,8 +16,6 @@ import { Bubble, BubbleContent } from '@/components/ui/bubble'
 import { Message, MessageContent } from '@/components/ui/message'
 import { MessageActions } from './MessageActions'
 import { MSG_CLASS } from '../styles'
-import { noteArrival, rehypeStreamWords, streamClock } from '../lib/streamWords'
-import { useSmoothText } from '../hooks/useSmoothText'
 
 const JUST_ARRIVED_MS = 5000
 
@@ -32,7 +30,7 @@ export const AssistantText = memo(function AssistantText({
 }: {
   event: Extract<AgentEvent, { kind: 'text' }>
   generating: boolean
-  /** Arrived while this chat was open, so it writes out from its first word even when it came in one piece. */
+  /** Arrived while this chat was open, so its blocks fade in even when it came in one piece. */
   fresh?: boolean
   actions?: boolean
   latest?: boolean
@@ -40,15 +38,10 @@ export const AssistantText = memo(function AssistantText({
   sessionId?: string
 }) {
   useLanguage()
-  // Written out at a steady pace while it streams; what has arrived but is not shown yet keeps the message live.
-  // A reply that came in one piece just as the turn ended is still written out, but only while it is new: a row shown
-  // again later (a folded turn opened) does not write itself out a second time.
+  // Shown as it arrives, a top-level block at a time, each new block fading in once, as T3 Code does. A reply that came
+  // in one piece just as the turn ended fades in too, but only while it is new: a row shown again later (a folded turn
+  // opened) appears settled.
   const [justArrived] = useState(() => fresh && e.at !== undefined && Date.now() - e.at < JUST_ARRIVED_MS)
-  const text = useSmoothText(e.text, generating || justArrived, fresh)
-  const writing = generating || text.length < e.text.length
-  const clock = useRef(streamClock(text))
-  noteArrival(clock.current, text)
-  const rehypePlugins = useMemo(() => [rehypeStreamWords(clock.current)], [])
   // Stable component identities: a fresh `a` function every tick would remount every link.
   const components = useMemo<Components>(
     () => ({
@@ -84,10 +77,10 @@ export const AssistantText = memo(function AssistantText({
     <Message>
       <MessageContent className="gap-0">
         <Bubble variant="ghost" className="w-full">
-          <BubbleContent className={`${MSG_CLASS} assistant${writing ? ' generating' : ''} w-full overflow-visible`}>
+          <BubbleContent className={`${MSG_CLASS} assistant${generating ? ' generating' : ''} w-full overflow-visible`}>
             <MarkdownText
               remarkPlugins={[remarkGfm, remarkChatReferences]}
-              rehypePlugins={writing ? rehypePlugins : undefined}
+              streaming={generating || justArrived}
               urlTransform={(url) =>
                 url.startsWith(SKILL_REFERENCE_PREFIX) || parseThreadReference(url) || localFileLink(url)
                   ? url
@@ -95,11 +88,11 @@ export const AssistantText = memo(function AssistantText({
               }
               components={components}
             >
-              {text}
+              {e.text}
             </MarkdownText>
           </BubbleContent>
         </Bubble>
-        {actions && !writing && (
+        {actions && !generating && (
           <MessageActions latest={latest} className="mt-2">
             <MessageTime at={e.at} />
             <CopyButton text={e.text} markdown />

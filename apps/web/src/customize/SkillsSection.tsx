@@ -6,7 +6,7 @@ import { Button } from '@/components/desktop-button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Dialog, Menu } from '../Menu'
+import { Dialog, Dropdown, Menu } from '../Menu'
 import { useHost } from '../workspace/HostProvider'
 import { errorText } from '../lib/errors'
 import { formatLocale, t, useLanguage } from '../i18n'
@@ -17,6 +17,15 @@ import { Advanced, CustomizeHeader, ExtensionGrid, ExtensionItem, Quiet, Section
 import { AvailableOn, RemoveElsewhere, useRemoveElsewhere, useToolSync, WaitingTools } from './toolSync'
 import { SafetyCheck } from './SafetyCheck'
 import { EVERY_USE, UseFor, type UseChoice } from './UseFor'
+import {
+  LEARNED_STATUSES,
+  LEARNED_STATUS_LABELS,
+  LearnedSkillDetail,
+  SkillHistory,
+  learnedByRamu,
+  type LearnedStatus,
+} from './LearnedSkills'
+import { takeLibraryFocus } from '../summaries/libraryFocus'
 
 const fromPlugin = (skill: ManagedSkill) => skill.installation?.source.startsWith('plugin:') === true
 const words = (query: string) => query.toLowerCase().split(/\s+/).filter(Boolean)
@@ -35,8 +44,8 @@ type Draft = {
 }
 
 /**
- * Skills: the ones you wrote, the ones installed from a repository or a plugin, and the skills.sh directory to add more
- * from, searched as you type.
+ * Skills: the ones you wrote, the ones installed from a repository or a plugin, the ones Ramu learned from finished
+ * threads, and the skills.sh directory to add more from, searched as you type.
  */
 export function SkillsSection({
   onOpenPlugins,
@@ -61,12 +70,11 @@ export function SkillsSection({
   const [openId, setOpenId] = useState<string | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [adding, setAdding] = useState(false)
+  const [learnedStatus, setLearnedStatus] = useState<LearnedStatus>('active')
   const { status: sync, reload: reloadSync } = useToolSync()
   const load = useCallback(async () => {
     const snapshot = await invoke('learning.get')
-    setSkills(
-      snapshot.skills.filter((skill) => skill.installation || (skill.changedBy === 'user' && !skill.sourceSessionId)),
-    )
+    setSkills(snapshot.skills)
     reloadSync()
   }, [invoke, reloadSync])
   useEffect(() => {
@@ -74,6 +82,18 @@ export function SkillsSection({
     void invoke('projects.list').then(setProjects, () => {})
     invoke('skills.popular').then(setPopular, (reason) => setDirectoryError(errorText(reason)))
   }, [load, invoke])
+  // A skill named in a summary of what Ramu learned opens on its details, whatever its status.
+  useEffect(() => {
+    const take = () => {
+      const item = takeLibraryFocus('skill')
+      if (!item) return
+      setLearnedStatus('all')
+      setOpenId(item.id)
+    }
+    take()
+    window.addEventListener('ramu:library-focus', take)
+    return () => window.removeEventListener('ramu:library-focus', take)
+  }, [])
   // The directory is searched once typing pauses, and only for two letters or more.
   const latest = useRef('')
   useEffect(() => {
@@ -145,7 +165,11 @@ export function SkillsSection({
       })
   }
   const all = skills ?? []
-  const own = all.filter((skill) => !skill.installation && matches(skill, query))
+  const own = all.filter((skill) => !skill.installation && !learnedByRamu(skill) && matches(skill, query))
+  const learnedAll = all.filter(learnedByRamu)
+  const learned = learnedAll.filter(
+    (skill) => (learnedStatus === 'all' || skill.status === learnedStatus) && matches(skill, query),
+  )
   const installed = all.filter((skill) => skill.installation && matches(skill, query))
   const have = new Set(all.flatMap((skill) => [skill.name, skill.installation?.source ?? '']))
   const directory = (results?.skills ?? popular ?? []).filter((entry) => !have.has(entry.name))
@@ -164,6 +188,7 @@ export function SkillsSection({
           {fromPlugin(skill) && <Badge variant="outline">{skill.installation!.source.slice(7)}</Badge>}
           {scopeOf(skill) && <Badge variant="outline">{scopeOf(skill)}</Badge>}
           {skill.status !== 'active' && <Badge variant="outline">{t('Off')}</Badge>}
+          {skill.pinned && learnedByRamu(skill) && <Badge variant="outline">{t('Pinned')}</Badge>}
         </>
       }
       onOpen={() => setOpenId(skill.id)}
@@ -247,6 +272,28 @@ export function SkillsSection({
               <ExtensionGrid label={t('Your skills')}>{own.map(skillItem)}</ExtensionGrid>
             </>
           )}
+          {learnedAll.length > 0 && (
+            <>
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <SectionTitle
+                  title={t('Learned by Ramu')}
+                  count={learned.length}
+                  help={t('From finished threads. Ramu keeps them current unless you pin them.')}
+                />
+                <Dropdown
+                  label={t('Status')}
+                  value={learnedStatus}
+                  options={LEARNED_STATUSES.map((value) => ({ value, label: t(LEARNED_STATUS_LABELS[value]) }))}
+                  onChange={(next) => setLearnedStatus(next as LearnedStatus)}
+                />
+              </div>
+              {learned.length ? (
+                <ExtensionGrid label={t('Learned by Ramu')}>{learned.map(skillItem)}</ExtensionGrid>
+              ) : (
+                <Quiet>{t('No skills match your search.')}</Quiet>
+              )}
+            </>
+          )}
           <SectionTitle title={t('Installed')} count={installed.length} />
           {installed.length ? (
             <ExtensionGrid label={t('Installed')}>{installed.map(skillItem)}</ExtensionGrid>
@@ -288,7 +335,10 @@ export function SkillsSection({
           }
         />
       )}
-      {open && (
+      {open && learnedByRamu(open) && (
+        <LearnedSkillDetail skill={open} projects={projects} busy={busy} act={act} onClose={() => setOpenId(null)} />
+      )}
+      {open && !learnedByRamu(open) && (
         <SkillDetail
           skill={open}
           sync={sync}
@@ -476,6 +526,7 @@ function SkillDetail({
           }
         />
         <SafetyCheck target={{ kind: 'skill', skillId: skill.id }} />
+        {!skill.installation && <SkillHistory skill={skill} busy={busy} act={act} />}
         {!plugin && <AvailableOn toolKey={`skill:${skill.name}`} status={sync} />}
         <div className="flex flex-wrap gap-1.5">
           {plugin ? (

@@ -124,6 +124,18 @@ const usualToolDirs = () =>
         join(homedir(), 'bin'),
         '/home/linuxbrew/.linuxbrew/bin',
         '/snap/bin',
+        // Node version managers keep npm and node here; their per-shell folders never reach an app.
+        ...[
+          process.env.FNM_DIR,
+          join(homedir(), '.local/share/fnm'),
+          join(homedir(), 'Library/Application Support/fnm'),
+          join(homedir(), '.fnm'),
+        ]
+          .filter((dir): dir is string => !!dir)
+          .map((dir) => join(dir, 'aliases/default/bin')),
+        join(homedir(), '.volta/bin'),
+        join(homedir(), '.local/share/mise/shims'),
+        join(homedir(), '.asdf/shims'),
       ]
 
 export function findExecutable(command: string): string | null {

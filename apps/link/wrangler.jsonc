@@ -4,6 +4,7 @@
   //   CF_API_TOKEN   an API token with Cloudflare Tunnel: Edit on the account, and DNS: Edit and Analytics: Read on the zone
   //   CF_ACCOUNT_ID  the account the tunnels are made in
   //   CF_ZONE_ID     the zone named by ZONE, where each host's CNAME is added
+  //   GITHUB_APP_WEBHOOK_SECRET  the Ramu GitHub App's webhook secret; its webhook URL is https://ramu-link.akalstack.com/github/events
   "name": "ramu-link",
   "main": "./src/worker.ts",
   "compatibility_date": "2026-11-01",
@@ -18,8 +19,17 @@
     "ACCOUNT_URL": "https://account.akalstack.com",
   },
   // Every slot, the waitlist and the session cache live in one SQLite Durable Object, so allocation is atomic.
-  "durable_objects": { "bindings": [{ "name": "POOL", "class_name": "SlotPool" }] },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SlotPool"] }],
+  // Live pull request events: every host's socket and the GitHub App's deliveries meet in one PullRequestEvents object.
+  "durable_objects": {
+    "bindings": [
+      { "name": "POOL", "class_name": "SlotPool" },
+      { "name": "EVENTS", "class_name": "PullRequestEvents" },
+    ],
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["SlotPool"] },
+    { "tag": "v2", "new_sqlite_classes": ["PullRequestEvents"] },
+  ],
   // Reads tunnel status, releases idle slots and counts traffic; hosts send no heartbeats.
   "triggers": { "crons": ["*/5 * * * *"] },
   // Link requests per session, so one account cannot churn tunnels.

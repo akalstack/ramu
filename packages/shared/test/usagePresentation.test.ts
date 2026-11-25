@@ -1,7 +1,6 @@
 import { expect, it } from 'vitest'
 import type { UsageReading } from '../src/types'
 import {
-  groupUsageByProvider,
   usageOnlyAtLimit,
   relevantUsage,
   summaryUsage,
@@ -80,20 +79,6 @@ it('localizes allowance windows without translating provider model identities', 
   expect(usageWindow(reading({ window: 'weekly', scope: 'Opus' }), false, 'id')).toBe('Opus · Mingguan')
   expect(usageWindow(reading({ window: 'monthly' }), true, 'id')).toBe('bln')
   expect(usageWindow(reading({ window: 'quota' }), false, 'id')).toBe('Kuota')
-})
-
-it('groups readings by provider and counts limited or high windows', () => {
-  const groups = groupUsageByProvider([
-    reading({ window: 'five_hour', usedPercent: 10 }),
-    reading({ provider: 'codex', usedPercent: 90 }),
-    reading({ window: 'weekly', status: 'limited', usedPercent: 100 }),
-    reading({ provider: 'codex', source: 'notice', usedPercent: 100 }),
-  ])
-  expect(groups.map((g) => [g.provider, g.readings.length, g.attention])).toEqual([
-    ['claude-code', 2, 1],
-    ['codex', 2, 1],
-  ])
-  expect(groupUsageByProvider([])).toEqual([])
 })
 
 it('names the providers whose plan usage is known only at a limit', () => {

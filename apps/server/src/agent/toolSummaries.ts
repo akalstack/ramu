@@ -1,4 +1,4 @@
-import { truncate } from './text'
+import { truncate, truncateFailure } from './text'
 
 /** One line describing a tool call, from its most telling argument. */
 export function summarizeInput(input: Record<string, unknown>): string {
@@ -54,10 +54,11 @@ export function serverToolResult(
   return { toolUseId: block.tool_use_id, isError: false, summary: typeof content === 'string' ? truncate(content) : '' }
 }
 
-export function summarizeToolResult(content: unknown): string {
-  if (typeof content === 'string') return truncate(content)
+export function summarizeToolResult(content: unknown, failed = false): string {
+  const cut = failed ? truncateFailure : truncate
+  if (typeof content === 'string') return cut(content)
   if (Array.isArray(content)) {
-    return truncate(
+    return cut(
       content.map((c: { type?: string; text?: string }) => (c.type === 'text' ? c.text : `[${c.type}]`)).join('\n'),
     )
   }

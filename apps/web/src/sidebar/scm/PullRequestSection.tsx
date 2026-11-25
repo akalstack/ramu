@@ -14,6 +14,7 @@ import { cn } from 'cn'
 import { Button } from '@/components/desktop-button'
 import { Dropdown } from '../../Menu'
 import { t } from '../../i18n'
+import { keptPullRequestRead } from '../../git/keptPullRequests'
 import { ipcQueryKeyOn } from '../../dataQueries'
 import { useModelSets } from '../../models/ModelSets'
 import { errorText } from '../../workspace/TaskPane'
@@ -75,10 +76,17 @@ export function PullRequestSection({
   const [creating, setCreating] = useState(false)
   const [starting, setStarting] = useState<PullRequestFeedbackKind | null>(null)
   const [watching, setWatching] = useState(false)
+  // Opens on what this device last saw for the branch, then reads it again. While open and the window is in front it is
+  // read every 30 seconds and on coming back to the window; the host shares one read between views and announces
+  // pushes and `gh pr` commands itself (forge:changed). A merged or closed one is not polled.
   const query = useQuery({
     queryKey: ipcQueryKeyOn(host.id, 'forge.pullRequest', taskId, binding.repoId, status?.branch ?? null),
     queryFn: () => call('forge.pullRequest', taskId, binding.repoId),
+    ...keptPullRequestRead(host.id, 'forge.pullRequest', taskId, binding.repoId, status?.branch ?? null),
     enabled: !!status?.remote,
+    refetchOnWindowFocus: true,
+    refetchInterval: (current) =>
+      current.state.data?.pullRequest?.state === 'open' && document.hasFocus() ? 30_000 : false,
   })
   const branchInfo = useQuery({
     queryKey: ipcQueryKeyOn(host.id, 'git.commitBranchInfo', taskId, binding.repoId, status?.branch ?? null),
@@ -107,21 +115,13 @@ export function PullRequestSection({
   }, [on, refreshWatch, refreshDrafts, pr?.state])
   const { refetch } = query
 
-  // Keep visible PR details fresh; opted-in feedback delivery belongs to the background service.
+  // A git action in this window (push, pull, commit) may change the pull request; opted-in feedback delivery belongs
+  // to the background service.
   useEffect(() => {
     const refresh = () => void refetch()
     window.addEventListener('ramu:git-updated', refresh)
-    const timer =
-      pr?.state === 'open'
-        ? setInterval(() => {
-            if (document.hasFocus()) refresh()
-          }, 30_000)
-        : undefined
-    return () => {
-      window.removeEventListener('ramu:git-updated', refresh)
-      clearInterval(timer)
-    }
-  }, [refetch, pr?.state])
+    return () => window.removeEventListener('ramu:git-updated', refresh)
+  }, [refetch])
 
   if (!status?.remote || !status.branch || !query.data) return null
   const { availability } = query.data

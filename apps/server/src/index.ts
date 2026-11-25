@@ -4,7 +4,15 @@ import { DASHBOARD_ROWS_MAX } from '@ramu/shared/artifactSource'
 import { LastingAddresses } from './workspace/deploy/namedTunnel'
 import { ShellPushes } from './agent/shellPushes'
 import { followPush } from './workspace/followPush'
-import { productionAddress } from './workspace/forge'
+import {
+  createRepoHook,
+  deleteRepoHook,
+  forgeRemoteOf,
+  forgetPullRequestStatus,
+  githubReadToken,
+  productionAddress,
+  updateRepoHook,
+} from './workspace/forge'
 import { terminalThreadRequest } from './background/agentThreads'
 import { NO_PROJECT_GUIDE, projectFactsText } from './workspace/projectCreate'
 import { HELPER_ROLES } from '@ramu/shared/chat/helperRoles'
@@ -61,6 +69,7 @@ import { previewInteractive } from './interactive/preview'
 import { openHeadlessPage } from './interactive/pageHeadless'
 import type { ArtifactInfo } from '@ramu/shared/artifacts'
 import type { TunnelChoice } from '@ramu/shared/types'
+import type { InstalledApp } from '@ramu/shared/updates'
 import { registerThemeTools } from './themeTools'
 import { registerScriptTools } from './agent/scriptTools'
 import { SettingsChanges } from './settings/settingsChanges'
@@ -182,6 +191,10 @@ import { OperationLog, runOnce } from './ipc/operationLog'
 import { ScheduleService, scheduleSchema } from './background/schedules'
 import { WEBHOOK_PATH, WebhookReceiver, readWebhookBody } from './background/webhookReceiver'
 import { PullRequestWatchService } from './background/pullRequestWatches'
+import { ShipService, registerShipTools } from './background/ship'
+import { LIVE_PULL_REQUEST_PATH, LivePullRequests } from './background/livePullRequests'
+import { GithubAppEvents } from './background/githubAppEvents'
+import { kindOfOrigin } from './workspace/forge/route'
 import { PullRequestIndex } from './background/pullRequestIndex'
 import { PullRequestDrafts } from './background/pullRequestDrafts'
 import { PullRequestWrites } from './background/pullRequestWrites'
@@ -400,6 +413,15 @@ const clients = new Set<EventSink>()
 // Only clients on the local socket can answer native dialogs; a remote client's folder picker would open on the wrong machine.
 const hostClients = new Set<EventSink>()
 const desktopClients = new Map<string, EventSink>()
+/** The update service hears here what a desktop app on this computer reports about the installed app. */
+let installedAppReported: (app: InstalledApp) => void = () => {}
+const installedAppSchema = z.object({
+  version: z
+    .string()
+    .max(64)
+    .regex(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?$/),
+  canInstall: z.boolean(),
+})
 const hostBrowser = new HostBrowser(
   join(userData, 'host-browser'),
   () => {
@@ -626,12 +648,19 @@ async function adoptClones(sessionId: string, state: string) {
     // A thread or project removed mid-turn has nothing to join.
   }
 }
-// A `git push` an agent runs itself is followed from the checkout it ran in, as Source Control's push is.
-const shellPushes = new ShellPushes((sessionId) => {
+// A `git push` an agent runs itself is followed from the checkout it ran in, as Source Control's push is; after it, or
+// after a `gh pr` command, the checkout's pull request is read again and every client shows the change at once.
+const shellPushes = new ShellPushes((sessionId, change) => {
   const session = agents.get(sessionId)
   for (const binding of workspace.listBindings(session.taskId))
-    if (!binding.folderOnly && binding.cwd === session.cwd)
-      followPush(pullRequestWatches, session.taskId, binding.cwd, binding.repoId)
+    if (!binding.folderOnly && binding.cwd === session.cwd) {
+      if (change === 'push') {
+        followPush(pullRequestWatches, session.taskId, binding.cwd, binding.repoId)
+        void ship.pushed(session.id, binding.cwd).catch(console.error)
+      }
+      forgetPullRequestStatus(binding.cwd)
+      send('forge:changed', { cwd: binding.cwd })
+    }
 })
 const threadTitles = new ThreadTitles(
   db,
@@ -759,6 +788,59 @@ schedules.webhookBases = () =>
     ...(network.enabled ? candidateUrls(network.host, network.port, Boolean(config.tls)) : []),
   ].map((candidate) => ({ url: candidate.url, via: candidate.interface }))
 const pullRequestWatches = new PullRequestWatchService(db, workspace, agents, changed)
+// One push sends GitHub's events in a burst (the push, each check, each status); they are read again once per burst.
+const liveRoots = new Set<string>()
+let liveFlush: ReturnType<typeof setTimeout> | undefined
+const liveChanged = (root: string) => {
+  liveRoots.add(root)
+  liveFlush ??= setTimeout(() => {
+    liveFlush = undefined
+    const roots = [...liveRoots]
+    liveRoots.clear()
+    // Every checkout of the repository (its worktrees too) may show one of its pull requests.
+    forgetPullRequestStatus()
+    for (const root of roots) send('forge:changed', { cwd: root })
+    void pullRequestWatches.pollNow().catch(console.error)
+  }, 1_500)
+  liveFlush.unref?.()
+}
+// The Ramu GitHub App's events arrive through Ramu Link on one socket; the live updates below decide what it watches.
+const githubAppEvents: GithubAppEvents = new GithubAppEvents({
+  relay: () => network.tunnel?.relay ?? LINK_URL,
+  // Read when it connects, after start-up has set the account service up.
+  bearer: () => account.bearer(),
+  watched: () => livePullRequests.watched(),
+  stateChanged: () => {
+    // Off is what a sync or shutdown asked for; syncing again would only reconnect it.
+    if (githubAppEvents.state() !== 'off') void livePullRequests.sync().catch(console.error)
+    send('forge:changed', { cwd: '' })
+  },
+  changed: (repo) => livePullRequests.appEvent(repo),
+  resync: () => livePullRequests.appReconnected(),
+})
+const livePullRequests: LivePullRequests = new LivePullRequests({
+  getState: (key, fallback) => workspace.getAppState(key, fallback),
+  setState: (key, value) => workspace.setAppState(key, value),
+  repositories: () =>
+    workspace
+      .listProjects()
+      .flatMap((project) =>
+        workspace.listRepositories(project.id).map((repo) => ({ name: repo.name, root: repo.root })),
+      ),
+  githubRepository: async (root) => {
+    const remote = await forgeRemoteOf(root)
+    return remote && (await kindOfOrigin(remote.origin)) === 'github' ? remote : null
+  },
+  publicUrl: () => publicCandidates()[0]?.url ?? null,
+  create: createRepoHook,
+  update: updateRepoHook,
+  remove: deleteRepoHook,
+  readToken: githubReadToken,
+  app: githubAppEvents,
+  changed: liveChanged,
+  // The settings list reads its status through the forge reads, which this refreshes on screen.
+  statusChanged: () => send('forge:changed', { cwd: '' }),
+})
 const projectWake = new ProjectWake(db, workspace, agents)
 const uptime = new UptimeWatches(
   {
@@ -841,6 +923,17 @@ const settingsChanges = new SettingsChanges(
 pullRequestIndex.drafts = () => pullRequestDrafts.list()
 pullRequestWatches.drafts = pullRequestDrafts
 pullRequestWatches.index = pullRequestIndex
+const ship = new ShipService(
+  workspace,
+  agents,
+  pullRequestWatches,
+  {
+    liveAddress: (projectId) => uptime.status(projectId).address,
+    viewer: (repoId) => pullRequestIndex.viewer(repoId),
+  },
+  () => send('workspace:changed', {}),
+)
+pullRequestWatches.ship = ship
 const secretFiles = new SecretFiles(join(userData, 'secret-files'))
 agents.secretFiles = secretFiles
 secretFiles.start()
@@ -1578,6 +1671,9 @@ const dispatcher = createDispatcher(
     desktopApp: {
       attached: () => hostClients.size > 0,
       installUpdate: async (version) => void (await askDesktop('installUpdate', version)),
+      onInstalled: (listener) => {
+        installedAppReported = listener
+      },
     },
     // 75 (try again): a service manager set to restart only on failure still starts the new build.
     restartService: () => void stop(false, 75),
@@ -1612,6 +1708,8 @@ const dispatcher = createDispatcher(
     artifactWebhookBases: () => schedules.webhookBases?.().map((base) => base.url.replace(/\/$/, '')) ?? [],
     schedules,
     pullRequestWatches,
+    ship,
+    livePullRequests,
     uptime,
     mediaAccounts,
     localApps,
@@ -1641,12 +1739,14 @@ async function stop(intentional = false, exitCode = 0) {
   if (stopping) return
   stopping = true
   clearInterval(tick)
+  githubAppEvents.stop()
   await linkOffline()
   tunnels.stop()
   publicPages.close()
   phoneForwards.closeAll()
   await schedules.stop()
   await pullRequestWatches.stop()
+  await ship.stop()
   localApps.close()
   await uptime.stop()
   await pullRequestIndex.stop()
@@ -1808,6 +1908,11 @@ async function performInvoke(
     const owner = browserBroker.owner()
     if (owner && owner !== args[0] && !desktopClients.has(owner)) browserBroker.detach(owner)
     value = browserBroker.attach(args[0])
+  } else if (method === 'updates.installedApp') {
+    // Desktop-only, outside the shared table: a paired device must not decide which release this host has.
+    if (remote) throw new Error('Only the desktop app on this host reports which release is installed.')
+    installedAppReported(installedAppSchema.parse(args?.[0]))
+    value = undefined
   } else if (method === 'browser.bridge.ready') {
     if (remote || typeof args?.[0] !== 'string' || typeof args?.[1] !== 'string')
       throw new Error('Invalid local browser connection.')
@@ -1956,6 +2061,14 @@ const handle = () => async (req: import('node:http').IncomingMessage, res: Serve
       res.writeHead(answer.status, json).end(JSON.stringify(answer.body))
       return
     }
+    if (req.method === 'POST' && hookPath.startsWith(LIVE_PULL_REQUEST_PATH)) {
+      const raw = await readWebhookBody(req)
+      const answer = raw
+        ? livePullRequests.receive(decodeURIComponent(hookPath.slice(LIVE_PULL_REQUEST_PATH.length)), req.headers, raw)
+        : { status: 413 }
+      res.writeHead(answer.status).end()
+      return
+    }
     if (req.method === 'POST' && hookPath.startsWith(WEBHOOK_PATH)) {
       const raw = await readWebhookBody(req)
       const answer = raw
@@ -2095,6 +2208,7 @@ const mcpHttp = createServer(async (req, res) => {
   if (!review) registerTestDeviceTools(server, source, () => agents.get(source.id))
   if (!review) externalSkills.register(server, agents, source.id)
   if (!review) pullRequestWatches.register(server, source.id)
+  if (!review && !source.parentId) registerShipTools(server, ship, source.id)
   if (!review) registerPullRequestTools(server, source.id, pullRequestWrites, agents, workspace)
   if (!review) agentThreads.register(server, source.id)
   const deployProject = workspace.getTask(source.taskId).projectId
@@ -2913,6 +3027,7 @@ const tick = setInterval(() => {
   void agents.resumeInterruptedChats().catch(console.error)
   void schedules.tick().catch(console.error)
   void pullRequestWatches.tick().catch(console.error)
+  void ship.tick().catch(console.error)
   void uptime.tick().catch(console.error)
   void pullRequestIndex.tick().catch(console.error)
   void agentThreads.tick().catch(console.error)
@@ -2926,6 +3041,10 @@ threadTitles.recover()
 await agents.recoverOnBoot()
 void schedules.tick().catch(console.error)
 void recaps.tick().catch(console.error)
+// Live pull request webhooks follow new projects and a changed public address; a sync with them off removes leftovers.
+void livePullRequests.sync().catch(console.error)
+const liveSync = setInterval(() => void livePullRequests.sync().catch(console.error), 30 * 60_000)
+liveSync.unref()
 process.on('SIGTERM', () => void stop())
 process.on('SIGINT', () => void stop())
 

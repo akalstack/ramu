@@ -98,6 +98,8 @@ test('the limit ends when the wait is cleared or the thread moves on', () => {
   assert.ok(wait(limited()))
   assert.equal(wait([...limited(), { kind: 'provider-wait', retryAt: null, updatedAt: 3 }]), null)
   assert.equal(wait([...limited(), { kind: 'text', text: 'back', at: 5 }]), null)
+  // A done thread waits on nothing, so it shows no limit tray.
+  assert.equal(limitWaitOf(transcript(limited()), NOW), null)
 })
 
 test('Limit reached and Paused are separate: a paused goal keeps its own words', () => {

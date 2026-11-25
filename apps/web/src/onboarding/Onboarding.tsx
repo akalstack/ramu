@@ -4,7 +4,7 @@ import type { IdentitySnapshot } from '@ramu/shared/identities'
 import { providerEnabled, providerName, type ProviderStatus } from '@ramu/shared/providers/providers'
 import type { AgentProvider, ModelPreferences } from '@ramu/shared/types'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import type { AppPreferences } from '@ramu/shared/types'
+import { DEFAULT_APP_PREFERENCES, type AppPreferences } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { PRIMARY_ACTION_CLASS } from '@/components/button-classes'
 import { deviceStorage } from '../deviceStorage'
@@ -124,7 +124,11 @@ export function Onboarding() {
   const [leadPick, setLeadPick] = useState<AgentProvider>(saved.provider)
   const [mode, setMode] = useState<Mode>(models.preferences.defaultBarMode ?? 'model')
   const [choices, setChoices] = useState<TokenChoices>(() => tokenChoicesOf(app.preferences))
-  const [access, setAccess] = useState<AppPreferences['defaultAccess']>(app.preferences.defaultAccess)
+  // Setup suggests Auto, where the provider's own reviewer stops risky commands. A host that already chose a mode keeps
+  // it; the stored default stays Full access so hosts set up before this keep what they had.
+  const [access, setAccess] = useState<AppPreferences['defaultAccess']>(() =>
+    app.preferences.defaultAccess === DEFAULT_APP_PREFERENCES.defaultAccess ? 'auto' : app.preferences.defaultAccess,
+  )
   const [identities, setIdentities] = useState<IdentitySnapshot | null>(null)
   const [identityError, setIdentityError] = useState('')
   const [drafts, setDrafts] = useState<IdentityDrafts | null>(null)

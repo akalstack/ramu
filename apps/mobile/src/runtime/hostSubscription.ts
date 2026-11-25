@@ -13,7 +13,6 @@ export const ON_DEMAND_CHANNELS: readonly string[] = [
 ]
 /** Channels no phone screen reads: a host that streams them wastes the link. */
 const UNUSED_CHANNELS: readonly string[] = [
-  'memory:changed',
   'mcp:changed',
   'providers:updates',
   // The phone's own connection state, never sent by a host.

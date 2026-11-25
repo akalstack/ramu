@@ -7,6 +7,7 @@ import type {
   PullRequestSummary,
   PullRequestThread,
   RepositoryPullRequests,
+  TaskPullRequest,
 } from './types'
 
 /** Ramu's own facts about a pull request that the hosting service does not know. */
@@ -65,6 +66,23 @@ export const PULL_REQUEST_STAGE_LABEL: Record<PullRequestStage, string> = {
   ready: 'Ready to merge',
   merged: 'Merged',
   closed: 'Closed',
+}
+
+/**
+ * How a pull request row reads where its next step is the person's: what an agent prepared, when it prepared
+ * something, otherwise its stage. Both apps pass their own `t`.
+ */
+export function pullRequestRowDetail(
+  pr: Pick<TaskPullRequest, 'number' | 'stage' | 'prepared'>,
+  t: (key: string, values?: Record<string, string | number>) => string,
+): string {
+  const what =
+    pr.stage === 'replies-ready' && pr.prepared
+      ? pr.prepared.kind === 'review'
+        ? t('Review drafted')
+        : t(pr.prepared.count === 1 ? '1 reply drafted' : '{0} replies drafted', { 0: pr.prepared.count })
+      : t(PULL_REQUEST_STAGE_LABEL[pr.stage])
+  return `#${pr.number} · ${what}`
 }
 
 /** Stages where the next step is the person's, so Inbox and the phone can surface them. */

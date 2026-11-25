@@ -17,6 +17,7 @@ import type { LibrarySummary } from '@ramu/shared/types'
 import { font, space, useTheme } from '../theme'
 import { useStore } from '../runtime/store'
 import { useAutomation } from '../runtime/automation'
+import { ShipActivityList } from './ShipActivity'
 import { buildInbox, INBOX_TABS, inboxTabOf, type InboxChat, type InboxTab } from '../runtime/inbox'
 import { STANDALONE, type Chat } from '../runtime/types'
 import { ago, useSay, useT, type Strings } from '../i18n'
@@ -24,6 +25,7 @@ import { showToast } from '../runtime/toast'
 import { Header, LargeTitle, PageScrollView, Screen, useScrolledUnderBar } from './Screen'
 import { TopFade } from './Glass'
 import { InboxBrief } from './InboxBrief'
+import { WaitingReviewRow } from './LearningReviews'
 import { InboxThread } from './InputRequests'
 import { Chips, Nothing, Section } from './InboxParts'
 import { HostChip } from './HostChip'
@@ -66,6 +68,9 @@ export function InboxList({ pane }: { pane?: boolean }) {
     ),
     summaries: store.computers.flatMap((pc) =>
       (auto.of(pc.id).summaries?.summaries ?? []).map((summary) => ({ computerId: pc.id, summary })),
+    ),
+    reviews: store.computers.flatMap((pc) =>
+      (auto.of(pc.id).learning?.jobs ?? []).map((job) => ({ computerId: pc.id, job })),
     ),
     recapsEnabled: (id) => store.appPreferences[id]?.recapsEnabled !== false,
     failureSeen: auto.failureSeen as (chat: InboxChat) => boolean,
@@ -244,7 +249,7 @@ export function InboxList({ pane }: { pane?: boolean }) {
         : key === 'running'
           ? inbox.running.length
           : key === 'learned'
-            ? inbox.unreadSummaries
+            ? inbox.learnedCount
             : 0,
   }))
 
@@ -299,13 +304,40 @@ export function InboxList({ pane }: { pane?: boolean }) {
         ) : null}
       </>
     ),
-    learned: inbox.summaries.length ? (
-      <View>{inbox.summaries.map(summary)}</View>
-    ) : (
-      <Nothing icon={Sparkles} title={t.noSummaries} detail={t.noSummariesHint} />
-    ),
+    learned:
+      inbox.summaries.length || inbox.learningReviews.length ? (
+        <>
+          {inbox.learningReviews.length ? (
+            <Section title={say('Waiting for you')} count={inbox.learningReviews.length}>
+              <View>
+                {inbox.learningReviews.map(({ computerId, job }, index) => (
+                  <WaitingReviewRow
+                    key={`${computerId}:${job.id}`}
+                    computerId={computerId}
+                    job={job}
+                    host={multi ? computerName(computerId) : undefined}
+                    divider={index > 0}
+                  />
+                ))}
+              </View>
+            </Section>
+          ) : null}
+          {inbox.summaries.length ? (
+            inbox.learningReviews.length ? (
+              <Section title={say('Summaries')}>
+                <View>{inbox.summaries.map(summary)}</View>
+              </Section>
+            ) : (
+              <View>{inbox.summaries.map(summary)}</View>
+            )
+          ) : null}
+        </>
+      ) : (
+        <Nothing icon={Sparkles} title={t.noSummaries} detail={t.noSummariesHint} />
+      ),
     completed: inbox.days.length ? (
       <>
+        <ShipActivityList hostId={host} />
         {/* Recaps live on the threads they are about: each row's line says what it did, and refreshing them sits here. */}
         {recapsOn ? (
           <Row
@@ -330,7 +362,10 @@ export function InboxList({ pane }: { pane?: boolean }) {
         ))}
       </>
     ) : (
-      <Nothing icon={InboxIcon} title={t.nothingFinished} detail={t.nothingFinishedHint} />
+      <>
+        <ShipActivityList hostId={host} />
+        <Nothing icon={InboxIcon} title={t.nothingFinished} detail={t.nothingFinishedHint} />
+      </>
     ),
   }[tab]
 

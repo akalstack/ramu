@@ -10,6 +10,17 @@ Ramu uses the [GitHub CLI](https://cli.github.com) sign-ins you already have (`g
 - **Follow it:** Source Control shows the branch's pull request with its checks, draft state and review decision. **Fix failing checks** and **Address review comments** send the details to a thread, which commits fixes but never pushes.
 - **Watch in a thread:** a thread can watch a pull request while Ramu runs in the background. New failing checks and new review comments return to it as one round, but only comments from people with write access, requested reviewers, the author and bots. Comments from anyone else show as **From outside the project** and never wake the agent. **Automatically watch pull requests** (Settings → Git) does this for pull requests you create.
 
+### Keeping pull requests current
+
+Ramu reads a branch's pull request straight from GitHub with your `gh` sign-in, and every view on a host shares one read for a few seconds, so an unchanged pull request costs no rate limit. It reads it again when the agent pushes or runs a `gh pr` command, after a push or a pull request action in Ramu, when you come back to the window or the app, and every 30 seconds while an open one is on screen. Merged and closed pull requests are not checked again on their own.
+
+**Live pull request updates** (Settings → Git) makes the rest instant: GitHub tells the computer the moment a review, a check or a merge happens, desktops and phones show it at once, and a watching thread hears of a finished check without waiting for the next check. Each repository uses the best source it can have:
+
+- **The Ramu GitHub App** ([Ramu by Akalstack](https://github.com/apps/ramu-by-akalstack) on GitHub), installed on the repository or its organization. Its events reach the computer through Ramu Link, so it needs no admin rights on the repository and no public address, only a signed-in Ramu account. Ramu Link passes on only which repository changed (with the pull request number and commit), never titles or comments, and only to computers whose GitHub account can read that repository.
+- **A webhook** Ramu adds to the repository where the App is not installed. It needs admin rights there (GitHub lets only admins add webhooks) and a public address for the computer, from Ramu Link or **Reach from anywhere** under **Remote access**. Once the App covers a repository, Ramu removes its webhook again.
+
+Settings lists each repository with where its updates come from, or what is missing, and offers installing the App for the rest. Turning the setting off removes Ramu's webhooks. Without either source, the regular checks above keep pull requests current.
+
 ### The Pull requests page
 
 **Pull requests**, on the rail along the sidebar's left edge and in the phone's tabs, lists the pull requests of every project's repositories in one place. On the desktop it covers the hosts the sidebar's host filter shows (as Threads, Inbox and Schedules do), and on the phone every paired host. A pull request whose repository several hosts have is listed once and opens where a thread already works on it, otherwise on the host on screen. With several hosts, each row names its host, and the **On …** picker moves the open pull request to another connected host with a checkout. The list and the pull requests you opened reopen on what this device last showed, after a restart too, and refresh from the host at once. A host that is offline says so above the list.
@@ -49,6 +60,26 @@ Opening a pull request shows it in full, with these actions:
 ### Review replies
 
 When a thread addresses review comments, the agent records an outcome for each thread: **Fixed** (with the commit), **No change** (why the code stays), **Question** (one specific question for the reviewer) or **Skip**. The pull request's **Review replies** card shows each comment beside its draft. Edit any reply or outcome, then **Push and reply**: it pushes first, posts the replies (a Fixed reply names its commit), and asks the reviewers to review again. **Resolve fixed threads** is off by default. If the push fails, nothing is posted. A reply that fails stays in the card with its error, and a reply that already reached the thread is never posted twice. The reviewer's answer comes back to the same thread as the next round.
+
+### Shipping a change
+
+Ask a thread's agent to ship ("ship it", "get this to review", "put it live") and it carries the change to the project's finish line without you pressing each step. It works on a branch, reviews its own diff, pushes and opens the pull request, and Ramu watches it: failing checks come back to the agent, which fixes and pushes them, and review comments come back as rounds whose replies wait for you in the **Review replies** card. Ramu tells the agent when the pull request is approved, merged or at the finish line, and the agent says so in one line.
+
+Choose the finish line under **Ship** in the project's **Live app…** sheet, on the desktop or the phone:
+
+- **Pull request:** stops once the pull request is open, out of draft, and its checks pass.
+- **Ready for review:** handles fix and reply rounds until the pull request is approved, and never merges.
+- **Merged:** asks you to merge once it is approved and its checks pass.
+- **Preview deploy:** after the merge, deploys a preview or staging build and checks it.
+- **Live in production:** after the merge, deploys to production and checks the live address.
+
+**Suggested** picks one for you: **Ready for review** for a repository that belongs to an organization or someone else, **Live in production** for your own with a live address (**Merged** without one), and **Pull request** without a Git host. An agent can ask for an earlier finish line, never a later one.
+
+Approving, merging and production deploys still ask you, as they do anywhere else. Ship runs up to 3 rounds of fixing checks and 5 review rounds by default; when one runs out, the agent asks whether to run more rounds or stop, and the question waits in Inbox's Brief. **Fix failing checks** and **Address review comments** still work by hand and don't count as rounds.
+
+Prepared work waits in Inbox's Brief with the answer first, such as "#42 · 3 replies drafted" or "Review drafted", and **Review and send** opens the pull request where you check and send it. Each check fix Ship pushed without asking is listed under **Done for you** in Inbox's **Done**, with **Undo** ([Learned and Done](inbox.md#learned-and-done)).
+
+A team sets the limit in `ramu.json` on the default branch ([Repository settings](configuration.md#repository-settings)). Ramu reads it from the Git host's copy of that branch, not from the thread's checkout, so an agent can't raise its own limit.
 
 ### Agents and pull requests
 

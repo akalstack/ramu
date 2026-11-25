@@ -1,6 +1,17 @@
 import { randomUUID } from 'node:crypto'
 import { crossHostWarning } from '@ramu/shared/identities'
-import { PROJECT_NAME, STACKS, STACK_IDS, commandLine, stackCheck, type StackId } from '@ramu/shared/stacks'
+import {
+  PROJECT_NAME,
+  STACKS,
+  STACK_IDS,
+  commandLine,
+  customStackPlan,
+  stackCheck,
+  withProjectName,
+  type CustomStack,
+  type StackId,
+  type StackPlan,
+} from '@ramu/shared/stacks'
 import { createProjectFolder, runCommand } from '../workspace/projectCreate'
 import { RequestReplay } from '../agent/requestReplay'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
@@ -74,6 +85,37 @@ const REQUEST_ID = z
   .optional()
   .describe('Any unique string; sending the same call again returns the first result instead of repeating it.')
 // Checked by the folder calls it goes through, as the folder browser's folders are.
+const ARGV = z.array(z.string().min(1).max(500)).min(1).max(40)
+/** A framework none of Ramu's stacks cover, looked up by the agent: its own generator and commands, with sources. */
+const CUSTOM_STACK = z
+  .object({
+    name: z.string().trim().min(1).max(60).describe('The framework, such as Tauri or SvelteKit.'),
+    summary: z
+      .string()
+      .trim()
+      .min(1)
+      .max(120)
+      .describe('One line for the person, such as "A Tauri desktop app with React".'),
+    generator: z
+      .array(ARGV)
+      .min(1)
+      .max(6)
+      .describe(
+        'The official create command as argument lists, run in order in the new empty folder (`.`), non-interactive (pass the flags that skip prompts), never through a shell; then the install step if the generator does not install.',
+      ),
+    dev: ARGV.optional(),
+    build: ARGV.optional(),
+    test: ARGV.optional(),
+    readyText: z.string().max(100).optional().describe('Text the dev server prints once it serves.'),
+    ignore: z.array(z.string().min(1).max(200)).max(40).optional(),
+    framework: z.boolean().optional().describe('False when it is the language or platform alone, with no framework.'),
+    sources: z
+      .array(z.string().url().max(2000))
+      .min(1)
+      .max(5)
+      .describe('The official documentation pages the commands came from.'),
+  })
+  .optional()
 const PARENT_FOLDER = z
   .string()
   .min(1)
@@ -315,10 +357,11 @@ export class AgentThreadService {
     server.registerTool(
       'project_create',
       {
-        description: `Create a new project from scratch when the person wants to build something that needs its own folder and repository: a folder where the person keeps their projects (they can change it on the card that asks), the stack's official generator (${STACK_IDS.join(', ')}; leave stack out to write the files yourself), a .gitignore, ramu.json with the stack's commands, and a first commit. Ask at most three questions first and say the stack in one line. With continue (the default) the work goes on in the new project toward a goal checked by the stack's build and tests: a thread with no project moves into it when this turn ends, and from another project a new thread starts there with the brief; either way end your turn after telling the person. Outside Full access the person approves first; if they decline, do not retry. For the app's icon, store screenshots or a social sharing image, call generate_image when you have it; to compare hosting or a library when your provider has no search of its own, call web_search.`,
+        description: `Create a new project from scratch when the person wants to build something that needs its own folder and repository: a folder where the person keeps their projects (they can change it on the card that asks), the stack's official generator (${STACK_IDS.join(', ')}; leave stack out to write the files yourself), a .gitignore, ramu.json with the stack's commands, and a first commit. Ask at most three questions first and say the stack in one line. When the person names a framework, use it. Otherwise recommend the smallest stack that does the job, and no framework by default (static, vite-vanilla, node, go, rust or swift): you write the code quickly, so a framework earns its place only for sign-in, stored data, many routed pages or SEO, or a phone or desktop app. Libraries are not stacks: add them yourself when the app needs them, such as TanStack Router to a React app once it has several pages and TanStack Query once it fetches server data to cache and refetch. For a framework none of these stacks cover (such as Tauri, SvelteKit, Nuxt, Flutter or Laravel), look up its current official create command first (with your own web search, or web_search) and pass customStack with the documentation pages as sources; never guess the flags. The person always approves a customStack before it runs. If its generator fails, read the error, look again, and retry once with corrected flags. With continue (the default) the work goes on in the new project toward a goal checked by the stack's build and tests: a thread with no project moves into it when this turn ends, and from another project a new thread starts there with the brief; either way end your turn after telling the person. Outside Full access the person approves first; if they decline, do not retry. For the app's icon, store screenshots or a social sharing image, call generate_image when you have it; to compare hosting or a library when your provider has no search of its own, call web_search.`,
         inputSchema: {
           name: z.string().regex(PROJECT_NAME).describe('Folder and project name, such as barbershop-booking.'),
           stack: z.enum(STACK_IDS).optional(),
+          customStack: CUSTOM_STACK,
           brief: z
             .string()
             .min(1)
@@ -1043,22 +1086,50 @@ export class AgentThreadService {
    */
   private async createProject(
     sessionId: string,
-    input: { name: string; stack?: StackId; brief: string; continue?: boolean; parent?: string },
+    input: {
+      name: string
+      stack?: StackId
+      customStack?: CustomStack
+      brief: string
+      continue?: boolean
+      parent?: string
+    },
     signal?: AbortSignal,
   ) {
     const caller = this.agents.get(sessionId)
-    const stack = input.stack ? STACKS[input.stack] : null
+    if (input.stack && input.customStack) throw new Error('Pass stack or customStack, not both.')
+    const stack: StackPlan | null = input.stack
+      ? STACKS[input.stack]
+      : input.customStack
+        ? customStackPlan(input.customStack)
+        : null
     // Full access asks once per host, until the person has said where their projects go; other modes always ask.
+    // Commands an agent found on the web always ask: the person sees them, and where they came from, before they run.
     const usual = this.workspace.newProjectParent()
     const location = { name: input.name, parent: input.parent ?? usual }
-    if (caller.settings.access !== 'full' || (!input.parent && !this.workspace.chosenProjectParent())) {
-      const commands = stack?.generator.map(commandLine) ?? []
+    if (
+      caller.settings.access !== 'full' ||
+      stack?.sources ||
+      (!input.parent && !this.workspace.chosenProjectParent())
+    ) {
+      const commands = stack?.generator.map((step) => commandLine(withProjectName(step, input.name))) ?? []
       const allowed = await this.agents.requestPermission(
         sessionId,
         `creating the project ${input.name}`,
         [
           `Create the folder ${input.name}${stack ? ` as ${stack.summary}` : ''}, commit it and add it as a project.`,
           commands.length ? `Runs:\n${commands.join('\n')}` : '',
+          // Ramu runs a looked-up stack's build and test itself to check the goal, so they are approved here too.
+          stack?.sources
+            ? [
+                stack.dev ? `Runs it with: ${commandLine(stack.dev)}` : '',
+                stack.build ? `Builds with: ${commandLine(stack.build)}` : '',
+                stack.test ? `Tests with: ${commandLine(stack.test)}` : '',
+                `From the framework's documentation, found on the web:\n${stack.sources.join('\n')}`,
+              ]
+                .filter(Boolean)
+                .join('\n')
+            : '',
         ]
           .filter(Boolean)
           .join('\n\n'),
@@ -1072,7 +1143,7 @@ export class AgentThreadService {
     // The usual place may be a ~/Projects that does not exist yet; it is made only now that the project is wanted.
     const parent = location.parent === usual ? this.workspace.newProjectParent(true) : location.parent
     const folder = await createProjectFolder(
-      { parent, name: input.name, ...(input.stack ? { stack: input.stack } : {}) },
+      { parent, name: input.name, ...(stack ? { stack } : {}) },
       {
         create: async (at, name) => (await this.invoke('folders.create', [at, name])) as string,
         run: runCommand,
@@ -1086,7 +1157,7 @@ export class AgentThreadService {
       projectId: project.id,
       name: project.name,
       path: folder.path,
-      stack: folder.stack,
+      stack: folder.stack ?? folder.stackName,
       ran: folder.ran,
     }
     if (input.continue === false)
@@ -1098,6 +1169,9 @@ export class AgentThreadService {
     const brief = [
       input.brief.trim(),
       `This project was just created${stack ? ` with ${stack.name}` : ''} and committed. ${start}`.trim(),
+      stack?.prerequisites
+        ? `It needs ${stack.prerequisites}. Check that first (such as with --version); if it is missing, tell the person how to install it instead of working around it.`
+        : '',
       check ? `The goal is checked with: ${check}` : '',
     ]
       .filter(Boolean)

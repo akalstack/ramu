@@ -815,6 +815,8 @@ export class AgentService {
    */
   holdThread(taskId: string): void {
     for (const session of this.listByTask().get(taskId) ?? []) {
+      // A done thread waits on nothing: a usage-limit wait would resume it at the reset, and keeps its tray showing.
+      this.parts.providerWaits.clearProviderWait(session.id)
       this.parts.dispatcher.pauseQueue(session.id)
       if (this.getGoal(session.id)?.status === 'active') this.controlGoal(session.id, 'pause')
     }

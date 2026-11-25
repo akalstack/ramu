@@ -321,8 +321,16 @@ export const AgentView = memo(function AgentView({
   }, [view.sessionId, setOpenAgent])
   const goalEvent = events.findLast((event) => event.kind === 'goal')
   const goal = goalEvent?.kind === 'goal' ? goalEvent.goal : null
-  const liveGoal = goal && goal.status !== 'completed' ? goal : null
-  const providerWait = useMemo(() => providerWaitState(events), [events])
+  // Read from the live store, so unarchiving brings the composer back at once.
+  const workspace = useWorkspace()
+  const thread = workspace.task(session?.taskId ?? '')
+  const threadArchived = thread?.status === 'archived'
+  const threadDoneAt = thread?.doneAt ?? null
+  // A done thread waits on no usage limit: it resumes only when the person reopens it or sends a message.
+  const eventsWait = useMemo(() => providerWaitState(events), [events])
+  const providerWait = threadDoneAt ? null : eventsWait
+  // A done thread's goal is paused with it; its bar shows again when the thread is reopened.
+  const liveGoal = goal && goal.status !== 'completed' && !threadDoneAt ? goal : null
   const reportError = useCallback((reason: unknown) => setError(errorText(reason)), [setError])
   const autoResume = useAutoResume(view.sessionId, session?.settings ?? {}, setSession, reportError)
   // Assigned once the pending-settings helpers exist below; a retry sends a just-chosen login before trying.
@@ -451,11 +459,6 @@ export const AgentView = memo(function AgentView({
     if (working) setInterrupted(false)
   }, [working])
   const ws = useWorkspaceActions()
-  // Read from the live store, so unarchiving brings the composer back at once.
-  const workspace = useWorkspace()
-  const thread = workspace.task(session?.taskId ?? '')
-  const threadArchived = thread?.status === 'archived'
-  const threadDoneAt = thread?.doneAt ?? null
   const { offline: hostOffline, name: hostName } = useHostConnection()
   // A thread opened from what this client holds says so while the host catches it up, so a person does not act on
   // a transcript that may be behind. A first load has its spinner, and a host that is away has its own note below.
@@ -811,13 +814,15 @@ export const AgentView = memo(function AgentView({
     onStopTask: stopTask,
     onOpenQuestion: openQuestion,
     onReviewAccess: () => setMcpOpen(true),
-    onRetry: viewOnly
-      ? undefined
-      : () => {
-          setInterrupted(false)
-          stick.current = true
-          void act(() => invoke('agent.submit', view.sessionId, RESUME_PROMPT, 'steer', [], []))
-        },
+    // While a usage limit holds the thread, the tray above the composer owns trying again; a second button here would race it.
+    onRetry:
+      viewOnly || providerWait
+        ? undefined
+        : () => {
+            setInterrupted(false)
+            stick.current = true
+            void act(() => invoke('agent.submit', view.sessionId, RESUME_PROMPT, 'steer', [], []))
+          },
     readOnly: viewOnly,
     onEditMessage: viewOnly ? undefined : editMessage,
   }

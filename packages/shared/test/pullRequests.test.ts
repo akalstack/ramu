@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { PullRequestSummary, RepositoryPullRequests } from '../src/types'
+import { translate } from '../src/i18n'
 import {
   diffLineMatches,
+  pullRequestRowDetail,
   groupPullRequests,
   inPullRequestFilter,
   matchesPullRequest,
@@ -355,5 +357,27 @@ describe('searching inside a pull request', () => {
     expect(diffLineMatches('const tokenTtl = 2', 'tokenttl')).toBe(true)
     expect(diffLineMatches('const a = 1', 'tokenttl')).toBe(false)
     expect(diffLineMatches('anything', ' ')).toBe(false)
+  })
+})
+
+describe('pullRequestRowDetail', () => {
+  const t = (key: string, values?: Record<string, string | number>) => translate('en', key, values)
+  it('leads with what an agent prepared, otherwise the stage', () => {
+    expect(
+      pullRequestRowDetail({ number: 42, stage: 'replies-ready', prepared: { kind: 'replies', count: 3 } }, t),
+    ).toBe('#42 · 3 replies drafted')
+    expect(
+      pullRequestRowDetail({ number: 42, stage: 'replies-ready', prepared: { kind: 'replies', count: 1 } }, t),
+    ).toBe('#42 · 1 reply drafted')
+    expect(pullRequestRowDetail({ number: 7, stage: 'replies-ready', prepared: { kind: 'review' } }, t)).toBe(
+      '#7 · Review drafted',
+    )
+    expect(pullRequestRowDetail({ number: 7, stage: 'ready' }, t)).toBe('#7 · Ready to merge')
+    expect(
+      pullRequestRowDetail(
+        { number: 7, stage: 'replies-ready', prepared: { kind: 'replies', count: 3 } },
+        (key, values) => translate('id', key, values),
+      ),
+    ).toBe('#7 · 3 balasan sudah didraf')
   })
 })

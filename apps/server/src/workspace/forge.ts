@@ -21,18 +21,38 @@ import type {
 import { forgeAdapter } from './forge/adapter'
 import { adapterFor, adapterForOrigin } from './forge/route'
 import { reviewThreadsPrompt } from './forge/reviewPrompt'
+import { PullRequestStatusCache } from './forge/statusCache'
+import { currentBranch } from './git'
 
 export * from './forge/github'
 export { forgeAdapter }
 
 export const repositoryAccount = async (cwd: string) => (await adapterFor(cwd)).repositoryAccount(cwd)
 export const checkAccess = async (cwd: string) => (await adapterFor(cwd)).checkAccess(cwd)
-export const pullRequestStatus = async (cwd: string, url?: string): Promise<ForgeStatus> =>
-  (await adapterFor(cwd)).pullRequestStatus(cwd, url)
+const statuses = new PullRequestStatusCache()
+/** The checkout's pull request, shared by every caller for a few seconds (see PullRequestStatusCache). */
+export const pullRequestStatus = async (cwd: string, url?: string, fresh = false): Promise<ForgeStatus> =>
+  statuses.read(
+    cwd,
+    await currentBranch(cwd),
+    url,
+    async () => (await adapterFor(cwd)).pullRequestStatus(cwd, url),
+    fresh,
+  )
+/** Drops the kept status of a checkout's pull requests, after anything that may have changed them. */
+export const forgetPullRequestStatus = (cwd?: string) => statuses.forget(cwd)
+/** Runs a change to a checkout's pull request; the next status read asks the service again. */
+const changing = async <T>(cwd: string, change: Promise<T>): Promise<T> => {
+  try {
+    return await change
+  } finally {
+    statuses.forget(cwd)
+  }
+}
 export const pullRequestDraft = async (cwd: string, issue: IssueLink | null) =>
   (await adapterFor(cwd)).pullRequestDraft(cwd, issue)
 export const createPullRequest = async (cwd: string, input: PullRequestInput) =>
-  (await adapterFor(cwd)).createPullRequest(cwd, input)
+  changing(cwd, (await adapterFor(cwd)).createPullRequest(cwd, input))
 /**
  * The prompt that hands a pull request's failing checks or open review threads to an agent. Review threads read the
  * same on every service, so their prompt is built here from the shared shape.
@@ -66,7 +86,7 @@ export const listPullRequests = async (cwd: string, options: { includeClosed: bo
   (await adapterFor(cwd)).listPullRequests(cwd, options)
 export const mergeOptions = async (cwd: string, url: string) => (await adapterFor(cwd)).mergeOptions(cwd, url)
 export const pullRequestAction = async (cwd: string, url: string, action: PullRequestAction) =>
-  (await adapterFor(cwd)).pullRequestAction(cwd, url, action)
+  changing(cwd, (await adapterFor(cwd)).pullRequestAction(cwd, url, action))
 export const pullRequestBody = async (cwd: string, url: string) => (await adapterFor(cwd)).pullRequestBody(cwd, url)
 export const pullRequestTimeline = async (cwd: string, url: string) =>
   (await adapterFor(cwd)).pullRequestTimeline(cwd, url)
@@ -87,12 +107,12 @@ export const replyToThread = async (cwd: string, url: string, threadId: string, 
 export const resolveThread = async (cwd: string, url: string, threadId: string) =>
   (await adapterFor(cwd)).resolveThread(cwd, url, threadId)
 export const requestReviews = async (cwd: string, url: string, reviewers: string[]) =>
-  (await adapterFor(cwd)).requestReviews(cwd, url, reviewers)
+  changing(cwd, (await adapterFor(cwd)).requestReviews(cwd, url, reviewers))
 export const submitReview = async (
   cwd: string,
   url: string,
   review: { verdict: ReviewVerdict; body: string; comments: ReviewCommentDraft[] },
-) => (await adapterFor(cwd)).submitReview(cwd, url, review)
+) => changing(cwd, (await adapterFor(cwd)).submitReview(cwd, url, review))
 export const pullRequestConversation = async (cwd: string, url: string) =>
   (await adapterFor(cwd)).conversation(cwd, url)
 export const commentOnPullRequest = async (cwd: string, url: string, body: string) =>
@@ -113,11 +133,13 @@ export const reactToComment = async (
   remove: boolean,
 ) => (await adapterFor(cwd)).react(cwd, url, commentId, reaction, remove)
 export const removeReviewers = async (cwd: string, url: string, reviewers: string[]) =>
-  (await adapterFor(cwd)).removeReviewers(cwd, url, reviewers)
-export const withdrawReview = async (cwd: string, url: string) => (await adapterFor(cwd)).withdrawReview(cwd, url)
+  changing(cwd, (await adapterFor(cwd)).removeReviewers(cwd, url, reviewers))
+export const withdrawReview = async (cwd: string, url: string) =>
+  changing(cwd, (await adapterFor(cwd)).withdrawReview(cwd, url))
 export const updatePullRequest = async (cwd: string, url: string, update: PullRequestUpdate) =>
-  (await adapterFor(cwd)).updatePullRequest(cwd, url, update)
-export const rerunChecks = async (cwd: string, url: string) => (await adapterFor(cwd)).rerunChecks(cwd, url)
+  changing(cwd, (await adapterFor(cwd)).updatePullRequest(cwd, url, update))
+export const rerunChecks = async (cwd: string, url: string) =>
+  changing(cwd, (await adapterFor(cwd)).rerunChecks(cwd, url))
 /** The service a checkout's remote is on, so callers can word things for it. */
 export const serviceOf = async (cwd: string) => (await adapterFor(cwd)).id
 export const listIssues = async (cwd: string, search: string) => (await adapterFor(cwd)).listIssues(cwd, search)

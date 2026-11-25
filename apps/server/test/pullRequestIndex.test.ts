@@ -142,12 +142,20 @@ describe('pull requests on thread rows', () => {
         branch: 'feature',
         sessionId: 's',
         threads: [],
-        drafts: [{ threadId: 't', outcome: 'question', reply: 'Which one?', commit: null }],
+        drafts: [
+          { threadId: 't', outcome: 'question', reply: 'Which one?', commit: null },
+          { threadId: 'u', outcome: 'fixed', reply: 'Fixed.', commit: 'abc' },
+          { threadId: 'v', outcome: 'skipped', reply: '', commit: null },
+        ],
         reviewers: [],
         createdAt: 1,
       },
     ]
-    expect(index.forTask(tasks[0]!)?.stage).toBe('replies-ready')
+    // The row leads with what is prepared: the replies still to send, not the skipped one.
+    expect(index.forTask(tasks[0]!)).toMatchObject({
+      stage: 'replies-ready',
+      prepared: { kind: 'replies', count: 2 },
+    })
   })
 })
 

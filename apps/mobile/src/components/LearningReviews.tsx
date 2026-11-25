@@ -1,117 +1,142 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Pressable, View } from 'react-native'
-import type { LearningJob, LearningSnapshot } from '@ramu/shared/types'
-import { font, space } from '../theme'
+import { useState } from 'react'
+import { Pressable, StyleSheet, View } from 'react-native'
+import { Sparkles } from 'lucide-react-native'
+import type { LearningJob } from '@ramu/shared/types'
+import { learningLine } from '@ramu/shared/learningReviews'
+import { font, space, useTheme } from '../theme'
 import { useStore } from '../runtime/store'
-import { useSay } from '../i18n'
-import { showToast } from '../runtime/toast'
-import { Card, Divider, SectionLabel, T, tap } from './ui'
+import { useAutomation } from '../runtime/automation'
+import { learningCounts, learningLineText, undoneText } from '../runtime/learningLines'
+import type { TranscriptItem } from '../runtime/types'
+import { ago, useSay } from '../i18n'
+import { showError, showToast } from '../runtime/toast'
+import { useOpenThread } from './paneContext'
+import { Divider, ROW_INSET, Row, T, tap } from './ui'
 
-interface Proposal {
-  memories?: { title: string; reason: string }[]
-  skills?: { name: string; reason: string }[]
-  archive?: { id: string; reason: string }[]
-}
+type Action = 'apply' | 'dismiss' | 'undo'
 
-/** What a review would change, one line each, from its proposal; an unreadable one shows nothing rather than failing. */
-function proposalLines(job: LearningJob, say: (text: string) => string): string[] {
-  if (!job.proposal) return []
-  try {
-    const change = JSON.parse(job.proposal) as Proposal
-    return [
-      ...(change.memories ?? []).map((note) => `${say('Memory')}: ${note.title} — ${note.reason}`),
-      ...(change.skills ?? []).map((skill) => `${say('Procedure')}: ${skill.name} — ${skill.reason}`),
-      ...(change.archive ?? []).map((item) => `${say('Archive')}: ${item.id} — ${item.reason}`),
-    ]
-  } catch {
-    return []
-  }
-}
-
-/**
- * The learning reviews that wait for the person, as the desktop's Learning & skills lists them: what each would save
- * or change, with Apply, Retry review and Dismiss, so an agent's proposal does not wait until they are back at the
- * computer. Applied and dismissed reviews stay on the desktop's full list.
- */
-export function LearningReviews({ hostId, locked }: { hostId: string; locked: boolean }) {
+/** Apply, Dismiss and Undo for one host's reviews: one at a time, and only where the host can take them. */
+function useLearningActions(computerId: string) {
   const store = useStore()
+  const auto = useAutomation()
   const say = useSay()
-  const [jobs, setJobs] = useState<LearningJob[] | null>(null)
   const [busy, setBusy] = useState(false)
-  const online = store.isOnline(hostId)
-  const viewer = store.computers.find((computer) => computer.id === hostId)?.access === 'viewer'
-  const load = useCallback(() => {
-    void store
-      .invoke(hostId, 'learning.get')
-      .then((snapshot: LearningSnapshot) =>
-        setJobs(
-          snapshot.jobs.filter((job) => job.status === 'pending' || job.status === 'failed' || job.status === 'queued'),
-        ),
-      )
-      .catch(() => setJobs(null))
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- store.invoke is stable; reloads when the host or its connection changes
-  }, [hostId])
-  useEffect(() => {
-    if (online && !viewer) load()
-  }, [online, viewer, load])
-  if (!online || viewer || !jobs?.length) return null
-  const act = (method: 'learning.apply' | 'learning.retry' | 'learning.dismiss', id: string) => {
-    if (busy || locked) return
+  const viewer = store.computers.find((computer) => computer.id === computerId)?.access === 'viewer'
+  const disabled = busy || viewer || !store.isOnline(computerId)
+  const act = (action: Action, jobId: string) => {
+    if (disabled) return
     tap()
     setBusy(true)
-    void store
-      .invoke(hostId, method, id)
-      .then(load)
-      .catch((error: unknown) => showToast(error instanceof Error ? error.message : String(error)))
+    void auto
+      .actLearning(computerId, action, jobId)
+      .then((kept) => (action === 'undo' ? showToast(undoneText(kept, say)) : undefined))
+      .catch(showError)
       .finally(() => setBusy(false))
   }
-  const action = (
-    label: string,
-    method: Parameters<typeof act>[0],
-    id: string,
-    tone: 'accent' | 'muted' = 'accent',
-  ) => (
-    <Pressable accessibilityRole="button" disabled={busy || locked} hitSlop={8} onPress={() => act(method, id)}>
-      <T size={font.caption} weight="600" tone={busy || locked ? 'muted' : tone}>
-        {label}
+  const button = (action: Action, jobId: string) => (
+    <Pressable
+      key={action}
+      accessibilityRole="button"
+      disabled={disabled}
+      hitSlop={8}
+      onPress={() => act(action, jobId)}
+    >
+      <T size={font.caption} weight="600" tone={disabled ? 'muted' : action === 'apply' ? 'accent' : 'soft'}>
+        {action === 'apply' ? say('Apply') : action === 'dismiss' ? say('Dismiss') : say('Undo')}
       </T>
     </Pressable>
   )
+  return button
+}
+
+/**
+ * One review waiting in Inbox → Learned: the thread it learned from, what it would save, Apply and Dismiss. The row
+ * opens the thread; its actions sit beside it rather than inside it.
+ */
+export function WaitingReviewRow({
+  computerId,
+  job,
+  host,
+  divider,
+}: {
+  computerId: string
+  job: LearningJob
+  /** The host's name, when more than one is paired. */
+  host?: string
+  divider: boolean
+}) {
+  const { c } = useTheme()
+  const say = useSay()
+  const store = useStore()
+  const openThread = useOpenThread()
+  const button = useLearningActions(computerId)
+  const line = learningLine(job)
+  if (!line) return null
+  const chat = store.chats.find((entry) => entry.computerId === computerId && entry.sessionId === job.sessionId)
   return (
-    <>
-      <SectionLabel>{say('Learning review')}</SectionLabel>
-      <Card style={{ marginHorizontal: space.l }}>
-        {jobs.map((job, index) => (
-          <View key={job.id}>
-            {index ? <Divider inset={space.m} /> : null}
-            <View style={{ padding: space.m, gap: space.xs }}>
-              <T weight="500">
-                {job.sessionTitle ?? say('Thread')} · {say(job.status)}
-              </T>
-              <T size={font.caption} tone="muted">
-                {new Date(job.createdAt).toLocaleString()}
-              </T>
-              {job.error ? (
-                <T size={font.caption} tone="bad">
-                  {job.error}
-                </T>
-              ) : null}
-              {proposalLines(job, say).map((line) => (
-                <T key={line} size={font.caption} numberOfLines={3}>
-                  {line}
-                </T>
-              ))}
-              <View style={{ flexDirection: 'row', gap: space.l, paddingTop: space.xs }}>
-                {job.status === 'pending' ? action(say('Apply'), 'learning.apply', job.id) : null}
-                {job.status === 'pending' || job.status === 'failed'
-                  ? action(say('Retry review'), 'learning.retry', job.id, 'muted')
-                  : null}
-                {action(say('Dismiss'), 'learning.dismiss', job.id, 'muted')}
-              </View>
-            </View>
+    <View>
+      {divider ? <Divider inset={ROW_INSET} /> : null}
+      <Row
+        accessibilityLabel={chat ? say('Open thread') : undefined}
+        disabled={!chat}
+        onPress={
+          chat
+            ? () => {
+                tap()
+                openThread(chat.id)
+              }
+            : undefined
+        }
+        style={{ paddingTop: 11, paddingBottom: space.xs }}
+      >
+        <Sparkles size={16} color={c.accent} />
+        <View style={{ flex: 1 }}>
+          <T weight="500" numberOfLines={1}>
+            {job.sessionTitle ?? chat?.title ?? say('Thread')}
+          </T>
+          <T size={font.caption} tone="muted" numberOfLines={2}>
+            {[learningCounts(line.waiting, say), host, ago(job.createdAt)].filter(Boolean).join(' · ')}
+          </T>
+        </View>
+      </Row>
+      <View style={{ flexDirection: 'row', gap: space.l, paddingLeft: ROW_INSET, paddingBottom: 11 }}>
+        {button('apply', job.id)}
+        {button('dismiss', job.id)}
+      </View>
+    </View>
+  )
+}
+
+/** The quiet line under a turn a review learned from: what it saved or would save, and what can be done about it. */
+export function LearningTurnLine({
+  item,
+  computerId,
+}: {
+  item: Extract<TranscriptItem, { kind: 'learning' }>
+  computerId: string
+}) {
+  const { c } = useTheme()
+  const say = useSay()
+  const button = useLearningActions(computerId)
+  const { line, jobId } = item
+  const actions: Action[] = line.state === 'saved' ? ['undo'] : line.state === 'proposed' ? ['apply', 'dismiss'] : []
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, marginVertical: space.s }}>
+      <View style={{ flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: c.lineStrong }} />
+      <View style={{ maxWidth: '78%', alignItems: 'center', gap: 2 }}>
+        <View accessible accessibilityRole="text" style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Sparkles size={12} color={c.muted} />
+          <T size={font.caption} tone={line.state === 'undone' ? 'placeholder' : 'muted'} style={{ flexShrink: 1 }}>
+            {learningLineText(line, say)}
+          </T>
+        </View>
+        {actions.length ? (
+          <View style={{ flexDirection: 'row', gap: space.l, marginTop: 2 }}>
+            {actions.map((action) => button(action, jobId))}
           </View>
-        ))}
-      </Card>
-    </>
+        ) : null}
+      </View>
+      <View style={{ flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: c.lineStrong }} />
+    </View>
   )
 }

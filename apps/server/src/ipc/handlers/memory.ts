@@ -118,6 +118,7 @@ export const registerMemoryHandlers: RegisterHandlers = ({
   'learning.apply': { args: z.tuple([id]), run: (jobId: string) => need(learning).apply(jobId) },
   'learning.retry': { args: z.tuple([id]), run: (jobId: string) => need(learning).retry(jobId) },
   'learning.dismiss': { args: z.tuple([id]), run: (jobId: string) => need(learning).dismiss(jobId) },
+  'learning.undo': { args: z.tuple([id]), run: (jobId: string) => need(learning).undo(jobId) },
   'learning.control': {
     args: z.tuple([id, z.enum(['pin', 'unpin', 'disable', 'archive', 'restore'])]),
     run: (skillId: string, action: 'pin' | 'unpin' | 'disable' | 'archive' | 'restore') =>
@@ -130,6 +131,10 @@ export const registerMemoryHandlers: RegisterHandlers = ({
   },
   'learning.run': { args: z.tuple([]), run: () => need(learning).tick(true) },
   'agent.checkpoint': { args: z.tuple([id]), run: (sessionId: string) => need(learning).checkpoint(sessionId) },
+  'agent.saveCheckpoint': {
+    args: z.tuple([id, z.string().trim().min(1).max(6000)]),
+    run: (sessionId: string, summary: string) => need(learning).editCheckpoint(sessionId, summary),
+  },
   'memory.revert': {
     args: z.tuple([id, z.number().int().min(0), z.number().int()]),
     run: (memoryId: string, index: number, updatedAt: number) => need(memory).revert(memoryId, index, updatedAt),

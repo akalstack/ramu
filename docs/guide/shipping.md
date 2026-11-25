@@ -7,12 +7,12 @@ From one sentence on Home to a live app on your own accounts, with CI and previe
 Type what you want into Home's message box, such as "a booking page for my barbershop where customers pick a time and I get an email".
 
 - With **Auto** and no project that fits, Home offers **New project** first. On the desktop, **New project…** in the Project picker does the same, and a host with no projects shows **Start something new** ([Home](inbox.md#home)).
-- The agent asks at most three questions it can't work out itself (a website or a phone app, sign-in, stored data), then names the stack in one line, such as "Next.js with TypeScript". Ramu picks the smallest stack that does the job: plain HTML before a framework, a full framework only for sign-in or stored data.
+- The agent asks at most three questions it can't work out itself (a website or a phone app, sign-in, stored data), then names the stack in one line, such as "Next.js with TypeScript". Ramu picks the smallest stack that does the job and starts without a framework: plain HTML, TypeScript with Vite, or Node's own HTTP server. A framework comes in only for sign-in, stored data, many routed pages, or a phone or desktop app.
 - To skip the questions on the desktop, give the project a name (and a stack, if you know it). Ramu creates the project and the thread starts there with your message.
 
 ## 2. The project
 
-Ramu creates a folder beside your other repositories (or where you choose with **Change…** on the desktop, or where you tell the agent), runs the framework's own generator (Next.js, Vite, Astro, Expo, Hono, Django, FastAPI or Rails; a static site and a Go service start from files the agent writes), writes the stack's commands to `ramu.json` ([Configuration](configuration.md#repository-settings)) and commits. The thread moves into the new project and works toward a [goal](goals.md) checked by the project's build and tests ([Threads started by agents](working-with-agents.md#threads-started-by-agents)). The agent starts the dev server as a [background command](background-work.md#background-commands) and opens the app in the [browser](browser-and-computer.md#browser), so you see it while it's built.
+Ramu creates a folder beside your other repositories (or where you choose with **Change…** on the desktop, or where you tell the agent), runs the framework's own generator (Next.js, Vite, Nuxt, Astro, Expo, Hono, Django, FastAPI, Rails, Rust, Swift, Tauri, Electron or Flutter; a static site and a Go service start from files the agent writes; any other framework you name, such as SvelteKit, from its official create command the agent looks up and you approve), writes the stack's commands to `ramu.json` ([Configuration](configuration.md#repository-settings)) and commits. The thread moves into the new project and works toward a [goal](goals.md) checked by the project's build and tests ([Threads started by agents](working-with-agents.md#threads-started-by-agents)). The agent starts the dev server as a [background command](background-work.md#background-commands) and opens the app in the [browser](browser-and-computer.md#browser), so you see it while it's built.
 
 When the agent needs something only you know, such as an API key, it asks with a masked card and can keep it for later threads ([Secrets agents ask for](working-with-agents.md#secrets-agents-ask-for)).
 
@@ -37,7 +37,7 @@ Ask the project's agent to deploy. It picks a platform that suits the stack (Ver
 
 ## 6. Every later change
 
-The agent works on a branch and opens a pull request. Its card in Source Control and on the phone shows the checks, including the preview a platform connected to the repository reports ([The Pull requests page](git-hosting.md#the-pull-requests-page)). With the platform connected to the repository, merging deploys it.
+The agent works on a branch and opens a pull request. Ask it to ship and it also fixes checks and handles review rounds until the project's finish line ([Shipping a change](git-hosting.md#shipping-a-change)). Its card in Source Control and on the phone shows the checks, including the preview a platform connected to the repository reports ([The Pull requests page](git-hosting.md#the-pull-requests-page)). With the platform connected to the repository, merging deploys it.
 
 - **After a push or merge from a thread**, Ramu follows the checks on that commit and wakes the thread once, with the links or the failing logs ([After a push](deploy.md#after-a-push)).
 - **Latest deploy** in **Live app…** shows the checks on the default branch's newest commit ([The latest deploy](deploy.md#the-latest-deploy)).

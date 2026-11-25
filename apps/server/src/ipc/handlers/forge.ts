@@ -218,9 +218,24 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
   }
 
   return {
+    'forge.livePullRequests': {
+      args: z.tuple([]),
+      run: () => {
+        if (!ctx.livePullRequests) throw new Error('Live pull request updates are unavailable.')
+        return ctx.livePullRequests.status()
+      },
+    },
+    'forge.setLivePullRequests': {
+      args: z.tuple([z.boolean()]),
+      run: (enabled: boolean) => {
+        if (!ctx.livePullRequests) throw new Error('Live pull request updates are unavailable.')
+        return ctx.livePullRequests.setEnabled(enabled)
+      },
+    },
     'forge.pullRequest': {
-      args: z.tuple([id, id]),
-      run: (taskId: string, repoId: string) => forge.pullRequestStatus(gitCwdOf(taskId, repoId)),
+      args: z.tuple([id, id, z.boolean().optional()]),
+      run: (taskId: string, repoId: string, fresh?: boolean) =>
+        forge.pullRequestStatus(gitCwdOf(taskId, repoId), undefined, fresh === true),
     },
     'forge.watchStatus': {
       args: z.tuple([id, id, z.string().url().max(2000)]),

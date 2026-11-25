@@ -40,7 +40,8 @@ export interface LatestRelease {
 }
 
 /** How one provider's CLI is updated: a shell-free command, or an in-process installer. */
-export type UpdatePlan = { command: string; args: string[] } | { install: () => Promise<void> }
+/** `pathDirs` go first on the updater's PATH: an npm script needs the `node` beside it, which an app's bare PATH lacks. */
+export type UpdatePlan = { command: string; args: string[]; pathDirs?: string[] } | { install: () => Promise<void> }
 
 /** Shared helpers handed to adapter hooks so adapters never import the modules that import them. */
 export interface UpdateContext {
@@ -177,8 +178,11 @@ export interface ProviderAdapter {
   skillsLaunch?(exportDir: string, cwd?: string): SkillsLaunch
   /** Decides how to update; throws when this installation cannot be updated by Ramu. */
   updatePlan(ctx: UpdateContext): UpdatePlan
-  /** The update installs the exact `version` it is given, so an older release that has waited can be installed. */
-  readonly pinsVersion?: boolean
+  /**
+   * The update installs the exact `version` it is given, so an older release that has waited can be installed. A
+   * function answers for the binary in use, for a provider whose own updater can only install the newest release.
+   */
+  readonly pinsVersion?: boolean | ((binary: string, runtimeHome: string) => boolean)
 }
 
 type AdapterDefaults = Pick<ProviderAdapter, 'searchDirs' | 'probeVersion'>

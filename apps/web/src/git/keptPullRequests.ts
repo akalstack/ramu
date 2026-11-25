@@ -3,9 +3,13 @@ import { keptReadKey, keptReads } from '@ramu/shared/keptReads'
 import { queryClient } from '../dataQueries'
 import { storeForHost } from '../hostStorage'
 
-/** The pull request reads a page opens on: lists, one pull request's description, threads, comments and timeline. */
+/**
+ * The pull request reads a page opens on: lists, a branch's pull request, one pull request's description, threads,
+ * comments and timeline.
+ */
 const KEPT = [
   'forge.allPullRequests',
+  'forge.pullRequest',
   'forge.pullRequests',
   'forge.drafts',
   'forge.pullRequestDescription',

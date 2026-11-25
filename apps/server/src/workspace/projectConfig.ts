@@ -3,6 +3,8 @@ import { isAbsolute, join, relative } from 'node:path'
 import { z } from 'zod'
 import { abilityChoices, appPreferences } from '../ipc/preferences'
 import { STACK_IDS } from '@ramu/shared/stacks'
+import { FINISH_LINES, MAX_SHIP_ROUNDS } from '@ramu/shared/ship'
+import { commitBranchInfo, git } from './git'
 
 export const projectActionSchema = z.object({
   id: z.string().min(1).max(64),
@@ -10,6 +12,16 @@ export const projectActionSchema = z.object({
   command: z.string().trim().min(1).max(4000),
   keys: z.string().max(40).optional(),
 })
+
+const shipRounds = z.number().int().min(0).max(MAX_SHIP_ROUNDS)
+
+/** How far Ship may carry a change in this repository: it can only stop the loop earlier than the host would. */
+export const shipConfigSchema = z.object({
+  finishLine: z.enum(FINISH_LINES).optional(),
+  maxCiFixes: shipRounds.optional(),
+  maxReviewRounds: shipRounds.optional(),
+})
+export type ShipConfig = z.infer<typeof shipConfigSchema>
 
 /** Repository configuration deliberately excludes credentials, binaries and permission escalation. */
 export const projectConfigSchema = z.object({
@@ -44,6 +56,8 @@ export const projectConfigSchema = z.object({
   stack: z
     .object({
       id: z.enum(STACK_IDS).optional(),
+      /** A framework an agent looked up rather than one of Ramu's stacks, such as Tauri. */
+      name: z.string().trim().min(1).max(60).optional(),
       dev: z.string().trim().min(1).max(1000).optional(),
       build: z.string().trim().min(1).max(1000).optional(),
       test: z.string().trim().min(1).max(1000).optional(),
@@ -59,6 +73,7 @@ export const projectConfigSchema = z.object({
         .optional(),
     })
     .optional(),
+  ship: shipConfigSchema.optional(),
   commit: z
     .object({
       commitStyle: appPreferences.shape.commitStyle.removeDefault().optional(),
@@ -97,4 +112,41 @@ export function loadProjectConfig(root: string | null): ProjectConfigResult {
     }
   }
   return { config: {} }
+}
+
+/** Shipping starts without the fresh copy when the Git host is this slow; the last fetched one applies then. */
+const FETCH_WAIT_MS = 15_000
+const UNREADABLE_SHIP: ShipConfig = { finishLine: 'pull-request' }
+
+/**
+ * The `ship` limits as committed on the default branch, never the checkout's copy: an agent works in the checkout and
+ * could otherwise raise its own finish line. Null when there is no default branch or no file there.
+ */
+export async function committedShipConfig(root: string, options: { fetch?: boolean } = {}): Promise<ShipConfig | null> {
+  const { defaultBranch } = await commitBranchInfo(root).catch(() => ({ defaultBranch: null }))
+  if (!defaultBranch) return null
+  // The Git host's copy when there is one; a local default branch can carry commits nobody reviewed. Fetched first when
+  // an agent starts shipping, so a remote-tracking ref rewritten in the checkout is replaced by what the host has.
+  const remote = `refs/remotes/origin/${defaultBranch}`
+  if (options.fetch)
+    await Promise.race([
+      git(root, ['fetch', '--quiet', '--no-tags', 'origin', `+refs/heads/${defaultBranch}:${remote}`]).catch(() => {}),
+      new Promise((resolve) => setTimeout(resolve, FETCH_WAIT_MS).unref?.()),
+    ])
+  const ref = (await git(root, ['rev-parse', '--verify', '--quiet', remote]).catch(() => '')).trim()
+    ? remote
+    : `refs/heads/${defaultBranch}`
+  for (const source of ['ramu.json', '.ramu/config.json']) {
+    const text = await git(root, ['show', `${ref}:${source}`]).catch(() => null)
+    if (text === null) continue
+    // A limit the team wrote but Ramu cannot read stops at the earliest line rather than at none.
+    if (text.length > 256 * 1024) return UNREADABLE_SHIP
+    try {
+      const parsed = shipConfigSchema.safeParse((JSON.parse(text) as { ship?: unknown }).ship ?? {})
+      return parsed.success ? parsed.data : UNREADABLE_SHIP
+    } catch {
+      return UNREADABLE_SHIP
+    }
+  }
+  return null
 }

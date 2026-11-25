@@ -54,6 +54,7 @@ import { MODEL_WARNING_DEVICE_KEY, resolveModelChangeWarning } from '../../../ru
 import { sharedValue } from '@ramu/shared/sharedFields'
 import { foldTurns } from '../../../runtime/turns'
 import { withChangeCards } from '../../../runtime/changeCards'
+import { withLearningLines } from '../../../runtime/learningLines'
 import { sideChat } from '../../../runtime/sideChat'
 import { limitPlaceholderKey, limitTrayModel, limitWaitOf } from '../../../runtime/limitTray'
 import { fill, useT, useSay } from '../../../i18n'
@@ -65,7 +66,7 @@ import { looseInvoke } from '../../../runtime/settingsModel'
 import { formatChatDate, needsChatDate } from '@ramu/shared/chat/chatDates'
 import { commitAndPush, pushBranch } from '../../../runtime/gitQuick'
 import { chooseCommitBranch } from '../../../runtime/commitBranchPrompt'
-import { STANDALONE } from '../../../runtime/types'
+import { STANDALONE, providerNames } from '../../../runtime/types'
 import { Header, HeaderButton, HeaderMenu, Screen, PageLegendList, liquidGlass } from '../../../components/Screen'
 import type { LegendListRef } from '@legendapp/list/react-native'
 import Reanimated, { cancelAnimation, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
@@ -83,7 +84,7 @@ import { ComputerUseNotice } from '../../../components/ComputerUseNotice'
 import { translate } from '@ramu/shared/i18n'
 import { quoteSource } from '@ramu/shared/chat/quoteSource'
 import { showToast } from '../../../runtime/toast'
-import { Composer } from '../../../components/Composer'
+import { Composer, type QueuedEdit } from '../../../components/Composer'
 import { ContinueOnHostSheet } from '../../../components/ContinueOnHost'
 import { draftMentions, type AbilityModels } from '@ramu/shared/chat/helperMentions'
 import type { CustomAgent } from '@ramu/shared/customAgents'
@@ -515,6 +516,42 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [storedModel, chat?.id, chat?.provider, chat?.model, chat?.effort, c...] by design; the values it reads beyond these are current as of that run
   }, [storedModel, chat?.id, chat?.provider, chat?.model, chat?.effort, chat?.settings])
+  // A thread not started yet on a model at its usage limit starts elsewhere, as the host routes it; say where before
+  // the first message, so the person need not move the model themselves.
+  const [startSwitch, setStartSwitch] = useState<string | null>(null)
+  const routeHost = chat?.computerId
+  // The model the first send uses: one picked for it, else the thread's own.
+  const routeSettings =
+    chat && !chat.sessionId && chat.settings
+      ? JSON.stringify({
+          ...chat.settings,
+          ...(staged
+            ? { provider: staged.model.provider, model: staged.model.model, effort: staged.model.effort }
+            : {}),
+        })
+      : null
+  const routeOnline = routeHost ? store.isOnline(routeHost) : false
+  // Usage moving (a limit lifting or hitting) changes where it starts, so the line is read again with it.
+  const routeUsage = routeHost ? JSON.stringify(store.usage[routeHost] ?? null) : ''
+  useEffect(() => {
+    setStartSwitch(null)
+    // A view-only pairing cannot ask; it never sends a first message either.
+    if (!routeHost || !routeSettings || !routeOnline || viewOnly) return
+    let current = true
+    store
+      .invoke(routeHost, 'agent.startRoute', JSON.parse(routeSettings) as AgentSettings)
+      .then((route) => {
+        if (current && route)
+          setStartSwitch(
+            tr('{0} — this thread starts on {1}', { 0: route.reason, 1: providerNames[route.settings.provider] }),
+          )
+      })
+      .catch(() => {})
+    return () => {
+      current = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `store` and `tr` are stable for this screen
+  }, [routeHost, routeSettings, routeOnline, viewOnly, routeUsage])
   const setStaged = (next: { chatId: string; model: import('../../../components/Composer').ModelChoice } | null) => {
     if (modelDraftKey) store.setDraft(modelDraftKey, next ? JSON.stringify(next.model) : '')
   }
@@ -544,20 +581,25 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
   }, [chat?.computerId, chat?.sessionId, chat?.status])
   // Folded rows are rebuilt as new objects; keeping the unchanged ones lets each memoised row skip its render.
   const previousRows = useRef<TranscriptItem[]>([])
+  const learningJobs = useAutomation().of(chat?.computerId ?? '').learning?.jobs
   const rows = useMemo(() => {
     const next = shareRows(
       previousRows.current,
-      withChangeCards(
-        foldTurns(chat?.items ?? [], chat?.status === 'running', chat?.status === 'needs-input', (text, values) =>
-          translate(store.language, text, values),
+      withLearningLines(
+        withChangeCards(
+          foldTurns(chat?.items ?? [], chat?.status === 'running', chat?.status === 'needs-input', (text, values) =>
+            translate(store.language, text, values),
+          ),
+          reviews,
+          chat?.sessionId,
         ),
-        reviews,
+        learningJobs ?? [],
         chat?.sessionId,
       ),
     )
     previousRows.current = next
     return next
-  }, [chat?.items, chat?.status, chat?.sessionId, reviews, store.language])
+  }, [chat?.items, chat?.status, chat?.sessionId, reviews, learningJobs, store.language])
   const arrivalReady = useRef(false)
   const arrivalChat = useRef(id)
   if (arrivalChat.current !== id) {
@@ -768,7 +810,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
       chat.status !== 'running' &&
       chat.status !== 'needs-input' &&
       !chat.compacting &&
-      !limitWaitOf(chat.items) &&
+      !limitWaitOf(chat.items, chat.doneAt) &&
       store.isOnline(chat.computerId) &&
       !viewOnly,
     contextUsage,
@@ -810,7 +852,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
     !running &&
     (chat.status === 'failed' || chat.items.slice(lastUser + 1).some((item) => item.kind === 'end' && item.interrupted))
   // Held at a usage limit: the tray, queue label and play button follow limitTrayModel, never a failed turn.
-  const limitWait = limitWaitOf(chat.items)
+  const limitWait = limitWaitOf(chat.items, chat.doneAt)
   const limit = limitWait
     ? limitTrayModel(limitWait, chat.settings, store.appPreferences[chat.computerId]?.fallback)
     : null
@@ -940,10 +982,9 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
         }
       : undefined
   const editPending = (text: string) => setRestore((r) => ({ text, n: (r?.n ?? 0) + 1 }))
-  // Editing a queued message takes it out of the queue first, so it is not sent while being changed.
-  const editQueued = (message: QueuedMessage) => {
-    store.removeQueued(chat.id, message.id)
-    editPending(visibleText(message.text))
+  const editQueued: QueuedEdit = {
+    hold: (id, held) => store.holdQueued(chat.id, id, held),
+    save: (id, text) => store.editQueued(chat.id, id, text),
   }
   const openScm = () => router.push({ pathname: '/chat/[id]/scm', params: { id: chat.id } })
   const openChanges = () => router.push({ pathname: '/chat/[id]/changes', params: { id: chat.id } })
@@ -1763,9 +1804,20 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                       <Composer
                         activity={
                           <>
+                            {startSwitch ? (
+                              <T
+                                size={font.caption}
+                                tone="warn"
+                                accessibilityRole="alert"
+                                style={{ paddingHorizontal: space.l, paddingVertical: space.xs }}
+                              >
+                                {startSwitch}
+                              </T>
+                            ) : null}
                             <ThreadActivity
                               inlineStatus
-                              chat={chat}
+                              // A done thread's goal is paused with it; it shows again when the thread is reopened.
+                              chat={chat.doneAt ? { ...chat, goal: null } : chat}
                               onEditQueued={offline ? undefined : editQueued}
                               leading={
                                 <>
@@ -1877,7 +1929,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                         draftKey={composerDraftKey(chat)}
                         nextMessages={nextMessages}
                         onStop={() => store.stop(chat.id)}
-                        goal={chat.goal}
+                        goal={chat.doneAt ? null : chat.goal}
                         queue={chat.queue?.filter((message) => message.mode !== 'steer')}
                         queuePaused={chat.queuePaused}
                         onResumeQueue={

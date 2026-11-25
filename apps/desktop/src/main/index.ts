@@ -973,7 +973,12 @@ async function main() {
       const epoch = ++browserConnection
       browserToken = null
       if (!payload.connected) browser.pauseForDisconnect()
-      else
+      else {
+        // The service may have outlived an app update: tell it which release is installed here, and whether this app
+        // installs updates itself, so it offers and downloads only what this app can use.
+        void runtimeInvoke(runtime, 'updates.installedApp', [
+          { version: app.getVersion(), canInstall: desktopUpdater.supported },
+        ]).catch(() => {})
         void (async () => {
           // The connection can race the event stream registering, so a failed attach is retried briefly.
           for (let attempt = 0; attempt < 5; attempt++) {
@@ -997,6 +1002,7 @@ async function main() {
             if (!win.isDestroyed()) win.webContents.send('browser:changed', {})
           }
         })()
+      }
     }
     observeHostActivity(LOCAL, ...([channel, payload] as PushArgs))
     if (channel === 'background:connection') computers.setLocalStatus(payload.connected, payload.restarting)

@@ -1,4 +1,4 @@
-import { buildInbox } from '@ramu/shared/hostInbox'
+import { buildInbox, type InboxReview } from '@ramu/shared/hostInbox'
 import { hostInboxInput } from '@ramu/shared/hostOverview'
 import { useAppSettings } from '../settings/AppSettings'
 import { useComputers } from '../workspace/computers'
@@ -6,7 +6,7 @@ import { useHostOverviews } from '../workspace/hostOverview'
 import { useFailureSeen } from './failureSeen'
 
 /** The Inbox model across every connected host, so Home, the Inbox and the badge all give the same answer. */
-export function useInboxModel({ everyHost = false }: { everyHost?: boolean } = {}) {
+export function useInboxModel({ everyHost = false, reviews }: { everyHost?: boolean; reviews?: InboxReview[] } = {}) {
   const computers = useComputers()
   const { preferences } = useAppSettings()
   const failureSeen = useFailureSeen()
@@ -19,6 +19,7 @@ export function useInboxModel({ everyHost = false }: { everyHost?: boolean } = {
     recapsEnabled: (id) => id !== computers?.current || preferences.recapsEnabled,
     failureSeen,
     visit,
+    ...(reviews ? { reviews } : {}),
   })
   return { model, hosts, computers, visit }
 }

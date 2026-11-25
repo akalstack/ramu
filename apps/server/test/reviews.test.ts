@@ -93,6 +93,34 @@ describe('saved reviews and live workspaces', () => {
     expect(files.find((f) => f.path === 'f0.txt')).toMatchObject({ binary: false, oldContent: '0\n' })
     expect(files.find((f) => f.path === 'f5.txt')).toMatchObject({ oldContent: 'local edit\n', newContent: '5\n' })
   }, 60_000)
+  it('leaves out what a pull brought in during the turn, but keeps the agent edits made on top of it', async () => {
+    const git = (...args: string[]) => execFileSync('git', args, { cwd, stdio: 'ignore' })
+    git('init', '-q', '-b', 'main')
+    git('config', 'user.name', 't')
+    git('config', 'user.email', 't@t')
+    for (const name of ['pulled.txt', 'touched.txt', 'own.txt']) writeFileSync(join(cwd, name), 'base\n')
+    git('add', '-A')
+    git('commit', '-qm', 'base')
+    // Someone else's work, made before the turn and waiting upstream.
+    git('checkout', '-qb', 'upstream')
+    writeFileSync(join(cwd, 'pulled.txt'), 'from upstream\n')
+    writeFileSync(join(cwd, 'touched.txt'), 'from upstream\n')
+    const past = { ...process.env, GIT_COMMITTER_DATE: '2020-01-01T00:00:00Z', GIT_AUTHOR_DATE: '2020-01-01T00:00:00Z' }
+    execFileSync('git', ['commit', '-qam', 'upstream work'], { cwd, stdio: 'ignore', env: past })
+    git('checkout', '-q', 'main')
+    const id = await service.begin(review.taskId, { cwd } as never)
+    service.bind(id, 'session')
+    git('merge', '-q', '--ff-only', 'upstream')
+    writeFileSync(join(cwd, 'touched.txt'), 'from upstream\nagent line\n')
+    writeFileSync(join(cwd, 'own.txt'), 'agent edit\n')
+    await service.complete('session')
+    const files = service.get(id).files
+    expect(files.map((f) => f.path).sort()).toEqual(['own.txt', 'touched.txt'])
+    expect(files.find((f) => f.path === 'touched.txt')).toMatchObject({
+      oldContent: 'from upstream\n',
+      newContent: 'from upstream\nagent line\n',
+    })
+  }, 60_000)
   it('records added and removed line counts from the run, independent of current edits', async () => {
     expect(review.files.find((f) => f.path === 'changed.txt')).toMatchObject({ addedLines: 1, removedLines: 1 })
     expect(review.files.find((f) => f.path === 'added.txt')).toMatchObject({ addedLines: 1, removedLines: 0 })

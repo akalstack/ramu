@@ -6,6 +6,7 @@ import { beforeEach, expect, it } from 'vitest'
 import { git } from '../src/workspace/git'
 import { createProjectFolder, projectFactsText, type RunCommand } from '../src/workspace/projectCreate'
 import { projectConfigSchema } from '../src/workspace/projectConfig'
+import { customStackPlan } from '@ramu/shared/stacks'
 
 let parent: string
 const create = async (at: string, name: string) => {
@@ -58,4 +59,41 @@ it('starts a project with no stack as an empty commit, and refuses a name that i
   await expect(createProjectFolder({ parent, name: '../x' }, { create, run: async () => {} })).rejects.toThrow(
     /folder name/,
   )
+})
+
+it('records a looked-up stack by name, since it has no id of Ramu’s', async () => {
+  const folder = await createProjectFolder(
+    {
+      parent,
+      name: 'desk',
+      stack: customStackPlan({
+        name: 'Tauri',
+        summary: 'A Tauri desktop app',
+        generator: [['npm', 'create', 'tauri-app@latest', '.']],
+        dev: ['npm', 'run', 'tauri', 'dev'],
+        sources: ['https://v2.tauri.app/start/create-project/'],
+      }),
+    },
+    { create, run: async () => {} },
+  )
+  const config = projectConfigSchema.parse(JSON.parse(readFileSync(join(folder.path, 'ramu.json'), 'utf8')))
+  expect(config.stack).toEqual({ name: 'Tauri', dev: 'npm run tauri dev' })
+  expect(folder).toMatchObject({ stack: null, stackName: 'Tauri' })
+  expect(projectFactsText(config)).toContain('Stack: Tauri')
+  expect(readFileSync(join(folder.path, '.gitignore'), 'utf8')).toContain('.env')
+})
+
+it('runs a generator with the project’s package name filled in', async () => {
+  const ran: string[][] = []
+  const folder = await createProjectFolder(
+    { parent, name: 'barber-shop', stack: 'flutter' },
+    {
+      create,
+      run: async (argv) => {
+        ran.push(argv)
+      },
+    },
+  )
+  expect(ran).toEqual([['flutter', 'create', '--project-name', 'barber_shop', '.']])
+  expect(folder.ran).toEqual(['flutter create --project-name barber_shop .'])
 })

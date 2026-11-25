@@ -2,20 +2,22 @@ import { interactiveExport } from '@ramu/shared/interactiveExport'
 import type { ArtifactInfo } from '@ramu/shared/artifacts'
 import type { ForgeAccountStore } from '../workspace/forgeAccounts'
 import { githubPages } from '../hosting/staticSite'
+import { drawAppIcons, installableSite, type AppIcons } from './installableSite'
 import type { PageStore } from './pages'
 
 /** What a page published from Ramu records as its target, so Update live site deploys to the same repository. */
 const GITHUB_PAGES = 'github-pages'
 
 /**
- * Publish to the web: a page's exact tested bytes as a one-file static site on GitHub Pages, through the GitHub login
- * saved in Settings.
+ * Publish to the web: a page's exact tested bytes as a static site on GitHub Pages, through the GitHub login saved in
+ * Settings. The site can be installed as an app from the browser, and installed copies offer each newer version.
  */
 export class PagePublisher {
   constructor(
     private readonly pages: PageStore,
     private readonly forge: () => ForgeAccountStore | undefined,
     private readonly fetcher: typeof fetch = fetch,
+    private readonly drawIcons: (icon: string, signal?: AbortSignal) => Promise<AppIcons | null> = drawAppIcons,
   ) {}
 
   /** Whether this host has a GitHub login to publish with. */
@@ -35,20 +37,12 @@ export class PagePublisher {
     const document = this.pages.document(artifactId)
     // The runnable export: the tested bytes with their isolation policy, opening on the page's saved values.
     const exported = interactiveExport(document, this.pages.state(artifactId).state, false)
-    const html = exported.html.replace(
-      '<head>',
-      `<head><title>${page.title.replace(/[<&]/g, (c) => (c === '<' ? '&lt;' : '&amp;'))}</title>`,
-    )
+    const files = installableSite(page, exported.html, await this.drawIcons(page.icon, signal))
     const site = {
       name: page.title,
       ...(page.published?.target === GITHUB_PAGES && page.published.siteId ? { siteId: page.published.siteId } : {}),
     }
-    const deployed = await githubPages(this.fetcher).deploy(
-      [{ path: 'index.html', content: Buffer.from(html) }],
-      site,
-      account.token,
-      signal,
-    )
+    const deployed = await githubPages(this.fetcher).deploy(files, site, account.token, signal)
     this.pages.markPublished(artifactId, {
       target: GITHUB_PAGES,
       url: deployed.url,

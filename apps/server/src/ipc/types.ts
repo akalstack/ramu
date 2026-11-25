@@ -1,5 +1,6 @@
 import type { z } from 'zod'
 import type { FileContext, SkillInfo, AppPreferences, ModelPreferences } from '@ramu/shared/types'
+import type { InstalledApp } from '@ramu/shared/updates'
 import type { NoticeInbox } from '../background/notices'
 import type { ActivityService } from '../background/activity'
 import type { LearningService } from '../memory/learning'
@@ -77,6 +78,8 @@ export interface Services {
   agents: AgentService
   schedules: ScheduleService
   pullRequestWatches?: PullRequestWatchService
+  ship?: import('../background/ship').ShipService
+  livePullRequests?: import('../background/livePullRequests').LivePullRequests
   pullRequestIndex?: import('../background/pullRequestIndex').PullRequestIndex
   pullRequestDrafts?: import('../background/pullRequestDrafts').PullRequestDrafts
   pullRequestWrites?: import('../background/pullRequestWrites').PullRequestWrites
@@ -107,7 +110,12 @@ export interface RuntimeHost {
   send(channel: string, payload: unknown): void
   native(method: 'pickExecutable' | 'pickDirectory' | 'pickAttachments' | 'reveal', path?: string): Promise<unknown>
   /** This host's own desktop app, when it is open: whether it is, and asking it to install a prepared update. */
-  desktopApp?: { attached(): boolean; installUpdate(version: string): Promise<void> }
+  desktopApp?: {
+    attached(): boolean
+    installUpdate(version: string): Promise<void>
+    /** Hears what each desktop app reports about the app installed on this host when it connects. */
+    onInstalled?(listener: (app: InstalledApp) => void): void
+  }
   /** Stops the service so its service manager starts the newly built version. */
   restartService?(): void
 }

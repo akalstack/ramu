@@ -1,10 +1,11 @@
 import {
   activityAcrossHosts,
-  loginsAcrossHosts,
-  peakOf,
+  loginRows,
+  loginsWithRoom,
+  providerLoginRows,
   type ActivityTotal,
-  type HostUsage,
-  type LoginUsage,
+  type HostLogins as SharedHostLogins,
+  type LoginRow as SharedLoginRow,
 } from '@ramu/shared/usageAcrossHosts'
 import { useComputers } from '../workspace/computers'
 import { usageTone, usagePercent, usageOnlyAtLimit } from '@ramu/shared/usage/presentation'
@@ -19,13 +20,7 @@ import { cn } from 'cn'
 import { Eye, EyeOff, Gauge } from 'lucide-react'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { AgentProvider, ContextUsage, UsageReading } from '@ramu/shared/types'
-import {
-  accountName,
-  providerEnabled,
-  providerName,
-  type AccountLogin,
-  type ProviderConfiguration,
-} from '@ramu/shared/providers/providers'
+import { accountName, providerEnabled, providerName, type AccountLogin } from '@ramu/shared/providers/providers'
 import { bridge, invokeOn, invokerFor, ramu } from '../ipc'
 import { ownHostId } from '../hosts'
 import { deviceStorage } from '../deviceStorage'
@@ -313,10 +308,7 @@ const windowOrder = (reading: UsageReading) =>
 
 const REVEAL_KEY = 'ramu.usage.accounts'
 
-type HostLogins = HostUsage & {
-  config: ProviderConfiguration | undefined
-  logins: Record<string, Record<string, AccountLogin>>
-}
+type HostLogins = SharedHostLogins & { logins: Record<string, Record<string, AccountLogin>> }
 
 /** Every connected host's logins and readings, read while the dialog is open. */
 function useHostLogins(open: boolean): HostLogins[] | null {
@@ -357,16 +349,8 @@ function useHostLogins(open: boolean): HostLogins[] | null {
   return hosts
 }
 
-/** One login seen across hosts, named and marked for the dialog. */
-type LoginRow = LoginUsage & {
-  name: string
-  /** In use on this host. */
-  inUse: boolean
-  /** Every host it is signed in on, and whether that host's threads use it. */
-  where: { host: string; inUse: boolean }[]
-  plan?: string
-  newest: number
-}
+/** One login seen across hosts, named for the dialog. */
+type LoginRow = Omit<SharedLoginRow, 'where'> & { name: string; where: { host: string; inUse: boolean }[] }
 
 /** Where a provider shows plan usage itself, for the providers Ramu learns about only at a limit. */
 const OWN_USAGE_PAGE: Partial<Record<AgentProvider, string>> = { cursor: 'https://cursor.com/dashboard?tab=usage' }
@@ -385,10 +369,7 @@ function ProviderLogins({
   multiHost: boolean
 }) {
   useLanguage()
-  const withRoom = rows.filter((row) => {
-    const peak = peakOf(row)
-    return !peak || (peak.status !== 'limited' && peak.usedPercent < 100)
-  }).length
+  const withRoom = loginsWithRoom(rows)
   return (
     <section className="flex flex-col gap-2" aria-label={providerName(provider)}>
       <header className="flex items-center gap-2">
@@ -519,55 +500,35 @@ function UsageDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (ope
     setReveal(!reveal)
   }
   const multiHost = (hosts?.length ?? 0) > 1
-  const logins = hosts ? loginsAcrossHosts(hosts) : []
+  // This host's threads follow the settings open here, which can be newer than the copy it last answered with.
+  const rows = hosts
+    ? loginRows(
+        hosts.map((entry) => (entry.hostId === host.id ? { ...entry, config: preferences.providerBinaries } : entry)),
+        host.id,
+      )
+    : []
   const sections = ORDER.flatMap((provider) => {
     if (!providerEnabled(preferences.providerBinaries, provider)) return []
-    const rows: LoginRow[] = logins
-      .filter((login) => login.provider === provider)
-      .map((login) => {
-        // Named by this host's own label when it is signed in here, otherwise by email or where it is signed in.
-        const here = login.places.find((place) => place.hostId === host.id)
-        const place = here ?? login.places[0]!
-        const source = hosts!.find((entry) => entry.hostId === place.hostId)
-        const name = accountName(
+    const named: LoginRow[] = providerLoginRows(rows, provider).map((row) => {
+      // Named by this host's own label when it is signed in here, otherwise by email or where it is signed in.
+      const source = hosts!.find((entry) => entry.hostId === row.namedBy.hostId)
+      return {
+        ...row,
+        name: accountName(
           source?.config,
           provider,
-          place.accountId,
-          source?.logins[provider]?.[place.accountId],
+          row.namedBy.accountId,
+          source?.logins[provider]?.[row.namedBy.accountId],
           t,
           reveal,
-        )
-        const active = here && (preferences.providerBinaries[provider]?.accountId || 'default') === here.accountId
-        const where = hosts!
-          .filter((entry) => login.places.some((place) => place.hostId === entry.hostId))
-          .map((entry) => ({
-            host: entry.hostId === host.id ? t('This host') : entry.host,
-            inUse: login.places.some(
-              (place) =>
-                place.hostId === entry.hostId &&
-                ((entry.hostId === host.id
-                  ? preferences.providerBinaries[provider]?.accountId
-                  : entry.config?.[provider]?.accountId) || 'default') === place.accountId,
-            ),
-          }))
-        const newest = Math.max(...login.readings.map((reading) => reading.updatedAt))
-        const plan = [...login.readings].filter((r) => r.plan).sort((a, b) => b.updatedAt - a.updatedAt)[0]?.plan
-        return {
-          ...login,
-          name,
-          inUse: !!active,
-          where,
-          ...(plan ? { plan } : {}),
-          newest,
-        }
-      })
-      .sort(
-        (a, b) =>
-          Number(b.inUse) - Number(a.inUse) ||
-          Number(b.where.some((place) => place.inUse)) - Number(a.where.some((place) => place.inUse)) ||
-          (peakOf(a)?.usedPercent ?? 0) - (peakOf(b)?.usedPercent ?? 0),
-      )
-    return rows.length ? [{ provider, rows }] : []
+        ),
+        where: row.where.map((place) => ({
+          host: place.hostId === host.id ? t('This host') : place.host,
+          inUse: place.inUse,
+        })),
+      }
+    })
+    return named.length ? [{ provider, rows: named }] : []
   })
   const openFallback = () => {
     onOpenChange(false)

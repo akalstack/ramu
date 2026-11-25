@@ -13,11 +13,12 @@ import { CiSetupSection } from './CiSetup'
 import { LiveAddressSection } from './LiveAddress'
 import { LocalAppSection } from './LocalApp'
 import { ProductionDatabaseSection } from './ProductionDatabase'
+import { ShipSection } from './ShipSection'
 
 const open = (url: string) => void openOnThisComputer('app.openExternal', url)
 
 /**
- * Live app: the latest deploy as the Git host reports it, the live address the host watches, the production database
+ * Live app: where Ship stops, the latest deploy as the Git host reports it, the live address the host watches, the production database
  * migrations run against, CI, and an app run from this computer. Deploys themselves are the project's agent's work
  * with the platform's plugin or CLI, so the sheet starts none.
  */
@@ -75,6 +76,7 @@ export function LiveAppDialog({
       onCancel={onClose}
       onConfirm={onClose}
     >
+      <ShipSection projectId={project.id} />
       <section aria-label={t('Latest deploy')} className="flex flex-col gap-2">
         <strong>{t('Latest deploy')}</strong>
         {!status ? (

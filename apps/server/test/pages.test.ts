@@ -547,7 +547,13 @@ it('publishes a page without records or AI to the web and updates the same site 
     if (url.includes('/contents/') && !init?.method) return new Response('', { status: 404 })
     return new Response('{}')
   }) as typeof fetch
-  const publisher = new PagePublisher(pages, () => forge as never, fetcher)
+  const icons = { 192: Buffer.from('png192'), 512: Buffer.from('png512') }
+  const publisher = new PagePublisher(
+    pages,
+    () => forge as never,
+    fetcher,
+    async () => icons,
+  )
   expect(publisher.ready()).toBe(true)
   await expect(publisher.publish(page.id)).rejects.toThrow('Make it a project')
   const plain = interactive.publish('s', (await interactive.preview('s', { ...input, html: '<p>Trip</p>' })).id, 'p1')
@@ -559,10 +565,18 @@ it('publishes a page without records or AI to the web and updates the same site 
     siteId: 'trip-costs',
     version: 1,
   })
+  // An installable site: manifest, icons and the service worker, written last so it only sees files already there.
+  const written = requests.filter((r) => r.startsWith('PUT')).map((r) => r.split('/contents/')[1])
+  expect(written).toEqual(['icon.svg', 'icon-192.png', 'icon-512.png', 'manifest.webmanifest', 'index.html', 'sw.js'])
   requests.length = 0
   await publisher.publish(trip.id)
   expect(requests.some((request) => request.startsWith('POST') && request.endsWith('/user/repos'))).toBe(false)
-  const signedOut = new PagePublisher(pages, () => undefined, fetcher)
+  const signedOut = new PagePublisher(
+    pages,
+    () => undefined,
+    fetcher,
+    async () => null,
+  )
   expect(signedOut.ready()).toBe(false)
   await expect(signedOut.publish(trip.id)).rejects.toThrow('Connect a GitHub account')
 })

@@ -990,15 +990,7 @@ kbd {
   @apply [backdrop-filter:blur(28px)_saturate(1.7)];
 }
 
-/* Working state: a live "Working for 4s" rule above the steps, streamed words fading in, and a quiet "Thinking" below. */
-@keyframes stream-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
+/* Working state: a live "Working for 4s" rule above the steps and a quiet "Thinking" below. */
 
 /* Switch thumb: placed by coordinates, so nothing about flex or line height can shift it. */
 /* A step between the canvas and the composer, so the box reads as resting on the tray. */

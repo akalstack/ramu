@@ -211,7 +211,12 @@ it('refuses cancelled turns and honors the daily review budget even after a prop
     { kind: 'result', isError: false, text: 'done', costUsd: null },
   )
   await service.tick(true)
-  expect(analyze).toHaveBeenCalledTimes(1)
+  // Out of reviews: the new turn gets a checkpoint of its own budget, and its review waits for tomorrow.
+  expect(analyze).toHaveBeenCalledTimes(2)
+  expect(analyze.mock.calls[1]![0]).toContain('ramu-checkpoint')
+  expect(service.jobs()[0]).toMatchObject({ seq: trace.length, status: 'queued' })
+  await service.tick(true)
+  expect(analyze).toHaveBeenCalledTimes(2)
 })
 
 it('rejects stale skill revisions atomically and protects pinned procedures from generated rewrites', async () => {
@@ -238,26 +243,56 @@ it('rejects stale skill revisions atomically and protects pinned procedures from
 })
 
 it('rolls back all skill mutations if a later operation conflicts', async () => {
+  await service.tick(true)
+  service.apply(service.jobs()[0]!.id)
+  const existing = service.skills()[0]!
+  // A new skill, then a rewrite of the existing one that takes the new skill's name.
   analyze.mockResolvedValue({
     provider: 'codex',
     model: 'test',
-    message: JSON.stringify({ ...proposal, memories: [], skills: [proposal.skills[0], proposal.skills[0]] }),
+    message: JSON.stringify({
+      ...proposal,
+      memories: [],
+      skills: [
+        { ...proposal.skills[0], name: 'retry-budget', description: 'Cap total retry time per request' },
+        { ...proposal.skills[0], id: existing.id, expectedRevision: existing.revision, name: 'retry-budget' },
+      ],
+    }),
   })
+  trace.push(
+    { kind: 'tool-use', toolUseId: 'test2', name: 'shell', summary: 'test' },
+    { kind: 'result', isError: false, text: 'done', costUsd: null },
+  )
   await service.tick(true)
   const job = service.jobs().find((job) => job.status === 'pending')!
-  expect(() => service.apply(job.id)).toThrow(/Skill changed/)
-  expect(service.skills()).toEqual([])
-  expect(db.prepare('SELECT COUNT(*) AS count FROM skill_revisions').get()).toEqual({ count: 0 })
+  expect(() => service.apply(job.id)).toThrow(/already exists/)
+  expect(service.skills()).toEqual([existing])
+  expect(db.prepare('SELECT COUNT(*) AS count FROM skill_revisions').get()).toEqual({ count: 1 })
 })
 
-it('keeps an applied job committed if its Markdown export fails, preventing duplicate automatic writes', async () => {
+it('keeps at most one new skill from a review, alongside updates to existing ones', async () => {
+  analyze.mockResolvedValue({
+    provider: 'codex',
+    model: 'test',
+    message: JSON.stringify({
+      ...proposal,
+      skills: [proposal.skills[0], { ...proposal.skills[0], name: 'second-new-skill' }],
+    }),
+  })
+  await service.tick(true)
+  service.apply(service.jobs()[0]!.id)
+  expect(service.skills().map((skill) => skill.name)).toEqual(['rate-limit-retry'])
+})
+
+it('keeps an applied job committed if its Markdown export fails, preventing duplicate writes', async () => {
   workspace.setAppState('app-preferences', { intelligence: { ...DEFAULT_INTELLIGENCE_PREFERENCES, learning: 'auto' } })
   writeFileSync(join(root, 'skills'), 'Not a directory')
   await service.tick(true)
-  expect(service.jobs()[0]).toMatchObject({ status: 'applied', error: expect.stringContaining('ENOTDIR') })
   expect(memory.active('p')).toHaveLength(1)
+  const job = service.jobs()[0]!
+  expect(job).toMatchObject({ status: 'applied', error: expect.stringContaining('ENOTDIR') })
   expect(service.enqueue('s')).toBeNull()
-  expect(() => service.apply(service.jobs()[0]!.id)).toThrow('No pending')
+  expect(() => service.apply(job.id)).toThrow('No pending')
 })
 
 it('recalls original visible evidence by sequence without transferring provider reasoning', async () => {
@@ -554,18 +589,23 @@ describe('refreshing the checkpoint when a provider crosses its early-switch thr
     await refresh.tick()
     expect(analyze).not.toHaveBeenCalled()
     db.exec("UPDATE agent_sessions SET state='idle' WHERE id='busy'")
+    workspace.setAppState(
+      'learning-checkpoint-times',
+      Array.from({ length: 20 }, () => Date.now()),
+    )
+    await refresh.tick()
+    expect(analyze).not.toHaveBeenCalled()
+    workspace.setAppState('learning-checkpoint-times', [])
+    // Spent reviews do not hold a checkpoint back: it has a budget of its own.
     const { dailyReviews } = DEFAULT_INTELLIGENCE_PREFERENCES
     workspace.setAppState(
       'learning-review-times',
       Array.from({ length: dailyReviews }, () => Date.now()),
     )
     await refresh.tick()
-    expect(analyze).not.toHaveBeenCalled()
-    workspace.setAppState('learning-review-times', [])
-    await refresh.tick()
     expect(analyze).toHaveBeenCalledTimes(1)
-    // It spent one review of the day, like any other.
-    expect(workspace.getAppState<number[]>('learning-review-times', [])).toHaveLength(1)
+    expect(workspace.getAppState<number[]>('learning-checkpoint-times', [])).toHaveLength(1)
+    expect(workspace.getAppState<number[]>('learning-review-times', [])).toHaveLength(dailyReviews)
   })
 
   it('refreshes a turn once, across ticks and across a restart, even when the model call failed', async () => {
@@ -622,7 +662,10 @@ describe('refreshing the checkpoint when a provider crosses its early-switch thr
     await refresh.tick()
     expect(analyze).toHaveBeenCalledTimes(1)
     expect(analyze.mock.calls[0]![0]).toContain('ramu-learning')
-    expect(refresh.jobs()[0]).toMatchObject({ status: 'applied' })
+    // Saved straight away, the new skill included.
+    expect(refresh.jobs()[0]).toMatchObject({ status: 'applied', changes: { memories: [{ action: 'added' }] } })
+    expect(memory.active('p')).toHaveLength(1)
+    expect(refresh.skills()).toHaveLength(1)
     expect(refresh.checkpoint('s')?.summary).toBe(proposal.checkpoint)
   })
 
@@ -645,4 +688,85 @@ it('crosses the early-switch threshold only below the limit, with a threshold se
   expect(crossedSwitchAt([reading(100, 'limited')], settings, 80)).toBe(false)
   expect(crossedSwitchAt([], settings, 80)).toBe(false)
   expect(crossedSwitchAt([{ ...reading(95), provider: 'claude-code' }], settings, 80)).toBe(false)
+})
+
+describe('when a review runs and what it saves', () => {
+  const auto = () =>
+    workspace.setAppState('app-preferences', {
+      intelligence: { ...DEFAULT_INTELLIGENCE_PREFERENCES, learning: 'auto' },
+    })
+
+  it('waits for a thread to settle, unless it is marked done', async () => {
+    await service.tick()
+    expect(analyze).not.toHaveBeenCalled()
+    const job = service.jobs()[0]!
+    db.prepare('UPDATE learning_jobs SET data=? WHERE id=?').run(
+      JSON.stringify({ ...job, createdAt: Date.now() - 16 * 60_000 }),
+      job.id,
+    )
+    await service.tick()
+    expect(analyze).toHaveBeenCalledTimes(1)
+    trace.push(
+      { kind: 'user', text: 'Now the suite' },
+      { kind: 'tool-use', toolUseId: 'suite', name: 'shell', summary: 'run suite' },
+      { kind: 'result', isError: false, text: 'done', costUsd: null },
+    )
+    await service.tick()
+    expect(analyze).toHaveBeenCalledTimes(1)
+    workspace.setDone('t', true)
+    await service.tick()
+    expect(analyze).toHaveBeenCalledTimes(2)
+  })
+
+  it('saves the checkpoint before the person approves the rest', async () => {
+    await service.tick(true)
+    expect(service.jobs()[0]?.status).toBe('pending')
+    expect(service.checkpoint('s')?.summary).toBe(proposal.checkpoint)
+    expect(memory.active('p')).toEqual([])
+  })
+
+  it('saves a new skill on its own in Save automatically, and Undo takes back everything the review saved', async () => {
+    auto()
+    await service.tick(true)
+    const job = service.jobs()[0]!
+    expect(memory.active('p')).toHaveLength(1)
+    expect(() => service.retry(job.id)).toThrow('cannot be retried')
+    expect(service.jobs()[0]).toMatchObject({
+      status: 'applied',
+      changes: { memories: [{ action: 'added' }], skills: [{ name: 'rate-limit-retry', before: null }] },
+    })
+    expect(service.skills()).toHaveLength(1)
+    expect(service.undo(job.id)).toEqual({ kept: 0 })
+    expect(memory.active('p')).toEqual([])
+    expect(service.skills()).toEqual([])
+    expect(service.jobs()[0]?.status).toBe('undone')
+    expect(() => service.undo(job.id)).toThrow('nothing saved')
+  })
+
+  it('leaves a note changed since the review alone on Undo', async () => {
+    auto()
+    await service.tick(true)
+    const job = service.jobs()[0]!
+    const note = memory.active('p')[0]!
+    memory.save({ ...note, content: 'Corrected by the person' }, { actor: 'user' }, note.id)
+    expect(service.undo(job.id)).toEqual({ kept: 1 })
+    expect(memory.active('p')[0]?.content).toBe('Corrected by the person')
+  })
+
+  it('tries a failed review once more on its own, then leaves it', async () => {
+    analyze.mockRejectedValue(new Error('offline'))
+    await service.tick(true)
+    expect(service.jobs()[0]).toMatchObject({ status: 'failed' })
+    await service.tick(true)
+    expect(analyze).toHaveBeenCalledTimes(2)
+    expect(service.jobs()[0]).toMatchObject({ status: 'failed', attempts: 1 })
+    await service.tick(true)
+    expect(analyze).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps a checkpoint correction and refuses a credential in it', () => {
+    expect(service.editCheckpoint('s', '## Next\n- Run the suite').summary).toBe('## Next\n- Run the suite')
+    expect(service.checkpoint('s')).toMatchObject({ seq: trace.length, summary: '## Next\n- Run the suite' })
+    expect(() => service.editCheckpoint('s', 'Use ghp_' + 'a1B2c3D4e5'.repeat(4))).toThrow(/credential/)
+  })
 })

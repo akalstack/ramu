@@ -136,7 +136,7 @@ const cliTokens = new Map<string, { at: number; token: Promise<string> }>()
 /** `gh auth token` is a process per forge call; a token read a moment ago is still the sign-in's token. */
 const CLI_TOKEN_TTL = 5 * 60_000
 
-/** The token of one `gh` sign-in, for a call that must use a specific CLI account. Never stored or returned. */
+/** The token of one `gh` sign-in (its active one when `login` is empty). Never stored or returned. */
 function cliToken(executable: string, origin: string, login: string): Promise<string> {
   const key = `${executable}\n${origin}\n${login}`
   const cached = cliTokens.get(key)
@@ -154,7 +154,7 @@ function readCliToken(executable: string, origin: string, login: string): Promis
   return new Promise((resolve, reject) => {
     execFile(
       executable,
-      ['auth', 'token', '--hostname', origin, '--user', login],
+      ['auth', 'token', '--hostname', origin, ...(login ? ['--user', login] : [])],
       { encoding: 'utf8', timeout: 15_000, env: { ...process.env, GH_PROMPT_DISABLED: '1', NO_COLOR: '1' } },
       (error, stdout) =>
         error || !stdout.trim()
@@ -270,6 +270,28 @@ async function savedAccessFor(origin: string): Promise<ApiAccess> {
   if (account.kind !== 'saved')
     throw new ForgeError('Install the GitHub CLI (gh) or save a GitHub token in Settings.', 'no-cli')
   return { origin, token: account.token, owner: '', repo: '' }
+}
+
+/**
+ * The checkout's repository with the token its `gh` sign-in uses, so a read can call GitHub directly instead of starting
+ * `gh`: a repeated read is then asked conditionally and an unchanged answer costs no rate limit (see githubApi's ETags).
+ */
+async function cliAccess(cwd: string): Promise<ApiAccess | null> {
+  const executable = ghExecutable()
+  if (!executable) return null
+  const remote = await forgeRemoteOf(cwd)
+  if (!remote) return null
+  const chosen = await accountEnvironmentFor(remote.origin, executable, remote.owner, remote.repo)
+  const token = chosen.GH_TOKEN ?? chosen.GH_ENTERPRISE_TOKEN ?? (await cliToken(executable, remote.origin, ''))
+  return { origin: remote.origin, token, owner: remote.owner, repo: remote.repo }
+}
+
+/**
+ * A token that reads the checkout's GitHub repository: its saved account's, or its `gh` sign-in's. Only ever sent to
+ * GitHub, or to Ramu Link to prove access to the repository's live events; never kept there.
+ */
+export async function githubReadToken(cwd: string): Promise<string | null> {
+  return ((await directAccess(cwd).catch(() => null)) ?? (await cliAccess(cwd).catch(() => null)))?.token ?? null
 }
 
 /** A rejected saved token reads like a signed-out CLI: the availability tells the person what to fix. */
@@ -636,6 +658,13 @@ export async function pullRequestStatus(cwd: string, url?: string): Promise<Forg
       const found = await findPullRequest(direct, { ...(url ? { url } : {}), branch: head }).catch(directFailure)
       return { availability: 'ready', pullRequest: found ? parsePullRequest(found as RawPullRequest) : null }
     }
+    // With `gh`, its token reads the pull request directly first. Only a found one is trusted: `gh` below also finds one
+    // opened from a fork, and answers when the direct read cannot.
+    const borrowed = await cliAccess(cwd).catch(() => null)
+    const found = borrowed
+      ? await findPullRequest(borrowed, { ...(url ? { url } : {}), branch: head }).catch(() => null)
+      : null
+    if (found) return { availability: 'ready', pullRequest: parsePullRequest(found as RawPullRequest) }
     const raw = JSON.parse(await gh(cwd, ['pr', 'view', head, '--json', PR_FIELDS])) as RawPullRequest
     return { availability: 'ready', pullRequest: parsePullRequest(raw) }
   } catch (error) {

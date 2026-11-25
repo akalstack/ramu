@@ -1,4 +1,4 @@
-import { QueryClient } from '@tanstack/react-query'
+import { QueryClient, focusManager } from '@tanstack/react-query'
 import type { RamuMethods } from '@ramu/shared/api'
 import { ownHostId } from './hosts'
 
@@ -14,6 +14,18 @@ export const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
     },
   },
+})
+// A desktop window comes to the front without its page becoming visible again (it never stopped being visible), so the
+// queries that refetch on focus also listen for the window itself.
+focusManager.setEventListener((handleFocus) => {
+  if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return
+  const visible = () => handleFocus()
+  window.addEventListener('focus', visible)
+  globalThis.document?.addEventListener('visibilitychange', visible)
+  return () => {
+    window.removeEventListener('focus', visible)
+    globalThis.document?.removeEventListener('visibilitychange', visible)
+  }
 })
 /**
  * Every cached read is keyed by the host it came from: `['ipc', hostId, method, ...args]`, so one cache can hold many

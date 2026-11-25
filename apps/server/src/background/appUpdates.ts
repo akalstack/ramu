@@ -1,10 +1,16 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdirSync, existsSync, readFileSync, writeFileSync, renameSync, rmSync } from 'node:fs'
+import { createReadStream, mkdirSync, readFileSync, readdirSync, writeFileSync, renameSync, rmSync } from 'node:fs'
 import { open } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { newerVersion } from '@ramu/shared/version'
-import { APP_AUTO_UPDATE, UPDATE_WAIT_MS, type AppRelease, type AppUpdateStatus } from '@ramu/shared/updates'
+import {
+  APP_AUTO_UPDATE,
+  UPDATE_WAIT_MS,
+  type AppRelease,
+  type AppUpdateStatus,
+  type InstalledApp,
+} from '@ramu/shared/updates'
 import type { AppPreferences } from '@ramu/shared/types'
 
 export const RAMU_RELEASES = 'https://github.com/akalstack/ramu/releases'
@@ -88,6 +94,28 @@ export function assetChecksum(text: string, name: string): string {
   if (entries.length !== 1) throw new Error('The release must contain exactly one checksum for this update')
   return entries[0]![1]!
 }
+const stagedSchema = z.object({
+  release: z.object({
+    version: z.string().regex(VERSION),
+    assetName: z.string().regex(/^[\w.-]+\.zip$/),
+    assetUrl: z.string().refine(releaseAssetUrl),
+    size: z.number().positive(),
+    checksumsUrl: z.string().refine(releaseAssetUrl),
+    notesUrl: z.string(),
+    publishedAt: z.string(),
+  }),
+  checksum: z.string().regex(/^[a-f0-9]{64}$/),
+})
+/** Streams the file through the hash, so a staged update of hundreds of megabytes never blocks the service. */
+function fileChecksum(path: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const hash = createHash('sha256')
+    createReadStream(path)
+      .on('error', reject)
+      .on('data', (chunk) => hash.update(chunk))
+      .on('end', () => resolve(hash.digest('hex')))
+  })
+}
 
 /** Checks and checksum-verified staging live in the daemon, not the window.
  * Applying an update belongs to Electron and always requires a user's restart choice. */
@@ -102,6 +130,10 @@ export class AppUpdateService {
   /** The newer release found while it is still waiting, and the one the person chose to install without waiting. */
   private held: AppRelease | null = null
   private accepted: string | null = null
+  /** Whether an app that can install a downloaded update is here; nothing else can use the download. */
+  private installs: boolean
+  /** Settles once a staged update left by an earlier run is verified or discarded; checks and downloads wait for it. */
+  private restored: Promise<void>
   readonly directory: string
   constructor(
     userData: string,
@@ -109,44 +141,74 @@ export class AppUpdateService {
     private preferences: () => Pick<AppPreferences, 'appUpdateChecks' | 'appAutoUpdate'> &
       Partial<Pick<AppPreferences, 'updateWait'>>,
     private emit: (state: AppUpdateStatus) => void,
+    options: { installs?: boolean } = {},
   ) {
     this.directory = join(userData, 'app-updates')
+    this.installs = options.installs ?? false
     this.state = { currentVersion, phase: 'idle', release: null, checkedAt: null, error: null, downloadedBytes: 0 }
-    try {
-      const saved = JSON.parse(readFileSync(join(this.directory, 'ready.json'), 'utf8')) as {
-        release: AppRelease
-        checksum: string
-      }
-      const parsed = z
-        .object({
-          release: z.object({
-            version: z.string().regex(VERSION),
-            assetName: z.string().regex(/^[\w.-]+\.zip$/),
-            assetUrl: z.string().refine(releaseAssetUrl),
-            size: z.number().positive(),
-            checksumsUrl: z.string().refine(releaseAssetUrl),
-            notesUrl: z.string(),
-            publishedAt: z.string(),
-          }),
-          checksum: z.string().regex(/^[a-f0-9]{64}$/),
-        })
-        .parse(saved)
-      const path = join(this.directory, parsed.release.assetName)
-      if (
-        existsSync(path) &&
-        newerVersion(parsed.release.version, currentVersion) &&
-        createHash('sha256').update(readFileSync(path)).digest('hex') === parsed.checksum
-      )
-        this.state = { ...this.state, phase: 'ready', release: parsed.release, downloadedBytes: parsed.release.size }
-    } catch {}
+    this.restored = this.restore().catch(() => {})
     this.settingsChanged()
   }
   status() {
     return structuredClone(this.state)
   }
+  /** Whether a downloaded update can be installed on this host. */
+  canInstall() {
+    return this.installs
+  }
   private change(patch: Partial<AppUpdateStatus>) {
     this.state = { ...this.state, ...patch }
     this.emit(this.status())
+  }
+  private async restore() {
+    let saved: z.infer<typeof stagedSchema> | null = null
+    try {
+      saved = stagedSchema.parse(JSON.parse(readFileSync(join(this.directory, 'ready.json'), 'utf8')))
+    } catch {}
+    if (saved) {
+      const checksum = await fileChecksum(join(this.directory, saved.release.assetName)).catch(() => null)
+      if (
+        !this.closed &&
+        checksum === saved.checksum &&
+        newerVersion(saved.release.version, this.state.currentVersion) &&
+        this.state.phase === 'idle'
+      )
+        this.change({ phase: 'ready', release: saved.release, downloadedBytes: saved.release.size })
+    }
+    this.prune()
+  }
+  /** Keeps only the staged update's file: an older download is never installed, and each one is the whole app. */
+  private prune() {
+    const keep = this.state.phase === 'ready' ? this.state.release?.assetName : undefined
+    let names: string[]
+    try {
+      names = readdirSync(this.directory)
+    } catch {
+      return
+    }
+    for (const name of names)
+      if ((name.endsWith('.zip') && name !== keep) || (name.endsWith('.partial') && !this.downloading))
+        rmSync(join(this.directory, name), { force: true })
+    if (!keep) rmSync(join(this.directory, 'ready.json'), { force: true })
+  }
+  /**
+   * What the desktop app on this host reports when it connects. A service that outlived an app update still carries
+   * the version it started with, so the installed app's newer version decides what counts as an update.
+   */
+  installedApp(app: InstalledApp) {
+    this.installs = app.canInstall
+    if (!VERSION.test(app.version) || !newerVersion(app.version, this.state.currentVersion)) return
+    const installed = (version: string | undefined) => !!version && !newerVersion(version, app.version)
+    if (installed(this.held?.version)) this.held = null
+    const busy = this.state.phase === 'checking' || this.state.phase === 'downloading'
+    this.change({
+      currentVersion: app.version,
+      ...(installed(this.state.waiting?.version) ? { waiting: null } : {}),
+      ...(installed(this.state.release?.version) && !busy
+        ? { phase: 'idle' as const, release: null, downloadedBytes: 0, error: null }
+        : {}),
+    })
+    if (!busy) this.prune()
   }
   settingsChanged() {
     this.generation++
@@ -157,7 +219,8 @@ export class AppUpdateService {
     }
   }
   private async automatic() {
-    const generation = this.generation
+    const generation = this.generation,
+      timer = this.timer
     try {
       const status = await this.check()
       if (
@@ -165,10 +228,14 @@ export class AppUpdateService {
         generation === this.generation &&
         APP_AUTO_UPDATE &&
         this.preferences().appAutoUpdate &&
+        this.installs &&
         status.phase === 'available'
       )
         await this.download()
     } catch {}
+    // A settings change during the check set a new timer already; a second one would start a second chain.
+    if (this.timer !== timer) return
+    clearTimeout(this.timer)
     if (!this.closed && (this.preferences().appUpdateChecks || this.preferences().appAutoUpdate)) {
       this.timer = setTimeout(() => void this.automatic(), 6 * 60 * 60_000)
       this.timer.unref()
@@ -179,8 +246,11 @@ export class AppUpdateService {
     if (this.running) return this.running
     if (this.downloading) return this.downloading
     this.running = (async () => {
-      const ready = this.state.phase === 'ready'
-      this.change({ phase: 'checking', error: null })
+      await this.restored
+      // Read at each step: the installed app reporting in can retire the staged release mid-check.
+      const ready = () => this.state.phase === 'ready'
+      // A staged update stays ready while checking, so its restart stays on offer and it is not downloaded again.
+      this.change(ready() ? { error: null } : { phase: 'checking', error: null })
       try {
         // The list, not /releases/latest, which never returns a pre-release.
         const response = await fetch('https://api.github.com/repos/akalstack/ramu/releases?per_page=30', {
@@ -192,7 +262,7 @@ export class AppUpdateService {
           },
         })
         if (response.status === 404) {
-          this.change({ phase: ready ? 'ready' : 'idle', checkedAt: new Date().toISOString() })
+          this.change({ phase: ready() ? 'ready' : 'idle', checkedAt: new Date().toISOString() })
           return this.status()
         }
         if (!response.ok) throw new Error(`GitHub update check failed (HTTP ${response.status})`)
@@ -209,34 +279,34 @@ export class AppUpdateService {
         if (release && waits && newerVersion(release.version, this.state.currentVersion))
           // A release out less than a day is named, not offered: a bad one is usually pulled within hours.
           this.change({
-            phase: ready ? 'ready' : 'idle',
+            phase: ready() ? 'ready' : 'idle',
             checkedAt: new Date().toISOString(),
             waiting: {
               version: release.version,
               notesUrl: release.notesUrl,
               settlesAt: new Date(settles).toISOString(),
             },
-            ...(ready ? {} : { release: null }),
+            ...(ready() ? {} : { release: null }),
           })
         else if (release && newerVersion(release.version, this.state.currentVersion))
           this.change({
             waiting: null,
-            phase: ready && release.version === this.state.release?.version ? 'ready' : 'available',
+            phase: ready() && release.version === this.state.release?.version ? 'ready' : 'available',
             release,
             checkedAt: new Date().toISOString(),
           })
         else
           this.change({
-            phase: ready ? 'ready' : 'idle',
+            phase: ready() ? 'ready' : 'idle',
             checkedAt: new Date().toISOString(),
             waiting: null,
-            ...(ready ? {} : { release: null }),
+            ...(ready() ? {} : { release: null }),
           })
       } catch (error) {
         this.change(
           this.abort.signal.aborted
-            ? { phase: ready ? 'ready' : this.state.release ? 'available' : 'idle', error: null }
-            : { phase: ready ? 'ready' : 'error', error: String(error) },
+            ? { phase: ready() ? 'ready' : this.state.release ? 'available' : 'idle', error: null }
+            : { phase: ready() ? 'ready' : 'error', error: String(error) },
         )
       }
       return this.status()
@@ -263,6 +333,8 @@ export class AppUpdateService {
     if (!release) return Promise.reject(new Error('Check for an update first'))
     if (this.state.phase === 'ready') return Promise.resolve(this.status())
     this.downloading = (async () => {
+      await this.restored
+      if (this.state.phase === 'ready' && this.state.release?.version === release.version) return this.status()
       const temporary = join(this.directory, `${randomUUID()}.partial`)
       mkdirSync(this.directory, { recursive: true, mode: 0o700 })
       this.change({ phase: 'downloading', downloadedBytes: 0, error: null })
@@ -297,7 +369,10 @@ export class AppUpdateService {
         signal.throwIfAborted()
         renameSync(temporary, join(this.directory, release.assetName))
         writeFileSync(join(this.directory, 'ready.json'), JSON.stringify({ release, checksum }), { mode: 0o600 })
-        this.change({ phase: 'ready', downloadedBytes: size })
+        // The installed app may have reached this release while it downloaded.
+        if (newerVersion(release.version, this.state.currentVersion))
+          this.change({ phase: 'ready', downloadedBytes: size })
+        else this.change({ phase: 'idle', release: null, downloadedBytes: 0 })
       } catch (error) {
         this.change(
           this.abort.signal.aborted
@@ -308,6 +383,7 @@ export class AppUpdateService {
         await file?.close()
         rmSync(temporary, { force: true })
       }
+      if (this.state.phase === 'ready' || this.state.phase === 'idle') this.prune()
       return this.status()
     })().finally(() => {
       this.downloading = undefined

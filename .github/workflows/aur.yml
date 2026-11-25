@@ -1,0 +1,48 @@
+name: Arch User Repository
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published release the AUR package ramu-bin should offer
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: aur
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      TAG: ${{ inputs.tag || github.event.release.tag_name }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Write the package for this release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/release/aur.sh "$TAG" "$RUNNER_TEMP/ramu-bin-new"
+      - name: Push it to the AUR
+        env:
+          AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
+        run: |
+          if [ -z "$AUR_SSH_KEY" ]; then
+            echo "::notice::No AUR_SSH_KEY secret; the package was written but not published."
+            exit 0
+          fi
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$AUR_SSH_KEY" > ~/.ssh/aur && chmod 600 ~/.ssh/aur
+          # The AUR's published host key (https://aur.archlinux.org), so a changed key stops the push.
+          echo 'aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN' > ~/.ssh/known_hosts
+          export GIT_SSH_COMMAND='ssh -i ~/.ssh/aur -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes'
+          git clone ssh://aur@aur.archlinux.org/ramu-bin.git "$RUNNER_TEMP/ramu-bin"
+          cp "$RUNNER_TEMP/ramu-bin-new/PKGBUILD" "$RUNNER_TEMP/ramu-bin-new/.SRCINFO" "$RUNNER_TEMP/ramu-bin/"
+          cd "$RUNNER_TEMP/ramu-bin"
+          git add PKGBUILD .SRCINFO
+          if git diff --cached --quiet; then exit 0; fi
+          git -c user.name='Ramu release' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -m "ramu-bin ${TAG#v}"
+          git push origin HEAD:master

@@ -271,7 +271,7 @@ export class ClaudeStreamPump {
               kind: 'tool-result',
               toolUseId: block.tool_use_id,
               isError: Boolean(block.is_error),
-              summary: summarizeToolResult(block.content),
+              summary: summarizeToolResult(block.content, Boolean(block.is_error)),
               ...(block.content ? { content: agentContent(block.content) } : {}),
               ...(agentId ? { agentId } : {}),
             })

@@ -273,6 +273,19 @@ describe('a thread held at a usage limit', () => {
     expect(starts).toHaveLength(1)
   })
 
+  it('is cleared when the thread is marked done, so it never resumes a done thread', async () => {
+    script.limit = true
+    const svc = make()
+    const s = svc.start('t', scopeOf(cwd), 'task', stay)
+    await until(() => !!waitOf(svc, s.id))
+    svc.holdThread('t')
+    expect(waitOf(svc, s.id)).toBeNull()
+    expect(groups(svc).size).toBe(0)
+    script.limit = false
+    await sleep(1300)
+    expect(starts).toHaveLength(1)
+  })
+
   it('treats a 429 whose retries ran out as a limit wait, not a failure', async () => {
     script.throws = '429 Too Many Requests: retries exhausted after 3 attempts'
     const svc = make()

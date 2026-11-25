@@ -418,3 +418,29 @@ describe('pushes from a thread', () => {
     expect(enqueue).toHaveBeenCalledOnce()
   })
 })
+
+describe('shipping threads', () => {
+  it('adds Ship’s words to automatic rounds, holds them past the limit, and never counts a button', async () => {
+    let allowed = 1
+    const after = vi.fn()
+    service.ship = {
+      held: () => allowed <= 0,
+      before: () => (allowed-- > 0 ? 'Push the fix.' : false),
+      after,
+    }
+    await watch()
+    await service.tick(0)
+    expect(enqueue).toHaveBeenCalledOnce()
+    expect(enqueue.mock.calls[0]![1]).toContain('Push the fix.')
+    expect(after).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'session', cwd: '/repo' }), 'checks')
+    pr.headCommit = 'sha2'
+    await service.tick(60_000)
+    expect(enqueue).toHaveBeenCalledOnce()
+    expect(pullRequestFeedback).toHaveBeenCalledOnce()
+    // The person's own button is a round they chose, outside Ship's count.
+    await service.sendFeedback('/repo', 'checks')
+    expect(enqueue).toHaveBeenCalledTimes(2)
+    expect(enqueue.mock.calls[1]![1]).not.toContain('Push the fix.')
+    expect(after).toHaveBeenCalledOnce()
+  })
+})

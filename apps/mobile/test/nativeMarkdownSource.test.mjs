@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { markdownBlocks, nativeMarkdownSource, splitCodeFences } from '../src/runtime/nativeMarkdownSource.ts'
+import { nativeMarkdownSource, splitCodeFences } from '../src/runtime/nativeMarkdownSource.ts'
 
 test('file and skill references become links the native view can open; code keeps them as written', () => {
   assert.equal(
@@ -22,23 +22,6 @@ test('a file named in backticks becomes a link, but not inside a code block', ()
   assert.equal(nativeMarkdownSource('Run `npm test`'), 'Run `npm test`')
   const fenced = '```\nsee `src/app.ts`\n```'
   assert.equal(nativeMarkdownSource(fenced), fenced)
-})
-
-test('a reply splits into its top-level blocks for fading in one at a time', () => {
-  assert.deepEqual(markdownBlocks('# Plan\n\nFirst paragraph\nstill first.\n\nSecond.'), [
-    '# Plan',
-    'First paragraph\nstill first.',
-    'Second.',
-  ])
-  // A fence keeps its blank lines; a loose list and an indented continuation stay one block.
-  assert.deepEqual(markdownBlocks('```ts\na()\n\nb()\n```\n\n1. one\n\n2. two\n\n   more of two\n\nAfter.'), [
-    '```ts\na()\n\nb()\n```',
-    '1. one\n\n2. two\n\n   more of two',
-    'After.',
-  ])
-  // A fence still arriving keeps everything after it.
-  assert.deepEqual(markdownBlocks('Intro\n\n```\ncode\n\nmore'), ['Intro', '```\ncode\n\nmore'])
-  assert.deepEqual(markdownBlocks('\n\n'), [])
 })
 
 test('closed code fences come out of the text view, so a long line scrolls instead of wrapping', () => {

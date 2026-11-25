@@ -92,18 +92,18 @@ export class MessageDispatcher {
     if (!held) this.release(id)
   }
 
-  /** Saving an edit cancels the message and sends the new text in its place, as the newest message. */
+  /** Saving an edit changes the message where it is: it keeps its place in the queue and goes out at its usual moment. */
   editQueued(id: string, messageId: string, text: string): void {
     this.host.get(id)
     if (!text.trim()) throw new Error('Enter a message, or remove it instead.')
     if (this.sendingMessages.has(messageId)) throw new Error('This message is already being sent.')
     const messages = this.host.queued(id)
-    const message = messages.find((entry) => entry.id === messageId)
-    if (!message) throw new Error('That message has already been sent or removed.')
-    this.updateQueue(id, [
-      ...messages.filter((entry) => entry !== message),
-      { ...withHold(message, false), id: randomUUID(), text },
-    ])
+    if (!messages.some((entry) => entry.id === messageId))
+      throw new Error('That message has already been sent or removed.')
+    this.updateQueue(
+      id,
+      messages.map((entry) => (entry.id === messageId ? { ...withHold(entry, false), text } : entry)),
+    )
     this.release(id)
   }
 

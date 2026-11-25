@@ -48,7 +48,7 @@ export function LimitTray({ chatId }: { chatId: string }) {
   const [trying, setTrying] = useState(false)
   const [still, setStill] = useState(false)
   const chat = store.chats.find((entry) => entry.id === chatId)
-  const wait = chat ? limitWaitOf(chat.items) : null
+  const wait = chat ? limitWaitOf(chat.items, chat.doneAt) : null
   // A new wait (a new reset time) starts clean; "Still limited" belongs to the try that just failed.
   useEffect(() => setStill(false), [wait?.retryAt])
   if (!chat || !wait) return null
@@ -87,7 +87,12 @@ export function LimitTray({ chatId }: { chatId: string }) {
       <Clock3 size={15} color={c.warn} strokeWidth={1.9} />
       {/* What happened, when it continues, and this thread's own Auto-resume choice, stacked so none of it wraps oddly. */}
       <View style={{ flex: 1, gap: 1 }}>
-        <T size={font.control} weight="600" numberOfLines={1}>
+        <T
+          size={font.control}
+          weight="600"
+          numberOfLines={1}
+          tone={model.title === 'limitHasReset' ? undefined : 'warn'}
+        >
           {t[model.title]}
         </T>
         <T size={font.caption} tone="muted" numberOfLines={2}>

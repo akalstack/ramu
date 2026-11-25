@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { loginsAcrossHosts, peakOf } from '../src/usageAcrossHosts'
+import { loginRows, loginsAcrossHosts, loginsWithRoom, peakOf, providerLoginRows } from '../src/usageAcrossHosts'
 import type { UsageReading } from '../src/types'
 
 const reading = (accountId: string | undefined, usedPercent: number, updatedAt: number): UsageReading => ({
@@ -134,4 +134,47 @@ it('adds tokens where turns report them and names hosts whose turns do not', asy
     { host: 'vps', rows: [row(2, 500, 1)] },
   ])
   expect(total).toMatchObject({ turns: 5, tokens: 12_500, untokenedOn: ['vps'] })
+})
+
+const hostLogins = (hostId: string, readings: UsageReading[], emails: Record<string, string>, accountId?: string) => ({
+  hostId,
+  host: hostId.toUpperCase(),
+  readings,
+  emails: { 'claude-code': emails },
+  config: accountId ? { 'claude-code': { binary: 'claude', accountId } } : undefined,
+})
+
+it('marks the login threads use, on the current host or on any host', () => {
+  const hosts = [
+    hostLogins('a', [reading(undefined, 30, 1), reading('acc-2', 90, 1)], { default: 'one@x.io', 'acc-2': 'two@x.io' }),
+    hostLogins('b', [reading('acc-7', 10, 1)], { 'acc-7': 'two@x.io' }, 'acc-7'),
+  ]
+  const onA = loginRows(hosts, 'a')
+  const one = onA.find((row) => row.email === 'one@x.io')!
+  const two = onA.find((row) => row.email === 'two@x.io')!
+  expect(one).toMatchObject({ inUse: true, namedBy: { hostId: 'a', accountId: 'default' } })
+  expect(two).toMatchObject({
+    inUse: false,
+    namedBy: { hostId: 'a', accountId: 'acc-2' },
+    where: [
+      { hostId: 'a', inUse: false },
+      { hostId: 'b', inUse: true },
+    ],
+  })
+  // Opened for no host in particular, a login is in use when any host's threads use it.
+  expect(loginRows(hosts).find((row) => row.email === 'two@x.io')!.inUse).toBe(true)
+})
+
+it('lists the login in use first, then the ones another host uses, then the most room', () => {
+  const hosts = [
+    hostLogins(
+      'a',
+      [reading('full', 100, 1), reading('roomy', 5, 1), reading('used', 70, 1), reading(undefined, 95, 1)],
+      { full: 'f@x.io', roomy: 'r@x.io', used: 'u@x.io', default: 'd@x.io' },
+    ),
+    hostLogins('b', [reading('u2', 70, 2)], { u2: 'u@x.io' }, 'u2'),
+  ]
+  const rows = providerLoginRows(loginRows(hosts, 'a'), 'claude-code')
+  expect(rows.map((row) => row.email)).toEqual(['d@x.io', 'u@x.io', 'r@x.io', 'f@x.io'])
+  expect(loginsWithRoom(rows)).toBe(3)
 })

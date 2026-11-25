@@ -10,7 +10,8 @@ import { fileToolDiffs, fileToolLine } from '@ramu/shared/chat/fileTools'
 import { FileToolCounts } from './FileToolCounts'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Button } from '@/components/desktop-button'
-import { Brain, ChevronRight } from 'lucide-react'
+import { Brain, ChevronRight, CircleX } from 'lucide-react'
+import { toolFailure } from '@ramu/shared/chat/toolFailure'
 import { thoughtLine } from '@ramu/shared/chat/thoughtLine'
 import { describeRamuTool, ramuTool } from '@ramu/shared/chat/ramuTools'
 import { toolIsRunning, toolVerb } from '@ramu/shared/chat/toolStatus'
@@ -47,6 +48,28 @@ const TOOL_VERB: Record<string, string> = {
   WebSearch: 'Searched',
 }
 
+const failedResult = (tool: ToolUse, result: ToolResult | undefined) =>
+  result ? result.isError || result.status === 'failed' : tool.status === 'failed'
+
+/**
+ * What a failed call said, under its row while the row is closed: the exit code and the output's last lines, so the
+ * reason reads without opening anything. Opening the row shows the whole output instead.
+ */
+function ToolFailureLines({ output }: { output: string | undefined }) {
+  const { exit, lines } = toolFailure(output)
+  if (!lines.length && exit === undefined) return null
+  return (
+    <div className="tool-failure mb-1 ml-[22px] min-w-0 border-l-2 border-bad/40 pl-2 font-mono text-caption leading-[1.5] text-soft">
+      {exit !== undefined && <div className="text-bad">{translate('Exit code {0}', { 0: exit })}</div>}
+      {lines.map((line, index) => (
+        <div key={index} className="truncate" title={line}>
+          {line}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 /**
  * A run of consecutive tool calls as one collapsible row; open it for each call and its output. While it is the live
  * group of a running turn its headline names the newest call, so what the agent is doing now reads in place.
@@ -78,7 +101,7 @@ export function ToolGroup({
   const held = useHeldHeight<HTMLDivElement>(live && active && !open, tools[0]?.toolUseId)
   const status = toolActivity(tools, (tool) => {
     const result = results.get(tool.toolUseId)
-    return result?.isError || result?.status === 'failed' || tool.status === 'failed'
+    return failedResult(tool, result) || tool.status === 'failed'
       ? 'failed'
       : toolIsRunning(result, active)
         ? 'running'
@@ -92,6 +115,8 @@ export function ToolGroup({
   // Until the live group settles, its latest thought stays under the headline, between calls too, instead of hiding in
   // the closed group the moment a call finishes.
   const lastThought = live && !thought ? entries.findLast((entry) => entry.kind === 'thinking') : undefined
+  const lastFailed = tools.findLast((tool) => failedResult(tool, results.get(tool.toolUseId)))
+  const lastFailedLine = lastFailed ? toolFailure(results.get(lastFailed.toolUseId)?.summary).lines.at(-1) : undefined
   const headline = thought
     ? thoughtLine(thought.text, true) || translate('Thinking')
     : running || live
@@ -138,6 +163,16 @@ export function ToolGroup({
             <ChevronRight size={13} className={CARET_CLASS} />
           </CollapsibleTrigger>
         )}
+        {entries.length > 1 && !open && !running && lastFailed && (
+          // A closed group names its latest failure and what it said, so a failed step is never hidden behind "Ran 5 commands".
+          <div className="flex min-w-0 items-start gap-2 pb-1 text-caption">
+            <CircleX size={12} className="mt-[3px] flex-none text-bad" aria-hidden="true" />
+            <span className="min-w-0 truncate text-soft">
+              {translate('Failed')}: {describeTools([lastFailed], results, active)}
+              {lastFailedLine ? <span className="font-mono text-muted-foreground"> — {lastFailedLine}</span> : null}
+            </span>
+          </div>
+        )}
         {entries.length > 1 && !open && lastThought && thoughtLine(lastThought.text, true) && (
           <div className="flex min-w-0 items-start gap-2 pb-1 text-caption text-muted-foreground">
             <Brain size={12} className="mt-[3px] flex-none opacity-70" />
@@ -177,7 +212,7 @@ export function ToolGroup({
               const inputText = t.input ?? (humanTitle === summary ? undefined : summary)
               // An opened edit shows its change as a diff, built from the input when the provider sent none.
               const builtDiffs = file && !shownHasDiff(r?.content ?? t.content) ? fileToolDiffs(t, r) : []
-              const failed = r ? r.isError || r.status === 'failed' : t.status === 'failed'
+              const failed = failedResult(t, r)
               const state = failed
                 ? 'Failed'
                 : t.status === 'pending' && active
@@ -192,7 +227,7 @@ export function ToolGroup({
                 <Collapsible
                   key={t.toolUseId}
                   data-tool-use-id={t.toolUseId}
-                  className="tool [&_[data-slot='collapsible-trigger']]:flex [&_[data-slot='collapsible-trigger']]:items-center [&_[data-slot='collapsible-trigger']]:cursor-pointer [&_[data-slot='collapsible-trigger']]:[list-style:none] [&_[data-slot='collapsible-trigger']]:min-w-0 [&_[data-slot='collapsible-trigger']]:m-0 [&_[data-slot='collapsible-trigger']]:p-[4px_6px] [&_[data-slot='collapsible-trigger']]:rounded-(--radius-s) [&_[data-slot='collapsible-trigger']]:gap-2 [&_[data-slot='collapsible-trigger']::-webkit-details-marker]:hidden [&_[data-slot='collapsible-trigger']:hover]:bg-hover [&_.caret]:text-muted-foreground [&_.caret]:flex-none [&_.caret]:[transition:transform_0.15s_var(--ease)] [&[data-open]_.caret]:[transform:rotate(90deg)] [&_>_[data-slot='collapsible-trigger']_.caret]:m-0 [&_>_[data-slot='collapsible-trigger']_.caret]:opacity-0 [&_>_[data-slot='collapsible-trigger']_.caret]:[transition:opacity_0.15s_var(--ease),_transform_0.15s_var(--ease)] [&_>_[data-slot='collapsible-trigger']]:m-0 [&_>_[data-slot='collapsible-trigger']]:p-[3px_0] [&_>_[data-slot='collapsible-trigger']]:[border-radius:0] [&_>_[data-slot='collapsible-trigger']]:gap-2 [&_>_[data-slot='collapsible-trigger']]:text-muted-foreground [&_>_[data-slot='collapsible-trigger']]:text-chat [&_>_[data-slot='collapsible-trigger']:hover]:bg-transparent [&_>_[data-slot='collapsible-trigger']:hover]:text-soft text-control text-soft rounded-(--radius-s)"
+                  className="tool [&[data-open]_>_.tool-failure]:hidden [&_[data-slot='collapsible-trigger']]:flex [&_[data-slot='collapsible-trigger']]:items-center [&_[data-slot='collapsible-trigger']]:cursor-pointer [&_[data-slot='collapsible-trigger']]:[list-style:none] [&_[data-slot='collapsible-trigger']]:min-w-0 [&_[data-slot='collapsible-trigger']]:m-0 [&_[data-slot='collapsible-trigger']]:p-[4px_6px] [&_[data-slot='collapsible-trigger']]:rounded-(--radius-s) [&_[data-slot='collapsible-trigger']]:gap-2 [&_[data-slot='collapsible-trigger']::-webkit-details-marker]:hidden [&_[data-slot='collapsible-trigger']:hover]:bg-hover [&_.caret]:text-muted-foreground [&_.caret]:flex-none [&_.caret]:[transition:transform_0.15s_var(--ease)] [&[data-open]_.caret]:[transform:rotate(90deg)] [&_>_[data-slot='collapsible-trigger']_.caret]:m-0 [&_>_[data-slot='collapsible-trigger']_.caret]:opacity-0 [&_>_[data-slot='collapsible-trigger']_.caret]:[transition:opacity_0.15s_var(--ease),_transform_0.15s_var(--ease)] [&_>_[data-slot='collapsible-trigger']]:m-0 [&_>_[data-slot='collapsible-trigger']]:p-[3px_0] [&_>_[data-slot='collapsible-trigger']]:[border-radius:0] [&_>_[data-slot='collapsible-trigger']]:gap-2 [&_>_[data-slot='collapsible-trigger']]:text-muted-foreground [&_>_[data-slot='collapsible-trigger']]:text-chat [&_>_[data-slot='collapsible-trigger']:hover]:bg-transparent [&_>_[data-slot='collapsible-trigger']:hover]:text-soft text-control text-soft rounded-(--radius-s)"
                 >
                   <CollapsibleTrigger render={<Button variant="ghost" />}>
                     <ToolIcon
@@ -214,6 +249,7 @@ export function ToolGroup({
                     )}
                     <ChevronRight size={12} className={CARET_CLASS} />
                   </CollapsibleTrigger>
+                  {failed && !toolRunning && !row && <ToolFailureLines output={r?.summary} />}
                   <CollapsibleContent className={TOOL_DISCLOSURE_PANEL_CLASS}>
                     <div className={TOOL_CARD_CLASS}>
                       {!row && movable && (

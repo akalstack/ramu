@@ -1,8 +1,4 @@
-import { PRIMARY_ACTION_CLASS } from '@/components/button-classes'
-import { MarkdownText } from '../chat/MarkdownText'
 import { MovedToCustomize } from '../customize/openCustomize'
-import { ListCount, ListEmpty, ListToolbar, useListView } from './ListView'
-import { Badge } from '@/components/ui/badge'
 import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { SettingsScopeContext, useSettingsEvents, useSettingsInvoke } from './SettingsScope'
 import { useCallback, useContext, useEffect, useRef, useState } from 'react'
@@ -13,19 +9,8 @@ import { Dropdown } from '../Menu'
 import { t } from '../i18n'
 import { notifyError } from '../chat/Notifications'
 import { errorText } from '../lib/errors'
-import { takeLibraryFocus } from '../summaries/libraryFocus'
-import { SettingsCard, SettingsCardList, SettingsEmpty, SettingsSectionHead } from './cards'
 import { ModelChoice } from './ModelChoice'
-import {
-  type IntelligencePreferences,
-  type MemoryPreferences,
-  type LearningSnapshot,
-  type ManagedSkill,
-  type Project,
-} from '@ramu/shared/types'
-import { providerName } from '@ramu/shared/providers/providers'
-import { SKILL_ACTION_LABELS, skillActions } from '@ramu/shared/skillControls'
-import { readableJobError } from '@ramu/shared/jobErrors'
+import { type IntelligencePreferences, type MemoryPreferences, type LearningSnapshot } from '@ramu/shared/types'
 
 type Props = { value: IntelligencePreferences; onChange: (value: IntelligencePreferences) => void }
 const withCurrent = (values: number[], current: number) => [...new Set([...values, current])].sort((a, b) => a - b)
@@ -206,22 +191,13 @@ function useLearning() {
   return { invoke, snapshot: snapshot?.host === host ? snapshot.value : null, busy, act, viewOnly }
 }
 
-export function LearningSettings({ value, onChange }: Props) {
+/**
+ * How Ramu learns: recall, automatic learning and one way to tidy up now. Reviews waiting for the person are in Inbox →
+ * Learned and under the turn they learned from; the skills it learned are in Customize → Skills.
+ */
+export function LearningSettings({ value, onChange, memory }: Props & { memory: boolean }) {
   const { invoke, snapshot, busy, act, viewOnly } = useLearning()
-  const reviews = snapshot?.jobs.filter((job) => {
-    if (job.status !== 'applied' || !job.proposal || job.error) return true
-    const change = JSON.parse(job.proposal) as { memories: unknown[]; skills: unknown[]; archive: unknown[] }
-    return change.memories.length + change.skills.length + change.archive.length > 0
-  })
-  const [reviewStatus, setReviewStatus] = useState('all')
-  const reviewView = useListView(reviews ?? [], {
-    text: (job) => `${job.sessionTitle ?? ''} ${job.status} ${job.error ?? ''}`,
-    match: (job) => reviewStatus === 'all' || job.status === reviewStatus,
-    size: 10,
-    filterKey: reviewStatus,
-  })
-  const pagedReviews = reviewView.paged
-  const failedReviews = (reviews ?? []).filter((job) => job.status === 'failed')
+  const learning = value.learning !== 'off'
   return (
     <div className="settings-form [&_p]:m-[0_0_8px] [&_>_p.muted]:m-[12px_0] [&_>_p.muted]:leading-[1.55] flex flex-col gap-0 mt-6">
       <SettingsGroupTitle>{t('Learning & skills')}</SettingsGroupTitle>
@@ -242,7 +218,9 @@ export function LearningSettings({ value, onChange }: Props) {
       <SettingsRow setting="intelligence.learning">
         <SettingsLabel
           title={t('Automatic learning')}
-          help={t('After a thread, look for lasting notes and reusable skills. Uses model tokens when idle.')}
+          help={t(
+            'When a thread’s task is finished, save lasting notes and reusable skills. Uses model tokens when idle.',
+          )}
         />
         <Dropdown
           label={t('Automatic learning')}
@@ -255,418 +233,29 @@ export function LearningSettings({ value, onChange }: Props) {
           onChange={(learning) => onChange({ ...value, learning: learning as IntelligencePreferences['learning'] })}
         />
       </SettingsRow>
-      <Button
-        disabled={viewOnly || busy || snapshot?.running || value.learning === 'off'}
-        variant="secondary"
-        className="bg-fill hover:bg-fill-hover self-start mt-3 mb-4"
-        onClick={() => void act(() => invoke('learning.run'))}
-      >
-        {snapshot?.running ? t('Reviewing…') : t('Run learning maintenance')}
-      </Button>
-      <div className="flex flex-col gap-3">
-        <ListToolbar
-          view={reviewView}
-          label={t('Search reviews')}
-          filters={[
-            {
-              key: 'status',
-              label: t('Status'),
-              value: reviewStatus,
-              options: [
-                { value: 'all', label: t('All') },
-                ...[...new Set((reviews ?? []).map((job) => job.status))].map((value) => ({ value, label: t(value) })),
-              ],
-              onChange: setReviewStatus,
-            },
-          ]}
-        />
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <ListCount view={reviewView} />
-          {failedReviews.length > 1 && (
-            <span className="flex items-center gap-1">
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={viewOnly || busy}
-                onClick={() =>
-                  void act(async () => {
-                    for (const job of failedReviews) await invoke('learning.retry', job.id)
-                  })
-                }
-              >
-                {t('Retry {count} failed', { count: failedReviews.length })}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={viewOnly || busy}
-                onClick={() =>
-                  void act(async () => {
-                    for (const job of failedReviews) await invoke('learning.dismiss', job.id)
-                  })
-                }
-              >
-                {t('Dismiss failed')}
-              </Button>
-            </span>
-          )}
-        </div>
-        {reviewView.empty === 'filtered' && (
-          <ListEmpty
-            view={reviewView}
-            none=""
-            filtered="No reviews match your search."
-            onReset={() => setReviewStatus('all')}
-          />
-        )}
-        <SettingsCardList>
-          {pagedReviews.shown.map((job) => (
-            <SettingsCard
-              key={job.id}
-              // The thread it learned from leads; what it would save and when follow, so a list of reviews reads as
-              // threads rather than a column of identical "Learning review" titles.
-              title={job.sessionTitle ?? t('Thread')}
-              meta={[
-                t(job.status),
-                job.proposal ? proposalSummary(job.proposal) : null,
-                new Date(job.createdAt).toLocaleString(),
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-              actions={
-                <>
-                  {job.status === 'pending' && (
-                    <Button
-                      disabled={viewOnly || busy}
-                      variant="default"
-                      size="sm"
-                      className={PRIMARY_ACTION_CLASS}
-                      onClick={() => void act(() => invoke('learning.apply', job.id))}
-                    >
-                      {t('Apply')}
-                    </Button>
-                  )}
-                  {['pending', 'failed'].includes(job.status) && (
-                    <Button
-                      disabled={viewOnly || busy}
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => void act(() => invoke('learning.retry', job.id))}
-                    >
-                      {t('Retry review')}
-                    </Button>
-                  )}
-                  {['queued', 'pending', 'failed'].includes(job.status) && (
-                    <Button
-                      disabled={viewOnly || busy}
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => void act(() => invoke('learning.dismiss', job.id))}
-                    >
-                      {t('Dismiss')}
-                    </Button>
-                  )}
-                </>
-              }
-            >
-              {job.error && (
-                <p role="alert" className="m-0! line-clamp-2 text-caption text-bad" title={job.error}>
-                  {t(readableJobError(job.error))}
-                </p>
-              )}
-              {job.proposal && (
-                <LearningProposal
-                  proposal={job.proposal}
-                  skills={snapshot?.skills ?? []}
-                  showCheckpoint={job.status !== 'applied'}
-                />
-              )}
-            </SettingsCard>
-          ))}
-          {pagedReviews.more}
-        </SettingsCardList>
+      <div className="mt-3 mb-1 flex flex-wrap items-center gap-3">
+        <Button
+          disabled={viewOnly || busy || snapshot?.running || (!learning && !memory)}
+          variant="secondary"
+          className="bg-fill hover:bg-fill-hover"
+          onClick={() =>
+            // Learning first, so memory cleanup also sees the notes the reviews just saved.
+            void act(async () => {
+              if (learning) await invoke('learning.run')
+              if (memory) await invoke('memory.dream')
+            })
+          }
+        >
+          {busy || snapshot?.running ? t('Tidying up…') : t('Tidy up now')}
+        </Button>
+        <span className="text-caption text-muted-foreground">
+          {t('Review finished threads and clean up memory now, instead of waiting for idle time.')}
+        </span>
       </div>
-    </div>
-  )
-}
-
-const SKILL_STATUS_FILTERS = ['active', 'disabled', 'archived', 'all'] as const
-type SkillStatusFilter = (typeof SKILL_STATUS_FILTERS)[number]
-const SKILL_STATUS_LABELS: Record<SkillStatusFilter, string> = {
-  active: 'Active',
-  disabled: 'Disabled',
-  archived: 'Archived',
-  all: 'All',
-}
-
-/** The skills Ramu wrote itself, searchable and a page at a time; installed skills are managed above them. */
-export function ManagedSkills() {
-  const { invoke, snapshot, busy, act, viewOnly } = useLearning()
-  const [status, setStatus] = useState<SkillStatusFilter>('active')
-  const own = (snapshot?.skills ?? []).filter((skill) => !skill.installation)
-  const view = useListView(own, {
-    text: (skill) => `${skill.name} ${skill.description}`,
-    match: (skill) => status === 'all' || skill.status === status,
-    size: 10,
-    filterKey: status,
-  })
-  const { setQuery } = view
-  const [history, setHistory] = useState<ManagedSkill[]>([])
-  const [selected, setSelected] = useState<string | null>(null)
-  const [focusId, setFocusId] = useState<string | null>(null)
-  // A summary item that was clicked: show just that skill, then scroll to it and flash it.
-  useEffect(() => {
-    const take = () => {
-      const item = takeLibraryFocus('skill')
-      if (!item) return
-      setQuery(item.title)
-      setStatus('all')
-      setFocusId(item.id)
-    }
-    take()
-    window.addEventListener('ramu:library-focus', take)
-    return () => window.removeEventListener('ramu:library-focus', take)
-  }, [setQuery])
-  useEffect(() => {
-    if (!focusId || !snapshot) return
-    const timer = window.setTimeout(() => {
-      const card = document.getElementById(`skill-${focusId}`)
-      card?.scrollIntoView({ block: 'center', behavior: 'smooth' })
-      card?.classList.add('flash')
-      window.setTimeout(() => card?.classList.remove('flash'), 1400)
-      setFocusId(null)
-    }, 150)
-    return () => window.clearTimeout(timer)
-  }, [focusId, snapshot])
-  const { paged } = view
-  const [projects, setProjects] = useState<Project[]>([])
-  useEffect(() => {
-    void invoke('projects.list').then(setProjects, () => {})
-  }, [invoke])
-  return (
-    <div className="settings-form flex flex-col gap-2">
-      <SettingsSectionHead
-        title={t('Ramu’s skills')}
-        help={t('Learned from finished threads or written by you, for every provider. Each says where it applies.')}
-      />
-      {viewOnly && <p role="status">{t(VIEW_ONLY_WRITE_NOTICE)}</p>}
-      {/* Filters over an empty list only add noise; they appear once Ramu has a skill. */}
-      {own.length > 0 && (
-        <ListToolbar
-          view={view}
-          label={t('Search skills')}
-          filters={[
-            {
-              key: 'status',
-              label: t('Status'),
-              value: status,
-              options: SKILL_STATUS_FILTERS.map((value) => ({ value, label: t(SKILL_STATUS_LABELS[value]) })),
-              onChange: (next) => setStatus(next as SkillStatusFilter),
-            },
-          ]}
-        />
-      )}
-      <ListCount view={view} />
-      {snapshot &&
-        (own.length === 0 ? (
-          <SettingsEmpty>
-            {t('No skills yet. Ramu adds them here when it learns a repeatable procedure.')}
-          </SettingsEmpty>
-        ) : (
-          <ListEmpty
-            view={view}
-            none="No skills yet. Ramu adds them here when it learns a repeatable procedure."
-            filtered="No skills match your search."
-            onReset={() => setStatus('active')}
-          />
-        ))}
-      <SettingsCardList>
-        {paged.shown.map((skill) => (
-          <SettingsCard
-            key={skill.id}
-            id={`skill-${skill.id}`}
-            className="[&.flash]:[animation:settings-flash_1.4s_ease-out]"
-            title={skill.name}
-            badges={
-              <>
-                <Badge variant="outline" title={t('Where agents can load it')}>
-                  {skill.projectId
-                    ? (projects.find((project) => project.id === skill.projectId)?.name ?? t('One project'))
-                    : t('All projects')}
-                </Badge>
-                {skill.providers?.length ? (
-                  <Badge variant="outline">
-                    {skill.providers.map((provider) => providerName(provider)).join(', ')}
-                  </Badge>
-                ) : null}
-                {skill.status !== 'active' && <Badge variant="secondary">{t(skill.status)}</Badge>}
-                {skill.pinned && <Badge variant="outline">{t('Pinned')}</Badge>}
-              </>
-            }
-            meta={[
-              skill.description,
-              skill.changedBy === 'user' && !skill.sourceSessionId ? t('Written by you') : t('Learned by Ramu'),
-              t('Read {0} times', { 0: skill.useCount }),
-            ]
-              .filter(Boolean)
-              .join(' · ')}
-            actions={
-              <>
-                {skillActions(skill).map((action) => (
-                  <Button
-                    key={action}
-                    disabled={viewOnly || busy}
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => void act(() => invoke('learning.control', skill.id, action))}
-                  >
-                    {t(SKILL_ACTION_LABELS[action])}
-                  </Button>
-                ))}
-                <Button
-                  disabled={viewOnly || busy}
-                  variant="ghost"
-                  size="sm"
-                  onClick={() =>
-                    void act(async () => {
-                      setSelected(skill.id)
-                      setHistory(await invoke('learning.history', skill.id))
-                    })
-                  }
-                >
-                  {t('History')}
-                </Button>
-              </>
-            }
-          >
-            <details className="text-caption">
-              <summary className="cursor-pointer text-muted-foreground hover:text-foreground">{t('Procedure')}</summary>
-              <pre className="whitespace-pre-wrap text-caption text-muted-foreground m-0 mt-2">{skill.content}</pre>
-            </details>
-            {selected === skill.id &&
-              history.map((revision) => (
-                <details key={revision.revision}>
-                  <summary>{t('Revision {0}', { 0: revision.revision })}</summary>
-                  <pre className="whitespace-pre-wrap text-caption">{revision.content}</pre>
-                  <Button
-                    disabled={viewOnly || busy || revision.revision === skill.revision}
-                    variant="secondary"
-                    className="bg-fill hover:bg-fill-hover"
-                    onClick={() =>
-                      void act(async () => {
-                        await invoke('learning.revert', skill.id, revision.revision)
-                        setHistory(await invoke('learning.history', skill.id))
-                      })
-                    }
-                  >
-                    {t('Restore revision')}
-                  </Button>
-                </details>
-              ))}
-          </SettingsCard>
-        ))}
-        {paged.more}
-      </SettingsCardList>
       <MovedToCustomize
         section="skills"
-        text={t('Skills you write or install, and the skills.sh directory, are in Customize → Skills.')}
+        text={t('Skills Ramu learned, with their history, are in Customize → Skills.')}
       />
     </div>
   )
-}
-
-function LearningProposal({
-  proposal,
-  skills,
-  showCheckpoint,
-}: {
-  proposal: string
-  skills: ManagedSkill[]
-  showCheckpoint: boolean
-}) {
-  const change = JSON.parse(proposal) as Proposal
-  return (
-    <details className="text-caption">
-      <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-        {t('Review proposed changes')}
-      </summary>
-      <div className="flex flex-col gap-3 max-h-96 overflow-auto py-2">
-        {showCheckpoint && change.checkpoint && (
-          <section>
-            <strong>{t('Session checkpoint')}</strong>
-            <ProposalText text={change.checkpoint} />
-          </section>
-        )}
-        {!showCheckpoint && change.checkpoint && (
-          <p className="text-muted-foreground">{t('Saved checkpoints are available in their thread.')}</p>
-        )}
-        {change.memories.map((note, index) => (
-          <section key={`memory-${index}`}>
-            <strong>
-              {t('Memory')}: {note.title}
-            </strong>
-            <ProposalText text={note.content} />
-            <p className="muted text-muted-foreground text-caption">{note.reason}</p>
-          </section>
-        ))}
-        {change.skills.map((skill, index) => (
-          <section key={`skill-${index}`}>
-            <strong>
-              {t('Procedure')}: {skill.name}
-            </strong>
-            <div className="grid grid-cols-2 gap-2 text-caption">
-              <div>
-                <strong>{t('Earlier revision')}</strong>
-                <pre className="whitespace-pre-wrap">
-                  {skills.find((entry) => entry.id === skill.id)?.content ?? t('No earlier text')}
-                </pre>
-              </div>
-              <div>
-                <strong>{t('Proposed revision')}</strong>
-                <pre className="whitespace-pre-wrap">{skill.content}</pre>
-              </div>
-            </div>
-            <p className="muted text-muted-foreground text-caption">{skill.reason}</p>
-          </section>
-        ))}
-        {change.archive.map((item) => (
-          <section key={item.id}>
-            <strong>
-              {t('Archive')}: {skills.find((entry) => entry.id === item.id)?.name ?? item.id} →{' '}
-              {skills.find((entry) => entry.id === item.absorbedInto)?.name ?? item.absorbedInto}
-            </strong>
-            <p className="text-caption">{item.reason}</p>
-          </section>
-        ))}
-      </div>
-    </details>
-  )
-}
-
-type Proposal = {
-  checkpoint: string
-  memories: { title: string; content: string; reason: string }[]
-  skills: { id?: string; name: string; content: string; reason: string }[]
-  archive: { id: string; absorbedInto: string; reason: string }[]
-}
-
-/** What a review would save, in a few words: "Checkpoint · 2 memories · 1 procedure". */
-function proposalSummary(proposal: string): string | null {
-  try {
-    const change = JSON.parse(proposal) as Proposal
-    return [
-      change.checkpoint ? t('Checkpoint') : '',
-      change.memories.length ? t('{0} memories', { 0: change.memories.length }) : '',
-      change.skills.length ? t('{0} procedures', { 0: change.skills.length }) : '',
-    ]
-      .filter(Boolean)
-      .join(' · ')
-  } catch {
-    return null
-  }
-}
-
-/** Learned text is Markdown the model wrote; it reads as formatted text, not as raw headings and backticks. */
-function ProposalText({ text }: { text: string }) {
-  return <MarkdownText density="compact">{text}</MarkdownText>
 }

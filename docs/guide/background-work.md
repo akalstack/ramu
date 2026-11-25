@@ -53,7 +53,7 @@ On the phone, webhook schedules can be renamed, edited, paused and run, and a we
 
 ## Recaps
 
-[Recaps](inbox.md#recaps-learned-and-completed) summarize what threads did and what is left. Inbox's Brief lists items that need a decision, and **Inbox → Recaps** lists the rest. Recaps use model tokens only when something changed. A phone can get one daily "Your daily recap is ready" notification.
+[Recaps](inbox.md#learned-and-done) summarize what threads did and what is left. Inbox's Brief lists items that need a decision, and **Inbox → Done** shows the rest on each finished thread's row. Recaps use model tokens only when something changed. A phone can get one daily "Your daily recap is ready" notification.
 
 ## Reviews and undo
 

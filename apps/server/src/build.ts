@@ -5,12 +5,14 @@ import { createHash } from 'node:crypto'
 /** Identifies the daemon code on disk, so a service left running from an older build can be told apart from the current one. */
 export function runtimeBuild(daemonPath: string): string {
   try {
+    // An npm global install starts the CLI through a link in its bin folder, which holds none of its code.
+    const dir = dirname(realpathSync(daemonPath))
     const hash = createHash('sha256')
     // Include shared Vite chunks as well as the entry point; timestamps aren't a version.
-    for (const name of readdirSync(dirname(daemonPath))
+    for (const name of readdirSync(dir)
       .filter((name) => name.endsWith('.js'))
       .sort())
-      hash.update(name).update(readFileSync(join(dirname(daemonPath), name)))
+      hash.update(name).update(readFileSync(join(dir, name)))
     return hash.digest('hex').slice(0, 20)
   } catch {
     return 'unknown'

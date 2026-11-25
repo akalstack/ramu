@@ -126,9 +126,12 @@ sudo apt update && sudo apt install ramu
 # Fedora and RHEL
 sudo curl -fsSLo /etc/yum.repos.d/ramu.repo https://getramu.dev/ramu.repo
 sudo dnf install ramu
+
+# Arch Linux (AUR)
+yay -S ramu-bin
 ```
 
-Ramu is in **alpha**. macOS builds are signed, notarized and update themselves. On Linux without a package manager, updates install by hand from GitHub Releases. The AppImage needs FUSE 2: `sudo apt install libfuse2t64` on Ubuntu 24.04+, `libfuse2` on 22.04.
+Ramu is in **beta**. macOS builds are signed, notarized and update themselves. On Linux without a package manager, updates install by hand from GitHub Releases. The AppImage needs FUSE 2: `sudo apt install libfuse2t64` on Ubuntu 24.04+, `libfuse2` on 22.04, `sudo pacman -S fuse2` on Arch.
 
 ### Run the server without the app
 

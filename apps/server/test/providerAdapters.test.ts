@@ -95,9 +95,22 @@ describe('provider adapter registry', () => {
       command: '/bin/tool',
       args: ['upgrade', '--major'],
     })
+    // A Codex installed outside Ramu updates itself; Ramu's own npm copy updates with npm.
     expect(providerAdapter('codex').updatePlan(base)).toEqual({
+      command: '/bin/tool',
+      args: ['update'],
+      pathDirs: ['/bin', '.'],
+    })
+    expect(
+      providerAdapter('codex').updatePlan({
+        ...base,
+        binary: '/runtime/codex/node_modules/.bin/codex',
+        findExecutable: (command: string) => (command === 'npm' || command.startsWith('/') ? command : null),
+      }),
+    ).toEqual({
       command: 'npm',
       args: ['install', '--prefix', '/runtime/codex', '--no-audit', '--no-fund', '@openai/codex@latest'],
+      pathDirs: ['.'],
     })
     expect(() => providerAdapter('cursor').updatePlan({ ...base, findExecutable: () => null })).toThrow(
       'Select an installed CLI before updating it.',

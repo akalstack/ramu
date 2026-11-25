@@ -19,6 +19,7 @@ import { turnParts } from '../lib/turns'
 import { groupToolThinking, isLiveToolGroup, type ToolEntry } from '../lib/toolThinking'
 import { Fragment, useLayoutEffect, useRef } from 'react'
 import { reducedMotion } from '../../../workspace/panelMotion'
+import { TurnLearning } from '../../../learning/TurnLearning'
 
 type TurnReview = React.ComponentProps<typeof TurnChanges>['review']
 
@@ -279,6 +280,14 @@ export function TranscriptTurn({
       {reviews?.map((review) => (
         <TurnChanges key={review.id} review={review} />
       ))}
+      {turn.ended && (
+        <TurnLearning
+          sessionId={ctx.sessionId}
+          items={turn.items}
+          sequences={ctx.eventSequences}
+          readOnly={ctx.readOnly}
+        />
+      )}
       {completedGoals?.map((done) => (
         <GoalDone key={done.id} goal={done} />
       ))}

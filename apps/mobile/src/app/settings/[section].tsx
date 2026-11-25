@@ -39,6 +39,7 @@ import { useAccountLogins } from '../../runtime/useAccountLogins'
 import { Screen, useScrolledUnderBar } from '../../components/Screen'
 import { SettingScroll } from '../../components/SettingHighlight'
 import { PlanUsageReading, PlanUsageSummary } from '../../components/PlanUsage'
+import { useUsageReveal } from '../../runtime/usageReveal'
 import { Card, ConnectionDot, Divider, Row, SectionLabel, Segmented, T } from '../../components/ui'
 import { SettingsHeader } from '../../components/SettingsChrome'
 import { RulesSettings } from '../../components/RulesSettings'
@@ -52,7 +53,6 @@ import { ThemeLibrary } from '../../components/ThemeLibrary'
 import { Hint, HostGroups, RowLabel, ToggleRow } from '../../components/SettingRows'
 import { PermissionNeeded } from '../../components/DevicePermissions'
 import { SavedApprovals } from '../../components/SavedApprovals'
-import { LearningReviews } from '../../components/LearningReviews'
 import { ManagedSkills } from '../../components/ManagedSkills'
 import { BrowserDefaultProfile } from '../../components/BrowserDefaultProfile'
 import { ScopeControl } from '../../components/ScopeControl'
@@ -412,6 +412,7 @@ function Usage({ computer }: { computer: string }) {
   const say = useSay()
   const readings = usage[computer] ?? []
   const logins = useAccountLogins([computer], readings.length > 0)[computer]
+  const reveal = useUsageReveal()
   return (
     <>
       <SectionLabel>{say('Plan usage')}</SectionLabel>
@@ -429,6 +430,7 @@ function Usage({ computer }: { computer: string }) {
                   r.accountId ?? 'default',
                   logins?.[r.provider]?.[r.accountId ?? 'default'],
                   say,
+                  reveal,
                 )}
               />
             </View>
@@ -518,9 +520,6 @@ export default function SettingsSectionPage() {
           <HostGroups section={id} host={host} name={name} locked={locked} />
         ) : null}
         {id === 'models' ? <AbilitySummary key={`AbilitySummary:${selected}`} hostId={selected} /> : null}
-        {id === 'memory' ? (
-          <LearningReviews key={`LearningReviews:${selected}`} hostId={selected} locked={locked} />
-        ) : null}
         {id === 'memory' ? <MemoryList key={`MemoryList:${selected}`} hostId={selected} /> : null}
         {id === 'browser' ? (
           <BrowserDefaultProfile key={`BrowserDefaultProfile:${selected}`} host={host} locked={locked} />

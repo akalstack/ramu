@@ -4,7 +4,6 @@ import { helperActive } from '@ramu/shared/chat/helperPresentation'
 import { mobileThreadActivity } from '../runtime/threadActivity'
 import { goalActivityLabel, type ActivityKind } from '@ramu/shared/chat/threadActivity'
 import type { Chat } from '../runtime/types'
-import type { QueuedMessage } from '@ramu/shared/types'
 import { useStore } from '../runtime/store'
 import { useSay } from '../i18n'
 import { space } from '../theme'
@@ -27,7 +26,7 @@ const KIND_ICON: Record<ActivityKind | 'more', Icon> = {
 }
 import { Helpers } from './Helpers'
 import { InputRequests } from './InputRequests'
-import { GoalQueueTray } from './Composer'
+import { GoalQueueTray, type QueuedEdit } from './Composer'
 import { moveQueued } from '../runtime/queueOrder'
 import { showError } from '../runtime/toast'
 import { LimitTray } from './LimitTray'
@@ -41,7 +40,7 @@ export function ThreadActivity({
 }: {
   chat: Chat
   /** Takes a queued message back into the composer to change it. */
-  onEditQueued?: (message: QueuedMessage) => void
+  onEditQueued?: QueuedEdit
   children?: ReactNode
   /** The screen shows the turn's status at the end of the transcript, as the desktop does, so the row leaves it out. */
   inlineStatus?: boolean
@@ -244,14 +243,7 @@ export function ThreadActivity({
             onRemove={online ? (message) => store.removeQueued(chat.id, message) : undefined}
             onSendNow={online ? (message) => store.sendQueuedNow(chat.id, message) : undefined}
             onSteer={online ? (message) => store.steerQueued(chat.id, message) : undefined}
-            onEdit={
-              online && onEditQueued
-                ? (message) => {
-                    setOpened(null)
-                    onEditQueued(message)
-                  }
-                : undefined
-            }
+            onEdit={online ? onEditQueued : undefined}
             onMove={
               online && chat.sessionId
                 ? (id, delta) => {

@@ -126,7 +126,7 @@ export class PullRequestIndex {
     const links = this.links()[task.id]
     if (!links?.length) return null
     const chosen = links.findLast((entry) => entry.snapshot.state === 'open') ?? links.at(-1)!
-    const { draftsReady, agentWorking } = this.localState(chosen.url, [task.id])
+    const { draftsReady, agentWorking, prepared } = this.localState(chosen.url, [task.id])
     return {
       repoId: chosen.repoId,
       number: chosen.number,
@@ -135,21 +135,30 @@ export class PullRequestIndex {
       state: chosen.snapshot.state,
       draft: chosen.snapshot.draft,
       stage: pullRequestStage(chosen.snapshot, { draftsReady, agentWorking }),
+      ...(draftsReady && prepared ? { prepared } : {}),
     }
   }
 
   /** What Ramu itself knows about a pull request: replies drafted for it, or an agent of these threads working on it. */
-  private localState(url: string, taskIds: string[]): { draftsReady: boolean; agentWorking: boolean } {
+  private localState(
+    url: string,
+    taskIds: string[],
+  ): { draftsReady: boolean; agentWorking: boolean; prepared?: TaskPullRequest['prepared'] } {
     const batch = this.drafts().find((entry) => entry.url === url)
     if (!batch) return { draftsReady: false, agentWorking: false }
-    const drafted =
+    const waiting =
       batch.kind === 'review'
-        ? !!batch.body || batch.comments.length > 0
-        : batch.drafts.some((draft) => draft.outcome !== 'skipped' && !draft.postedId)
+        ? 0
+        : batch.drafts.filter((draft) => draft.outcome !== 'skipped' && !draft.postedId).length
+    const drafted = batch.kind === 'review' ? !!batch.body || batch.comments.length > 0 : waiting > 0
     const working = taskIds.some((taskId) =>
       this.agents.list(taskId).some((session) => session.id === batch.sessionId && session.state === 'running'),
     )
-    return { draftsReady: drafted && !working, agentWorking: working }
+    return {
+      draftsReady: drafted && !working,
+      agentWorking: working,
+      prepared: batch.kind === 'review' ? { kind: 'review' } : { kind: 'replies', count: waiting },
+    }
   }
 
   /**
@@ -185,8 +194,8 @@ export class PullRequestIndex {
         for (const pr of list.pullRequests) {
           const linked = this.threadsFor(pr.url).filter((taskId) => titles.has(taskId))
           if (linked.length) threads[pr.url] = linked.map((taskId) => ({ taskId, title: titles.get(taskId)! }))
-          const state = this.localState(pr.url, linked)
-          if (state.draftsReady || state.agentWorking) local[pr.url] = state
+          const { draftsReady, agentWorking } = this.localState(pr.url, linked)
+          if (draftsReady || agentWorking) local[pr.url] = { draftsReady, agentWorking }
         }
         results[position] = { ...base, ...list, threads, local }
       } catch (error) {

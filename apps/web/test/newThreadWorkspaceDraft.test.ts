@@ -50,7 +50,11 @@ vi.mock('../src/i18n', () => ({
 vi.mock('../src/settings/AppSettings', () => ({
   useAppSettings: () => ({ preferences: { autoProjectSelection: true } }),
 }))
-vi.mock('../src/models/ModelSets', () => ({ useModelSets: () => ({ initialSettings: DEFAULT_AGENT_SETTINGS }) }))
+vi.mock('../src/models/ModelSets', () => ({
+  useModelSets: () => ({ initialSettings: DEFAULT_AGENT_SETTINGS, catalogs: [] }),
+  settingsNames: () => ({ model: '', effort: '' }),
+}))
+vi.mock('../src/settings/Usage', () => ({ useUsage: () => [] }))
 vi.mock('../src/workspace/workspace', () => ({
   useHostRuntime: () => ({ on: () => () => {} }),
   useWorkspacesOf: () => [],
@@ -182,7 +186,9 @@ vi.mock('@tanstack/react-query', () => ({
             branchInstructions: '',
             worktreeUnavailable: null,
           }
-        : [],
+        : queryKey[0] === 'start-route'
+          ? null
+          : [],
   }),
 }))
 import { NewThread } from '../src/NewThread'

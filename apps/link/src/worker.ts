@@ -1,10 +1,13 @@
 // ramu-link.akalstack.com: the Worker in front of the one SlotPool Durable Object. It rate-limits link requests per session,
 // caches the public pool for a minute, and runs the five-minute sweep. Hosts' own traffic never passes through here: it
-// goes through each host's Cloudflare Tunnel.
+// goes through each host's Cloudflare Tunnel. It also carries live pull request events from the Ramu GitHub App to the
+// hosts that may read each repository (PullRequestEvents).
 import { cloudflare } from './cloudflare'
 import { createRelay } from './relay'
 import { sqlStore } from './sqlStore'
 import { bearerOf } from './validate'
+import { createPullRequestEvents, type Attachment, type EventSocket } from './pullRequestEvents'
+import { EVENTS_PING, EVENTS_PONG, EVENTS_SOCKET_PATH, GITHUB_APP_EVENTS_PATH } from '@ramu/shared/pullRequestEvents'
 
 export interface Env {
   POOL: DurableObjectNamespace
@@ -16,6 +19,9 @@ export interface Env {
   CF_API_TOKEN: string
   CF_ACCOUNT_ID: string
   CF_ZONE_ID: string
+  EVENTS: DurableObjectNamespace
+  /** The Ramu GitHub App's webhook secret. */
+  GITHUB_APP_WEBHOOK_SECRET: string
 }
 
 /** The path the Worker uses to start a sweep; never forwarded from a public request. */
@@ -59,9 +65,120 @@ export class SlotPool {
   }
 }
 
+/** Whether a GitHub token can read a repository: GitHub answers it with the repository, under the same name. */
+async function canRead(repo: string, token: string): Promise<boolean> {
+  const response = await fetch(`https://api.github.com/repos/${repo}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'ramu-link',
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+  })
+  if (!response.ok) return false
+  const found = (await response.json()) as { full_name?: string }
+  return found.full_name?.toLowerCase() === repo
+}
+
+/**
+ * Every host's event socket and the GitHub App's deliveries meet in this one object. Sockets hibernate between events,
+ * and pings are answered without waking it; which repositories have the App is kept in its own SQLite.
+ */
+export class PullRequestEvents {
+  private readonly events: ReturnType<typeof createPullRequestEvents>
+
+  constructor(
+    private readonly ctx: DurableObjectState,
+    env: Env,
+  ) {
+    const sql = ctx.storage.sql
+    sql.exec('CREATE TABLE IF NOT EXISTS installed (repo TEXT PRIMARY KEY, installation INTEGER NOT NULL)')
+    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(EVENTS_PING, EVENTS_PONG))
+    this.events = createPullRequestEvents({
+      sockets: () => ctx.getWebSockets().map(wrap),
+      installed: {
+        has: (repo) => sql.exec('SELECT 1 FROM installed WHERE repo = ?', repo).toArray().length > 0,
+        add: (installation, repos) => {
+          for (const repo of repos)
+            sql.exec(
+              'INSERT INTO installed (repo, installation) VALUES (?, ?) ON CONFLICT(repo) DO UPDATE SET installation = excluded.installation',
+              repo,
+              installation,
+            )
+        },
+        remove: (repos) => {
+          for (const repo of repos) sql.exec('DELETE FROM installed WHERE repo = ?', repo)
+        },
+        dropInstallation: (installation) => {
+          const repos = sql
+            .exec<{ repo: string }>('SELECT repo FROM installed WHERE installation = ?', installation)
+            .toArray()
+            .map((row) => row.repo)
+          sql.exec('DELETE FROM installed WHERE installation = ?', installation)
+          return repos
+        },
+      },
+      account: (bearer) => accountUser(env, bearer),
+      canRead,
+      secret: env.GITHUB_APP_WEBHOOK_SECRET ?? '',
+    })
+  }
+
+  async fetch(request: Request): Promise<Response> {
+    const path = new URL(request.url).pathname
+    if (path === EVENTS_SOCKET_PATH) {
+      const pair = new WebSocketPair()
+      this.ctx.acceptWebSocket(pair[1])
+      return new Response(null, { status: 101, webSocket: pair[0] })
+    }
+    if (path === GITHUB_APP_EVENTS_PATH) {
+      const status = await this.events.github({
+        event: request.headers.get('X-GitHub-Event'),
+        signature: request.headers.get('X-Hub-Signature-256'),
+        body: await request.arrayBuffer(),
+      })
+      return new Response(null, { status })
+    }
+    return new Response(null, { status: 404 })
+  }
+
+  async webSocketMessage(socket: WebSocket, message: string | ArrayBuffer): Promise<void> {
+    if (typeof message === 'string') await this.events.message(wrap(socket), message)
+  }
+
+  webSocketClose(socket: WebSocket, code: number): void {
+    // A socket may only be closed with 1000 or an application code; the codes that describe a lost connection
+    // (1005, 1006, 1015) are reported, never sent.
+    socket.close(code === 1000 || (code >= 3000 && code <= 4999) ? code : 1000, 'closed')
+  }
+}
+
+const wrap = (socket: WebSocket): EventSocket => ({
+  send: (message) => socket.send(message),
+  close: (code, reason) => socket.close(code, reason),
+  attachment: () => (socket.deserializeAttachment() as Attachment | null) ?? null,
+  attach: (value) => socket.serializeAttachment(value),
+})
+
+const events = (env: Env) => env.EVENTS.get(env.EVENTS.idFromName('events'))
+/** GitHub's deliveries are at most 25 MB; anything near that is not one this relay needs to read. */
+const MAX_GITHUB_BODY = 5 * 1024 * 1024
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
+    if (url.pathname === GITHUB_APP_EVENTS_PATH && request.method === 'POST') {
+      if (Number(request.headers.get('Content-Length') ?? 0) > MAX_GITHUB_BODY)
+        return new Response(null, { status: 413 })
+      return events(env).fetch(request)
+    }
+    if (url.pathname === EVENTS_SOCKET_PATH) {
+      if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') return new Response(null, { status: 426 })
+      // A socket is signed in by its first message; connecting at all is limited per address.
+      const { success } = await env.LOOKUPS.limit({ key: request.headers.get('CF-Connecting-IP') ?? 'anonymous' })
+      if (!success) return new Response(null, { status: 429 })
+      return events(env).fetch(request)
+    }
     if (!url.pathname.startsWith('/v1/')) return new Response('Ramu Link', { status: 404 })
     if (url.pathname === '/v1/pool' && request.method === 'GET') {
       const cached = await caches.default.match(request)

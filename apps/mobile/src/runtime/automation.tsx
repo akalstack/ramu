@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { AppState } from 'react-native'
 import type {
   AgentSettings,
+  LearningSnapshot,
   LibrarySummary,
   RecapItem,
   RecapSnapshot,
@@ -19,7 +20,7 @@ import { looseInvoke } from './settingsModel'
 import { actOnHost, applyRecapAction, RECAP_TOAST, type RecapAction } from './recapActions'
 import { showToast } from './toast'
 
-// What the computers keep beyond threads: recaps, what Ramu learned, and schedules. Every online computer is read
+// What the computers keep beyond threads: recaps, what Ramu learned (summaries and reviews), and schedules. Every online computer is read
 // at once (Inbox shows what needs you on all of them) and refreshed when the computer says automation changed.
 
 const FAILURES_KEPT = 300
@@ -28,6 +29,8 @@ const RESOURCES_MS = 60_000
 export interface Automation {
   recaps: RecapSnapshot | null
   summaries: SummariesSnapshot | null
+  /** Learning reviews and skills; null where the host refuses them, as it does a view-only device. */
+  learning: LearningSnapshot | null
   schedules: Schedule[]
   runs: ScheduleRun[]
   resources: HostResources | null
@@ -37,6 +40,7 @@ export interface Automation {
 const empty: Automation = {
   recaps: null,
   summaries: null,
+  learning: null,
   schedules: [],
   runs: [],
   resources: null,
@@ -61,6 +65,8 @@ interface AutomationStore {
   actRecap(computerId: string, item: RecapItem, action: RecapAction, until?: number): Promise<void>
   readSummary(computerId: string, id: string): Promise<LibrarySummary>
   dismissSummary(computerId: string, id: string): Promise<void>
+  /** Apply, dismiss or undo a learning review; resolves with how many items Undo left because they changed since. */
+  actLearning(computerId: string, action: 'apply' | 'dismiss' | 'undo', jobId: string): Promise<number>
   runSummaries(computerId: string): Promise<void>
   discussSummary(computerId: string, id: string, text: string, settings?: AgentSettings): Promise<{ taskId: string }>
   saveSchedule(computerId: string, input: ScheduleInput, id?: string): Promise<Schedule>
@@ -114,20 +120,25 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
   const recapsOn = (id: string) => store.appPreferences[id]?.recapsEnabled !== false
 
   const load = useCallback(
-    async (id: string, what: ('recaps' | 'summaries' | 'schedules')[] = ['recaps', 'summaries', 'schedules']) => {
+    async (
+      id: string,
+      what: ('recaps' | 'summaries' | 'learning' | 'schedules')[] = ['recaps', 'summaries', 'learning', 'schedules'],
+    ) => {
       const call = storeRef.current.invoke
       const on = storeRef.current.appPreferences[id]?.recapsEnabled !== false
       try {
-        const [recaps, summaries, schedules, runs] = await Promise.all([
+        const [recaps, summaries, learning, schedules, runs] = await Promise.all([
           what.includes('recaps') && on ? call(id, 'recaps.get') : undefined,
           // Older computers do not have summaries; that is not an error for the rest.
           what.includes('summaries') ? call(id, 'summaries.get').catch(() => undefined) : undefined,
+          what.includes('learning') ? call(id, 'learning.get').catch(() => null) : undefined,
           what.includes('schedules') ? call(id, 'schedules.list') : undefined,
           what.includes('schedules') ? call(id, 'schedules.runs') : undefined,
         ])
         patch(id, {
           ...(recaps ? { recaps } : {}),
           ...(summaries ? { summaries } : {}),
+          ...(learning !== undefined ? { learning } : {}),
           ...(schedules ? { schedules } : {}),
           ...(runs ? { runs } : {}),
           loaded: true,
@@ -165,6 +176,7 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
       const off = storeRef.current.subscribe(id, (...[channel]) => {
         if (channel === 'automation:changed') soon(['recaps', 'schedules'])
         else if (channel === 'summaries:changed') soon(['summaries'])
+        else if (channel === 'memory:changed') soon(['learning'])
       })
       return () => {
         clearTimeout(timer)
@@ -207,6 +219,9 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
         ),
         summaries: store.computers.flatMap((c) =>
           (state[c.id]?.summaries?.summaries ?? []).map((summary) => ({ computerId: c.id, summary })),
+        ),
+        reviews: store.computers.flatMap((c) =>
+          (state[c.id]?.learning?.jobs ?? []).map((job) => ({ computerId: c.id, job })),
         ),
         recapsEnabled: recapsOn,
         failureSeen,
@@ -261,6 +276,17 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
       dismissSummary: async (id, summaryId) => {
         await call(id, (invoke) => invoke(id, 'summaries.dismiss', summaryId))
         await load(id, ['summaries'])
+      },
+      actLearning: async (id, action, jobId) => {
+        try {
+          if (action === 'undo') return (await call(id, (invoke) => invoke(id, 'learning.undo', jobId))).kept
+          await call(id, (invoke) =>
+            action === 'apply' ? invoke(id, 'learning.apply', jobId) : invoke(id, 'learning.dismiss', jobId),
+          )
+          return 0
+        } finally {
+          void load(id, ['learning'])
+        }
       },
       runSummaries: async (id) => {
         await call(id, (invoke) => invoke(id, 'summaries.run'))

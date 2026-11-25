@@ -2,7 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { latestProviderRelease, newerVersion, parseProviderVersion, ProviderService } from '../src/providers/providers'
+import {
+  latestProviderRelease,
+  newerVersion,
+  parseProviderVersion,
+  ProviderService,
+  updateFailure,
+} from '../src/providers/providers'
 import {
   configureProviderAccounts,
   configureProviderBinaries,
@@ -378,15 +384,61 @@ describe('waiting a day before an update is offered', () => {
     await expect(service.update('antigravity')).rejects.toThrow('less than a day ago')
     vi.unstubAllEnvs()
   })
-  it('pins Codex to the exact release that has waited', () => {
-    const plan = providerAdapter('codex').updatePlan({
+  it("pins Ramu's own Codex copy to the exact release that has waited, with node on the updater's PATH", () => {
+    const codex = providerAdapter('codex')
+    const plan = codex.updatePlan({
       config: {},
-      binary: 'codex',
-      findExecutable: (command) => `/usr/bin/${command}`,
+      binary: '/tmp/runtime/node_modules/.bin/codex',
+      findExecutable: (command) => (command.startsWith('/') ? command : `/fnm/default/bin/${command}`),
       runtimeHome: '/tmp/runtime',
       installRuntime: async () => {},
       version: '1.3.0',
     })
+    expect(plan).toMatchObject({ command: '/fnm/default/bin/npm', pathDirs: ['/fnm/default/bin'] })
     expect('args' in plan && plan.args.at(-1)).toBe('@openai/codex@1.3.0')
+    expect(
+      typeof codex.pinsVersion === 'function' &&
+        codex.pinsVersion('/tmp/runtime/node_modules/.bin/codex', '/tmp/runtime'),
+    ).toBe(true)
   })
+  it('lets a Codex you installed update itself, with or without npm', () => {
+    const codex = providerAdapter('codex')
+    const plan = codex.updatePlan({
+      config: {},
+      binary: 'codex',
+      findExecutable: (command) => (command === 'codex' ? '/Users/me/.local/bin/codex' : null),
+      runtimeHome: '/tmp/runtime',
+      installRuntime: async () => {},
+      version: '1.3.0',
+    })
+    expect(plan).toEqual({
+      command: '/Users/me/.local/bin/codex',
+      args: ['update'],
+      pathDirs: ['/Users/me/.local/bin'],
+    })
+    // `codex update` takes only the newest release, so Ramu waits out the day before offering it.
+    expect(
+      typeof codex.pinsVersion === 'function' && codex.pinsVersion('/Users/me/.local/bin/codex', '/tmp/runtime'),
+    ).toBe(false)
+  })
+  it("says why Ramu's own Codex copy cannot update without npm", () => {
+    expect(() =>
+      providerAdapter('codex').updatePlan({
+        config: {},
+        binary: '/tmp/runtime/node_modules/.bin/codex',
+        findExecutable: (command) => (command.startsWith('/') ? command : null),
+        runtimeHome: '/tmp/runtime',
+        installRuntime: async () => {},
+      }),
+    ).toThrow('npm was not found')
+  })
+})
+
+it("reports an updater's own reason for failing", () => {
+  expect(updateFailure('/usr/bin/npm', { code: 'ENOENT' }, '', '')).toBe('CLI update failed: npm was not found.')
+  expect(
+    updateFailure('npm', { code: 1 }, '\u001b[31mnpm error\u001b[0m code EACCES\nnpm error permission denied\n', ''),
+  ).toBe('CLI update failed: npm error code EACCES npm error permission denied')
+  expect(updateFailure('codex', { killed: true }, '', '')).toContain('longer than 5 minutes')
+  expect(updateFailure('codex', { code: 1 }, '', '')).toContain('Check permissions')
 })

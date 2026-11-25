@@ -126,11 +126,20 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
     runtimeVersion(process.argv[1] ?? ''),
     () => ({ ...DEFAULT_APP_PREFERENCES, ...storedPreferences() }),
     (state) => host.send('updates:changed', state),
+    // Until a desktop app reports in, only a service a packaged macOS app started is expected to have one that installs.
+    { installs: process.platform === 'darwin' && !!process.env.RAMU_DESKTOP_APP },
   )
+  host.desktopApp?.onInstalled?.((app) => updates.installedApp(app))
   const hostUpdates = new HostUpdater({
     status: async () => updates.status(),
     check: () => updates.check(),
-    download: () => updates.download(),
+    // Downloading a desktop app this host cannot install only fills its disk.
+    download: () =>
+      updates.canInstall()
+        ? updates.download()
+        : Promise.reject(
+            new Error('Ramu on this host cannot install updates itself. Install the release from GitHub there.'),
+          ),
     desktopAttached: () => host.desktopApp?.attached() === true,
     installOnDesktop: (version) =>
       host.desktopApp ? host.desktopApp.installUpdate(version) : Promise.reject(new Error('No desktop app here')),

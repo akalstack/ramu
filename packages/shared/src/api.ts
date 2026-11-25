@@ -110,6 +110,7 @@ import type {
   GitBranchInfo,
   CommitDraft,
   ForgeStatus,
+  LivePullRequestStatus,
   Rule,
   RuleFileStatus,
   RuleInput,
@@ -903,11 +904,15 @@ export interface RamuMethods extends ArtifactMethods {
   'learning.apply'(id: string): void
   'learning.retry'(id: string): void
   'learning.dismiss'(id: string): void
+  /** Takes back what an applied review saved; returns how many notes and skills were left alone because they changed since. */
+  'learning.undo'(id: string): { kept: number }
   'learning.control'(id: string, action: 'pin' | 'unpin' | 'disable' | 'archive' | 'restore'): void
   'learning.history'(id: string): import('./types').ManagedSkill[]
   'learning.revert'(id: string, revision: number): void
   'learning.run'(): void
   'agent.checkpoint'(id: string): import('./types').SessionCheckpoint | null
+  /** The person's correction of a thread's checkpoint, which the next handoff and model refresh build on. */
+  'agent.saveCheckpoint'(id: string, summary: string): import('./types').SessionCheckpoint
   'memory.revert'(id: string, index: number, updatedAt: number): Memory
 
   'app.systemLanguages': () => string[]
@@ -1583,8 +1588,15 @@ export interface RamuMethods extends ArtifactMethods {
   'git.commitDetails'(taskId: string, repoId: string, oid: string): string
   'git.compareUpstream'(taskId: string, repoId: string): string
   'git.generateCommit'(taskId: string, repoId: string, settings: AgentSettings, includeBranch?: boolean): CommitDraft
-  /** The pull request for the checked-out branch, through the GitHub CLI. */
-  'forge.pullRequest'(taskId: string, repoId: string): ForgeStatus
+  /** Live pull request updates: on or off, whether GitHub can reach this host, and each repository's webhook. */
+  'forge.livePullRequests'(): LivePullRequestStatus
+  /** Adds a webhook to each GitHub repository of the projects (on) or removes them again (off). */
+  'forge.setLivePullRequests'(enabled: boolean): Promise<LivePullRequestStatus>
+  /**
+   * The pull request for the checked-out branch. `fresh` skips the host's short-lived copy, for a person's explicit
+   * refresh.
+   */
+  'forge.pullRequest'(taskId: string, repoId: string, fresh?: boolean): ForgeStatus
   'forge.watchStatus'(taskId: string, repoId: string, url: string): PullRequestWatchStatus
   'forge.watch'(taskId: string, repoId: string, url: string, sessionId: string | null): void
   /** Delivers feedback to the watched thread, or returns null when no thread is watching. */
@@ -1623,6 +1635,17 @@ export interface RamuMethods extends ArtifactMethods {
   'deploy.setUptime'(projectId: string, enabled: boolean): UptimeStatus
   /** Saves the project's live address, which the uptime watch checks; null forgets it. */
   'deploy.setLiveAddress'(projectId: string, address: string | null): UptimeStatus
+  /** What Ship did without being asked in the last week, newest first. */
+  'ship.activity'(): import('./types/ship').ShipActivity[]
+  /** Reverts one fix Ship pushed with a revert commit, while nothing came after it on the branch. */
+  'ship.undo'(activityId: string): import('./types/ship').ShipActivity[]
+  /** Where Ship stops for the project: the person's choice, Ramu's suggestion and the repository's committed limit. */
+  'ship.project'(projectId: string): import('./types/ship').ShipProjectStatus
+  /** Chooses the project's finish line on this host; null follows the suggestion. The repository's limit still applies. */
+  'ship.setFinishLine'(
+    projectId: string,
+    finishLine: import('./ship').FinishLine | null,
+  ): import('./types/ship').ShipProjectStatus
   /** What Set up CI would add to a repository of the project, from its last fetched default branch. */
   'ci.preview'(projectId: string, repoId: string): CiPreview
   /**
@@ -1986,6 +2009,11 @@ export interface RamuMethods extends ArtifactMethods {
   'agent.providerHold'(sessionId: string): 'message' | 'chat' | 'picked' | null
   /** Where the thread's next message would run under the host's routing, without changing anything. */
   'agent.nextRoute'(sessionId: string): Promise<NextMessageRoute>
+  /**
+   * Where a new thread on these settings would start under the host's routing, without starting it: other settings and
+   * the reason when a usage limit moves it, or null when it starts as chosen.
+   */
+  'agent.startRoute'(settings: AgentSettings): Promise<{ settings: AgentSettings; reason: string } | null>
   /** Moves one running command to the background so the agent can carry on (Claude only). False when it already finished. */
   'agent.backgroundTool'(sessionId: string, toolUseId: string): boolean
   /** Stops one sub-agent or background task; the main agent keeps going. */
@@ -2137,6 +2165,8 @@ export type PushEvents = {
   'term:changed': { taskId: string }
   'notices:changed': import('./chat/notices').InboxNotice[]
   'fs:changed': { cwd: string; path: string }
+  /** A pull request of the checkout at `cwd` may have changed (the agent pushed or ran a `gh pr` command): read it again. */
+  'forge:changed': { cwd: string }
   /** Another window changed a device-wide UI value (`value` null means removed). */
   'device-state:changed': { key: string; value: string | null }
 }

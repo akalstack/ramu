@@ -21,9 +21,11 @@ export const TOOL_ICON_CLASS = 'tool-icon flex-none text-muted-foreground'
 export const TOOL_SUMMARY_CLASS =
   'tool-summary overflow-hidden text-ellipsis whitespace-nowrap min-w-0 font-sans text-chat text-inherit flex-initial'
 
-/** Collapsible panel that animates to its content height. */
-export const TOOL_DISCLOSURE_PANEL_CLASS =
-  'tool-disclosure-panel [&[data-starting-style]]:h-0 [&[data-ending-style]]:h-0 [&[data-starting-style]]:opacity-0 [&[data-ending-style]]:opacity-0 h-[var(--collapsible-panel-height)] overflow-hidden motion-safe:[transition:height_200ms_var(--ease),opacity_160ms_var(--ease)]'
+/**
+ * Collapsible panel in the transcript. It opens and closes at once, as T3 Code's work log does: a height animation here
+ * would replay every time a running group gains a row, and would move the replies below it while the person reads.
+ */
+export const TOOL_DISCLOSURE_PANEL_CLASS = 'tool-disclosure-panel'
 
 /** Bordered card holding a tool call body. */
 export const TOOL_CARD_CLASS =

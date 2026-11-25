@@ -36,10 +36,10 @@ const fixture = (body: string) => ({
     },
   ],
 })
-const make = (preferences = { appUpdateChecks: false, appAutoUpdate: false }) => {
+const make = (preferences = { appUpdateChecks: false, appAutoUpdate: false }, options: { installs?: boolean } = {}) => {
   const dir = mkdtempSync(join(tmpdir(), 'ramu updates '))
   dirs.push(dir)
-  const service = new AppUpdateService(dir, '0.1.0', () => preferences, vi.fn())
+  const service = new AppUpdateService(dir, '0.1.0', () => preferences, vi.fn(), options)
   services.push(service)
   return { service, dir }
 }
@@ -92,7 +92,8 @@ it('stages a checksum-verified GitHub download and restores it after a daemon re
   service.close()
   const restored = new AppUpdateService(dir, '0.1.0', () => ({ appUpdateChecks: false, appAutoUpdate: false }), vi.fn())
   services.push(restored)
-  expect(restored.status().phase).toBe('ready')
+  // The staged file is verified in the background, so a restart never waits on hashing it.
+  await vi.waitFor(() => expect(restored.status().phase).toBe('ready'))
 })
 it('rejects corrupt downloads without staging an installable update', async () => {
   const release = fixture('bad')
@@ -116,7 +117,7 @@ it('rejects corrupt downloads without staging an installable update', async () =
 })
 it('auto-downloads in the service without asking Electron to restart anything', async () => {
   vi.useFakeTimers()
-  const { service } = make({ appUpdateChecks: false, appAutoUpdate: true })
+  const { service } = make({ appUpdateChecks: false, appAutoUpdate: true }, { installs: true })
   vi.spyOn(service, 'check').mockResolvedValue({ ...service.status(), phase: 'available' })
   const download = vi.spyOn(service, 'download').mockResolvedValue({ ...service.status(), phase: 'ready' })
   await vi.advanceTimersByTimeAsync(45_000)
@@ -124,6 +125,15 @@ it('auto-downloads in the service without asking Electron to restart anything', 
   service.close()
   await vi.advanceTimersByTimeAsync(6 * 60 * 60_000)
   expect(download).toHaveBeenCalledOnce()
+})
+it('does not download by itself when no app on this host can install the update', async () => {
+  vi.useFakeTimers()
+  const { service } = make({ appUpdateChecks: false, appAutoUpdate: true })
+  vi.spyOn(service, 'check').mockResolvedValue({ ...service.status(), phase: 'available' })
+  const download = vi.spyOn(service, 'download').mockResolvedValue({ ...service.status(), phase: 'ready' })
+  await vi.advanceTimersByTimeAsync(45_000)
+  expect(download).not.toHaveBeenCalled()
+  service.close()
 })
 it('service identity changes with shared code, independent of filesystem timestamps', () => {
   const { dir } = make()
@@ -149,6 +159,7 @@ it('aborts an update check without an error and can check again', async () => {
   vi.stubGlobal('fetch', fetcher)
   const { service } = make()
   const checking = service.check()
+  await vi.waitFor(() => expect(fetcher).toHaveBeenCalledOnce())
   await service.cancel()
   expect((await checking).phase).toBe('idle')
   expect(service.status().error).toBeNull()
@@ -174,6 +185,7 @@ it('cancels a download without staging partial files and permits another downloa
   const { service } = make()
   await service.check()
   const downloading = service.download()
+  await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2))
   await service.cancel()
   expect(await downloading).toMatchObject({ phase: 'available', error: null, downloadedBytes: 0 })
   expect((await service.download()).phase).toBe('ready')

@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { defineAdapter, LONG_CONTEXT_TOKENS, npmLatest, runCli } from '../adapter'
 
 /** The login's email and ChatGPT plan, from the ID token Codex keeps; the plan is as of Codex's last token refresh. */
@@ -81,16 +81,27 @@ export const codexAdapter = defineAdapter({
   },
   // The ACP adapter takes no skill roots from the client, but Codex scans `.agents/skills` in the chat's folder.
   skillsLaunch: (_exportDir, cwd) => ({ linkDirs: cwd ? [join(cwd, '.agents', 'skills')] : [] }),
-  pinsVersion: true,
+  // Only Ramu's own npm copy can install an exact release; `codex update` always takes the newest.
+  pinsVersion: (binary, runtimeHome) => binary.startsWith(runtimeHome),
   updatePlan({ config, binary, findExecutable, runtimeHome, version }) {
-    if (!findExecutable(binary)) throw new Error('Select an installed CLI before updating it.')
+    const own = findExecutable(binary)
+    if (!own) throw new Error('Select an installed CLI before updating it.')
     if (config.codex?.binary?.trim() || process.env.RAMU_CODEX_BIN)
       throw new Error('Update this custom Codex installation with its package manager.')
-    // Own the npm-managed replacement instead of modifying an unrelated global
-    // installation selected by npm's prefix. Existing native processes keep running.
+    const npm = findExecutable(process.platform === 'win32' ? 'npm.cmd' : 'npm')
+    // Codex's own updater knows how it was installed (standalone, Homebrew or npm) and updates it in place, needing
+    // no Node.js for a standalone install. An npm-installed Codex sits beside the `node` its updater runs.
+    if (!binary.startsWith(runtimeHome))
+      return { command: own, args: ['update'], pathDirs: [dirname(own), ...(npm ? [dirname(npm)] : [])] }
+    if (!npm)
+      throw new Error(
+        'This Codex copy is updated with npm, and npm was not found. Install Node.js, or install Codex yourself and Ramu will use it.',
+      )
+    // Ramu's own npm copy, kept apart from any global installation npm's prefix would pick. Running threads keep going.
     return {
-      command: findExecutable(process.platform === 'win32' ? 'npm.cmd' : 'npm') ?? 'npm',
+      command: npm,
       args: ['install', '--prefix', runtimeHome, '--no-audit', '--no-fund', `@openai/codex@${version ?? 'latest'}`],
+      pathDirs: [dirname(npm)],
     }
   },
 })

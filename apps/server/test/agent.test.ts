@@ -1890,18 +1890,18 @@ describe('busy agent messages', () => {
     expect(service.queued(session.id)).toEqual([])
   })
 
-  it('sends an edited message as the newest one, after messages queued before it', async () => {
+  it('keeps an edited message in its place in the queue', async () => {
     const { service, session, send, complete } = setup()
     await service.submit(session.id, 'first', 'queue', [], undefined, true)
     await service.submit(session.id, 'second', 'queue', [], undefined, true)
     const [first] = service.queued(session.id)
     service.holdQueued(session.id, first!.id, true)
     service.editQueued(session.id, first!.id, 'first, edited')
-    expect(service.queued(session.id).map((m) => m.text)).toEqual(['second', 'first, edited'])
-    expect(service.queued(session.id)[1]!.id).not.toBe(first!.id)
+    expect(service.queued(session.id).map((m) => m.text)).toEqual(['first, edited', 'second'])
+    expect(service.queued(session.id)[0]!.id).toBe(first!.id)
     complete()
     await until(() => send.mock.calls.length === 1)
-    expect(send.mock.calls[0]![0]).toContain('second')
+    expect(send.mock.calls[0]![0]).toContain('first, edited')
     service.stopAll()
   })
 

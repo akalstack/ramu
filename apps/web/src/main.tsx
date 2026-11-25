@@ -59,6 +59,13 @@ function Startup() {
       bridge.on('fs:changed', (_, from) => {
         void invalidateDataOn(host(from), 'files', 'git')
       }),
+      // The agent pushed or ran a `gh pr` command: pull request reads on screen read again now.
+      bridge.on('forge:changed', (_, from) => {
+        void queryClient.invalidateQueries({
+          queryKey: ['ipc', host(from)],
+          predicate: (query) => String(query.queryKey[2]).startsWith('forge.'),
+        })
+      }),
       bridge.on('automation:changed', (_, from) => {
         void invalidateDataOn(host(from), 'reviews', 'tasks')
       }),

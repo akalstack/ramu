@@ -14,12 +14,19 @@ import { timeAgo } from '../Menu'
 import { StateDot, StatusMark } from '../sidebar/projects/TaskStateIcon'
 import { threadStatus } from '@ramu/shared/chat/threadStatus'
 import { savedInboxTab, saveInboxTab } from './navigation'
+import { LearningReviewList } from './LearningReviews'
+import { useLearningReviews } from '../learning/learningQueries'
+import { useComputers } from '../workspace/computers'
 
 /** All sections are derived after host filtering, including counts and limits. Actions always carry the owning host. */
 export function HostsInbox() {
   useLanguage()
   const { select } = useHostSelection()
-  const { model, hosts, computers } = useInboxModel()
+  // Only hosts that answer are asked; an offline host's waiting reviews return with it.
+  const reviews = useLearningReviews(
+    (useComputers()?.computers ?? []).filter((c) => c.status === 'connected').map((c) => c.id),
+  )
+  const { model, hosts, computers } = useInboxModel({ reviews })
   const host = computers?.scope ?? null
   const [tab, setTab] = useState<InboxTab>(savedInboxTab)
   useEffect(() => {
@@ -106,7 +113,7 @@ export function HostsInbox() {
   const counts: Record<InboxTab, number> = {
     brief: model.needsYou,
     running: model.running.length,
-    learned: model.unreadSummaries,
+    learned: model.learnedCount,
     completed: model.completed.length,
   }
   const labels: Record<InboxTab, string> = {
@@ -142,6 +149,16 @@ export function HostsInbox() {
             )}
             {tab === 'brief' && <Brief />}
             {tab === 'running' && model.running.length > 0 && chats(model.running)}
+            {tab === 'learned' && (
+              <LearningReviewList
+                reviews={model.learningReviews}
+                taskOf={(computerId, sessionId) =>
+                  data(computerId)?.agents.find((agent) => agent.id === sessionId)?.taskId
+                }
+                where={(computerId) => pc(computerId)?.name ?? ''}
+                available={available}
+              />
+            )}
             {tab === 'learned' && model.summaries.length > 0 && (
               <InboxList>
                 {model.summaries.map(({ computerId, summary }) => (
@@ -179,9 +196,11 @@ export function HostsInbox() {
                   {chats(day.items)}
                 </FeedSection>
               ))}
-            {!pending && tab !== 'brief' && (tab === 'learned' ? !model.summaries.length : !counts[tab]) && (
-              <InboxEmpty {...emptyTab(tab)} />
-            )}
+            {!pending &&
+              tab !== 'brief' &&
+              (tab === 'learned' ? !model.summaries.length && !model.learningReviews.length : !counts[tab]) && (
+                <InboxEmpty {...emptyTab(tab)} />
+              )}
           </TabsContent>
         </Tabs>
       </div>

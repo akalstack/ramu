@@ -1,4 +1,4 @@
-import { PULL_REQUEST_STAGE_LABEL } from '@ramu/shared/pullRequests'
+import { pullRequestRowDetail } from '@ramu/shared/pullRequests'
 import { useRouter } from 'expo-router'
 import { useState } from 'react'
 import { Pressable, View } from 'react-native'
@@ -114,7 +114,7 @@ function BriefRowView({ row, divider, where }: { row: BriefRow; divider: boolean
         : row.kind === 'failure'
           ? say('Failed')
           : row.kind === 'pull-request'
-            ? `#${row.chat.pullRequest!.number} · ${say(PULL_REQUEST_STAGE_LABEL[row.chat.pullRequest!.stage])}`
+            ? pullRequestRowDetail(row.chat.pullRequest!, say)
             : (request?.title && say(request.title)) ||
               inboxBlockerText(row.blocker, store.language === 'id' ? 'id' : 'en')
   const look = briefRowLook(row)
@@ -144,6 +144,9 @@ function BriefRowView({ row, divider, where }: { row: BriefRow; divider: boolean
         onPress={() => run(() => stopIdleThreads(invoke, hostId, row.memory.low.idleThreads))}
       />
     ) : null
+  ) : row.kind === 'pull-request' && row.chat.pullRequest?.prepared ? (
+    // Drafts are checked where they are, never sent from here unseen.
+    <Button title={say('Review and send')} disabled={!online} onPress={go} />
   ) : row.kind === 'recap' ? (
     <Button
       kind="secondary"

@@ -64,7 +64,7 @@ export function ManagedSkills({ hostId, locked }: { hostId: string; locked: bool
   const revert = (skill: ManagedSkill, revision: number) =>
     Alert.alert(
       say('Restore revision {0}?', { 0: revision }),
-      say('{0} goes back to this procedure. The current one stays in its history, so you can restore it later.', {
+      say('{0} goes back to this revision. The current one stays in its history, so you can restore it later.', {
         0: skill.name,
       }),
       [
@@ -105,7 +105,7 @@ export function ManagedSkills({ hostId, locked }: { hostId: string; locked: bool
           <Row style={{ paddingVertical: space.m }}>
             <RowLabel
               title={archived ? say('Nothing archived') : say('No skills yet')}
-              help={archived ? undefined : say('Ramu adds them here when it learns a repeatable procedure.')}
+              help={archived ? undefined : say('Ramu adds them here when it learns a skill worth repeating.')}
             />
           </Row>
         ) : null}

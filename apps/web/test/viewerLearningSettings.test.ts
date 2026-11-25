@@ -45,16 +45,7 @@ vi.mock('../src/settings/SettingsScope', async () => ({
   useSettingsInvoke: () => state.invoke,
   useSettingsEvents: () => state.on,
 }))
-vi.mock('../src/settings/InstalledSkills', () => ({ InstalledSkills: () => null }))
-vi.mock('../src/settings/cards', () => ({
-  SettingsCard: 'SettingsCard',
-  SettingsCardList: 'SettingsCardList',
-  usePaged: (shown: unknown[]) => ({ shown, more: null }),
-}))
-vi.mock('../src/SearchInput', () => ({ SearchInput: 'SearchInput' }))
 vi.mock('../src/models/ModelSets', () => ({ useModelSets: () => ({}) }))
-vi.mock('../src/summaries/libraryFocus', () => ({ takeLibraryFocus: () => null }))
-vi.mock('../src/chat/MarkdownText', () => ({ MarkdownText: 'MarkdownText' }))
 vi.mock('../src/chat/Notifications', () => ({ notifyError: state.notify }))
 vi.mock('../src/i18n', () => ({ t: (text: string) => text }))
 vi.mock('../src/Menu', () => ({ Dropdown: 'Dropdown' }))
@@ -62,7 +53,6 @@ vi.mock('../src/settings/ModelChoice', () => ({ ModelChoice: 'ModelChoice' }))
 vi.mock('@/components/settings-row', () => ({ SettingsGroupTitle: 'h4', SettingsRow: 'div', SettingsLabel: 'label' }))
 vi.mock('@/components/desktop-button', () => ({ Button: 'Button' }))
 vi.mock('@/components/ui/switch', () => ({ Switch: 'Switch' }))
-vi.mock('@/components/ui/badge', () => ({ Badge: 'Badge' }))
 import { LearningSettings } from '../src/settings/IntelligenceSettings'
 type Node = { type?: unknown; props: Record<string, any> }
 const nodes = (value: unknown): Node[] =>
@@ -74,42 +64,43 @@ const nodes = (value: unknown): Node[] =>
       ]
 const RenderLearning = () => {
   state.cursor = 0
-  return LearningSettings({ value: DEFAULT_APP_PREFERENCES.intelligence, onChange() {} })
+  return LearningSettings({ value: DEFAULT_APP_PREFERENCES.intelligence, onChange() {}, memory: true })
 }
+const tidy = () =>
+  nodes(RenderLearning()).find(
+    (node) => node.type === 'Button' && ['Tidy up now', 'Tidying up…'].includes(node.props.children),
+  )!
 const flush = async () => {
   state.effects.splice(0).forEach((run) => run())
   for (let i = 0; i < 8; i++) await Promise.resolve()
 }
-const snapshot = (title: string) => ({
-  jobs: [{ id: 'job', status: 'pending', createdAt: 1, sessionTitle: title }],
-  skills: [],
-  running: false,
-})
+const snapshot = (running: boolean) => ({ jobs: [], skills: [], running })
 beforeEach(() => {
   state.slots = []
   state.effects = []
   state.host = 'a'
   state.viewer = false
-  state.invoke.mockReset().mockResolvedValue(snapshot('Host A'))
+  state.invoke.mockReset().mockResolvedValue(snapshot(false))
   state.on.mockReset().mockReturnValue(() => {})
   state.notify.mockReset()
 })
-it('keeps cached reviews readable while disabling maintenance and retained apply actions for viewers', async () => {
+it('tidies up with one press: learning first, then memory cleanup', async () => {
   RenderLearning()
   await flush()
-  const before = nodes(RenderLearning())
-  const apply = before.find((node) => node.type === 'Button' && node.props.children === 'Apply')!
-  const maintenance = before.find(
-    (node) => node.type === 'Button' && node.props.children === 'Run learning maintenance',
-  )!
-  state.viewer = true
-  const viewer = nodes(RenderLearning())
-  await flush()
-  expect(viewer.some((node) => String(node.props.title ?? '').includes('Host A'))).toBe(true)
-  expect(viewer.find((node) => node.type === 'Button' && node.props.children === 'Apply')!.props.disabled).toBe(true)
   state.invoke.mockClear()
-  apply.props.onClick()
-  maintenance.props.onClick()
+  tidy().props.onClick()
+  await flush()
+  expect(state.invoke.mock.calls.map(([method]) => method)).toEqual(['learning.run', 'memory.dream', 'learning.get'])
+})
+it('disables tidying up for viewers and ignores a press retained from before', async () => {
+  RenderLearning()
+  await flush()
+  const before = tidy()
+  state.viewer = true
+  expect(tidy().props.disabled).toBe(true)
+  await flush()
+  state.invoke.mockClear()
+  before.props.onClick()
   await flush()
   expect(state.invoke).not.toHaveBeenCalled()
 })
@@ -124,14 +115,12 @@ it('hides another host snapshot immediately and ignores its late response', asyn
   RenderLearning()
   await flush()
   state.host = 'b'
-  expect(nodes(RenderLearning()).some((node) => node.type === 'SettingsCard')).toBe(false)
-  state.invoke.mockResolvedValue(snapshot('Host B'))
+  expect(tidy().props.children).toBe('Tidy up now')
+  state.invoke.mockResolvedValue(snapshot(true))
   await flush()
-  finish(snapshot('Old host A'))
+  finish(snapshot(false))
   await flush()
-  const selected = nodes(RenderLearning())
-  expect(selected.some((node) => String(node.props.title ?? '').includes('Host B'))).toBe(true)
-  expect(selected.some((node) => String(node.props.title ?? '').includes('Old host A'))).toBe(false)
+  expect(tidy().props.children).toBe('Tidying up…')
   expect(state.notify).not.toHaveBeenCalled()
 })
 
@@ -148,12 +137,10 @@ it('keeps the newest refresh when same-host memory events complete out of order'
       }),
   )
   changed()
-  state.invoke.mockResolvedValueOnce(snapshot('Newest review'))
+  state.invoke.mockResolvedValueOnce(snapshot(true))
   changed()
   await flush()
-  finish(snapshot('Stale review'))
+  finish(snapshot(false))
   await flush()
-  const selected = nodes(RenderLearning())
-  expect(selected.some((node) => String(node.props.title ?? '').includes('Newest review'))).toBe(true)
-  expect(selected.some((node) => String(node.props.title ?? '').includes('Stale review'))).toBe(false)
+  expect(tidy().props.children).toBe('Tidying up…')
 })

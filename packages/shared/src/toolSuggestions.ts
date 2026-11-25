@@ -120,14 +120,23 @@ export function detectStack(project: {
     } catch {
       // An unreadable package.json says nothing about the stack.
     }
+    if ('@tauri-apps/api' in deps || '@tauri-apps/cli' in deps) return 'tauri'
+    if ('electron' in deps) return 'electron'
     if ('next' in deps) return 'nextjs'
+    if ('nuxt' in deps) return 'nuxt'
+    if ('vite' in deps && 'vue' in deps) return 'vite-vue'
     if ('expo' in deps) return 'expo'
     if ('astro' in deps) return 'astro'
     if ('vite' in deps && 'react' in deps) return 'vite-react'
+    if ('vite' in deps && Object.keys(deps).every((dep) => dep === 'vite' || dep === 'typescript'))
+      return 'vite-vanilla'
     if ('hono' in deps) return 'node-api'
   }
   if (project.files.includes('manage.py')) return 'django'
   if (project.files.includes('go.mod')) return 'go'
+  if (project.files.includes('Cargo.toml')) return 'rust'
+  if (project.files.includes('pubspec.yaml')) return 'flutter'
+  if (project.files.includes('Package.swift')) return 'swift'
   const python = `${project.manifests['pyproject.toml'] ?? ''}\n${project.manifests['requirements.txt'] ?? ''}`
   if (/^\s*"?fastapi\b/im.test(python) || /["']fastapi\b/i.test(python)) return 'fastapi'
   if (/^\s*"?django\b/im.test(python) || /["']django\b/i.test(python)) return 'django'

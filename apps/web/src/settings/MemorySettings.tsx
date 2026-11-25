@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Archive, History, Moon, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react'
+import { Archive, History, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { takeLibraryFocus } from '../summaries/libraryFocus'
 import { DateTime } from 'luxon'
@@ -233,17 +233,6 @@ export function MemoryBrowser() {
             {snapshot.error}
           </span>
         )}
-        <span className="grow" />
-        <Button
-          variant="ghost"
-          size="sm"
-          className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground small text-caption"
-          disabled={!snapshot || snapshot.dreaming}
-          onClick={() => void act(() => invoke('memory.dream'))}
-        >
-          <Moon size={12} />
-          {t('Clean up memory')}
-        </Button>
       </div>
       {editing && !editing.id && (
         <MemoryEditor

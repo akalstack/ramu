@@ -242,4 +242,15 @@
   .ramu-prose .md-frontmatter pre {
     margin-bottom: 0;
   }
+
+  /* Streaming text arrives a top-level block at a time (MarkdownText); each new block fades in once while text in the
+     block already shown appears at once, so a reply reads steadily without words flickering in. */
+  @media (prefers-reduced-motion: no-preference) {
+    .ramu-prose[data-streaming] > * {
+      transition: opacity 0.6s ease-out;
+      @starting-style {
+        opacity: 0;
+      }
+    }
+  }
 }

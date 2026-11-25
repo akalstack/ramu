@@ -283,15 +283,6 @@
 .transcript-arrival {
   animation: arrive var(--chat-enter-duration, 180ms) var(--chat-enter-ease, var(--ease)) both;
 }
-/* Each word of a reply that is still arriving fades in from nothing; ThinkingRow and AssistantText add the spans. */
-.stream-word {
-  animation: stream-in 280ms ease-out both;
-}
-@media (prefers-reduced-motion: reduce) {
-  .stream-word {
-    animation: none;
-  }
-}
 
 /* Following a working agent, each step to its new output glides instead of jumping, as on the phone. Only while the
    scroller follows (TranscriptFollowState): a reader who scrolled up gets position restores, which must stay instant. */

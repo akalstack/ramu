@@ -1,4 +1,13 @@
-import type { ChatGoal, LibrarySummary, RecapItem, TaskPullRequest, TaskStatus, ThreadInputSummary } from './types'
+import type {
+  ChatGoal,
+  LearningJob,
+  LibrarySummary,
+  RecapItem,
+  TaskPullRequest,
+  TaskStatus,
+  ThreadInputSummary,
+} from './types'
+import { waitingReviews } from '@ramu/shared/learningReviews'
 import { stageNeedsYou } from '@ramu/shared/pullRequests'
 import { goalContinues } from '@ramu/shared/chat/goalHold'
 import type { LowMemory } from './resources'
@@ -138,6 +147,11 @@ export interface InboxSummary {
   computerId: string
   summary: LibrarySummary
 }
+/** A learning review on one host; only those waiting for the person are listed. */
+export interface InboxReview {
+  computerId: string
+  job: LearningJob
+}
 
 /** Threads finished within this many days (counting today) are listed under Completed. */
 export const COMPLETED_DAYS = 7
@@ -199,6 +213,8 @@ export function buildInbox(input: {
   computerId?: string | null
   recaps: InboxRecap[]
   summaries: InboxSummary[]
+  /** Learning reviews; those waiting for Apply lead Learned and count toward its tab. */
+  reviews?: InboxReview[]
   /** Recaps are only shown when the computer has them turned on. */
   recapsEnabled?: (computerId: string) => boolean
   /** A failure the person already opened on this device no longer asks for them. */
@@ -260,6 +276,10 @@ export function buildInbox(input: {
     .filter((s) => inScope(s.computerId) && s.summary.status !== 'dismissed')
     .sort((a, b) => b.summary.periodEnd - a.summary.periodEnd)
     .slice(0, LEARNED_MAX)
+  const scopedReviews = (input.reviews ?? []).filter((review) => inScope(review.computerId))
+  const waitingJobs = waitingReviews(scopedReviews.map((review) => review.job))
+  const learningReviews = waitingJobs.flatMap((job) => scopedReviews.filter((review) => review.job === job))
+  const unreadSummaries = summaries.filter((s) => s.summary.status === 'unread').length
   const today = startOfDay(now)
   const since = today - (COMPLETED_DAYS - 1) * DAY
   const completed = live
@@ -292,7 +312,10 @@ export function buildInbox(input: {
     running,
     ...recaps,
     summaries,
-    unreadSummaries: summaries.filter((s) => s.summary.status === 'unread').length,
+    unreadSummaries,
+    learningReviews,
+    /** What the Learned tab counts: unread summaries and reviews waiting for Apply. */
+    learnedCount: unreadSummaries + learningReviews.length,
     completed,
     days,
     /**
@@ -314,6 +337,7 @@ export function buildInbox(input: {
       !recaps.attention.length &&
       !recaps.sinceVisit.length &&
       !summaries.length &&
+      !learningReviews.length &&
       !completed.length,
   }
 }

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, memo, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Image, Linking, ScrollView, StyleSheet, Text, View, type TextStyle } from 'react-native'
 import { ReferenceBadge } from './ReferenceChip'
 export { ReferenceBadge } from './ReferenceChip'
@@ -14,7 +14,8 @@ import { phoneProse, type PhoneProse } from '../runtime/prose'
 import { ImagePreview } from './ImagePreview'
 import { NativeMarkdown, TextMarkContext, nativeMarkdown } from './NativeMarkdown'
 import { markSource } from '../runtime/textMark'
-import { markdownBlocks, nativeMarkdownSource, splitCodeFences } from '../runtime/nativeMarkdownSource'
+import { nativeMarkdownSource, splitCodeFences } from '../runtime/nativeMarkdownSource'
+import { markdownBlocks } from '@ramu/shared/chat/markdownBlocks'
 
 // Markdown on the phone. The native Markdown view (NativeMarkdown) draws it in every app build, with native selection and
 // its menu; the block renderer below draws it where that view does not exist (the web build), from React Native parts,
@@ -438,6 +439,19 @@ function NativeParts({
   )
 }
 
+/** One block of a streaming reply, drawn again only when its own text changes, so a new token redraws the last block alone. */
+const StreamedBlock = memo(function StreamedBlock({
+  source,
+  muted,
+  actions,
+}: {
+  source: string
+  muted?: boolean
+  actions: ReferenceActions
+}) {
+  return <NativeParts source={source} streaming muted={muted} actions={actions} />
+})
+
 export function Markdown({
   text,
   density,
@@ -484,7 +498,7 @@ export function Markdown({
         <View>
           {nativeBlocks.map((block, index) => (
             <Arrive key={index} animate={index >= settledCount}>
-              <NativeParts source={block} streaming muted={muted} actions={actions} />
+              <StreamedBlock source={block} muted={muted} actions={actions} />
             </Arrive>
           ))}
         </View>

@@ -318,6 +318,13 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
     },
     'agent.providerHold': { args: z.tuple([id]), run: (s: string) => agents.providerHold(s) },
     'agent.nextRoute': { args: z.tuple([id]), run: (s: string) => agents.nextRoute(s) },
+    'agent.startRoute': {
+      args: z.tuple([agentSettings]),
+      run: async (settings: AgentSettings) => {
+        const route = await agents.route(settings)
+        return route ? { settings: agents.withStep(settings, route.step), reason: route.reason } : null
+      },
+    },
     'agent.backgroundTool': {
       args: z.tuple([id, z.string().min(1).max(300)]),
       run: (s: string, toolUseId: string) => agents.backgroundTool(s, toolUseId),

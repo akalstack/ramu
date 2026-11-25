@@ -1,4 +1,5 @@
 import type { AgentProvider, UsageReading } from './types'
+import type { ProviderConfiguration } from './providers/providers'
 
 // A login's percentage is the same quota seen from every host, so percentages never add up: each login appears once,
 // with its newest reading. Account ids are local to a host; only a sign-in email matches a login across hosts.
@@ -94,6 +95,78 @@ export function loginsAcrossHosts(hosts: readonly HostUsage[]): LoginUsage[] {
 /** The window that decides how close a login is to its limit. */
 export const peakOf = (login: Pick<LoginUsage, 'readings'>) =>
   [...login.readings].sort((a, b) => b.usedPercent - a.usedPercent)[0]
+
+/** A host's logins with the provider settings that say which login its threads use. */
+export type HostLogins = HostUsage & { config: ProviderConfiguration | undefined }
+
+/** One login of a provider as Plan usage lists it, with where it is signed in and whether threads use it. */
+export interface LoginRow extends LoginUsage {
+  /** Threads use it on the host Plan usage is opened for, or on any host when none is. */
+  inUse: boolean
+  /** Each host it is signed in on, in host order, and whether that host's threads use it. */
+  where: { hostId: string; host: string; inUse: boolean }[]
+  /** The host and that host's account id that name it: the current host's own when it is signed in there. */
+  namedBy: { hostId: string; accountId: string }
+  plan?: string
+  /** When its newest reading was taken. */
+  newest: number
+}
+
+/** Login rows of every provider shown, for the readings of providers that are turned on. */
+export function loginRows(hosts: readonly HostLogins[], currentHostId?: string): LoginRow[] {
+  const inUseOn = (host: HostLogins | undefined, provider: AgentProvider, accountId: string) =>
+    !!host && (host.config?.[provider]?.accountId || 'default') === accountId
+  return loginsAcrossHosts(hosts).map((login) => {
+    const here = currentHostId ? login.places.find((place) => place.hostId === currentHostId) : undefined
+    const where = hosts
+      .filter((host) => login.places.some((place) => place.hostId === host.hostId))
+      .map((host) => ({
+        hostId: host.hostId,
+        host: host.host,
+        inUse: login.places.some(
+          (place) => place.hostId === host.hostId && inUseOn(host, login.provider, place.accountId),
+        ),
+      }))
+    const plan = [...login.readings].filter((r) => r.plan).sort((a, b) => b.updatedAt - a.updatedAt)[0]?.plan
+    return {
+      ...login,
+      inUse: currentHostId
+        ? !!here &&
+          inUseOn(
+            hosts.find((host) => host.hostId === currentHostId),
+            login.provider,
+            here.accountId,
+          )
+        : where.some((place) => place.inUse),
+      where,
+      namedBy: here ?? login.places[0]!,
+      ...(plan ? { plan } : {}),
+      newest: Math.max(0, ...login.readings.map((reading) => reading.updatedAt)),
+    }
+  })
+}
+
+/**
+ * One provider's logins in the order to read them: the one in use first, then ones some host uses, then the ones with
+ * the most room.
+ */
+export function providerLoginRows(rows: readonly LoginRow[], provider: AgentProvider): LoginRow[] {
+  return rows
+    .filter((row) => row.provider === provider)
+    .sort(
+      (a, b) =>
+        Number(b.inUse) - Number(a.inUse) ||
+        Number(b.where.some((place) => place.inUse)) - Number(a.where.some((place) => place.inUse)) ||
+        (peakOf(a)?.usedPercent ?? 0) - (peakOf(b)?.usedPercent ?? 0),
+    )
+}
+
+/** How many logins still have room: none of their windows is at its limit. */
+export const loginsWithRoom = (rows: readonly Pick<LoginUsage, 'readings'>[]) =>
+  rows.filter((row) => {
+    const peak = peakOf(row)
+    return !peak || (peak.status !== 'limited' && peak.usedPercent < 100)
+  }).length
 
 /** One host's finished turns on one day for one provider; cost and tokens only where the provider reports them. */
 export interface ActivityRow {

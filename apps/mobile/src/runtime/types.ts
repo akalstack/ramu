@@ -170,6 +170,8 @@ export type TranscriptItem = (
       undone: boolean
     }
   | { kind: 'goal'; id: string; objective: string; turns: number; detail?: string }
+  /** What a learning review saved or would save from the turn above it, with Apply, Dismiss or Undo. */
+  | { kind: 'learning'; id: string; jobId: string; line: import('@ramu/shared/learningReviews').LearningLine }
   /** Turn boundary from a provider result or a terminal state; drives the Worked-for fold and is never drawn. */
   | { kind: 'end'; id: string; ended: boolean; interrupted: boolean }
   /** Live "Working for 12s" rule above the steps of the running turn. */

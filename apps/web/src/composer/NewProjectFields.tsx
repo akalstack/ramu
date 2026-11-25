@@ -1,17 +1,14 @@
-import { STACKS, STACK_IDS, type StackId } from '@ramu/shared/stacks'
+import { STACKS, STACK_IDS } from '@ramu/shared/stacks'
 import { Input } from '@/components/desktop-input'
 import { Combobox } from '@/components/combobox'
 import { t } from '../i18n'
 import { ProjectParentField, type useProjectParent } from '../workspace/ProjectParentField'
-
-export interface NewProjectDraft {
-  name: string
-  stack: StackId | ''
-}
+import { catalogStack, stackName, type NewProjectDraft, type StackChoice } from './newProjectDraft'
 
 /**
- * Name, stack and folder for a project Ramu creates before the thread starts. An empty name leaves the name and stack to
- * the agent, which asks what to build first.
+ * Name, stack and folder for a new project. An empty name leaves the name and stack to the agent, which asks what to
+ * build first; with a name, the person picks the stack, lets the agent recommend one, or names any framework for the
+ * agent to look up.
  */
 export function NewProjectFields({
   value,
@@ -31,6 +28,7 @@ export function NewProjectFields({
   location: ReturnType<typeof useProjectParent>
 }) {
   const named = !!value.name.trim()
+  const known = catalogStack(value)
   return (
     <div className="flex flex-wrap items-center gap-2 px-3" role="group" aria-label={t('New project')}>
       {designs.length > 0 && onFromDesign && (
@@ -66,18 +64,49 @@ export function NewProjectFields({
           value={value.stack}
           searchPlaceholder={t('Search stacks…')}
           options={[
-            { value: '', label: t('No generator') },
-            ...STACK_IDS.map((id) => ({ value: id, label: t(STACKS[id].name) })),
+            { value: '', label: t('Agent recommends'), detail: t('No framework unless the app needs one') },
+            ...(['No framework', 'Framework'] as const).flatMap((group) => [
+              ...STACK_IDS.filter((id) => STACKS[id].framework === (group === 'Framework')).map((id) => ({
+                value: id,
+                label: stackName(id),
+                detail: t(STACKS[id].summary),
+                group: t(group),
+              })),
+              group === 'Framework'
+                ? { value: 'other', label: t('Other framework…'), group: t(group) }
+                : {
+                    value: 'none',
+                    label: t('No generator'),
+                    detail: t('The agent writes every file'),
+                    group: t(group),
+                  },
+            ]),
           ]}
-          onChange={(stack) => onChange({ ...value, stack: stack as StackId | '' })}
+          onChange={(stack) => onChange({ ...value, stack: stack as StackChoice })}
+        />
+      )}
+      {named && value.stack === 'other' && (
+        <Input
+          className="h-7 w-[180px]"
+          value={value.framework}
+          maxLength={60}
+          spellCheck={false}
+          disabled={disabled}
+          aria-label={t('Framework')}
+          placeholder={t('Framework, such as Tauri')}
+          onChange={(event) => onChange({ ...value, framework: event.target.value })}
         />
       )}
       <span className="text-caption text-muted-foreground">
-        {named
-          ? value.stack
-            ? t(STACKS[value.stack].summary)
-            : t('An empty project the agent fills in')
-          : t('Leave it empty and the agent asks a few questions first')}
+        {!named
+          ? t('Leave it empty and the agent asks a few questions first')
+          : known
+            ? t(STACKS[known].summary)
+            : value.stack === 'none'
+              ? t('An empty project the agent fills in')
+              : value.stack === 'other'
+                ? t('The agent looks up its official setup and shows you the commands first')
+                : t('The agent asks what it needs and recommends a stack')}
       </span>
       {(named || designs.length > 0) && <ProjectParentField location={location} disabled={disabled} />}
     </div>

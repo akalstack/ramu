@@ -3,12 +3,11 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Button } from '@/components/desktop-button'
 import { Brain, ChevronRight } from 'lucide-react'
 import { NEW_THOUGHT, thoughtLine, thoughtTitle, tickThought } from '@ramu/shared/chat/thoughtLine'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import { MarkdownText } from '../../../chat/MarkdownText'
 import { scrollMotion } from '../../../workspace/panelMotion'
 import { useScrollFade } from '../hooks/useScrollFade'
 import { formatDuration } from '../lib/format'
-import { noteArrival, rehypeStreamWords, streamClock } from '../lib/streamWords'
 import { WorkingText } from './WorkingText'
 import { CARET_CLASS, TOOL_DISCLOSURE_PANEL_CLASS, TOOL_ICON_CLASS, TOOL_SUMMARY_CLASS } from '../styles'
 
@@ -16,7 +15,7 @@ import { CARET_CLASS, TOOL_DISCLOSURE_PANEL_CLASS, TOOL_ICON_CLASS, TOOL_SUMMARY
  * Reasoning the provider shared, as one row led by the brain icon: closed, the thought itself on a single line that
  * ends in an ellipsis (its newest paragraph, shimmering, while it streams) preceded by "Thought for 4s" once it took
  * a while; opened, the row is titled "Thought" (or "Thinking", "Thought for 4s") and the whole thought shows below as
- * markdown, new words fading in while it streams.
+ * markdown, each new block fading in while it streams.
  */
 export function ThinkingRow({ text, active = false }: { text: string; active?: boolean }) {
   useLanguage()
@@ -24,9 +23,6 @@ export function ThinkingRow({ text, active = false }: { text: string; active?: b
   const [timing, setTiming] = useState(() => tickThought(NEW_THOUGHT, active, Date.now()))
   const body = useScrollFade<HTMLDivElement>()
   const line = useMemo(() => thoughtLine(text, active), [text, active])
-  const clock = useRef(streamClock(text))
-  noteArrival(clock.current, text)
-  const rehypePlugins = useMemo(() => [rehypeStreamWords(clock.current)], [])
   useEffect(() => setTiming((current) => tickThought(current, active, Date.now())), [active])
   const heading = thoughtTitle(active, timing.took)
   const longThought = heading.label === 'Thought for {0}'
@@ -67,7 +63,7 @@ export function ThinkingRow({ text, active = false }: { text: string; active?: b
           ref={body}
           density="compact"
           className="thinking-body fade-scroll [--fade-top:0px] [--fade-bottom:0px] [mask-image:linear-gradient(to_bottom,_transparent_0,_#000_var(--fade-top),_#000_calc(100%_-_var(--fade-bottom)),_transparent_100%)] [transition:--fade-top_0.14s_ease-out,_--fade-bottom_0.14s_ease-out] m-[2px_0_4px] text-muted-foreground [overflow-wrap:anywhere] overflow-y-auto [&_:is(strong,h1,h2,h3,h4,h5,h6)]:text-soft [&_:not(pre)>code]:text-inherit max-h-[260px]"
-          rehypePlugins={active ? rehypePlugins : undefined}
+          streaming={active}
         >
           {text}
         </MarkdownText>

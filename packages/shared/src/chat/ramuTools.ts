@@ -46,6 +46,7 @@ const KNOWN = new Set([
   'watch_pull_request',
   'unwatch_pull_request',
   'ci_setup',
+  'ship',
   'skill_update',
   'skill_archive',
   'skill_restore',
@@ -373,6 +374,12 @@ export function describeRamuTool(call: RamuToolCall, result?: string): RamuToolR
       return reply('Watching pull request', 'Starting pull request watch', 'review', text(data.url) ?? text(args.url))
     case 'unwatch_pull_request':
       return reply('Stopped pull request watches', 'Stopping pull request watches', 'review')
+    case 'ship':
+      return reply(
+        data.shipping === false ? 'Stopped shipping' : data.rounds === 'reset' ? 'Allowed more rounds' : 'Shipping',
+        'Starting to ship',
+        'review',
+      )
     case 'ci_setup':
       return reply(
         data.written === false ? 'Read the CI workflow' : 'Wrote the CI workflow',

@@ -1,6 +1,8 @@
 import type { AntigravitySignIn } from '@ramu/shared/providers/environment'
 import type { ActivityService } from '../background/activity'
 import { execFile } from 'node:child_process'
+import { basename, delimiter } from 'node:path'
+import { stripVTControlCharacters } from 'node:util'
 import {
   AGENT_PROVIDERS,
   providerEnabled,
@@ -38,6 +40,29 @@ import { newerVersion } from '@ramu/shared/version'
 import { launchCompatibility } from './launchCompatibility'
 import { installAntigravity } from './antigravityInstall'
 export { newerVersion }
+/**
+ * Why an updater failed, in its own words where it gave any: the last non-empty lines it printed, without ANSI colour
+ * and bounded, so the card says "permission denied" or "network unreachable" instead of a guess.
+ */
+export function updateFailure(
+  command: string,
+  error: { code?: string | number | null; killed?: boolean },
+  stderr: string,
+  stdout: string,
+): string {
+  if (error.code === 'ENOENT') return `CLI update failed: ${basename(command)} was not found.`
+  if (error.killed) return 'CLI update failed: it took longer than 5 minutes and was stopped.'
+  const said = stripVTControlCharacters(stderr.trim() ? stderr : stdout)
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(-3)
+    .join(' ')
+    .slice(-400)
+  return said
+    ? `CLI update failed: ${said}`
+    : 'CLI update failed. Check permissions, network access, and how this CLI was installed.'
+}
 export function providerSetup(
   provider: AgentProvider,
   version: string | null,
@@ -343,7 +368,7 @@ export class ProviderService {
   private offered(provider: AgentProvider, latest: string) {
     return offeredVersion(this.seen[provider] ?? {}, latest, {
       wait: this.preferences().updateWait !== false,
-      pins: !!providerAdapter(provider).pinsVersion,
+      pins: this.pinsVersion(provider),
     })
   }
   /**
@@ -357,7 +382,7 @@ export class ProviderService {
     // The wait keeps a bad release off a working install; with nothing installed yet there is nothing to protect.
     const installed = !!findExecutable(providerBinary(provider, this.preferences().providerBinaries))
     const waiting = this.preferences().updateWait !== false && !now && installed
-    const pins = !!providerAdapter(provider).pinsVersion
+    const pins = this.pinsVersion(provider)
     // Never install a release this policy already knows cannot work; the card explains the manual path instead.
     const known =
       (waiting ? this.offered(provider, this.releases[provider]?.version ?? '') : null) ??
@@ -405,25 +430,19 @@ export class ProviderService {
       })
       this.updateErrors.delete(provider)
       if ('install' in plan) await plan.install()
-      else
+      else {
+        const env = providerEnvironment(provider, config)
+        if (plan.pathDirs?.length) env.PATH = [...plan.pathDirs, env.PATH].filter(Boolean).join(delimiter)
         await new Promise<void>((resolve, reject) =>
           execFile(
             plan.command,
             plan.args,
-            {
-              timeout: 5 * 60_000,
-              maxBuffer: 1024 * 1024,
-              windowsHide: true,
-              env: providerEnvironment(provider, config),
-            },
-            (error) =>
-              error
-                ? reject(
-                    new Error('CLI update failed. Check permissions, network access, and how this CLI was installed.'),
-                  )
-                : resolve(),
+            { timeout: 5 * 60_000, maxBuffer: 1024 * 1024, windowsHide: true, env },
+            (error, stdout, stderr) =>
+              error ? reject(new Error(updateFailure(plan.command, error, stderr, stdout))) : resolve(),
           ),
         )
+      }
       this.statusCache = undefined
       launchCompatibility.invalidate(provider)
       return (await this.status()).find((status) => status.provider === provider)!
@@ -449,6 +468,12 @@ export class ProviderService {
       })
     this.updating.set(provider, work)
     return work
+  }
+  private pinsVersion(provider: AgentProvider): boolean {
+    const pins = providerAdapter(provider).pinsVersion
+    return typeof pins === 'function'
+      ? pins(providerBinary(provider, this.preferences().providerBinaries), providerRuntimeHome(provider))
+      : !!pins
   }
   private key(s: ProviderStatus) {
     return `${s.provider}:${s.binary}:${s.latestVersion}`

@@ -36,6 +36,32 @@ export interface PullRequestWatchStatus {
 /** A hosting service with its own adapter. */
 export type ForgeService = 'github' | 'gitlab' | 'bitbucket' | 'azure'
 
+/** One GitHub repository's live pull request updates: a webhook on it tells the host when anything changes. */
+export interface LivePullRequestRepo {
+  /** `owner/repo`. */
+  name: string
+  slug: string
+  /** `pending`: on, and neither source is ready yet. */
+  state: 'off' | 'pending' | 'live' | 'problem'
+  /** Where its live updates come from: the Ramu GitHub App through Ramu Link, or a webhook on the repository. */
+  source?: 'app' | 'webhook'
+  /** What the App's relay says: installed there, not installed, or the host's GitHub account cannot read it. */
+  app?: 'live' | 'not-installed' | 'no-access'
+  /** Why its webhook is not live: the account is not an admin there, the host has no public address, or GitHub refused. */
+  problem?: 'needs-admin' | 'no-address' | 'failed'
+  /** When GitHub last reached the host for it. */
+  lastDelivery: number | null
+}
+
+export interface LivePullRequestStatus {
+  enabled: boolean
+  /** Whether the host has a public https address GitHub can reach, for webhooks. */
+  reachable: boolean
+  /** The connection to Ramu Link that carries the GitHub App's events. */
+  app: 'off' | 'connecting' | 'connected' | 'signed-out' | 'unavailable'
+  repos: LivePullRequestRepo[]
+}
+
 export interface ForgeStatus {
   availability: ForgeAvailability
   /** The hosting service, so a sign-in hint names the right one. Absent means GitHub. */
@@ -197,6 +223,8 @@ export interface TaskPullRequest {
   state: PullRequestSummary['state']
   draft: boolean
   stage: PullRequestStage
+  /** Work an agent prepared that waits for the person to check and send: drafted replies, or a drafted review. */
+  prepared?: { kind: 'replies'; count: number } | { kind: 'review' }
 }
 
 export type MergeMethod = 'merge' | 'squash' | 'rebase'

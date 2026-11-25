@@ -2,10 +2,12 @@ import { useQueries, useQuery } from '@tanstack/react-query'
 import { ipcQueryKeyOn } from '../dataQueries'
 import { useHost } from '../workspace/HostProvider'
 import { queryInvokerFor } from './hostQuery'
+import { keptPullRequestRead } from './keptPullRequests'
 
 const options = (host: string, taskId: string, repoId: string, branch: string | null, enabled: boolean) => ({
   queryKey: ipcQueryKeyOn(host, 'forge.pullRequest', taskId, repoId, branch),
   queryFn: () => queryInvokerFor(host)('forge.pullRequest', taskId, repoId),
+  ...keptPullRequestRead(host, 'forge.pullRequest', taskId, repoId, branch),
   enabled,
 })
 

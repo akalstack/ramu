@@ -17,6 +17,7 @@ vi.mock('../src/views/agent/components/ThinkingRow', () => ({
   ThinkingRow: ({ text }: { text: string }) => createElement('div', {}, text),
 }))
 vi.mock('../src/Changes', () => ({ TurnChanges: () => null }))
+vi.mock('../src/learning/TurnLearning', () => ({ TurnLearning: () => null }))
 vi.mock('../src/views/agent/components/AdvisorActivity', () => ({ AdvisorActivity: () => null }))
 vi.mock('../src/views/agent/components/AgentGroup', () => ({ AgentGroup: () => null }))
 vi.mock('../src/views/agent/components/AgentTaskCard', () => ({ AgentTaskCard: () => null }))

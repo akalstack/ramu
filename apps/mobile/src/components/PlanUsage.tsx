@@ -1,26 +1,34 @@
-import { UsageAcrossHosts } from './UsageAcrossHosts'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ProviderIcon } from './Logos'
 import { Pressable, View } from 'react-native'
-import { Gauge, Monitor, Network, Settings } from 'lucide-react-native'
+import { Eye, EyeOff, Gauge, RefreshCw, Settings } from 'lucide-react-native'
 import Svg, { Circle } from 'react-native-svg'
 import { useRouter } from 'expo-router'
 import type { AgentProvider, UsageReading } from '@ramu/shared/types'
-import { accountName, planName, providerEnabled } from '@ramu/shared/providers/providers'
 import {
-  summaryUsage,
-  usagePercent,
-  usageStale,
-  usageTone,
-  usageWindow,
-  groupUsageByProvider,
-} from '@ramu/shared/usage/presentation'
+  AGENT_PROVIDERS,
+  accountName,
+  planName,
+  providerEnabled,
+  type AccountLogin,
+} from '@ramu/shared/providers/providers'
+import {
+  activityAcrossHosts,
+  loginRows,
+  loginsWithRoom,
+  providerLoginRows,
+  type ActivityRow,
+  type ActivityTotal,
+  type LoginRow,
+} from '@ramu/shared/usageAcrossHosts'
+import { summaryUsage, usagePercent, usageStale, usageTone, usageWindow } from '@ramu/shared/usage/presentation'
 import { useStore } from '../runtime/store'
 import { useAccountLogins } from '../runtime/useAccountLogins'
+import { setUsageReveal, useUsageReveal } from '../runtime/usageReveal'
 import { useSay } from '../i18n'
 import { providerNames } from '../runtime/types'
 import { font, space, useTheme } from '../theme'
-import { Card, Divider, Row, SectionLabel, Sheet, T } from './ui'
+import { Card, Chip, Divider, Pill, SectionLabel, Sheet, T } from './ui'
 import { SheetGroup, SheetOption } from './SheetOptions'
 
 export function PlanUsageReading({
@@ -68,7 +76,7 @@ export function PlanUsageReading({
               }),
             })
   return (
-    <View style={{ padding: space.m, gap: space.s }}>
+    <View style={{ paddingHorizontal: space.m, paddingVertical: compact ? space.s : space.m, gap: space.s }}>
       {!compact ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
           <ProviderIcon provider={r.provider} size={16} />
@@ -86,7 +94,7 @@ export function PlanUsageReading({
             {value}
           </T>
         ) : (
-          <T weight="700" size={20} style={{ color, fontVariant: ['tabular-nums'] }}>
+          <T weight="700" size={compact ? font.body : 20} style={{ color, fontVariant: ['tabular-nums'] }}>
             {Math.round(percent)}%
           </T>
         )}
@@ -94,9 +102,11 @@ export function PlanUsageReading({
       {percent !== null ? (
         <View
           accessibilityLabel={value}
-          style={{ height: 8, borderRadius: 4, backgroundColor: c.fill, overflow: 'hidden' }}
+          style={{ height: compact ? 6 : 8, borderRadius: 4, backgroundColor: c.fill, overflow: 'hidden' }}
         >
-          <View style={{ height: 8, borderRadius: 4, width: `${Math.max(2, percent)}%`, backgroundColor: color }} />
+          <View
+            style={{ height: '100%', borderRadius: 4, width: `${Math.max(2, percent)}%`, backgroundColor: color }}
+          />
         </View>
       ) : null}
       <T tone="muted" size={font.caption}>
@@ -113,28 +123,6 @@ export function PlanUsageReading({
           .join(' · ')}
       </T>
     </View>
-  )
-}
-
-/**
- * An account's plan, and when its readings are old how long ago they were updated, as the desktop shows them: once
- * for the account, not on every window.
- */
-function AccountFacts({ readings, offline }: { readings: UsageReading[]; offline: boolean }) {
-  const { language } = useStore()
-  const say = useSay()
-  const id = language === 'id'
-  const now = Date.now()
-  const plan = [...readings].filter((r) => r.plan).sort((a, b) => b.updatedAt - a.updatedAt)[0]?.plan
-  const newest = Math.max(...readings.map((r) => r.updatedAt))
-  const stale = offline || readings.every((r) => usageStale(r, now))
-  if (!plan && !stale) return null
-  return (
-    <T size={font.caption} tone={stale ? 'warn' : 'muted'}>
-      {[plan ? planName(plan) : null, stale ? say('Updated {0}', { 0: relative(newest, say, id) }) : null]
-        .filter(Boolean)
-        .join(' · ')}
-    </T>
   )
 }
 
@@ -158,6 +146,26 @@ function relative(at: number, say: ReturnType<typeof useSay>, id: boolean): stri
   return new Date(at).toLocaleDateString(id ? 'id-ID' : 'en-US')
 }
 
+/** Windows in reading order: the short window, then the weekly or monthly allowance, then model-specific ones. */
+const windowOrder = (reading: UsageReading) =>
+  (reading.scope ? 2 : 0) + (reading.window === 'five_hour' ? 0 : reading.window === 'quota' ? 1.5 : 1)
+
+/** Each provider's sign-in emails by account id, from a host's logins, for matching a login across hosts. */
+const emailsOf = (logins: Record<string, Record<string, AccountLogin>> | undefined) =>
+  Object.fromEntries(
+    Object.entries(logins ?? {}).map(([provider, accounts]) => [
+      provider,
+      Object.fromEntries(
+        Object.entries(accounts).flatMap(([id, login]) => (login.email ? [[id, login.email] as const] : [])),
+      ),
+    ]),
+  )
+
+/**
+ * Plan usage for every login on the given hosts: one section per provider, one card per login with all its windows,
+ * the login threads use marked, and the week's activity. Labels and emails stay hidden until asked for, since the
+ * phone may be showing its screen to others.
+ */
 export function PlanUsageSheet({
   hosts: hostList,
   open,
@@ -177,8 +185,8 @@ export function PlanUsageSheet({
   const router = useRouter()
   const [accounts, setAccounts] = useState<Record<string, UsageReading[]>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [filter, setFilter] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const reveal = useUsageReveal()
   const say = useSay()
   const hostKey = hostList.join('\n')
   // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by the ids, so a caller's new array of the same hosts keeps it
@@ -208,7 +216,6 @@ export function PlanUsageSheet({
     refreshing.current = null
     setBusy(false)
     setErrors({})
-    setFilter(null)
     if (!open) return
     const read = (id: string) => {
       void readAccounts(id, request).catch(() => {
@@ -234,7 +241,30 @@ export function PlanUsageSheet({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [open, key, connectionKey, store.language] by design; the values it reads beyond these are current as of that run
   }, [open, key, connectionKey, store.language])
-  const refreshHosts = hosts.filter((id) => (!filter || filter === id) && store.isOnline(id))
+  const name = (id: string) => store.computers.find((h) => h.id === id)?.name ?? id
+  const config = (id: string) => store.appPreferences[id]?.providerBinaries
+  const multiHost = hosts.length > 1
+  const offline = hosts.filter((id) => !store.isOnline(id))
+  const rows = loginRows(
+    hosts.map((id) => ({
+      hostId: id,
+      host: name(id),
+      readings: (accounts[id] ?? store.usage[id] ?? []).filter((r) => providerEnabled(config(id), r.provider)),
+      emails: emailsOf(logins[id]),
+      config: config(id),
+    })),
+  ).filter(
+    (row) =>
+      (!provider || row.provider === provider) &&
+      (!accountId || row.places.some((place) => place.accountId === accountId)),
+  )
+  const sections = AGENT_PROVIDERS.flatMap((id) => {
+    const own = providerLoginRows(rows, id)
+    return own.length ? [{ provider: id, rows: own }] : []
+  })
+  // Claude is the provider that can be asked for its usage outside a session; the others report while they run.
+  const refreshHosts = hosts.filter((id) => store.isOnline(id))
+  const canRefresh = (!provider || provider === 'claude-code') && refreshHosts.length > 0
   const refresh = async () => {
     if (refreshing.current !== null || !open) return
     const request = generation.current
@@ -248,7 +278,7 @@ export function PlanUsageSheet({
           await store.invoke(id, 'usage.refresh')
           if (request !== generation.current) break
           await readAccounts(id, request)
-        } catch (error) {
+        } catch {
           if (request !== generation.current) break
           setErrors((all) => ({
             ...all,
@@ -263,138 +293,243 @@ export function PlanUsageSheet({
       }
     }
   }
+  const failed = hosts.filter((id) => errors[id])
   return (
     <Sheet presentation="screen" open={open} onClose={onClose} title={say('Plan usage')}>
       {context}
-      <T tone="muted" style={{ padding: space.m }}>
-        {say('Shared across threads on this account')}
-      </T>
-      {!provider || provider === 'claude-code' ? (
-        <Row onPress={busy || !refreshHosts.length ? undefined : () => void refresh()}>
-          <T tone="muted">{busy ? say('Refreshing…') : say('Refresh Claude usage')}</T>
-        </Row>
-      ) : null}
-      {hosts.length > 1 ? (
-        <SheetGroup>
-          <SheetOption icon={Network} title={say('All hosts')} selected={!filter} onPress={() => setFilter(null)} />
-          {hosts.map((id) => (
-            <SheetOption
-              key={id}
-              icon={Monitor}
-              title={store.computers.find((h) => h.id === id)?.name ?? id}
-              selected={filter === id}
-              onPress={() => setFilter(id)}
+      <View style={{ paddingHorizontal: space.l, paddingTop: space.s, gap: space.m }}>
+        <T tone="muted" size={font.control}>
+          {multiHost
+            ? say('Every login on every connected host. A login signed in on several hosts shows once.')
+            : say('Every login on this host. At a limit, fallback moves a thread only to a login with an API key.')}
+        </T>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
+          <Chip
+            small
+            fill
+            icon={reveal ? EyeOff : Eye}
+            label={reveal ? say('Hide accounts') : say('Show accounts')}
+            accessibilityLabel={reveal ? say('Hide account names and emails') : say('Show account names and emails')}
+            onPress={() => setUsageReveal(!reveal)}
+          />
+          {canRefresh ? (
+            <Chip
+              small
+              fill
+              icon={RefreshCw}
+              label={busy ? say('Refreshing…') : say('Refresh Claude usage')}
+              onPress={() => void refresh()}
             />
-          ))}
-        </SheetGroup>
-      ) : null}
-      {!filter && !provider ? (
-        <UsageAcrossHosts
-          hosts={hosts}
-          readings={Object.fromEntries(hosts.map((id) => [id, accounts[id] ?? store.usage[id] ?? []]))}
-        />
-      ) : null}
-      {hosts
-        .filter((id) => !filter || id === filter)
-        .map((id) => {
-          const host = store.computers.find((h) => h.id === id)
-          const rows = (accounts[id] ?? store.usage[id] ?? []).filter(
-            (r) =>
-              (!provider || r.provider === provider) &&
-              (!accountId || (r.accountId ?? 'default') === accountId) &&
-              providerEnabled(store.appPreferences[id]?.providerBinaries, r.provider),
-          )
-          return (
-            <View key={id}>
-              <SectionLabel>
-                {host?.name ?? id}
-                {store.isOnline(id) ? '' : ` · ${say('Offline')}`}
-              </SectionLabel>
-              {errors[id] ? (
-                <T tone="bad" style={{ padding: space.m }}>
-                  {errors[id]}
-                </T>
-              ) : null}
-              {!rows.length ? (
-                <T tone="muted" style={{ padding: space.m }}>
-                  {say('Not reported')}
-                </T>
-              ) : (
-                groupUsageByProvider(rows).map((group) => (
-                  <View key={`${id}:${group.provider}`}>
-                    {provider ? null : (
-                      <View
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: space.s,
-                          paddingHorizontal: space.m,
-                          paddingTop: space.s,
-                        }}
-                      >
-                        <ProviderIcon provider={group.provider} size={14} />
-                        <T tone="muted" size={font.caption} style={{ flexShrink: 1 }}>
-                          {providerNames[group.provider]} ·{' '}
-                          {group.readings.length === 1
-                            ? say('{0} window', { 0: 1 })
-                            : say('{0} windows', { 0: group.readings.length })}
-                          {group.attention ? ` · ${say('{0} need attention', { 0: group.attention })}` : ''}
-                        </T>
-                      </View>
-                    )}
-                    {Array.from(new Set(group.readings.map((reading) => reading.accountId ?? 'default'))).map(
-                      (account) => {
-                        const readings = group.readings.filter(
-                          (reading) => (reading.accountId ?? 'default') === account,
-                        )
-                        const title = accountName(
-                          store.appPreferences[id]?.providerBinaries,
-                          group.provider,
-                          account,
-                          logins[id]?.[group.provider]?.[account],
-                          say,
-                        )
-                        return (
-                          <Card key={account} style={{ margin: space.m }}>
-                            <View style={{ padding: space.m, gap: space.xs }}>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
-                                <ProviderIcon provider={group.provider} size={18} />
-                                <T weight="600" style={{ flexShrink: 1 }}>
-                                  {providerNames[group.provider]} · {title}
-                                </T>
-                              </View>
-                              <AccountFacts readings={readings} offline={!store.isOnline(id)} />
-                            </View>
-                            {readings.map((reading) => (
-                              <View key={`${reading.window}:${reading.scope ?? ''}`}>
-                                <Divider />
-                                <PlanUsageReading reading={reading} compact offline={!store.isOnline(id)} />
-                              </View>
-                            ))}
-                          </Card>
-                        )
-                      },
-                    )}
+          ) : null}
+        </View>
+        {failed.map((id) => (
+          <T key={id} tone="bad" size={font.caption}>
+            {multiHost ? `${name(id)} · ${errors[id]}` : errors[id]}
+          </T>
+        ))}
+        {offline.length ? (
+          <T tone="warn" size={font.caption}>
+            {say('Offline: {0}. Last-known readings are shown.', { 0: offline.map(name).join(', ') })}
+          </T>
+        ) : null}
+      </View>
+      {sections.length ? (
+        sections.map((section) => (
+          <View key={section.provider}>
+            <SectionLabel
+              right={
+                section.rows.length > 1 ? (
+                  <T size={font.caption} tone="muted">
+                    {say('{0} logins · {1} with room', {
+                      0: section.rows.length,
+                      1: loginsWithRoom(section.rows),
+                    })}
+                  </T>
+                ) : undefined
+              }
+            >
+              {providerNames[section.provider]}
+            </SectionLabel>
+            <Card style={{ marginHorizontal: space.l }}>
+              {section.rows.map((row, index) => {
+                const source = row.namedBy.hostId
+                const title = accountName(
+                  config(source),
+                  row.provider,
+                  row.namedBy.accountId,
+                  logins[source]?.[row.provider]?.[row.namedBy.accountId],
+                  say,
+                  reveal,
+                )
+                return (
+                  <View
+                    key={`${row.email ?? ''}:${row.places.map((place) => `${place.hostId}/${place.accountId}`).join(',')}`}
+                  >
+                    {index ? <Divider /> : null}
+                    <LoginCard
+                      row={row}
+                      title={title}
+                      multiHost={multiHost}
+                      offline={row.where.every((place) => !store.isOnline(place.hostId))}
+                    />
                   </View>
-                ))
-              )}
-            </View>
-          )
-        })}
-      <SheetGroup>
-        <SheetOption
-          icon={Settings}
-          title={say('Models & access settings')}
-          onPress={() => {
-            const target = filter ?? (hosts.length === 1 ? hosts[0] : undefined)
-            if (target) store.select(target)
-            onClose()
-            router.push('/settings/providers')
-          }}
-        />
-      </SheetGroup>
+                )
+              })}
+            </Card>
+          </View>
+        ))
+      ) : (
+        <T tone="muted" style={{ padding: space.l }}>
+          {say('No usage reported yet. It appears once a provider runs.')}
+        </T>
+      )}
+      {provider ? null : <WeekActivity hosts={hosts} />}
+      <View style={{ paddingTop: space.l }}>
+        <SheetGroup>
+          <SheetOption
+            icon={Settings}
+            title={say('Models & access settings')}
+            onPress={() => {
+              if (hosts.length === 1) store.select(hosts[0]!)
+              onClose()
+              router.push('/settings/providers')
+            }}
+          />
+        </SheetGroup>
+      </View>
     </Sheet>
   )
+}
+
+/** One login: its name, whether threads use it and its plan, where it is signed in, then each limit window. */
+function LoginCard({
+  row,
+  title,
+  multiHost,
+  offline,
+}: {
+  row: LoginRow
+  title: string
+  multiHost: boolean
+  offline: boolean
+}) {
+  const { c } = useTheme()
+  const { language } = useStore()
+  const say = useSay()
+  const now = Date.now()
+  const stale = offline || row.readings.every((reading) => usageStale(reading, now))
+  const readings = [...row.readings].sort((a, b) => windowOrder(a) - windowOrder(b))
+  return (
+    <View style={{ paddingVertical: space.s }}>
+      <View style={{ paddingHorizontal: space.m, paddingTop: space.xs, gap: space.xs }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+          <ProviderIcon provider={row.provider} size={16} />
+          <T weight="600" numberOfLines={1} style={{ flexShrink: 1 }}>
+            {title}
+          </T>
+          {row.inUse ? (
+            <Pill tone="accent" wash={c.accentSoft}>
+              {say('In use')}
+            </Pill>
+          ) : null}
+          {row.plan ? <Pill>{planName(row.plan)}</Pill> : null}
+        </View>
+        {multiHost
+          ? row.where.map((place) => (
+              <View
+                key={place.hostId}
+                accessibilityLabel={place.inUse ? say('Threads on {0} use this login', { 0: place.host }) : place.host}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}
+              >
+                <View
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: 3,
+                    backgroundColor: place.inUse ? c.primary : c.lineStrong,
+                  }}
+                />
+                <T size={font.caption} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
+                  {place.inUse ? say('{0} · in use', { 0: place.host }) : place.host}
+                </T>
+              </View>
+            ))
+          : null}
+        {row.matchedBy === 'limits' ? (
+          <T size={font.caption} tone="muted">
+            {say('Matched by its limits')}
+          </T>
+        ) : null}
+        {stale ? (
+          <T size={font.caption} tone="warn">
+            {say('Updated {0}', { 0: relative(row.newest, say, language === 'id') })}
+          </T>
+        ) : null}
+      </View>
+      {readings.map((reading) => (
+        <PlanUsageReading key={`${reading.window}:${reading.scope ?? ''}`} reading={reading} compact />
+      ))}
+    </View>
+  )
+}
+
+/** This week's finished turns, reported cost and tokens, added across hosts; a host not read is named, not zero. */
+function WeekActivity({ hosts }: { hosts: string[] }) {
+  const say = useSay()
+  const store = useStore()
+  const [week, setWeek] = useState<ActivityTotal | null>(null)
+  const name = (id: string) => store.computers.find((pc) => pc.id === id)?.name ?? id
+  const key = hosts.map((id) => `${id}:${store.isOnline(id)}`).join(',')
+  useEffect(() => {
+    let live = true
+    void Promise.all(
+      hosts.map(async (id) => ({
+        host: name(id),
+        rows: store.isOnline(id)
+          ? await (store.invoke(id, 'usage.activity', 7) as Promise<ActivityRow[]>).catch(() => null)
+          : null,
+      })),
+    ).then((rows) => live && setWeek(activityAcrossHosts(rows)))
+    return () => {
+      live = false
+    }
+  }, [key]) // eslint-disable-line react-hooks/exhaustive-deps -- keyed on the hosts and whether each is online
+  if (!week?.turns) return null
+  const locale = store.language === 'id' ? 'id-ID' : 'en-US'
+  const figures = [
+    say('{0} turns', { 0: week.turns }),
+    week.costUsd > 0 ? new Intl.NumberFormat(locale, { style: 'currency', currency: 'USD' }).format(week.costUsd) : '',
+    week.tokens > 0 ? say('{0} tokens', { 0: compactCount(week.tokens, locale) }) : '',
+  ].filter(Boolean)
+  const notes = [
+    week.byHost.length > 1 ? week.byHost.map((entry) => `${entry.host} ${entry.turns}`).join(', ') : '',
+    week.unpricedOn.length ? say('Some providers on {0} report no cost', { 0: week.unpricedOn.join(', ') }) : '',
+    week.tokens > 0 && week.untokenedOn.length
+      ? say('Some providers on {0} report no tokens', { 0: week.untokenedOn.join(', ') })
+      : '',
+    week.missing.length ? say('Not counted: {0}', { 0: week.missing.join(', ') }) : '',
+  ].filter(Boolean)
+  return (
+    <View>
+      <SectionLabel>{say('This week')}</SectionLabel>
+      <Card style={{ marginHorizontal: space.l, padding: space.m, gap: space.xs }}>
+        <T weight="600" style={{ fontVariant: ['tabular-nums'] }}>
+          {figures.join(' · ')}
+        </T>
+        {notes.map((note) => (
+          <T key={note} size={font.caption} tone="muted">
+            {note}
+          </T>
+        ))}
+      </Card>
+    </View>
+  )
+}
+
+/** "51.4M": a large count short enough for one line; Hermes formats compact notation unreliably. */
+function compactCount(count: number, locale: string): string {
+  const [divisor, suffix] = count >= 1e9 ? [1e9, 'B'] : count >= 1e6 ? [1e6, 'M'] : count >= 1e3 ? [1e3, 'K'] : [1, '']
+  return `${(count / divisor).toLocaleString(locale, { maximumFractionDigits: divisor === 1 ? 0 : 1 })}${suffix}`
 }
 
 export function PlanUsageSummary({ hostIds, actionOnly = false }: { hostIds: string[]; actionOnly?: boolean }) {

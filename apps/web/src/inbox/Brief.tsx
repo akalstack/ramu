@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { finishThreads } from '../chat/FinishThreadDialog'
-import { stageLabel } from '../git/PullRequestIcon'
+import { pullRequestRowDetail } from '@ramu/shared/pullRequests'
 import { ChevronRight, CircleCheck } from 'lucide-react'
 import {
   blockerTally,
@@ -153,6 +153,11 @@ function BriefRowView({
     >
       {t('Mark done')}
     </Button>
+  ) : row.kind === 'pull-request' && row.chat.pullRequest?.prepared ? (
+    // Drafts are checked where they are, never sent from here unseen.
+    <Button size="xs" disabled={!online} onClick={open}>
+      {t('Review and send')}
+    </Button>
   ) : request?.kind === 'approval' ? (
     <Button
       size="xs"
@@ -252,7 +257,7 @@ export function Brief() {
       const pr = row.chat.pullRequest!
       return {
         ...base,
-        detail: `#${pr.number} · ${stageLabel(pr.stage)}`,
+        detail: pullRequestRowDetail(pr, t),
         pullRequest: { url: pr.url, closed: pr.state !== 'open' },
       }
     }
