@@ -547,13 +547,7 @@ it('publishes a page without records or AI to the web and updates the same site 
     if (url.includes('/contents/') && !init?.method) return new Response('', { status: 404 })
     return new Response('{}')
   }) as typeof fetch
-  const icons = { 192: Buffer.from('png192'), 512: Buffer.from('png512') }
-  const publisher = new PagePublisher(
-    pages,
-    () => forge as never,
-    fetcher,
-    async () => icons,
-  )
+  const publisher = new PagePublisher(pages, () => forge as never, fetcher)
   expect(publisher.ready()).toBe(true)
   await expect(publisher.publish(page.id)).rejects.toThrow('Make it a project')
   const plain = interactive.publish('s', (await interactive.preview('s', { ...input, html: '<p>Trip</p>' })).id, 'p1')
@@ -565,18 +559,10 @@ it('publishes a page without records or AI to the web and updates the same site 
     siteId: 'trip-costs',
     version: 1,
   })
-  // An installable site: manifest, icons and the service worker, written last so it only sees files already there.
-  const written = requests.filter((r) => r.startsWith('PUT')).map((r) => r.split('/contents/')[1])
-  expect(written).toEqual(['icon.svg', 'icon-192.png', 'icon-512.png', 'manifest.webmanifest', 'index.html', 'sw.js'])
   requests.length = 0
   await publisher.publish(trip.id)
   expect(requests.some((request) => request.startsWith('POST') && request.endsWith('/user/repos'))).toBe(false)
-  const signedOut = new PagePublisher(
-    pages,
-    () => undefined,
-    fetcher,
-    async () => null,
-  )
+  const signedOut = new PagePublisher(pages, () => undefined, fetcher)
   expect(signedOut.ready()).toBe(false)
   await expect(signedOut.publish(trip.id)).rejects.toThrow('Connect a GitHub account')
 })
@@ -722,4 +708,31 @@ it('fills an artifact file from an image attachment the thread holds, and refuse
   const bare = new ToolRegistry(new McpServer({ name: 'test', version: '1' }), true)
   registerInteractiveTools(bare.server, store, 's')
   expect((await bare.invoke('artifact_preview', input, extra)).isError).toBe(true)
+})
+
+it('keeps a picture as the app icon, outside the page files, until the person goes back to the emoji', async () => {
+  const { interactive, pages } = await setup()
+  const plain = interactive.publish('s', (await interactive.preview('s', { ...input, html: '<p>Trip</p>' })).id, 'ic')
+  const trip = pages.keep('s', plain.id, { title: 'Trip costs', icon: '🧳' })
+  expect(pages.appIcon(trip.id)).toBeNull()
+  const png = `data:image/png;base64,${Buffer.from('png').toString('base64')}`
+  const set = pages.setAppIcon(trip.id, png)
+  expect(set.appIcon).toEqual(expect.any(Number))
+  expect(pages.appIcon(trip.id)).toBe(png)
+  // The page's own code never reads it as one of its files.
+  expect(() => pages.file(trip.id, 'ramu-file:app-icon')).toThrow('File not found')
+  expect(() => pages.setAppIcon(trip.id, 'data:image/svg+xml;base64,PHN2Zz4=')).toThrow('JPEG, PNG or WebP')
+  const back = pages.setAppIcon(trip.id, null)
+  expect(back.appIcon).toBeUndefined()
+  expect(pages.appIcon(trip.id)).toBeNull()
+})
+
+it('asks for an app icon from the name, or from what the person describes', async () => {
+  const { appIconPrompt } = await import('../src/ipc/handlers/artifacts')
+  expect(appIconPrompt('Trip "costs"', '🧳')).toContain('called "Trip  costs "')
+  expect(appIconPrompt('Trip', '🧳')).toContain('emoji 🧳')
+  expect(appIconPrompt('Trip', '🧳', 'a red suitcase\nwith stickers')).toContain(
+    'It should show: a red suitcase with stickers.',
+  )
+  expect(appIconPrompt('Trip', '🧳')).toContain('no text')
 })

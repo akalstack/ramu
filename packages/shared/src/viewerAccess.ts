@@ -66,6 +66,8 @@ const viewerMethods = new Set([
   'artifacts.document',
   'artifacts.state',
   'artifacts.versions',
+  // A viewer installing an artifact as an app on its own desktop draws the icon the owner chose.
+  'artifacts.appIcon',
   // Share links: a viewer device opens an artifact someone shared, and adds records or edits its text only when the
   // link allows it; the host checks the link on each call.
   'artifacts.openShare',

@@ -27,6 +27,9 @@ import { randomUUID } from 'node:crypto'
 import { ElectronGuestFactory } from './electronGuest'
 import { browserMethod, isBrowserMethod } from './browserMethods'
 import { LiveWindow, liveMethodAllowed, liveWindowFile } from './liveWindow'
+import { ArtifactApps } from './artifactApps'
+import { ArtifactWindows, artifactWindowMethodAllowed } from './artifactWindows'
+import { artifactLink, parseArtifactLink } from '@ramu/shared/artifacts'
 import {
   isHostInvokeAllowed,
   isSettingsActionAllowed,
@@ -52,7 +55,7 @@ import { editorMenu, type EditorMenuOptions } from './editorMenu'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir, hostname } from 'node:os'
 import { type AppPreferences } from '@ramu/shared/types'
-import { isAbsolute, join } from 'node:path'
+import { basename, dirname, isAbsolute, join } from 'node:path'
 import { FILE_LIST_TYPE, fileListEntry, pathsFromUriList } from './fileClipboard'
 import {
   app,
@@ -70,6 +73,7 @@ import {
   systemPreferences,
   powerMonitor,
   nativeTheme,
+  nativeImage,
   net,
   screen,
   type Session,
@@ -178,14 +182,33 @@ const CSP = [
 const APP_LINK = /^ramu:\/\/(pair|plugin\/install)(?:[/?]|$)/i
 const queuedPairLinks: string[] = []
 let showPairLink: ((link: string) => void) | null = null
+// `ramu://artifact/<host>/<id>` from an installed artifact's launcher opens that artifact in its own window.
+const queuedArtifacts: { hostId: string; artifactId: string }[] = []
+let openArtifactWindow: ((hostId: string, artifactId: string) => void) | null = null
+let showMainWindow: (() => void) | null = null
 const receivePairLink = (link: string) => {
-  if (link.length > 4096 || !APP_LINK.test(link)) return
+  if (link.length > 4096) return
+  const artifact = parseArtifactLink(link)
+  if (artifact && !artifact.share) {
+    if (openArtifactWindow) openArtifactWindow(artifact.computerId, artifact.artifactId)
+    else queuedArtifacts.push({ hostId: artifact.computerId, artifactId: artifact.artifactId })
+    return
+  }
+  if (!APP_LINK.test(link)) return
   if (showPairLink) showPairLink(link)
   else queuedPairLinks.push(link)
 }
 app.on('open-url', (event, url) => {
   event.preventDefault()
   receivePairLink(url)
+})
+// On Windows and Linux a launcher starts Ramu again with its link: the running Ramu takes the link and the new one
+// quits. macOS hands links to the running app itself.
+const secondCopy = app.isPackaged && process.platform !== 'darwin' && !app.requestSingleInstanceLock()
+if (secondCopy) app.exit(0)
+app.on('second-instance', (_event, argv) => {
+  for (const arg of argv) receivePairLink(arg)
+  if (argv.includes('--pairing-request') || !argv.some((arg) => arg.startsWith('ramu://'))) showMainWindow?.()
 })
 for (const arg of process.argv) receivePairLink(arg)
 if (app.isPackaged) app.setAsDefaultProtocolClient('ramu')
@@ -498,6 +521,12 @@ async function main() {
   }
   // The window may still be loading; the renderer keeps the link until the screen asks for it.
   for (const link of queuedPairLinks.splice(0)) setTimeout(() => showPairLink?.(link), 1500)
+  showMainWindow = () => {
+    if (win.isDestroyed()) return
+    if (win.isMinimized()) win.restore()
+    win.show()
+    win.focus()
+  }
 
   // Packaged macOS builds take the icon from the bundle; development, Linux and Windows read it from assets/.
   // Packaged builds copy assets/ beside the app; in the monorepo it sits at the repository root.
@@ -518,7 +547,8 @@ async function main() {
     minWidth: 900,
     minHeight: 560,
     title: 'Ramu',
-    show: !e2eHeadless && !launchedForPairing,
+    // Opened by an installed artifact's launcher, only that artifact's window shows; the Dock or Ramu brings this one.
+    show: !e2eHeadless && !launchedForPairing && queuedArtifacts.length === 0,
     backgroundColor: '#131315',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 16, y: 16 } } : {}),
@@ -536,6 +566,71 @@ async function main() {
     if (lastBounds?.maximized && !launchedForPairing) win.maximize()
     rememberBounds(win, windowFile)
   }
+
+  // Each artifact installed as an app opens in a window of its own, loading the same page with only that artifact.
+  const loadRenderer = (window: BrowserWindow, query: Record<string, string>) =>
+    process.env.ELECTRON_RENDERER_URL
+      ? window.loadURL(`${process.env.ELECTRON_RENDERER_URL}?${new URLSearchParams(query)}`)
+      : window.loadFile(join(import.meta.dirname, '../renderer/index.html'), { query })
+  // On Windows a Squirrel install starts through Update.exe, which follows the app across updates; a launcher that
+  // named the versioned Ramu.exe would break after the next one.
+  const squirrelUpdate = join(dirname(process.execPath), '..', 'Update.exe')
+  const launchCommand =
+    process.platform === 'win32' && app.isPackaged && existsSync(squirrelUpdate)
+      ? { executable: squirrelUpdate, args: ['--processStart', basename(process.execPath), '--process-start-args'] }
+      : { executable: process.env.APPIMAGE || process.execPath, args: app.isPackaged ? [] : [app.getAppPath()] }
+  const artifactApps = new ArtifactApps({
+    platform: process.platform,
+    home: homedir(),
+    userData,
+    dataHome:
+      process.platform === 'win32'
+        ? app.getPath('appData')
+        : process.env.XDG_DATA_HOME || join(homedir(), '.local', 'share'),
+    command: launchCommand,
+    writeShortcut: (path, options) => {
+      if (!shell.writeShortcutLink(path, 'replace', { ...options, iconIndex: 0, description: 'Ramu artifact' }))
+        throw new Error(t('Could not add the app to the Start menu.'))
+    },
+  })
+  const artifactWindows = new ArtifactWindows({
+    userData,
+    preload: join(import.meta.dirname, '../preload/index.cjs'),
+    backgroundColor: () => (nativeTheme.shouldUseDarkColors ? '#131315' : '#ececef'),
+    load: async (window, query) => {
+      // This window has the system's own title bar, so the page keeps no room for the macOS window buttons.
+      window.webContents.on('dom-ready', () => window.webContents.send('ramu:window-chrome', { controlsInset: 0 }))
+      window.webContents.on('context-menu', (_event, params) => {
+        const items = editMenuItems(params)
+        if (items.length) Menu.buildFromTemplate(items).popup({ window })
+      })
+      window.on('closed', () => {
+        // Opened only for this artifact, Ramu goes away with its last artifact window, as an app would.
+        if (!win.isDestroyed() && !win.isVisible() && artifactWindows.all().length === 0) app.quit()
+      })
+      await loadRenderer(window, query)
+    },
+    icon: (hostId, artifactId) => {
+      const installed = artifactApps.list().find((app) => app.hostId === hostId && app.artifactId === artifactId)
+      return installed
+        ? {
+            png: artifactApps.iconFile(hostId, artifactId, 'png'),
+            ico: artifactApps.iconFile(hostId, artifactId, 'ico'),
+            title: installed.title,
+          }
+        : null
+    },
+    relaunch: (hostId, artifactId) => ({
+      executable: launchCommand.executable,
+      args: [...launchCommand.args, artifactLink({ computerId: hostId, artifactId })]
+        .map((arg) => `"${arg}"`)
+        .join(' '),
+    }),
+  })
+  // Closing Ramu's main window quits it, so its artifact windows close with it.
+  win.on('closed', () => {
+    for (const window of artifactWindows.all()) window.close()
+  })
 
   // Each computer's page gets the same behavior: edit menu, window chrome, and no navigation away from the app.
   const sendChrome = (contents: WebContents) => {
@@ -667,6 +762,8 @@ async function main() {
   // One shell receives tagged events from every host. Stores route and bound their own work in the renderer.
   const sendTo = (id: string, channel: string, payload: unknown) => {
     if (!win.webContents.isDestroyed()) win.webContents.send(channel, payload, id)
+    // An artifact's own window follows the same hosts, and keeps only the events its artifact view listens to.
+    for (const window of artifactWindows.all()) window.webContents.send(channel, payload, id)
   }
   // Device-wide UI state is shared by every window and is never buffered: it is tiny and idempotent.
   const deviceState = new DeviceState(join(userData, 'device-state.json'))
@@ -1055,14 +1152,59 @@ async function main() {
     if (channel) observeHostActivity(id, channel, {})
     return result
   }
+  const artifactTarget = (hostId: unknown, artifactId: unknown) => {
+    if (
+      typeof hostId !== 'string' ||
+      typeof artifactId !== 'string' ||
+      !parseArtifactLink(artifactLink({ computerId: hostId, artifactId }))
+    )
+      throw new Error('Invalid artifact')
+    return { hostId, artifactId }
+  }
+  /** Installs an artifact as an app, removes it, or opens its own window. */
+  const artifactAppMethod = (method: string, args: unknown[]) => {
+    if (method === 'artifactApps.list') return artifactApps.list()
+    if (method === 'artifactApps.install') {
+      const [input, iconPng] = args
+      const prefix = 'data:image/png;base64,'
+      if (typeof iconPng !== 'string' || !iconPng.startsWith(prefix) || iconPng.length > 2_000_000)
+        throw new Error('Invalid icon')
+      const icon = nativeImage.createFromBuffer(Buffer.from(iconPng.slice(prefix.length), 'base64'))
+      if (icon.isEmpty()) throw new Error('Invalid icon')
+      const installed = artifactApps.install(input, (size) =>
+        icon.resize({ width: size, height: size, quality: 'best' }).toPNG(),
+      )
+      for (const window of artifactWindows.all()) window.webContents.send('artifact-apps:changed', {})
+      if (!win.isDestroyed()) win.webContents.send('artifact-apps:changed', {})
+      return void installed
+    }
+    if (method === 'artifactApps.remove') {
+      const { hostId, artifactId } = artifactTarget(args[0], args[1])
+      artifactApps.remove(hostId, artifactId)
+      for (const window of artifactWindows.all()) window.webContents.send('artifact-apps:changed', {})
+      if (!win.isDestroyed()) win.webContents.send('artifact-apps:changed', {})
+      return
+    }
+    if (method === 'artifactApps.open') {
+      const { hostId, artifactId } = artifactTarget(args[0], args[1])
+      return artifactWindows.open(hostId, artifactId)
+    }
+    throw new Error('Invalid request')
+  }
   ipcMain.handle('ramu:invoke', async (event, requestMethod: unknown, requestArgs: unknown, requestHost?: unknown) => {
     // Only our windows may invoke IPC. Normal calls reach their owning computer; explicit computer management validates its target below.
     // The live view window is trusted only for watching and stopping.
     const fromLive = liveWindow.owns(event.sender)
-    const self = event.sender === win.webContents || fromLive ? LOCAL : undefined
+    const fromArtifact = artifactWindows.owns(event.sender)
+    const self = event.sender === win.webContents || fromLive || fromArtifact ? LOCAL : undefined
     if (!self || event.senderFrame !== event.sender.mainFrame) throw new Error('Untrusted IPC sender')
     if (typeof requestMethod !== 'string' || !Array.isArray(requestArgs)) throw new Error('Invalid request')
     if (fromLive && !liveMethodAllowed(requestMethod)) throw new Error('That is not available in the live view.')
+    // The main window's own state (threads it streams, its host filter) stays its own; the artifact window's store
+    // asks for them too and is answered without changing them.
+    if (fromArtifact && !artifactWindowMethodAllowed(requestMethod))
+      return requestMethod === 'computers.scope' ? computers.list(self) : undefined
+    if (requestMethod.startsWith('artifactApps.')) return artifactAppMethod(requestMethod, requestArgs)
     if (requestMethod === 'live.window') {
       if (fromLive) throw new Error('That is not available in the live view.')
       if (requestArgs[0] === true) liveWindow.open(requestArgs[1] === true)
@@ -1669,7 +1811,9 @@ async function main() {
 
   // Device-wide UI state: read synchronously by each page at startup, written through and fanned out to the other windows.
   ipcMain.on('ramu:device-state', (event) => {
-    event.returnValue = event.sender === win.webContents ? deviceState.snapshot() : {}
+    // An artifact's window reads the same appearance and language; only the main window changes them.
+    event.returnValue =
+      event.sender === win.webContents || artifactWindows.owns(event.sender) ? deviceState.snapshot() : {}
   })
   ipcMain.on('ramu:device-state:set', (event, key: unknown, value: unknown) => {
     if (event.sender !== win.webContents || event.senderFrame !== event.sender.mainFrame) return
@@ -1688,6 +1832,8 @@ async function main() {
     await win.loadURL(process.env.ELECTRON_RENDERER_URL)
   } else await win.loadFile(join(import.meta.dirname, '../renderer/index.html'))
 
+  openArtifactWindow = (hostId, artifactId) => artifactWindows.open(hostId, artifactId)
+  for (const { hostId, artifactId } of queuedArtifacts.splice(0)) artifactWindows.open(hostId, artifactId)
   computers.start()
   const networkWake = () => refreshRuntimeNetwork(true)
   powerMonitor.on('resume', networkWake)

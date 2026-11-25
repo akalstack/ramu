@@ -37,6 +37,8 @@ interface PageData {
   published?: ArtifactInfo['published']
   duplicatedFrom?: string
   usage?: ArtifactUsage
+  /** When the person set a picture as its app icon; the picture is the `app-icon` row of artifact_files. */
+  appIcon?: number
 }
 interface PageRow {
   id: string
@@ -49,6 +51,8 @@ interface PageRow {
 }
 
 const today = () => new Date().toISOString().slice(0, 10)
+/** The artifact_files id of the picture an artifact's installed app shows. */
+const APP_ICON = 'app-icon'
 const clipTitle = (title: string) => title.trim().slice(0, 160) || 'Artifact'
 /** One emoji, or the default page mark. */
 export const pageIcon = (icon: string | undefined) => {
@@ -101,6 +105,7 @@ export class PageStore {
       ...(data.grewInto ? { grewInto: data.grewInto } : {}),
       ...(data.published ? { published: data.published } : {}),
       ...(data.duplicatedFrom ? { duplicatedFrom: data.duplicatedFrom } : {}),
+      ...(data.appIcon ? { appIcon: data.appIcon } : {}),
     }
   }
   private data(id: string): PageData {
@@ -582,8 +587,8 @@ export class PageStore {
       .prepare('SELECT COALESCE(SUM(LENGTH(data)),0) AS n, COUNT(*) AS c FROM artifact_records WHERE artifact_id=?')
       .get(artifactId) as { n: number; c: number }
     const files = this.db
-      .prepare('SELECT COALESCE(SUM(LENGTH(data)),0) AS n FROM artifact_files WHERE artifact_id=?')
-      .get(artifactId) as { n: number }
+      .prepare('SELECT COALESCE(SUM(LENGTH(data)),0) AS n FROM artifact_files WHERE artifact_id=? AND id<>?')
+      .get(artifactId, APP_ICON) as { n: number }
     return records.n + files.n
   }
   private count(artifactId: string): number {
@@ -820,11 +825,41 @@ export class PageStore {
   }
   file(artifactId: string, ref: string): string {
     const id = ref.replace(/^ramu-file:/, '')
+    // The app icon belongs to the launcher, not to the page's own files.
+    if (id === APP_ICON) throw new Error('File not found.')
     const row = this.db
       .prepare('SELECT mime,data FROM artifact_files WHERE artifact_id=? AND id=?')
       .get(artifactId, id) as { mime: string; data: Uint8Array } | undefined
     if (!row) throw new Error('File not found.')
     return `data:${row.mime};base64,${Buffer.from(row.data).toString('base64')}`
+  }
+
+  // The picture its installed app shows instead of the emoji: the person's own choice, so it needs no grant and does
+  // not count toward the files the artifact keeps.
+
+  setAppIcon(artifactId: string, dataUrl: string | null): ArtifactInfo {
+    this.row(artifactId)
+    if (dataUrl === null) {
+      this.db.prepare('DELETE FROM artifact_files WHERE artifact_id=? AND id=?').run(artifactId, APP_ICON)
+      this.write(artifactId, ({ appIcon: _removed, ...data }) => data, false)
+      return this.get(artifactId)
+    }
+    const match = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl)
+    if (!match) throw new Error('An app icon must be a JPEG, PNG or WebP picture.')
+    const bytes = Buffer.from(match[2]!, 'base64')
+    if (bytes.length > ARTIFACT_LIMITS.file) throw new Error('That picture is larger than 2 MB.')
+    this.db
+      .prepare('INSERT OR REPLACE INTO artifact_files(artifact_id,id,mime,data,created_at) VALUES(?,?,?,?,?)')
+      .run(artifactId, APP_ICON, match[1]!, stripJpegMetadata(bytes, match[1]!), Date.now())
+    this.write(artifactId, (data) => ({ ...data, appIcon: Date.now() }), false)
+    return this.get(artifactId)
+  }
+  /** The app icon picture as a data URL, or null while the artifact shows its emoji. */
+  appIcon(artifactId: string): string | null {
+    const row = this.db
+      .prepare('SELECT mime,data FROM artifact_files WHERE artifact_id=? AND id=?')
+      .get(artifactId, APP_ICON) as { mime: string; data: Uint8Array } | undefined
+    return row ? `data:${row.mime};base64,${Buffer.from(row.data).toString('base64')}` : null
   }
 
   // Errors reported by any device, for Fix this

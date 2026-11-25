@@ -53,25 +53,3 @@ it('says which step a refused token failed at, without echoing the platform', as
     'The token was refused while reading the account.',
   )
 })
-
-it('leaves a file alone when the site already has the same bytes', async () => {
-  const { createHash } = await import('node:crypto')
-  const content = Buffer.from('<p>Trip</p>')
-  const sha = createHash('sha1').update(`blob ${content.length}\0`).update(content).digest('hex')
-  const { seen, fetcher } = platform([
-    [/^GET .*\/user$/, () => ({ body: { login: 'me' } })],
-    [/^GET .*\/contents\/index.html$/, () => ({ body: { sha } })],
-    [/^GET .*\/contents\/sw.js$/, () => ({ body: { sha: 'old' } })],
-    [/^PUT /, () => ({ body: {} })],
-    [/^GET .*\/pages$/, () => ({ body: {} })],
-  ])
-  await githubPages(fetcher).deploy(
-    [
-      { path: 'index.html', content },
-      { path: 'sw.js', content: Buffer.from('new') },
-    ],
-    { name: 'Trip costs', siteId: 'trip-costs' },
-    'gh',
-  )
-  expect(seen.filter((entry) => entry.method === 'PUT').map((entry) => entry.url.split('/').pop())).toEqual(['sw.js'])
-})

@@ -76,6 +76,7 @@ export const WINDOW_PUSH_CHANNELS = [
   'device-state:changed',
   'live:closed',
   'live:open',
+  'artifact-apps:changed',
 ] as const satisfies readonly (keyof PushEvents)[]
 
 // Every channel is exactly one kind: adding a push event without classifying it fails to compile here.

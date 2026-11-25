@@ -301,6 +301,12 @@ interface ArtifactMethods {
     title?: string,
     icon?: string,
   ): import('./artifacts').ArtifactInfo
+  /** Sets a picture (a JPEG, PNG or WebP data URL) as the artifact's app icon, or goes back to its emoji with null. */
+  'artifacts.setAppIcon'(artifactId: string, dataUrl: string | null): import('./artifacts').ArtifactInfo
+  /** The app icon picture as a data URL, or null while the artifact uses its emoji. */
+  'artifacts.appIcon'(artifactId: string): string | null
+  /** Makes an app icon with the host's image generation, from the artifact's name or what the person asks for. */
+  'artifacts.generateAppIcon'(artifactId: string, idea?: string): string
   'artifacts.update'(
     artifactId: string,
     patch: { title?: string; icon?: string; pinned?: boolean; projectId?: string | null },
@@ -1089,9 +1095,19 @@ export interface RamuMethods extends ArtifactMethods {
   'computers.overview'(id: string): HostOverview
   /** Opens the live view window above other apps, or closes it. Desktop only. */
   'live.window'(open: boolean, hideFromSharing?: boolean): void
-  /** From the live view window: bring the main window forward on that thread. */
+  /** From the live view window or an artifact's own window: bring the main window forward on that thread. */
   'live.open'(hostId: string, taskId: string): void
   'live.close'(): void
+  /** Artifacts installed as apps on this desktop: each has a launcher that opens it in its own window. Desktop only. */
+  'artifactApps.list'(): import('./artifacts').InstalledArtifactApp[]
+  /**
+   * Adds or refreshes an artifact's launcher in the system's app list, with its title and a 512 px PNG of its icon as
+   * a data URL. Desktop only.
+   */
+  'artifactApps.install'(app: import('./artifacts').InstalledArtifactApp, iconPng: string): void
+  'artifactApps.remove'(hostId: string, artifactId: string): void
+  /** Opens an artifact in its own window, or brings that window forward. Desktop only. */
+  'artifactApps.open'(hostId: string, artifactId: string): void
   /** Memory the desktop app's own windows and browser tabs use, in bytes. */
   'computers.appMemory'(): number
   /** The threads this window shows from a host: only they stream in full, and the host's other threads arrive in brief. */
@@ -2073,6 +2089,8 @@ export type PushEvents = {
   'live:closed': Record<string, never>
   /** The live view window asked to open its thread here. */
   'live:open': { hostId: string; taskId: string }
+  /** An artifact was installed as an app on this desktop, or removed. */
+  'artifact-apps:changed': Record<string, never>
   'automation:changed': Record<string, never>
   /** Projects, repositories, chats or sessions were created, renamed, moved or removed (by any client). */
   'workspace:changed': Record<string, never>

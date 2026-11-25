@@ -266,6 +266,15 @@ async function readPageFolder(ctx: HandlerContext, artifactId: string, path: str
  * and states, and pull requests on threads. Threads and pull requests are those of the page's project when it has one.
  * Never transcripts, files, credentials or settings.
  */
+/** What an app icon is drawn from: the artifact's name and emoji, and what the person asked for, if anything. */
+export function appIconPrompt(title: string, emoji: string, idea?: string): string {
+  return [
+    `A square app icon for an app called "${title.replace(/["\n]/g, ' ')}".`,
+    idea?.trim() ? `It should show: ${idea.trim().replace(/\n/g, ' ')}.` : `Its theme is the emoji ${emoji}.`,
+    'One simple, bold symbol centered on a solid or softly graded background that fills the whole square, with no text, letters, border or rounded corners, readable at 32 pixels.',
+  ].join(' ')
+}
+
 /** An image the page's AI asked for, within its AI grant and daily budget, as a data URL the page can show. */
 async function pageImage(ctx: HandlerContext, artifactId: string, prompt: string): Promise<string> {
   ctx.pages!.requireGrant(artifactId, 'ai')
@@ -771,6 +780,25 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
         artifactId: string,
         patch: { title?: string; icon?: string; pinned?: boolean; projectId?: string | null },
       ) => need().pages.update(artifactId, patch),
+    },
+    'artifacts.setAppIcon': {
+      args: z.tuple([id, z.string().max(3_000_000).nullable()]),
+      run: (artifactId: string, dataUrl: string | null) => need().pages.setAppIcon(artifactId, dataUrl),
+    },
+    'artifacts.appIcon': {
+      args: z.tuple([id]),
+      run: (artifactId: string) => need().pages.appIcon(artifactId),
+    },
+    'artifacts.generateAppIcon': {
+      args: z.tuple([id, z.string().trim().max(500).optional()]),
+      run: async (artifactId: string, idea?: string) => {
+        if (!ctx.abilities) throw new Error('Update this host to make app icons.')
+        const page = need().pages.get(artifactId)
+        // The person asked from the artifact's menu, so this is their image call, not the artifact's AI budget.
+        const image = await ctx.abilities.pageImage(appIconPrompt(page.title, page.icon, idea))
+        const mime = image.extension === 'jpg' || image.extension === 'jpeg' ? 'image/jpeg' : `image/${image.extension}`
+        return `data:${mime};base64,${image.bytes.toString('base64')}`
+      },
     },
     'artifacts.delete': {
       args: z.tuple([id]),

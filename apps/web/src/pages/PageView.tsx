@@ -57,6 +57,8 @@ import { GrantSheet, PageSettings, runStatusLabel } from './PageSettings'
 import { openPage } from './openPage'
 import { PublishDialog } from './PublishDialog'
 import { MakeProjectDialog } from './MakeProjectDialog'
+import { useArtifactApp } from './artifactApp'
+import { AppIconDialog } from './AppIconDialog'
 import { ArtifactKindMark, hostExportEntries, kindExportEntries } from './ArtifactKindMark'
 import { SlideToolbar, useSlideControls } from './SlideControls'
 import { MotionToolbar } from './MotionControls'
@@ -83,7 +85,16 @@ function setBase<T extends { base: number }>(edit: (change: (current: T | null) 
   edit((current) => (current && current.base < version ? { ...current, base: version } : current))
 }
 
-export function PageView({ artifactId, onBack }: { artifactId: string; onBack(): void }) {
+export function PageView({
+  artifactId,
+  onBack,
+  inWindow = false,
+}: {
+  artifactId: string
+  onBack(): void
+  /** Shown alone in the artifact's own window: no way back to the list, and the window takes its title. */
+  inWindow?: boolean
+}) {
   useLanguage()
   const { invoke, id: host } = useHost()
   const { on } = useHostRuntime()
@@ -98,7 +109,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
   const [frameError, setFrameError] = useState('')
   const [dialog, setDialog] = useState<
     | null
-    | { kind: 'settings' | 'versions' | 'delete' | 'project' | 'rename' | 'publish' }
+    | { kind: 'settings' | 'versions' | 'delete' | 'project' | 'rename' | 'publish' | 'app-icon' }
     | { kind: 'thread'; prompt: string; resolve?: (agreed: boolean) => void; title: string }
   >(null)
   const [picking, setPicking] = useState(false)
@@ -107,6 +118,10 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
   const [answer, setAnswer] = useState<ArtifactRun | null>(null)
   const [asking, setAsking] = useState(false)
   const [status, setStatus] = useState('')
+  const artifactApp = useArtifactApp(host, page)
+  useEffect(() => {
+    if (inWindow && page) window.document.title = page.title
+  }, [inWindow, page])
   // A doc's Markdown while the person edits it, and the version that edit started from.
   const [editing, setEditing] = useState<{ base: number; text: string; rich?: boolean } | null>(null)
   const editForm = useRef<HTMLFormElement>(null)
@@ -520,6 +535,37 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
       disabled: viewOnly,
       onSelect: () => setDialog({ kind: 'project' }),
     },
+    { key: 'sep-app', separator: true },
+    ...(inWindow
+      ? []
+      : [
+          {
+            key: 'window',
+            label: t('Open in its own window'),
+            onSelect: () => void artifactApp.openWindow().catch((e) => notifyError(message(e))),
+          },
+        ]),
+    {
+      key: 'app',
+      label: artifactApp.installed ? t('Uninstall app') : t('Install as app'),
+      disabled: artifactApp.installed === null,
+      onSelect: () =>
+        void (artifactApp.installed ? artifactApp.remove() : artifactApp.install())
+          .then(() =>
+            setStatus(
+              artifactApp.installed
+                ? t('Removed “{title}” from your apps.', { title: page.title })
+                : t('Installed “{title}”. Open it from {place}.', { title: page.title, place: appsPlace() }),
+            ),
+          )
+          .catch((e) => notifyError(message(e), page.title)),
+    },
+    {
+      key: 'app-icon',
+      label: t('App icon…'),
+      disabled: viewOnly,
+      onSelect: () => setDialog({ kind: 'app-icon' }),
+    },
     {
       key: 'duplicate',
       label: t('Duplicate'),
@@ -586,15 +632,17 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
   return (
     <div className="flex h-full w-full min-w-0 flex-col">
       <header className="flex min-h-11 flex-none items-center gap-1.5 border-b border-border px-3">
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className={GHOST_ICON_BUTTON_CLASS}
-          aria-label={t('Back to Artifacts')}
-          onClick={onBack}
-        >
-          <ArrowLeft size={15} />
-        </Button>
+        {!inWindow && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className={GHOST_ICON_BUTTON_CLASS}
+            aria-label={t('Back to Artifacts')}
+            onClick={onBack}
+          >
+            <ArrowLeft size={15} />
+          </Button>
+        )}
         <span aria-hidden className="text-[17px] leading-none">
           {page.icon}
         </span>
@@ -1545,6 +1593,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
         />
       )}
       {dialog?.kind === 'rename' && <RenameDialog page={page} onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'app-icon' && <AppIconDialog page={page} onClose={() => setDialog(null)} />}
       {dialog?.kind === 'delete' && (
         <Dialog
           title={t('Delete {title}?', { title: page.title })}
@@ -1786,3 +1835,11 @@ function ThreadDialog({
     </Dialog>
   )
 }
+
+/** Where this computer lists the installed app, in the words its system uses. */
+const appsPlace = () =>
+  navigator.platform.startsWith('Mac')
+    ? t('Applications › Ramu Apps or Launchpad')
+    : navigator.platform.startsWith('Win')
+      ? t('the Start menu › Ramu Apps')
+      : t('your applications menu')

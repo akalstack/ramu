@@ -51,11 +51,6 @@ export function PublishDialog({ page, onClose }: { page: ArtifactInfo; onClose()
           ? t('Deploys v{version} to {url}.', { version: page.version, url: page.published!.url })
           : t('Deploys this artifact to GitHub Pages on your own account. Ramu hosts nothing.')}
       </p>
-      <p className="mt-2 text-muted-foreground">
-        {update
-          ? t('Copies installed as an app offer this version the next time they open.')
-          : t('Visitors can install it as an app from their browser, and it works offline.')}
-      </p>
       {ready === false && (
         <span>
           <Button

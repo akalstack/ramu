@@ -1,8 +1,6 @@
 // GitHub Pages publishing for Publish to the web: a page's files in a public repository of the person's own GitHub
 // account, served from its root. Nothing is hosted by Ramu.
 
-import { createHash } from 'node:crypto'
-
 type Fetch = typeof fetch
 
 /** One file of a static site, at its path from the site root. */
@@ -23,9 +21,6 @@ const slug = (text: string) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 50) || 'ramu-page'
-
-/** The id Git gives a file's bytes, which the contents API reports as its sha. */
-const blobSha = (content: Buffer) => createHash('sha1').update(`blob ${content.length}\0`).update(content).digest('hex')
 
 async function call<T>(
   fetcher: Fetch,
@@ -91,8 +86,6 @@ export function githubPages(fetcher: Fetch = fetch) {
           signal,
         })
         const sha = existing.ok ? ((await existing.json()) as { sha?: string }).sha : undefined
-        // A file already there with the same bytes is left alone, so a republish commits only what changed.
-        if (sha && sha === blobSha(file.content)) continue
         await call(
           fetcher,
           `${api}/repos/${user.login}/${repo}/contents/${path}`,

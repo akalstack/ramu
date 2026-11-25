@@ -182,6 +182,8 @@ export interface ArtifactInfo {
   title: string
   /** One emoji. */
   icon: string
+  /** When a picture was set as its app icon, replacing the emoji where it is installed as an app; absent otherwise. */
+  appIcon?: number
   projectId: string | null
   pinned: boolean
   version: number
@@ -357,6 +359,17 @@ export interface ArtifactLink {
 /** A `ramu://artifact/<host>/<id>` link (with `?share=` for a share link), as Share and Add to Home Screen copy. */
 export function artifactLink(link: ArtifactLink): string {
   return `ramu://artifact/${encodeURIComponent(link.computerId)}/${encodeURIComponent(link.artifactId)}${link.share ? `?share=${encodeURIComponent(link.share)}` : ''}`
+}
+
+/** An artifact installed as an app on a desktop: what its launcher shows, kept so a rename or new icon refreshes it. */
+export interface InstalledArtifactApp {
+  hostId: string
+  artifactId: string
+  title: string
+  /** One emoji. */
+  icon: string
+  /** The artifact's `appIcon` the launcher was drawn from, so a new picture redraws it. */
+  appIcon?: number
 }
 
 /** Reads a `ramu://artifact/<host>/<id>` link, with the share token when it has one. */

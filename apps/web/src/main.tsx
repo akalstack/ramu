@@ -24,6 +24,7 @@ import { installAppearance } from './appearance'
 import { installTheme } from './theme/themes'
 import { installEditorTheme } from './editor/customEditorTheme'
 import { App } from './App'
+import { ArtifactWindowView } from './pages/ArtifactWindow'
 import { HostProvider } from './workspace/HostProvider'
 import { StartupScreen } from './Brand'
 import { ErrorBoundary } from './ErrorBoundary'
@@ -104,8 +105,21 @@ window.addEventListener('unhandledrejection', (event) => {
   }
 })
 
+const query = new URLSearchParams(location.search)
+const artifactWindow = { host: query.get('host'), artifact: query.get('artifact') }
 // Fonts and application data load behind one continuous logo-to-wordmark reveal.
-if (new URLSearchParams(location.search).has('live')) {
+if (artifactWindow.host && artifactWindow.artifact) {
+  // An artifact's own window: that artifact alone, as its installed app opens it.
+  createRoot(document.getElementById('root')!).render(
+    <QueryClientProvider client={queryClient}>
+      <ErrorBoundary scope="app">
+        <TooltipProvider delay={350}>
+          <ArtifactWindowView hostId={artifactWindow.host} artifactId={artifactWindow.artifact} />
+        </TooltipProvider>
+      </ErrorBoundary>
+    </QueryClientProvider>,
+  )
+} else if (query.has('live')) {
   // The live view window: one thread's view and Stop, nothing else of the workspace.
   createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>

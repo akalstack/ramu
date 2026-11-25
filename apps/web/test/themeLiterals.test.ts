@@ -29,6 +29,7 @@ const ALLOWED = new Set([
   'settings/AppearanceSettings.tsx #7652d4',
   'settings/AppearanceSettings.tsx #087f7b',
   'views/MediaFileView.tsx bg-white', // a document's own page background
+  'pages/artifactApp.ts #f4f4f5', // an installed artifact's app icon tile, the same in every theme
   'workspace/TaskPane.tsx #0003', // shadow
   'interactive/InteractiveContent.tsx #131315', // fallbacks when a token is unreadable
   'interactive/InteractiveContent.tsx #eeeef0',
