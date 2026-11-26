@@ -3,6 +3,16 @@ import { toBlocks } from '../src/views/agent/lib/blocks'
 import type { AgentEvent } from '@ramu/shared/types'
 
 describe('transcript blocks', () => {
+  it('keeps the same error from each automatic try at a limit as one card', () => {
+    const tryAgain = (n: number): AgentEvent[] => [
+      { kind: 'error', message: 'Claude usage limit reached.', at: n } as AgentEvent,
+      { kind: 'result', isError: true } as AgentEvent,
+    ]
+    const blocks = toBlocks([...tryAgain(1), ...tryAgain(2), ...tryAgain(3)])
+    const errors = blocks.filter((block) => block.kind === 'event' && block.event.kind === 'error')
+    expect(errors).toHaveLength(1)
+  })
+
   it('gives bookkeeping events no row, so repeated limit retries leave no blank space', () => {
     const wait = (updatedAt: number): AgentEvent => ({
       kind: 'provider-wait',

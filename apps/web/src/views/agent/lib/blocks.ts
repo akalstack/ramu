@@ -88,6 +88,15 @@ export function toBlocks(events: AgentEvent[]): Block[] {
       if (outcome && (outcome.startsWith('allowed') || outcome === 'approved' || outcome === 'allow')) continue
     }
     const last = blocks.at(-1)
+    // The same error again in a row (a limit met by each automatic try) stays one card, at its latest time; the end of
+    // each failed turn in between draws nothing, so it does not count as something between them.
+    if (event.kind === 'error') {
+      const previous = blocks.findLast((block) => !(block.kind === 'event' && block.event.kind === 'result'))
+      if (previous?.kind === 'event' && previous.event.kind === 'error' && previous.event.message === event.message) {
+        previous.event = event
+        continue
+      }
+    }
     if (event.kind === 'tool-use') {
       if (last?.kind === 'tools') last.tools.push(event)
       else blocks.push({ kind: 'tools', tools: [event] })

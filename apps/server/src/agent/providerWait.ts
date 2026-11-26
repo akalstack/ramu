@@ -72,6 +72,12 @@ const MAX_TIMEOUT = 2 ** 31 - 1
  * small random spread. Whether a wait resumes on its own is the thread's `autoResume`, else the global default, read each
  * time a timer is scheduled or fires; with it off the wait is recorded for display and only a reset notice is scheduled.
  */
+/** How long early tries are remembered: a limit met again within this time counts toward the same back-off. */
+const EARLY_TRY_MEMORY_MS = 6 * 60 * 60_000
+
+/** Wait before another early try, after `count` of them: 5, 10, 20, 40, then 60 minutes. */
+export const earlyTryBackoff = (count: number) => Math.min(60, 5 * 2 ** (count - 1)) * 60_000
+
 export class ProviderWaits {
   constructor(
     private readonly host: ProviderWaitsHost,
@@ -90,6 +96,12 @@ export class ProviderWaits {
   private readonly noticeTimers = new Map<string, NodeJS.Timeout>()
 
   private readonly providerDispatching = new Set<string>()
+  /**
+   * Early tries per thread: a usage reading can show room the provider does not grant (a weekly or per-model limit the
+   * reading leaves out, or room on another login), and each try that meets the limit again leaves a failed turn. So an
+   * early try backs off, doubling from five minutes, and the reset time the provider stated stays the plan.
+   */
+  private readonly earlyTries = new Map<string, { count: number; at: number }>()
 
   providerWait(id: string): ProviderWaitEvent | null {
     const event = this.host.latestEvent(id, 'provider-wait')
@@ -278,8 +290,14 @@ export class ProviderWaits {
     }
     const session = this.host.get(id)
     if (this.busy(id, session)) return 1000
-    if (!this.roomSince(session, catalogs, wait) && wait.retryAt! > Date.now())
-      return Math.min(60_000, wait.retryAt! - Date.now())
+    const now = Date.now()
+    if (wait.retryAt! <= now) return 'go'
+    if (!this.roomSince(session, catalogs, wait)) return Math.min(60_000, wait.retryAt! - now)
+    const tried = this.earlyTries.get(id)
+    const count = tried && now - tried.at < EARLY_TRY_MEMORY_MS ? tried.count : 0
+    const due = tried && count ? tried.at + earlyTryBackoff(count) : now
+    if (due > now) return Math.min(60_000, due - now)
+    this.earlyTries.set(id, { count: count + 1, at: now })
     return 'go'
   }
 

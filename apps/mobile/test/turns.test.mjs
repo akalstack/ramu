@@ -403,3 +403,12 @@ test('a steered message stays in its turn: one "Worked for" for the whole turn a
   assert.equal(rows[1].label, 'Worked for 40s')
   assert.equal(rows[3].label, 'Continued for 31s')
 })
+
+test('the same error from each automatic try at a limit stays one card', () => {
+  const tryAgain = () => [
+    { kind: 'error', message: 'Claude usage limit reached.' },
+    { kind: 'result', isError: true },
+  ]
+  const items = transcript([{ kind: 'user', text: 'test' }, ...tryAgain(), ...tryAgain(), ...tryAgain()])
+  assert.equal(items.filter((item) => item.kind === 'error').length, 1)
+})
