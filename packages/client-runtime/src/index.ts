@@ -287,6 +287,10 @@ function subscribeSocket(
     restart: () => {
       restarted = true
     },
+    // Every view refetches on a connection; one that stayed open but missed events needs the same.
+    catchUp: () => {
+      if (!closed && connected) receive('background:connection', { connected: true })
+    },
     state: (state) => {
       if (closed) return
       if (state === 'ready') {

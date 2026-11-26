@@ -8,7 +8,7 @@
 
 Two plain-text logs stay on the computer, in Ramu's folder (`~/Library/Application Support/Ramu` on macOS, `~/.config/Ramu` on Linux):
 
-- `background.log`: what the background service prints while it runs, such as the address it listens on and devices connecting.
-- `desktop-errors.log`: each call from the desktop window that failed, with its time, method, host and error. The same failure repeated within a few seconds is counted on one line. It never records what a call carried, and it moves to `desktop-errors.log.1` once it passes 2 MB.
+- `background.log`: what the background service prints while it runs, such as the address it listens on and devices connecting. A pause of the service of five seconds or more is noted with the calls that were running, and so is a connection it ended, with the reason.
+- `desktop-errors.log`: each call from the desktop window that failed, with its time, method, host and error. The same failure repeated within a few seconds is counted on one line. A pause of the app itself of five seconds or more is noted too. It never records what a call carried, and it moves to `desktop-errors.log.1` once it passes 2 MB.
 
 A service started with `ramu up` writes to the system log instead: `journalctl --user -u ramu` on Linux, Console on macOS.

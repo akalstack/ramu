@@ -238,6 +238,7 @@ import { githubToken } from './workspace/forge/github'
 import { IdentityService } from './identities/service'
 import { ProjectPlaces } from './identities/places'
 import { setFolderEnvironment } from './userEnvironment'
+import { RunningCalls, watchStalls } from './stallWatch'
 import { execFileSync } from 'node:child_process'
 import { providerVariable, setAccountRestriction } from './providers/providerBinaries'
 import { accountKey } from '@ramu/shared/identities'
@@ -482,6 +483,9 @@ const send = (channel: string, payload: unknown) => {
   const message = `data: ${JSON.stringify({ channel, payload })}\n\n`
   for (const client of clients) {
     if (client.writableLength > 8 * 1024 * 1024) {
+      console.error(
+        `A client fell ${Math.round(client.writableLength / 1024)} KB behind on events; it was disconnected.`,
+      )
       client.destroy()
       clients.delete(client)
       hostClients.delete(client)
@@ -2780,7 +2784,16 @@ const localSocketHost: SocketHost = {
       }
   },
 }
-const localSockets = serveSockets(runtime, localSocketHost)
+const runningCalls = new RunningCalls()
+const socketOptions = {
+  log: (message: string) => console.error(message),
+  track: (method: string) => runningCalls.start(method),
+}
+watchStalls(
+  () => runningCalls.list(),
+  (message) => console.error(message),
+)
+const localSockets = serveSockets(runtime, localSocketHost, socketOptions)
 /** Any way a device can reach this host right now, beyond this computer. */
 function reachable() {
   return network.enabled
@@ -2801,7 +2814,7 @@ function startRemote() {
   const server = (remote = config.tls
     ? createHttpsServer({ cert: readFileSync(config.tls.cert), key: readFileSync(config.tls.key) }, handle())
     : createServer(handle()))
-  sockets = serveSockets(server, socketHost)
+  sockets = serveSockets(server, socketHost, socketOptions)
   listenRemote(server)
 }
 /** Advertises the address the listener bound, and only while both settings allow it. Never affects the listener. */

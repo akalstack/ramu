@@ -137,6 +137,8 @@ export type SocketServerFrame =
   | { t: 'error'; id: number; error: string; status?: number }
   | { t: 'event'; channel: string; payload: unknown }
   | { t: 'pong' }
+  /** Events were held back while this client was behind (it asked with `catchup=1`): fetch current state again. */
+  | { t: 'resync' }
 
 const UNDEFINED_MARKER = '$ramuUndefined'
 
@@ -388,7 +390,7 @@ export function decodeSocketFrame(
       return frame
     return null
   }
-  if (frame.t === 'pong') return frame
+  if (frame.t === 'pong' || frame.t === 'resync') return frame
   if (frame.t === 'ready' && typeof frame.epoch === 'string') return frame
   if (frame.t === 'result' && int(frame.id)) return frame
   if (frame.t === 'error' && int(frame.id) && typeof frame.error === 'string') return frame

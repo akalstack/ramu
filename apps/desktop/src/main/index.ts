@@ -1116,8 +1116,12 @@ async function main() {
     })()
   }
   /** Every event this app knows, typed by its channel. */
+  let localConnected = false
   const onLocalEvent = (...[channel, payload]: PushArgs) => {
-    if (channel === 'background:connection') {
+    // A connection that stayed open and only caught up on missed events keeps its browser bridge.
+    const caughtUp = channel === 'background:connection' && payload.connected && localConnected && !payload.restarted
+    if (channel === 'background:connection') localConnected = payload.connected
+    if (channel === 'background:connection' && !caughtUp) {
       const epoch = ++browserConnection
       browserToken = null
       if (!payload.connected) browser.pauseForDisconnect()
@@ -1243,6 +1247,15 @@ async function main() {
     throw new Error('Invalid request')
   }
   const invokeLog = createInvokeLog(join(userData, 'desktop-errors.log'))
+  // A busy app reads its connections late, which looks to the service like a window that stopped answering.
+  {
+    let last = Date.now()
+    setInterval(() => {
+      const paused = Date.now() - last - 1000
+      last = Date.now()
+      if (paused >= 5000) invokeLog.note(`The app paused for ${(paused / 1000).toFixed(1)} s.`)
+    }, 1000).unref()
+  }
   const handleInvoke = async (
     event: Electron.IpcMainInvokeEvent,
     requestMethod: unknown,

@@ -43,8 +43,15 @@ export interface SocketOptions {
   heartbeatMs?: number
   /** Calls one connection may have running at once; more are refused rather than queued without bound. */
   maxInFlight?: number
-  /** Unsent bytes at which a slow reader is disconnected, as slow event streams are. */
+  /**
+   * Unsent event bytes at which a client is behind. One that can catch up stops receiving events until it has read what
+   * is queued, then is told to fetch what it missed; any other is disconnected, as slow event streams are.
+   */
   maxBuffered?: number
+  /** Notes a connection the host ended and why, for the service log. */
+  log?: (message: string) => void
+  /** Called as each call starts; the returned function as it ends. */
+  track?: (method: string) => () => void
 }
 
 /**
@@ -57,6 +64,8 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
   const heartbeatMs = options.heartbeatMs ?? 30_000
   const maxInFlight = options.maxInFlight ?? 32
   const maxBuffered = options.maxBuffered ?? 8 * 1024 * 1024
+  const log = options.log ?? (() => {})
+  const track = options.track ?? (() => () => {})
   // Transcripts and lists are repetitive JSON, and a phone or tunnel pays for every byte. Small frames (tokens, acks)
   // skip the deflate, and no shared context means an idle connection holds no compression memory.
   const wss = new WebSocketServer({
@@ -154,17 +163,37 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
     // event look like a client that fell behind.
     let answersQueued = 0
     const eventsQueued = () => Math.max(0, ws.bufferedAmount - answersQueued)
+    const params = new URL(req.url ?? '/', 'http://host').searchParams
+    // A client that can fetch what it missed is never dropped for falling behind, as a thread subscription in T3 Code
+    // is reset rather than its socket: dropping it showed the window reconnecting while several threads streamed.
+    const canCatchUp = params.get('catchup') === '1'
+    let catchingUp: ReturnType<typeof setInterval> | null = null
+    const fellBehind = () => {
+      log(
+        `A client fell ${Math.round(eventsQueued() / 1024)} KB behind on events; it catches up once it has read them.`,
+      )
+      catchingUp = setInterval(() => {
+        if (ws.readyState !== ws.OPEN || eventsQueued() > maxBuffered / 4) return
+        clearInterval(catchingUp!)
+        catchingUp = null
+        send({ t: 'resync' })
+      }, 250)
+      catchingUp.unref()
+    }
     const sink: EventSink = {
       write(chunk) {
         // Only data lines are events; SSE comments (keep-alives) have no meaning here.
-        if (!chunk.startsWith('data: ') || ws.readyState !== ws.OPEN) return true
+        if (!chunk.startsWith('data: ') || ws.readyState !== ws.OPEN || catchingUp) return true
         const json = chunk.slice(6).trimEnd()
         if (!wanted(json) || held(json)) return true
         ws.send(`{"t":"event",${json.slice(1)}`)
-        return eventsQueued() < maxBuffered
+        if (eventsQueued() < maxBuffered) return true
+        if (!canCatchUp) return false
+        fellBehind()
+        return true
       },
       get writableLength() {
-        return eventsQueued()
+        return catchingUp ? 0 : eventsQueued()
       },
       get destroyed() {
         return ws.readyState === ws.CLOSED || ws.readyState === ws.CLOSING
@@ -192,9 +221,15 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
     host.attach(sink, req, device)
     let inFlight = 0
     let alive = true
+    let lastProbe = Date.now()
     ws.on('pong', () => (alive = true))
     const probe = setInterval(() => {
-      if (!alive) {
+      // A probe that ran late means this service was busy, and the peer's answer may still be unread behind it: the
+      // peer gets another interval rather than being dropped for this service's own pause.
+      const late = Date.now() - lastProbe > heartbeatMs * 1.5
+      lastProbe = Date.now()
+      if (!alive && !late) {
+        log(`A client did not answer for ${Math.round((2 * heartbeatMs) / 1000)} s; its connection was closed.`)
         ws.terminate()
         return
       }
@@ -244,6 +279,7 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
         return
       }
       inFlight++
+      const done = track(frame.method)
       void host
         .invoke(device, { method: frame.method, args: frame.args, operationKey: frame.operationKey }, req)
         .then((result) => {
@@ -260,10 +296,14 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
             status: 400,
           }),
         )
-        .finally(() => inFlight--)
+        .finally(() => {
+          inFlight--
+          done()
+        })
     })
     ws.on('close', () => {
       clearInterval(probe)
+      if (catchingUp) clearInterval(catchingUp)
       open.delete(ws)
       host.detach(sink)
     })
