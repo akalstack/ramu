@@ -48,6 +48,7 @@ import {
   Square,
   X,
   Camera,
+  ClipboardPaste,
   Image as ImageIcon,
   SlidersHorizontal,
   Sparkles,
@@ -832,6 +833,22 @@ export function Composer({
   const [caret, setCaret] = useState(0)
   const [forced, setForced] = useState<{ start: number; end: number } | undefined>()
   const [menu, setMenu] = useState<'actions' | 'skills' | 'settings' | null>(null)
+  // Whether a picture is on the clipboard, looked up each time the sheet opens. Asking this shows no system prompt;
+  // only pasting does.
+  const [pastable, setPastable] = useState(false)
+  useEffect(() => {
+    if (menu !== 'actions') return
+    let live = true
+    void import('expo-clipboard')
+      .then((clipboard) => clipboard.hasImageAsync())
+      .then(
+        (has) => live && setPastable(has),
+        () => live && setPastable(false),
+      )
+    return () => {
+      live = false
+    }
+  }, [menu])
   const [skills, setSkills] = useState<SkillInfo[]>([])
   const [filter, setFilter] = useState('')
   const [uploading, setUploading] = useState(false)
@@ -1037,7 +1054,7 @@ export function Composer({
       Alert.alert(say('Could not load host choices'), e instanceof Error ? e.message : String(e))
     }
   }
-  const upload = async (kind: 'document' | 'camera' | 'photos') => {
+  const upload = async (kind: AttachmentSource) => {
     if (attachments.length >= 10) return Alert.alert(say('Attachments'), say('Attach up to ten files per message.'))
     if (uploadPending.current) return
     uploadPending.current = true
@@ -1606,6 +1623,17 @@ export function Composer({
                 help: 'Use the camera now.',
                 run: () => void upload('camera'),
               },
+              ...(pastable
+                ? [
+                    {
+                      key: 'paste',
+                      icon: ClipboardPaste,
+                      label: 'Paste a picture',
+                      help: 'The picture you last copied.',
+                      run: () => void upload('clipboard'),
+                    },
+                  ]
+                : []),
               ...(discoverScope && !offline
                 ? [
                     {
@@ -1788,17 +1816,30 @@ export function Composer({
   )
 }
 
+/** Where an attachment comes from: a file, the camera, the photo library, or a picture copied on the phone. */
+type AttachmentSource = 'document' | 'camera' | 'photos' | 'clipboard'
+
 async function pickAttachment(
   store: ReturnType<typeof useStore>,
   computerId: string,
   add: (attachment: import('@ramu/shared/types').Attachment) => void,
-  kind: 'document' | 'camera' | 'photos' = 'document',
+  kind: AttachmentSource = 'document',
 ) {
   const say = (text: string) => translate(store.language, text)
   try {
     if (!store.isOnline(computerId)) throw new Error(say('Reconnect this host to upload an attachment.'))
-    let asset: { uri: string; name: string; size?: number; file?: File }
-    if (kind === 'document') {
+    let asset: { uri: string; name: string; size?: number; file?: File; base64?: string }
+    if (kind === 'clipboard') {
+      // A text field takes only text from the paste menu, so a copied picture is read from the clipboard here.
+      const { getImageAsync } = await import('expo-clipboard')
+      const image = await getImageAsync({ format: 'jpeg', jpegQuality: 0.85 })
+      if (!image) throw new Error(say('There is no picture on the clipboard.'))
+      asset = {
+        uri: image.data,
+        name: `pasted-${Date.now()}.jpg`,
+        base64: image.data.slice(image.data.indexOf(',') + 1),
+      }
+    } else if (kind === 'document') {
       const { getDocumentAsync } = await import('expo-document-picker')
       const result = await getDocumentAsync({ copyToCacheDirectory: true, multiple: false })
       if (result.canceled) return
@@ -1817,14 +1858,16 @@ async function pickAttachment(
     }
     if ((asset.size ?? 0) > 10_000_000) throw new Error(say('Attachments must be 10 MB or smaller.'))
     const { File } = await import('expo-file-system')
-    const base64 = asset.file
-      ? await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader()
-          reader.onload = () => resolve(String(reader.result).split(',')[1]!)
-          reader.onerror = reject
-          reader.readAsDataURL(asset.file!)
-        })
-      : await new File(asset.uri).base64()
+    const base64 = asset.base64
+      ? asset.base64
+      : asset.file
+        ? await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(String(reader.result).split(',')[1]!)
+            reader.onerror = reject
+            reader.readAsDataURL(asset.file!)
+          })
+        : await new File(asset.uri).base64()
     if (base64.length > 13_400_000) throw new Error(say('Attachments must be 10 MB or smaller.'))
     const added = await store.invoke(computerId, 'attachments.add', asset.name, base64)
     // The phone's own copy of a picture stands in as its thumbnail, here and in the sent message.
