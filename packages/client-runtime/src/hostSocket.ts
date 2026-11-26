@@ -7,7 +7,7 @@ import { RuntimeSocket, type SocketState } from './socket'
 /** What a consumer of a host's socket hears: its events and its connection state. */
 export interface HostListener {
   event(channel: string, payload: unknown): void
-  state?(state: SocketState): void
+  state?(state: SocketState, resumed?: boolean): void
   /** The host restarted: every cursor held against it is void. */
   restart?(): void
 }
@@ -87,8 +87,8 @@ function open(
       onEvent: (channel, payload) => {
         for (const l of [...listeners]) l.event(channel, payload)
       },
-      onState: (state) => {
-        for (const l of [...listeners]) l.state?.(state)
+      onState: (state, resumed) => {
+        for (const l of [...listeners]) l.state?.(state, resumed)
       },
       onRestart: () => {
         for (const l of [...listeners]) l.restart?.()

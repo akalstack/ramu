@@ -288,11 +288,12 @@ function subscribeSocket(
     restart: () => {
       restarted = true
     },
-    state: (state) => {
+    state: (state, resumed) => {
       if (closed) return
       if (state === 'ready') {
         connected = true
-        receive('background:connection', { connected: true })
+        // A restart voids the replay too: what was missed belongs to a run that is gone.
+        receive('background:connection', { connected: true, ...(resumed && !restarted ? { resumed: true } : {}) })
         if (restarted) receive('background:connection', { connected: true, restarted: true })
         restarted = false
       } else if (state === 'rejected') {

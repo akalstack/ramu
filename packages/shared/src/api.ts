@@ -2173,6 +2173,8 @@ export type PushEvents = {
     error?: string
   }
   'computers:changed': Computers
+    /** The connection came back within the host's replay window and the missed events were delivered: nothing needs reading again. */
+    resumed?: boolean
   /** The number a nearby host shows while this computer asks it to pair (see `computers.pairByRequest`). */
   'computers:pairCode': { address: string; code: string }
   'computers:navigate': { hostId: string; destination: HostDestination }

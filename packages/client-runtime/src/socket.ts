@@ -5,6 +5,7 @@ import {
   PROTOCOL_HEADER,
   PROTOCOL_VERSION,
   SOCKET_PATH,
+  RESUME_HEADER,
 } from '@ramu/contracts'
 import { PROOF_HEADER } from '@ramu/shared/deviceProof'
 import { checkRpcResult } from '@ramu/shared/rpcResults'
@@ -38,7 +39,8 @@ export interface RuntimeSocketOptions {
   token: string
   factory: SocketFactory
   onEvent(channel: string, payload: unknown): void
-  onState?(state: SocketState): void
+  /** `resumed`: this connection took up where the last one stopped, and the events missed in between were replayed. */
+  onState?(state: SocketState, resumed?: boolean): void
   /** The host's run identity changed: it restarted and every cursor held is void. */
   onRestart?(): void
   /** The run an earlier socket to this host last saw, when this one replaces it, so a restart in between is still told. */
@@ -101,6 +103,9 @@ export class RuntimeSocket {
   private resynced = false
   private lastCode: string | undefined
   private readonly waiters = new Set<() => void>()
+  /** This connection's place on the host's event stream, and the last event received on it. */
+  private resumeId: string | null = null
+  private lastEvent = 0
   state: SocketState = 'closed'
 
   constructor(private readonly options: RuntimeSocketOptions) {
@@ -112,10 +117,10 @@ export class RuntimeSocket {
     return this.epoch
   }
 
-  private set(state: SocketState) {
+  private set(state: SocketState, resumed = false) {
     if (this.state === state) return
     this.state = state
-    this.options.onState?.(state)
+    this.options.onState?.(state, resumed)
     for (const wake of [...this.waiters]) wake()
   }
 
@@ -147,6 +152,10 @@ export class RuntimeSocket {
       ...this.options.headers,
       Authorization: `${AUTH_SCHEME} ${this.options.token}`,
       [PROTOCOL_HEADER]: String(PROTOCOL_VERSION),
+      // Asks for the events missed since the last one received; a host that cannot replay them starts a new stream.
+      ...(this.options.events === false
+        ? {}
+        : { [RESUME_HEADER]: this.resumeId ? `${this.resumeId}:${this.lastEvent}` : 'new' }),
       ...(prover ? { [PROOF_HEADER]: prover.header(this.options.token, 'socket') } : {}),
     }
     const deadline = this.after(this.options.connectTimeoutMs ?? 10_000, () => socket.close())
@@ -167,11 +176,15 @@ export class RuntimeSocket {
           this.connectedAt = Date.now()
           if (this.epoch !== null && this.epoch !== frame.epoch) this.options.onRestart?.()
           this.epoch = frame.epoch
-          this.set('ready')
+          const resumed = frame.resumed === true && !!this.resumeId && frame.resume === this.resumeId
+          if (!resumed) this.lastEvent = 0
+          this.resumeId = frame.resume ?? null
+          this.set('ready', resumed)
           this.startHeartbeat(socket)
           // A new connection starts unfiltered; the interest the caller declared is restored before it matters.
           if (this.subscription) void this.sendSubscription(this.subscription).catch(() => {})
         } else if (frame.t === 'event') {
+          if (typeof frame.n === 'number') this.lastEvent = frame.n
           this.options.onEvent(frame.channel, frame.payload)
           if (this.options.flowControl && frame.channel === 'term:data') this.acknowledge(socket, frame.payload)
         } else if (frame.t === 'result') this.settle(frame.id, (call) => call.resolve(frame.value))

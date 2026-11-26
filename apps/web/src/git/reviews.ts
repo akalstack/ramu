@@ -53,8 +53,8 @@ export function useReviews() {
   const subscribe = useCallback(
     (listener: () => void) => {
       const changed = on('automation:changed', summaries.invalidate)
-      const connection = on('background:connection', ({ connected }) => {
-        if (connected) summaries.invalidate()
+      const connection = on('background:connection', ({ connected, resumed }) => {
+        if (connected && !resumed) summaries.invalidate()
       })
       const off = summaries.subscribe(listener)
       return () => {

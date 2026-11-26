@@ -61,8 +61,8 @@ export function LivePullRequestsSetting() {
     // The host announces deliveries and webhook changes with the pull request reads.
     const changed = bridge.on('forge:changed', load)
     // A change made while the host was out of reach announced nothing.
-    const reconnected = bridge.on('background:connection', ({ connected }) => {
-      if (connected) load()
+    const reconnected = bridge.on('background:connection', ({ connected, resumed }) => {
+      if (connected && !resumed) load()
     })
     return () => {
       changed()

@@ -105,5 +105,13 @@ export function invalidateDataOn(host: string, ...domains: string[]) {
 export function recoverDataOn(host: string) {
   return queryClient.invalidateQueries({ queryKey: ['ipc', host], refetchType: 'active' })
 }
+/** After a gap the host replayed: nothing is stale, but a read that failed during the gap is tried again. */
+export function retryFailedOn(host: string) {
+  return queryClient.refetchQueries({
+    queryKey: ['ipc', host],
+    type: 'active',
+    predicate: (query) => query.state.status === 'error',
+  })
+}
 /** Same, for this window's own host. */
 export const invalidateData = (...domains: string[]) => invalidateDataOn(ownHostId(), ...domains)

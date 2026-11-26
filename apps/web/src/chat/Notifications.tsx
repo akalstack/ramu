@@ -248,8 +248,8 @@ export function Notifications() {
     const off = on('notices:changed', take)
     const load = () => void invoke('notices.list').then(take, () => {})
     load()
-    const reconnect = on('background:connection', ({ connected }) => {
-      if (connected) load()
+    const reconnect = on('background:connection', ({ connected, resumed }) => {
+      if (connected && !resumed) load()
     })
     return () => {
       live = false

@@ -66,8 +66,8 @@ function createUsageStore(host: string) {
         const offUsage = bridge.on('usage:changed', (next, from) => {
           if ((from ?? ownHostId()) === host) accept(next)
         })
-        const offConnection = bridge.on('background:connection', ({ connected }, from) => {
-          if (connected && (from ?? ownHostId()) === host) refresh()
+        const offConnection = bridge.on('background:connection', ({ connected, resumed }, from) => {
+          if (connected && !resumed && (from ?? ownHostId()) === host) refresh()
         })
         const offVisibility = onWorkspaceVisibility(refresh)
         const timer = window.setInterval(refresh, 5 * 60_000 + 5_000)

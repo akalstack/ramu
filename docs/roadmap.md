@@ -12,7 +12,6 @@ Every change needs focused tests and typechecks for the packages it touches; des
 
 ## To build
 
-- **Transport:** a bounded event backlog on the host, so a short gap in the connection replays what was missed instead of every list being read again ([Architecture](contributing/architecture.md#transport)). Start from measurements on real networks.
 - **Windows:** a Windows build: the local service over a named pipe, finding provider CLIs, `gh` and ripgrep, keeping the host awake, and a Squirrel installer that hands `ramu://` links to the running app.
 
 ## Blocked

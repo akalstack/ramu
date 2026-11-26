@@ -37,8 +37,8 @@ export function PermissionRequestDialog() {
     load()
     const off = ramu.on('permission:requests', ({ requests: next }) => setRequests(next))
     // A request made, answered or lapsed while the service was out of reach announced nothing.
-    const reconnected = ramu.on('background:connection', ({ connected }) => {
-      if (connected) load()
+    const reconnected = ramu.on('background:connection', ({ connected, resumed }) => {
+      if (connected && !resumed) load()
     })
     return () => {
       alive = false

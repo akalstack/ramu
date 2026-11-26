@@ -16,7 +16,7 @@ import { createRoot } from 'react-dom/client'
 import { errorText, isOfflineError } from './lib/errors'
 import { useCallback, useEffect, useState } from 'react'
 import { QueryClientProvider } from '@tanstack/react-query'
-import { queryClient, invalidateDataOn, recoverDataOn } from './dataQueries'
+import { queryClient, invalidateDataOn, recoverDataOn, retryFailedOn } from './dataQueries'
 import { hostSyncing } from './workspace/hostSync'
 import { bridge } from './ipc'
 import { ownHostId } from './hosts'
@@ -75,8 +75,11 @@ function Startup() {
       bridge.on('agent:event', (_, from) => {
         void invalidateDataOn(host(from), 'agent')
       }),
-      bridge.on('background:connection', ({ connected }, from) => {
-        if (connected) hostSyncing(host(from), recoverDataOn(host(from)))
+      bridge.on('background:connection', ({ connected, resumed }, from) => {
+        // A connection that resumed was sent what it missed; only a real gap needs everything read again.
+        if (connected && !resumed) hostSyncing(host(from), recoverDataOn(host(from)))
+        // Reads that failed while it was away have no event coming to correct them.
+        else if (connected) void retryFailedOn(host(from))
       }),
     ]
     return () => offs.forEach((off) => off())

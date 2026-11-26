@@ -943,9 +943,9 @@ export function BackgroundControls({ compact = false, onInstalled }: { compact?:
     )
   useEffect(() => {
     void reload()
-    return on('background:connection', ({ connected }) => {
+    return on('background:connection', ({ connected, resumed }) => {
       setConnected(connected)
-      if (connected) void reload()
+      if (connected && !resumed) void reload()
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [mount only] by design; the values it reads beyond these are current as of that run
   }, [])

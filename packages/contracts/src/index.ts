@@ -88,6 +88,12 @@ export const RECOVERABLE_MUTATIONS: ReadonlySet<string> = new Set([
   'agent.sendQueuedNow',
 ])
 
+/**
+ * Sent on the upgrade by a client that can have missed events replayed: `new` on its first connection, then the
+ * `resume` id the host gave it and the number of the last event it received, as `id:n`.
+ */
+export const RESUME_HEADER = 'x-ramu-resume'
+
 /** Path of the WebSocket upgrade. Credentials travel in the upgrade's Authorization header, never in the URL. */
 export const SOCKET_PATH = '/socket'
 
@@ -133,10 +139,12 @@ export const MAX_SUBSCRIBED_CHANNELS = 64
 export const MAX_SUBSCRIBED_KEYS = 200
 export const MAX_SUBSCRIBED_SKIPPED_KINDS = 64
 export type SocketServerFrame =
-  | { t: 'ready'; epoch: string }
+  /** `resume` names this connection's place on the event stream; `resumed` says a returning client was sent what it missed. */
+  | { t: 'ready'; epoch: string; resume?: string; resumed?: boolean }
   | { t: 'result'; id: number; value: unknown }
   | { t: 'error'; id: number; error: string; status?: number }
-  | { t: 'event'; channel: string; payload: unknown }
+  /** `n` numbers the events a client may ask to have replayed after a short loss of its connection. */
+  | { t: 'event'; channel: string; payload: unknown; n?: number }
   | { t: 'pong' }
 
 const UNDEFINED_MARKER = '$ramuUndefined'

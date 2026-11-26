@@ -457,3 +457,185 @@ it('never sends events to a paired host, even when it subscribes or omits events
   await new Promise((resolve) => setTimeout(resolve, 50))
   expect(host.frames.some((f) => f.t === 'event')).toBe(false)
 })
+
+/** A client that can have missed events replayed, as the client runtime connects. */
+function resumable(port: number, resume = 'new', headers: Record<string, string> = {}) {
+  const ws = new WebSocket(`ws://127.0.0.1:${port}${SOCKET_PATH}`, {
+    headers: { authorization: 'Bearer good', 'x-ramu-resume': resume, ...headers },
+  })
+  ws.on('error', () => {})
+  cleanup.push(() => ws.terminate())
+  const frames: SocketServerFrame[] = []
+  ws.on('message', (data) => {
+    const frame = decodeSocketFrame(data.toString(), 'server')
+    if (frame) frames.push(frame)
+  })
+  const until = async (check: () => boolean) => {
+    for (let i = 0; i < 500 && !check(); i++) await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(check()).toBe(true)
+  }
+  const ready = () => frames.find((frame) => frame.t === 'ready') as Extract<SocketServerFrame, { t: 'ready' }>
+  const events = () =>
+    frames.flatMap((frame) => (frame.t === 'event' ? [[frame.n, (frame.payload as { i: number }).i]] : []))
+  return { ws, frames, until, ready, events }
+}
+const note = (i: number, channel = 'workspace:changed') => `data: ${JSON.stringify({ channel, payload: { i } })}\n\n`
+const settled = () => new Promise((resolve) => setTimeout(resolve, 60))
+
+it('replays to a returning client exactly what it missed, in order, and keeps it attached meanwhile', async () => {
+  const { sinks, port } = await start()
+  const first = resumable(port)
+  await first.until(() => !!first.ready() && sinks.size === 1)
+  const [sink] = [...sinks]
+  expect(first.ready().resume).toMatch(/^[a-f0-9]{32}$/)
+  expect(first.ready().resumed).toBeUndefined()
+  sink!.write(note(1))
+  sink!.write(note(2))
+  await first.until(() => first.events().length === 2)
+  expect(first.events()).toEqual([
+    [1, 1],
+    [2, 2],
+  ])
+  first.ws.terminate()
+  await settled()
+  // Still attached: what the host sends now is kept for it.
+  expect(sinks.size).toBe(1)
+  expect(sink!.destroyed).toBe(false)
+  sink!.write(note(3))
+  sink!.write(note(4))
+
+  // It received event 1 only; event 2 was sent and lost on the way.
+  const back = resumable(port, `${first.ready().resume}:1`)
+  await back.until(() => back.events().length === 3)
+  expect(back.ready()).toMatchObject({ resume: first.ready().resume, resumed: true })
+  expect(back.events()).toEqual([
+    [2, 2],
+    [3, 3],
+    [4, 4],
+  ])
+  sink!.write(note(5))
+  await back.until(() => back.events().length === 4)
+  expect(back.events().at(-1)).toEqual([5, 5])
+  expect(sinks.size).toBe(1)
+})
+
+it('starts a new stream when what was missed is no longer kept, or the grace period has passed', async () => {
+  const { sinks, port } = await start({}, { resumeEvents: 2, resumeGraceMs: 150 })
+  const first = resumable(port)
+  await first.until(() => !!first.ready() && sinks.size === 1)
+  const [sink] = [...sinks]
+  first.ws.terminate()
+  await settled()
+  for (const i of [1, 2, 3, 4]) sink!.write(note(i))
+  const late = resumable(port, `${first.ready().resume}:0`)
+  await late.until(() => !!late.ready())
+  expect(late.ready().resumed).toBeUndefined()
+  expect(late.ready().resume).not.toBe(first.ready().resume)
+  await late.until(() => sinks.size === 1 && !sinks.has(sink!))
+
+  late.ws.terminate()
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  expect(sinks.size).toBe(0)
+  const after = resumable(port, `${late.ready().resume}:0`)
+  await after.until(() => !!after.ready())
+  expect(after.ready().resumed).toBeUndefined()
+})
+
+it('gives a seat back only to the device that held it', async () => {
+  let who = 'device-1'
+  const { sinks, port } = await start({ accept: async () => ({ id: who, name: 'Phone', role: 'owner' }) as never })
+  const first = resumable(port)
+  await first.until(() => !!first.ready() && sinks.size === 1)
+  const [sink] = [...sinks]
+  first.ws.terminate()
+  await settled()
+  sink!.write(note(1))
+  who = 'device-2'
+  const other = resumable(port, `${first.ready().resume}:0`)
+  await other.until(() => !!other.ready())
+  expect(other.ready().resumed).toBeUndefined()
+  await settled()
+  expect(other.events()).toEqual([])
+})
+
+it('refuses at once an event that needs an answer while the client is away, and never keeps terminal output', async () => {
+  const { sinks, port } = await start()
+  const first = resumable(port)
+  await first.until(() => !!first.ready() && sinks.size === 1)
+  const [sink] = [...sinks]
+  first.ws.terminate()
+  await settled()
+  sink!.write(note(1, 'term:data'))
+  sink!.write(note(2))
+  const back = resumable(port, `${first.ready().resume}:0`)
+  await back.until(() => back.events().length === 1)
+  expect(back.events()).toEqual([[1, 2]])
+
+  back.ws.terminate()
+  await settled()
+  expect(sink!.destroyed).toBe(false)
+  sink!.write(note(3, 'host:request'))
+  // Nobody can answer a dialog from a connection that is gone: the host hears so immediately.
+  expect(sink!.destroyed).toBe(true)
+  expect(sinks.size).toBe(0)
+})
+
+it('does not keep a connection the host ended itself, and numbers nothing for a client that did not ask', async () => {
+  const { sinks, port, connect } = await start()
+  const first = resumable(port)
+  await first.until(() => !!first.ready() && sinks.size === 1)
+  const [sink] = [...sinks]
+  // A revoked device is cut off: it must not be able to come back for what followed.
+  sink!.destroy()
+  await first.until(() => sinks.size === 0)
+
+  const plain = connect()
+  await plain.until(() => plain.frames.some((frame) => frame.t === 'ready') && sinks.size === 1)
+  const ready = plain.frames.find((frame) => frame.t === 'ready') as { resume?: string }
+  expect(ready.resume).toBeUndefined()
+  ;[...sinks][0]!.write(note(1))
+  await plain.until(() => plain.frames.some((frame) => frame.t === 'event'))
+  expect((plain.frames.find((frame) => frame.t === 'event') as { n?: number }).n).toBeUndefined()
+  plain.ws.terminate()
+  await plain.until(() => sinks.size === 0)
+})
+
+it('gives the client runtime what it missed across a dropped connection, and says the connection resumed', async () => {
+  const { port, sinks } = await start()
+  const events: number[] = []
+  const states: [string, boolean | undefined][] = []
+  let live: { close(): void } | null = null
+  const socket = new RuntimeSocket({
+    url: `http://127.0.0.1:${port}`,
+    token: 'good',
+    // Lets the test cut the connection as a network would, without the client asking to close.
+    factory: (url, headers, handlers) => (live = nodeSocketFactory(url, headers, handlers)),
+    onEvent: (_channel, payload) => events.push((payload as { i: number }).i),
+    onState: (state, resumed) => states.push([state, resumed]),
+    random: () => 0,
+  })
+  cleanup.push(() => socket.close())
+  socket.start()
+  const until = async (check: () => boolean) => {
+    for (let i = 0; i < 500 && !check(); i++) await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(check()).toBe(true)
+  }
+  await until(() => socket.state === 'ready' && sinks.size === 1)
+  const [sink] = [...sinks]
+  sink!.write(note(1))
+  await until(() => events.length === 1)
+
+  live!.close()
+  await until(() => socket.state !== 'ready')
+  sink!.write(note(2))
+  sink!.write(note(3))
+  await until(() => socket.state === 'ready')
+  await until(() => events.length === 3)
+  expect(events).toEqual([1, 2, 3])
+  expect(states.filter(([state]) => state === 'ready')).toEqual([
+    ['ready', false],
+    ['ready', true],
+  ])
+  // The same place on the stream: the host still sends to the one sink.
+  expect([...sinks]).toEqual([sink])
+})
