@@ -14,6 +14,7 @@ import type { AntigravitySignIn, ProviderEnvironmentStatus, ProviderEnvironmentV
 import type { HostOverview, HostDestination, HostTaskMethod } from './hostOverview'
 import type { ThreadDoneImpact } from './chat/threadDone'
 import type { PrivacyPane } from './privacyPanes'
+import type { TranscriptChanges } from './transcriptChanges'
 import type { SettingsSnapshot, SettingEdit } from './settingsCompatibility'
 import type { BackgroundActivity } from './chat/activity'
 import type { RamuTheme, ThemeIssue, ThemeRole } from './theme'
@@ -1913,18 +1914,12 @@ export interface RamuMethods extends ArtifactMethods {
   'agent.events'(sessionId: string): AgentEvent[]
   /** The end of a transcript, bounded and starting at a turn where one fits, to show a long thread while the rest loads. */
   'agent.tail'(sessionId: string): { complete: boolean; events: { seq: number; event: AgentEvent }[] }
-  /** Only the transcript rows that changed since `cursor` (a prior `cursor` from this call or a snapshot's revision counter); `reset` means a full snapshot. */
-  'agent.changes'(
-    sessionId: string,
-    cursor: number,
-    knownLastSeq: number,
-  ): {
-    reset: boolean
-    cursor: number
-    lastSeq: number
-    revision: number
-    events: { seq: number; event: AgentEvent }[]
-  }
+  /**
+   * Only the transcript rows that changed since `cursor` (a prior `cursor` from this call or a snapshot's revision
+   * counter); `reset` means a full snapshot. With `paged`, a catch-up too long for one answer comes in parts: `more`
+   * says to ask again from the returned `cursor`.
+   */
+  'agent.changes'(sessionId: string, cursor: number, knownLastSeq: number, paged?: boolean): TranscriptChanges
   'term.list'(taskId: string): TerminalInfo[]
   /** Runs a command in the workspace's newest idle shell, or a new one, and returns that shell. */
   'term.run'(ctx: string, command: string): TerminalInfo

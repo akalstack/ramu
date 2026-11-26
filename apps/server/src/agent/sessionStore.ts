@@ -192,7 +192,8 @@ export class SessionStore {
    * The rows that changed since `cursor` (a revision the client already holds), including rows edited in place, so
    * a reconnecting client need not re-read the whole transcript. A cursor the server cannot honor gets a full
    * snapshot flagged `reset`: none yet, one from the future, a client that holds later rows than exist (a rewind),
-   * or more changes than the bound.
+   * or more changes than the bound. A client that asks for pages gets the first bounded part of a long catch-up with
+   * `more`, and asks again from the cursor it returns, so no answer carries a whole transcript it already holds.
    */
   changes(
     id: string,
@@ -200,12 +201,14 @@ export class SessionStore {
     knownLastSeq: number,
     limit = 2000,
     maxBytes = MAX_CHANGE_BYTES,
+    paged = false,
   ): {
     reset: boolean
     cursor: number
     lastSeq: number
     revision: number
     events: { seq: number; event: AgentEvent }[]
+    more?: boolean
   } {
     this.get(id)
     const head = this.db
@@ -219,11 +222,23 @@ export class SessionStore {
     const usable = cursor > 0 && cursor <= head.rev && knownLastSeq <= head.seq
     const changed = usable
       ? (this.db
-          .prepare('SELECT seq, event FROM agent_events WHERE session_id = ? AND rev > ? ORDER BY rev LIMIT ?')
-          .all(id, cursor, limit + 1) as { seq: number; event: string }[])
+          .prepare('SELECT seq, event, rev FROM agent_events WHERE session_id = ? AND rev > ? ORDER BY rev LIMIT ?')
+          .all(id, cursor, limit + 1) as { seq: number; event: string; rev: number }[])
       : []
     // A replay is bounded by rows and by serialized size; past either, the client gets the authoritative snapshot.
     const tooLarge = changed.length > limit || changed.reduce((total, row) => total + row.event.length, 0) > maxBytes
+    if (usable && tooLarge && paged) {
+      // As many rows as fit the bounds, and always one, so a single oversized row cannot stall the catch-up.
+      let bytes = 0
+      let count = 0
+      for (const row of changed.slice(0, limit)) {
+        bytes += row.event.length
+        if (count && bytes > maxBytes) break
+        count++
+      }
+      const page = changed.slice(0, count)
+      return { reset: false, ...base, cursor: page.at(-1)!.rev, events: parse(page), more: true }
+    }
     if (!usable || tooLarge) {
       const all = this.db.prepare('SELECT seq, event FROM agent_events WHERE session_id = ? ORDER BY seq').all(id) as {
         seq: number

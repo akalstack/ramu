@@ -12,9 +12,7 @@ Every change needs focused tests and typechecks for the packages it touches; des
 
 ## To build
 
-- **Transport:** what is left of recovery after a lost connection ([Architecture](contributing/architecture.md#transport)). Start from measurements on real networks.
-  - **Replay:** a bounded event backlog on the host, so a short gap replays instead of every list being read again.
-  - **Long gaps:** a bound on the transcript sent when a thread is more than 2000 changes behind.
+- **Transport:** a bounded event backlog on the host, so a short gap in the connection replays what was missed instead of every list being read again ([Architecture](contributing/architecture.md#transport)). Start from measurements on real networks.
 - **Windows:** a Windows build: the local service over a named pipe, finding provider CLIs, `gh` and ripgrep, keeping the host awake, and a Squirrel installer that hands `ramu://` links to the running app.
 
 ## Blocked

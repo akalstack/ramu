@@ -39,6 +39,31 @@ describe('agent.changes', () => {
     return { svc, id: session.id, record }
   }
 
+  it('sends a long catch-up in parts to a client that asks, and a snapshot to one that does not', async () => {
+    const { svc, id, record } = await start()
+    const first = svc.changes(id, 0, 0)
+    for (let index = 0; index < 5; index++)
+      record({ kind: 'text', text: `note ${index}\n\n`, messageId: `n${index}` } as AgentEvent)
+    const whole = svc.changes(id, first.cursor, first.lastSeq)
+    expect(whole.events.length).toBeGreaterThan(2)
+
+    // An older client is given everything at once.
+    expect(svc.changes(id, first.cursor, first.lastSeq, 2).reset).toBe(true)
+
+    const seen: number[] = []
+    let cursor = first.cursor
+    for (let parts = 0; parts < 10; parts++) {
+      const part = svc.changes(id, cursor, first.lastSeq, 2, undefined, true)
+      expect(part.reset).toBe(false)
+      expect(part.events.length).toBeLessThanOrEqual(2)
+      seen.push(...part.events.map((entry) => entry.seq))
+      cursor = part.cursor
+      if (!part.more) break
+    }
+    expect(seen).toEqual(whole.events.map((entry) => entry.seq))
+    expect(cursor).toBe(whole.cursor)
+  })
+
   it('sends a full snapshot first, then only what changed, including rows edited in place', async () => {
     const { svc, id, record } = await start()
     const first = svc.changes(id, 0, 0)

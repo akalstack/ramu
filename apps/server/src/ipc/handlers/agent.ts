@@ -62,8 +62,9 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
       run: (s: string, command: string | null) => agents.setVerify(s, command),
     },
     'agent.changes': {
-      args: z.tuple([id, z.number().int().min(0), z.number().int().min(0)]),
-      run: (sessionId: string, cursor: number, knownLastSeq: number) => agents.changes(sessionId, cursor, knownLastSeq),
+      args: z.tuple([id, z.number().int().min(0), z.number().int().min(0), z.boolean().optional()]),
+      run: (sessionId: string, cursor: number, knownLastSeq: number, paged?: boolean) =>
+        agents.changes(sessionId, cursor, knownLastSeq, undefined, undefined, paged === true),
     },
     'agent.tail': { args: z.tuple([id]), run: (sessionId: string) => agents.tail(sessionId) },
     'agent.events': { args: z.tuple([id]), run: (sessionId: string) => agents.events(sessionId) },
