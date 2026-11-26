@@ -556,7 +556,8 @@ export class ShipService implements ShipRounds {
       this.update(run.id, (entry) => ({ ...entry, watched: [...new Set([...entry.watched, pr.url])] }))
     }
     const step = shipStep(pr, run.finishLine)
-    if (step === 'working' || run.told[pr.url] === step) return
+    // Nothing to tell while the agent works or reviewers have the turn: the watch brings their comments back.
+    if (step === 'working' || step === 'waiting' || run.told[pr.url] === step) return
     if (pr.state === 'open' && !pr.checks.length && Date.now() - (firstSeen ?? Date.now()) < CHECKS_GRACE) return
     const branch = (await currentBranch(cwd)) ?? pr.headBranch
     this.agents.enqueueBackground(run.sessionId, nextStep(step, run.finishLine, pr.url, optionsOf(run)), {
@@ -636,6 +637,7 @@ function nextStep(step: ShipStep, finishLine: FinishLine, url: string, options: 
     case 'closed':
       return `${url} was closed without merging, so shipping stopped. Tell the person in one line; do not reopen it.`
     case 'working':
+    case 'waiting':
       return ''
   }
 }

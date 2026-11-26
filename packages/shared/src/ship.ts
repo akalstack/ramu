@@ -137,10 +137,11 @@ export function defaultFinishLine(repository: ShipRepository): FinishLine {
 }
 
 /**
- * Where a shipping pull request is: still being worked on, at its finish line, or waiting for the next step only the
- * person decides (merging) or the agent starts (deploying after the merge).
+ * Where a shipping pull request is: still being worked on by the agent or its checks, waiting on reviewers with
+ * nothing left for the agent to do, at its finish line, or waiting for the next step only the person decides (merging)
+ * or the agent starts (deploying after the merge).
  */
-export type ShipStep = 'working' | 'reached' | 'merge' | 'deploy' | 'closed'
+export type ShipStep = 'working' | 'waiting' | 'reached' | 'merge' | 'deploy' | 'closed'
 
 export function shipStep(
   pr: Pick<PullRequestInfo, 'state' | 'draft' | 'reviewDecision' | 'checks'>,
@@ -152,7 +153,9 @@ export function shipStep(
   const green = pr.checks.every((check) => check.state !== 'failure' && check.state !== 'pending')
   if (pr.draft || !green) return 'working'
   if (finishLine === 'pull-request') return 'reached'
-  if (pr.reviewDecision !== 'approved') return 'working'
+  // Requested changes are the agent's to answer; anything else short of approval is a reviewer's turn.
+  if (pr.reviewDecision === 'changes-requested') return 'working'
+  if (pr.reviewDecision !== 'approved') return 'waiting'
   return finishLine === 'review' ? 'reached' : 'merge'
 }
 

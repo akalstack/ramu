@@ -57,6 +57,9 @@ describe('shipStep', () => {
 
   it('waits for approval before review counts as reached', () => {
     expect(shipStep(pr({ reviewDecision: 'changes-requested' }), 'review')).toBe('working')
+    // Green with no verdict yet is a reviewer's turn, not the agent's: nothing for it to spend turns on.
+    expect(shipStep(pr(), 'review')).toBe('waiting')
+    expect(shipStep(pr({ reviewDecision: 'review-required' }), 'live')).toBe('waiting')
     expect(shipStep(pr({ reviewDecision: 'approved' }), 'review')).toBe('reached')
   })
 

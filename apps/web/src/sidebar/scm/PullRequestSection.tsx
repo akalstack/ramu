@@ -26,7 +26,7 @@ import { useHost } from '../../workspace/HostProvider'
 import { queryInvokerFor } from '../../git/hostQuery'
 import { BrandIcon } from '@/components/brand-icon'
 import { forgeBrand } from '@ramu/shared/brands'
-import { FORGE_NAMES } from '@ramu/shared/pullRequests'
+import { FORGE_NAMES, pullRequestWaitingLine } from '@ramu/shared/pullRequests'
 
 const STATE_LABEL: Record<PullRequestInfo['state'], string> = { open: 'Open', closed: 'Closed', merged: 'Merged' }
 
@@ -123,6 +123,12 @@ export function PullRequestSection({
     return () => window.removeEventListener('ramu:git-updated', refresh)
   }, [refetch])
 
+  // The thread's own pull request row carries what the pull request waits on people for, read with the list.
+  const linked = ws.task(taskId)?.pullRequest
+  const waiting =
+    pr?.state === 'open' && !pr.draft && pr.reviewDecision !== 'approved' && linked?.url === pr.url
+      ? linked.waiting
+      : undefined
   if (!status?.remote || !status.branch || !query.data) return null
   const { availability } = query.data
   if (availability === 'not-github' || availability === 'no-remote') return null
@@ -302,6 +308,12 @@ export function PullRequestSection({
               <span className="flex-none text-warn">· {t('Changes requested')}</span>
             )}
           </div>
+          {/* On whom it waits and for what, as the Git host's own rules say; nothing to press, so it reads as a line. */}
+          {waiting && (
+            <p className="m-0 text-caption text-muted-foreground" role="status">
+              {t('Waiting: {0}', { 0: pullRequestWaitingLine(waiting, t) })}
+            </p>
+          )}
           <div className="flex flex-wrap gap-1.5 [&_button]:flex-1 [&_button]:justify-center [&_button]:whitespace-nowrap">
             {failing && (
               <Button

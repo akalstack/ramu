@@ -4193,7 +4193,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Replies ready': 'Balasan siap',
   'Has conflicts': 'Ada konflik',
   'Waiting on review': 'Menunggu review',
-  'Ready to merge': 'Siap di-merge',
+  'Waiting: {0}': 'Menunggu: {0}',
   'changes requested by {0}': 'perubahan diminta oleh {0}',
   'needs a code owner’s approval from {0}': 'butuh approval code owner dari {0}',
   'needs a code owner’s approval': 'butuh approval code owner',
