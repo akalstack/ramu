@@ -246,6 +246,19 @@ describe('waiting on reviewers', () => {
     clock.mockRestore()
   })
 
+  it('offers once to ask a reviewer again when their approval no longer stands', async () => {
+    green()
+    shipWith(() => ({ ...waitingOn(['bo']), dismissed: ['ana', 'bo'] }))
+    await ship.start('session', 'review')
+    await poll()
+    await poll()
+    await poll()
+    // Bo is already asked again; only Ana is offered.
+    expect(texts()).toHaveLength(1)
+    expect(texts()[0]).toMatch(/approval from @ana no longer stands/)
+    expect(texts()[0]).toMatch(/pull_request_reviewers/)
+  })
+
   it('does not count a weekend as a working day', () => {
     const friday = new Date('2026-11-27T16:00:00')
     const due = new Date(workingDayAfter(friday.getTime()))

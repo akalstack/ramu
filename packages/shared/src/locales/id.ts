@@ -4259,6 +4259,11 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Create branch from {0}': 'Buat branch dari {0}',
   'Merge {0} into this branch?': 'Merge {0} ke branch ini?',
   'Creates a branch at the tip of {0} and switches to it. The checkout must be clean.':
+  'Merge when ready…': 'Merge saat siap…',
+  '{0}’s approval no longer stands': 'persetujuan {0} tidak berlaku lagi',
+  'approvals from {0} no longer stand': 'persetujuan dari {0} tidak berlaku lagi',
+  'It cannot merge yet. The hosting service merges it once it can.':
+    'Belum bisa di-merge. Layanan hosting akan me-merge begitu bisa.',
     'Membuat branch di ujung {0} lalu berpindah ke sana. Checkout harus bersih.',
   'Renames the current local branch. Its remote branch is not changed.':
     'Mengganti nama branch lokal saat ini. Branch remote tidak berubah.',

@@ -42,6 +42,7 @@ import type {
 import {
   FORGE_NAMES,
   outsideRepository,
+  pullRequestMergeOffer,
   pullRequestNextStep,
   pullRequestRef,
   pullRequestStage,
@@ -312,6 +313,7 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
       ? 'none'
       : suggested
   // Open review threads go to an agent wherever the pull request is checked out, on this host or another.
+  const mergeOffer = pullRequestMergeOffer(pr, supportsPullRequest(service, 'auto-merge'))
   const canAddress = open && !outside && openThreads.length > 0 && !(pr.fork && !mine)
   const takeStep = (next: PullRequestNextStep) => {
     if (next === 'merge') setMerging(true)
@@ -492,16 +494,22 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
                     : t('Update branch')}
               </Button>
             )}
-            {open && (
+            {open && (pr.draft || mergeOffer !== 'none') && (
               <Button
                 variant="secondary"
                 size="sm"
                 disabled={!!busy || pr.draft}
-                title={pr.draft ? t('Mark it ready for review before merging') : undefined}
+                title={
+                  pr.draft
+                    ? t('Mark it ready for review before merging')
+                    : mergeOffer === 'when-ready'
+                      ? t('It cannot merge yet. The hosting service merges it once it can.')
+                      : undefined
+                }
                 onClick={() => setMerging(true)}
               >
                 <GitMerge size={13} />
-                {t('Merge…')}
+                {mergeOffer === 'when-ready' ? t('Merge when ready…') : t('Merge…')}
               </Button>
             )}
             {open ? (
@@ -757,6 +765,7 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
           repoId={view.repoId}
           url={view.url}
           service={service}
+          whenReady={mergeOffer === 'when-ready'}
           threadTaskId={thread?.taskId ?? null}
           onClose={(merged) => {
             setMerging(false)
@@ -841,6 +850,7 @@ function MergeDialog({
   repoId,
   url,
   service,
+  whenReady,
   threadTaskId,
   onClose,
 }: {
@@ -848,6 +858,8 @@ function MergeDialog({
   repoId: string
   url: string
   service: ForgeService
+  /** The service will not take a merge yet, so the dialog opens on leaving it to merge on its own. */
+  whenReady: boolean
   threadTaskId: string | null
   onClose: (merged: boolean) => void
 }) {
@@ -861,7 +873,7 @@ function MergeDialog({
   const [method, setMethod] = useState<MergeMethod | null>(storedMethod(repoId))
   const [deleteBranch, setDeleteBranch] = useState(true)
   const [markDone, setMarkDone] = useState(true)
-  const [whenChecksPass, setWhenChecksPass] = useState(false)
+  const [whenChecksPass, setWhenChecksPass] = useState(whenReady)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const methods = options.data?.methods ?? []

@@ -108,6 +108,27 @@ describe('pull requests on thread rows', () => {
     expect(index.forTask(tasks[0]!)).toMatchObject({ stage: 'merged' })
   })
 
+  it('names a reviewer whose approval the next look no longer has, until they answer again', async () => {
+    const waiting = { approvals: 1, from: [], codeOwner: false, conversations: 0, changesBy: [], queue: false }
+    const look = (overrides: Partial<PullRequestSummary>) =>
+      vi.mocked(listPullRequests).mockResolvedValue({
+        availability: 'ready',
+        viewer: 'me',
+        pullRequests: [pr({ checks: 'success', ...overrides })],
+      })
+    look({ approvedBy: ['ana'], waiting })
+    await at(0)
+    expect(index.waitingOf('worktree', 'https://github.com/o/r/pull/1')?.dismissed).toBeUndefined()
+    look({ approvedBy: [], waiting: { ...waiting, approvals: 2 } })
+    await at(10 * 60_000)
+    expect(index.waitingOf('worktree', 'https://github.com/o/r/pull/1')?.dismissed).toEqual(['ana'])
+    await at(20 * 60_000)
+    expect(index.waitingOf('worktree', 'https://github.com/o/r/pull/1')?.dismissed).toEqual(['ana'])
+    look({ approvedBy: ['Ana'], waiting })
+    await at(30 * 60_000)
+    expect(index.waitingOf('worktree', 'https://github.com/o/r/pull/1')?.dismissed).toBeUndefined()
+  })
+
   it('does not ask again before the list is stale, and backs off when the service is unavailable', async () => {
     await at(0)
     await at(30_000)

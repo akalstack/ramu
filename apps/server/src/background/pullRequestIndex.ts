@@ -11,7 +11,7 @@ import type {
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { NO_PROJECT } from '@ramu/shared/types'
-import { outsideRepoId, outsideRepository, pullRequestStage } from '@ramu/shared/pullRequests'
+import { dismissedApprovals, outsideRepoId, outsideRepository, pullRequestStage } from '@ramu/shared/pullRequests'
 import type { Workspace } from '../workspace/workspace'
 import type { AgentService } from '../agent'
 import { listInvolvedPullRequests, listPullRequests, listRepositoryPullRequests } from '../workspace/forge'
@@ -45,7 +45,7 @@ interface Link {
   number: number
   snapshot: Pick<
     PullRequestSummary,
-    'title' | 'state' | 'draft' | 'checks' | 'reviewDecision' | 'mergeable' | 'openThreads' | 'waiting'
+    'title' | 'state' | 'draft' | 'checks' | 'reviewDecision' | 'mergeable' | 'openThreads' | 'waiting' | 'approvedBy'
   >
 }
 
@@ -109,6 +109,7 @@ export class PullRequestIndex {
       openThreads: pr.openThreads ?? previous?.snapshot.openThreads ?? null,
       // A look that does not say (a watch reads less than the list) keeps what the list last said.
       ...((pr.waiting ?? previous?.snapshot.waiting) ? { waiting: pr.waiting ?? previous?.snapshot.waiting } : {}),
+      ...(previous?.snapshot.approvedBy ? { approvedBy: previous.snapshot.approvedBy } : {}),
     }
     const next = [
       ...current.filter((entry) => entry.url !== pr.url),
@@ -438,7 +439,7 @@ export class PullRequestIndex {
     for (const [taskId, links] of Object.entries(all))
       next[taskId] = links.map((entry) => {
         const pr = entry.repoId === repoId ? byUrl.get(entry.url) : undefined
-        return pr ? { ...entry, snapshot: snapshotOf(pr) } : entry
+        return pr ? { ...entry, snapshot: snapshotOf(pr, entry.snapshot) } : entry
       })
     const tasks = this.workspace.listTasks().filter((task) => task.status !== 'archived')
     let shared: { task: Task; pr: PullRequestSummary } | null = null
@@ -510,7 +511,13 @@ export class PullRequestIndex {
   }
 }
 
-function snapshotOf(pr: PullRequestSummary): Link['snapshot'] {
+/** What a look found, with the approvals the look before had and this one lost named on what it waits for. */
+function snapshotOf(pr: PullRequestSummary, previous?: Link['snapshot']): Link['snapshot'] {
+  const dismissed = dismissedApprovals(
+    { approvedBy: previous?.approvedBy, dismissed: previous?.waiting?.dismissed },
+    pr,
+  )
+  const waiting = pr.waiting && dismissed.length ? { ...pr.waiting, dismissed } : pr.waiting
   return {
     title: pr.title,
     state: pr.state,
@@ -519,11 +526,13 @@ function snapshotOf(pr: PullRequestSummary): Link['snapshot'] {
     reviewDecision: pr.reviewDecision,
     mergeable: pr.mergeable,
     openThreads: pr.openThreads,
-    ...(pr.waiting ? { waiting: pr.waiting } : {}),
+    ...(waiting ? { waiting } : {}),
+    ...(pr.approvedBy ? { approvedBy: pr.approvedBy } : {}),
   }
 }
 
 function withLink(links: Link[] | undefined, repoId: string, pr: PullRequestSummary): Link[] {
   const rest = (links ?? []).filter((entry) => entry.url !== pr.url)
-  return [...rest, { repoId, url: pr.url, number: pr.number, snapshot: snapshotOf(pr) }]
+  const previous = (links ?? []).find((entry) => entry.url === pr.url)?.snapshot
+  return [...rest, { repoId, url: pr.url, number: pr.number, snapshot: snapshotOf(pr, previous) }]
 }

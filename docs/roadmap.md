@@ -18,9 +18,8 @@ Every change needs focused tests and typechecks for the packages it touches; des
   - **Personal, idea to production:** one ask ("build this and put it live") creates the project, publishes it to the person's own Git host as a private repository, picks a deploy platform, runs the first deploy and records the live address, without the thread stopping between steps. Tokens and secrets still ask once with the masked card, and the first production deploy asks. After a later deploy, a failed check of the live address offers the rollback the uptime watch already has.
   - **Waiting on people:** a pull request says what it waits on from its Git host's own rules, and a shipping thread waiting on reviewers offers reviewers and drafts a reminder. Still missing:
     - **Inbox's Brief:** a pull request waiting on reviewers is not listed there, since the next step is not the person's; one with nobody asked yet should be, with **Request review**.
-    - **A dismissed approval:** a push that dismissed an earlier approval says so and offers to ask that reviewer again.
-    - **Merging:** **Merge** appears only when the host reports the pull request can merge; today the button shows and its blockers are listed under it. With **Merge when approved** on, a merge queue decides where the repository has one.
-  - **Acceptance:** on a host with no projects, "build a booking page and put it live" ends with a live address that loads, after one production question and the token cards; on a repository whose rules need two approvals and a code owner, a push that dismisses the one approval says so and offers to ask that reviewer again, and **Merge** is offered only once the host allows it.
+    - **A merge queue:** with **Merge when approved** on, a merge queue decides where the repository has one.
+  - **Acceptance:** on a host with no projects, "build a booking page and put it live" ends with a live address that loads, after one production question and the token cards; a pull request with nobody asked to review appears in Inbox's Brief with **Request review**.
 - **Presenting from the phone:** **Present** a deck on a display the phone is connected to (AirPlay or a cable), with speaker notes on the phone ([Artifacts](guide/artifacts.md)).
 
 ## Blocked

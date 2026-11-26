@@ -3,6 +3,7 @@ import type { PullRequestSummary, RepositoryPullRequests } from '../src/types'
 import { translate } from '../src/i18n'
 import {
   diffLineMatches,
+  dismissedApprovals,
   pullRequestRowDetail,
   pullRequestWaiting,
   pullRequestWaitingDetail,
@@ -17,6 +18,7 @@ import {
   outsideRepoId,
   outsideRepository,
   pullRequestGlyph,
+  pullRequestMergeOffer,
   pullRequestRows,
   shownReviewThreads,
   pullRequestRef,
@@ -452,5 +454,52 @@ describe('what a pull request waits on people for', () => {
     // A stage that is the person's or the agent's keeps its own words.
     expect(pullRequestRowDetail({ number: 42, stage: 'checks-failing', waiting }, t)).toBe('#42 · Checks failing')
     expect(pullRequestRowDetail({ number: 42, stage: 'review-required' }, t)).toBe('#42 · Waiting on review')
+  })
+})
+
+describe('pullRequestMergeOffer', () => {
+  const pr = (extra: Partial<PullRequestSummary> = {}) =>
+    ({ state: 'open', draft: false, mergeable: 'clean', ...extra }) as PullRequestSummary
+  const waiting = { approvals: 1, from: [], codeOwner: false, conversations: 0, changesBy: [], queue: false }
+
+  it('offers Merge when the service says it can merge', () => {
+    expect(pullRequestMergeOffer(pr(), true)).toBe('now')
+    // A request for changes that the repository does not enforce does not hold the merge.
+    expect(pullRequestMergeOffer(pr({ waiting: { ...waiting, approvals: 0, changesBy: ['ana'] } }), false)).toBe('now')
+  })
+
+  it('leaves a held pull request to the service’s own automatic merge, or offers nothing without one', () => {
+    expect(pullRequestMergeOffer(pr({ mergeable: 'blocked' }), true)).toBe('when-ready')
+    expect(pullRequestMergeOffer(pr({ mergeable: 'behind' }), false)).toBe('none')
+  })
+
+  it('goes by the missing approval where the service gives no verdict', () => {
+    expect(pullRequestMergeOffer(pr({ mergeable: 'unknown' }), false)).toBe('now')
+    expect(pullRequestMergeOffer(pr({ mergeable: 'unknown', waiting }), false)).toBe('none')
+  })
+
+  it('offers nothing on a draft, a conflict or a pull request no longer open', () => {
+    expect(pullRequestMergeOffer(pr({ draft: true }), true)).toBe('none')
+    expect(pullRequestMergeOffer(pr({ mergeable: 'conflicts' }), true)).toBe('none')
+    expect(pullRequestMergeOffer(pr({ state: 'merged' }), true)).toBe('none')
+  })
+})
+
+describe('dismissed approvals', () => {
+  it('names who approved before and no longer does, until they answer again', () => {
+    expect(dismissedApprovals({ approvedBy: ['ana', 'bo'] }, { approvedBy: ['bo'] })).toEqual(['ana'])
+    expect(dismissedApprovals({ dismissed: ['ana'] }, { approvedBy: [] })).toEqual(['ana'])
+    expect(dismissedApprovals({ dismissed: ['ana'] }, { approvedBy: ['Ana'] })).toEqual([])
+    expect(dismissedApprovals({ approvedBy: ['ana'] }, { approvedBy: [], changesRequestedBy: ['ana'] })).toEqual([])
+    // A look that does not list approvals says nothing new.
+    expect(dismissedApprovals({ approvedBy: ['ana'], dismissed: ['bo'] }, {})).toEqual(['bo'])
+  })
+
+  it('says so in the waiting line', () => {
+    const waiting = { approvals: 1, from: [], codeOwner: false, conversations: 0, changesBy: [], queue: false }
+    const say = (key: string, values?: Record<string, string | number>) => translate('en', key, values)
+    expect(pullRequestWaitingLine({ ...waiting, dismissed: ['ana'] }, say)).toBe(
+      'needs 1 more approval · @ana’s approval no longer stands',
+    )
   })
 })

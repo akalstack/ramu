@@ -76,6 +76,22 @@ export function pullRequestWaiting(
   }
 }
 
+/**
+ * Reviewers who approved at the last look and no longer do, with those already known: the service dropped their
+ * approval, as it does after a push where the repository asks for a fresh one. Someone who approved again or asked for
+ * changes has answered and is no longer listed.
+ */
+export function dismissedApprovals(
+  before: { approvedBy?: string[]; dismissed?: string[] },
+  pr: Pick<PullRequestSummary, 'approvedBy' | 'changesRequestedBy'>,
+): string[] {
+  if (!pr.approvedBy) return before.dismissed ?? []
+  const answered = new Set([...pr.approvedBy, ...(pr.changesRequestedBy ?? [])].map((name) => name.toLowerCase()))
+  return [...new Set([...(before.dismissed ?? []), ...(before.approvedBy ?? [])])].filter(
+    (name) => !answered.has(name.toLowerCase()),
+  )
+}
+
 /** A list row with what it waits on people for, when it waits on anyone; drafts are not up for review yet. */
 export function withPullRequestWaiting(pr: PullRequestSummary, rules: MergeRules | null = null): PullRequestSummary {
   const waiting = pr.draft ? null : pullRequestWaiting(pr, rules)
@@ -113,6 +129,12 @@ export function pullRequestWaitingLine(
       waiting.conversations === 1
         ? t('1 conversation to resolve')
         : t('{0} conversations to resolve', { 0: waiting.conversations }),
+    )
+  if (waiting.dismissed?.length)
+    parts.push(
+      waiting.dismissed.length === 1
+        ? t('{0}’s approval no longer stands', { 0: names(waiting.dismissed) })
+        : t('approvals from {0} no longer stand', { 0: names(waiting.dismissed) }),
     )
   return parts.join(' · ')
 }
@@ -496,6 +518,26 @@ export function pullRequestNextStep(
       if (pr.mergeable === 'behind') return 'update-branch'
       return mine ? 'wait-review' : 'review'
   }
+}
+
+/** How Merge is offered: now, through the service's own automatic merge once it allows one, or not at all. */
+export type PullRequestMergeOffer = 'now' | 'when-ready' | 'none'
+
+/**
+ * Whether the hosting service would take a merge now. Its own verdict decides; where it gives none, a missing approval
+ * or a conversation its rules want resolved does. A held pull request can still be left to merge on its own where the
+ * service has that, so the person does not come back for it.
+ */
+export function pullRequestMergeOffer(
+  pr: Pick<PullRequestSummary, 'state' | 'draft' | 'mergeable' | 'waiting'>,
+  autoMerge: boolean,
+): PullRequestMergeOffer {
+  if (pr.state !== 'open' || pr.draft || pr.mergeable === 'conflicts') return 'none'
+  if (pr.mergeable === 'clean') return 'now'
+  const held =
+    pr.mergeable !== 'unknown' || (!!pr.waiting && (pr.waiting.approvals !== 0 || pr.waiting.conversations > 0))
+  if (!held) return 'now'
+  return autoMerge ? 'when-ready' : 'none'
 }
 
 export type ReviewThreadFilter = 'open' | 'resolved' | 'all'

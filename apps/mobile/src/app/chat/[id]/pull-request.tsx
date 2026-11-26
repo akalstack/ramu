@@ -50,6 +50,7 @@ import {
 import {
   FORGE_NAMES,
   outsideRepository,
+  pullRequestMergeOffer,
   pullRequestNextStep,
   pullRequestRef,
   pullRequestStage,
@@ -441,6 +442,8 @@ export default function PullRequestScreen() {
   const shownThreads = shownReviewThreads(threads ?? [], threadFilter, threadOrder, search)
   const shownFiles = files ? files.files.filter((file) => matchesPullRequestFile(file, search)) : []
   const step = pr && stage ? readinessStep(pullRequestNextStep(pr, stage, mine), !!outside) : 'none'
+  const mergeOffer = pr ? pullRequestMergeOffer(pr, supportsPullRequest(service, 'auto-merge')) : 'none'
+  const mergeTitle = mergeOffer === 'when-ready' ? say('Merge when ready…') : say('Merge…')
   // Reviewing happens on the Files changed tab, on an open pull request whose service takes line comments.
   const canReview = !!pr && open && canWrite && supportsPullRequest(service, 'line-comment')
 
@@ -582,8 +585,8 @@ export default function PullRequestScreen() {
         ? { key: step, icon: STEP_ICON[step], title: say(stepAction), onPress: takeStep }
         : open && canWrite && outside
           ? { key: 'clone', icon: FolderGit2, title: say('Clone as project'), onPress: cloneAsProject }
-          : open && canWrite && !pr.draft
-            ? { key: 'merge', icon: GitMerge, title: say('Merge…'), onPress: () => setMerging(true) }
+          : open && canWrite && mergeOffer !== 'none'
+            ? { key: 'merge', icon: GitMerge, title: mergeTitle, onPress: () => setMerging(true) }
             : pr.state === 'closed' && canWrite
               ? { key: 'reopen', icon: RotateCcw, title: say('Reopen'), onPress: () => void act({ kind: 'reopen' }) }
               : null
@@ -591,10 +594,10 @@ export default function PullRequestScreen() {
   const stateEntries: (MenuEntry | null)[] =
     pr && open && canWrite
       ? [
-          primary?.key !== 'merge' && !pr.draft
+          primary?.key !== 'merge' && mergeOffer !== 'none'
             ? {
                 key: 'merge',
-                label: say('Merge…'),
+                label: mergeTitle,
                 icon: GitMerge,
                 symbol: 'arrow.triangle.merge',
                 section: 'state',
@@ -1198,6 +1201,7 @@ export default function PullRequestScreen() {
           repoId={repoId}
           url={url}
           service={service}
+          whenReady={mergeOffer === 'when-ready'}
           threadTaskId={thread?.taskId ?? null}
           onClose={(merged) => {
             setMerging(false)
@@ -1260,6 +1264,7 @@ function MergeSheet({
   repoId,
   url,
   service,
+  whenReady,
   threadTaskId,
   onClose,
 }: {
@@ -1268,6 +1273,8 @@ function MergeSheet({
   repoId: string
   url: string
   service: ForgeService
+  /** The service will not take a merge yet, so the sheet opens on leaving it to merge on its own. */
+  whenReady: boolean
   threadTaskId: string | null
   onClose: (merged: boolean) => void
 }) {
@@ -1278,7 +1285,7 @@ function MergeSheet({
   const [method, setMethod] = useState<MergeMethod | null>(null)
   const [deleteBranch, setDeleteBranch] = useState(true)
   const [markDone, setMarkDone] = useState(true)
-  const [whenChecksPass, setWhenChecksPass] = useState(false)
+  const [whenChecksPass, setWhenChecksPass] = useState(whenReady)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {

@@ -65,6 +65,8 @@ interface ShipRun {
   waitingSince?: Record<string, number>
   /** Pull requests whose wait was already acted on once: reviewers offered, or a reminder drafted. */
   nudged?: Record<string, 'asked' | 'reminded'>
+  /** Reviewers already offered a second look after their approval stopped standing, per pull request. */
+  askedAgain?: Record<string, string[]>
   /** A check-fixing round handed over and not pushed yet: the commit the fix starts from. */
   pendingFix?: { url: string; cwd: string; branch: string; from: string; at: number }
 }
@@ -544,6 +546,25 @@ export class ShipService implements ShipRounds {
     const nudged = run.nudged?.[url]
     const mark = (kind: 'asked' | 'reminded') =>
       this.update(run.id, (entry) => ({ ...entry, nudged: { ...entry.nudged, [url]: kind } }))
+    const again = (waiting.dismissed ?? []).filter(
+      (name) => !waiting.from.includes(name) && !run.askedAgain?.[url]?.includes(name),
+    )
+    if (again.length) {
+      this.update(run.id, (entry) => ({
+        ...entry,
+        askedAgain: { ...entry.askedAgain, [url]: [...(entry.askedAgain?.[url] ?? []), ...again] },
+      }))
+      const branch = (await currentBranch(cwd)) ?? ''
+      this.agents.enqueueBackground(
+        run.sessionId,
+        [
+          `${url}: the approval from ${again.map((name) => `@${name}`).join(', ')} no longer stands, most likely because a later push dismissed it.`,
+          'Tell the person in one line, and ask them to review again in one pull_request_reviewers call, which the person confirms.',
+        ].join('\n'),
+        { cwd, branch },
+      )
+      return
+    }
     if (!waiting.from.length) {
       if (nudged) return
       mark('asked')
@@ -612,6 +633,7 @@ export class ShipService implements ShipRounds {
         ...entry,
         waitingSince: without(entry.waitingSince, pr.url),
         nudged: without(entry.nudged, pr.url),
+        askedAgain: without(entry.askedAgain, pr.url),
       }))
     // Nothing to tell while the agent works or reviewers have the turn: the watch brings their comments back.
     if (step === 'working' || step === 'waiting' || run.told[pr.url] === step) return

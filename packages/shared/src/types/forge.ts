@@ -112,6 +112,8 @@ export interface PullRequestWaiting {
   changesBy: string[]
   /** The service merges it in a queue once it is ready. */
   queue: boolean
+  /** Reviewers whose earlier approval no longer stands (a later push dismissed it) and who have not answered since. */
+  dismissed?: string[]
 }
 
 /** What a repository's own rules require before a merge into one branch; a field is absent when not required or unknown. */
