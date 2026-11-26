@@ -1,7 +1,7 @@
 import type { ChatBlock as Block } from '@ramu/shared/chat/chatFolding'
 import type { goalChanges } from '@ramu/shared/chat/goalHistory'
 import type { QuestionState } from '@ramu/shared/chat/questions'
-import type { AgentEvent, AgentTask, Attachment, ViewDescriptor } from '@ramu/shared/types'
+import type { AgentEvent, AgentQuestion, AgentTask, Attachment, ViewDescriptor } from '@ramu/shared/types'
 
 /** The chat view descriptor. */
 export type AgentViewDesc = Extract<ViewDescriptor, { kind: 'agent' }>
@@ -39,6 +39,8 @@ export interface TranscriptContext {
   results: Map<string, ToolResult>
   outcomes: Map<string, string>
   questionStates: Map<string, QuestionState>
+  /** What each question request asked, by request id. */
+  askedQuestions: Map<string, AgentQuestion[]>
   goalNotes: ReturnType<typeof goalChanges>
   /** The text message the provider is still streaming. */
   liveText: AgentEvent | null

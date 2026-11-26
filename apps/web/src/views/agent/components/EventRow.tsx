@@ -15,7 +15,7 @@ import { AgentContentView } from '../../../chat/AgentContentView'
 import { compactionLabel, compactionCounts } from '@ramu/shared/chat/compaction'
 import { Button } from '@/components/desktop-button'
 import { ArrowRightLeft, CircleAlert, Minimize2, RotateCcw, Settings2, Undo2 } from 'lucide-react'
-import type { Attachment, AgentEvent } from '@ramu/shared/types'
+import type { Attachment, AgentEvent, AgentQuestion } from '@ramu/shared/types'
 import { ScheduleChatCard } from '../../../Automation'
 import { useHost } from '../../../workspace/HostProvider'
 import { errorText } from '../../../workspace/TaskPane'
@@ -55,6 +55,7 @@ export function EventRow({
   assistantActions = false,
   outcomes,
   questionStates,
+  askedQuestions,
   interactive,
   latest = false,
   editor,
@@ -76,6 +77,7 @@ export function EventRow({
   assistantActions?: boolean
   outcomes: Map<string, string>
   questionStates: Map<string, QuestionState>
+  askedQuestions?: Map<string, AgentQuestion[]>
   interactive?: import('../types').TranscriptContext['interactive']
   latest?: boolean
   editor?: React.ReactNode
@@ -223,6 +225,7 @@ export function EventRow({
           event={e}
           taskId={taskId}
           latest={latest}
+          askedQuestions={askedQuestions}
           editor={editor}
           onEdit={onEdit}
           onOpenAgent={onOpenAgent}

@@ -67,6 +67,7 @@ const render = ({
     results: new Map(),
     outcomes: new Map(),
     questionStates: new Map(),
+    askedQuestions: new Map(),
     interactive: { revisions: new Map(), updates: new Map() },
     goalNotes: new Map(),
     liveText: null,

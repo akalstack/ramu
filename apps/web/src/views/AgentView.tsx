@@ -96,6 +96,7 @@ import {
   outcomesOf,
   pageTurnDate,
   questionStatesOf,
+  askedQuestionsOf,
   toolResultsOf,
   nextTurnDate,
   openingLanded,
@@ -241,6 +242,7 @@ export const AgentView = memo(function AgentView({
 
   const outcomes = useMemo(() => outcomesOf(events), [events])
   const questionStates = useMemo(() => questionStatesOf(events), [events])
+  const askedQuestions = useMemo(() => askedQuestionsOf(events), [events])
   const interactive = useMemo(
     () => ({ revisions: interactiveRevisions(events), updates: interactiveUpdates(events) }),
     [events],
@@ -810,6 +812,7 @@ export const AgentView = memo(function AgentView({
     results,
     outcomes,
     questionStates,
+    askedQuestions,
     interactive,
     goalNotes,
     liveText,

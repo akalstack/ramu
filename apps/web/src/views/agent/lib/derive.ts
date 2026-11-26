@@ -17,6 +17,10 @@ export const questionStatesOf = (events: AgentEvent[]): Map<string, QuestionStat
     ),
   )
 
+/** What each question request asked, by request id, so a sent answer can show the choices it was picked from. */
+export const askedQuestionsOf = (events: AgentEvent[]) =>
+  new Map(events.flatMap((e) => (e.kind === 'question' ? [[e.requestId, e.questions] as const] : [])))
+
 /** Tool results by the id of the call they answer. */
 export const toolResultsOf = (events: AgentEvent[]) =>
   new Map(events.flatMap((e) => (e.kind === 'tool-result' ? [[e.toolUseId, e] as const] : [])))

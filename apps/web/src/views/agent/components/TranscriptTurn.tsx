@@ -102,6 +102,7 @@ function TranscriptBlock({
             fresh={ctx.freshArrival?.(b.event)}
             outcomes={ctx.outcomes}
             questionStates={ctx.questionStates}
+            askedQuestions={ctx.askedQuestions}
             interactive={ctx.interactive}
             latest={latest}
             onEdit={

@@ -70,6 +70,32 @@ export function answerPairs(body: string): { question: string; answer: string }[
   return pairs
 }
 
+/**
+ * A sent answer against the choices its question offered, so the chat can show what was on offer with the picked ones
+ * marked. `typed` is whatever the answer says beyond the choices (the person's own words). Null for a question that
+ * offered no choices.
+ */
+export function answerChoices(
+  question: Pick<AgentQuestion, 'options' | 'multiSelect'> | undefined,
+  answer: string,
+): { options: { label: string; chosen: boolean }[]; typed: string } | null {
+  if (!question?.options.length) return null
+  const labels = question.options.map((option) => option.label)
+  // Several picks are sent joined by commas, in the order offered; a label may hold a comma itself.
+  const picked = new Set(
+    labels.includes(answer)
+      ? [answer]
+      : question.multiSelect
+        ? labels.filter((label) => `, ${answer}, `.includes(`, ${label}, `))
+        : [],
+  )
+  const joined = labels.filter((label) => picked.has(label)).join(', ')
+  return {
+    options: labels.map((label) => ({ label, chosen: picked.has(label) })),
+    typed: joined === answer ? '' : picked.size ? answer.replace(joined, '').replace(/^, |, $/g, '') : answer,
+  }
+}
+
 export const QUESTION_INPUT_GUIDANCE =
   'For an open-ended question that needs the user’s own words, omit options or pass options=[]; the user must type and submit an explicit non-empty answer. Do not invent choices or a default answer for these questions.'
 

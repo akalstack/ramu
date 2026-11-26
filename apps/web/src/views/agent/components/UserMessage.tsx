@@ -5,6 +5,7 @@ import { Button } from '@/components/desktop-button'
 import {
   AppWindow,
   Bot,
+  Check,
   ChevronDown,
   ChevronRight,
   Lightbulb,
@@ -16,7 +17,7 @@ import {
 import { sentInteractiveAttachments } from '@ramu/shared/interactive'
 import { sentTerminalAttachments } from '@ramu/shared/chat/terminalContext'
 import { TerminalAttachmentChip } from '../../../chat/TerminalAttachmentChip'
-import type { AgentEvent, AgentTask, Attachment } from '@ramu/shared/types'
+import type { AgentEvent, AgentQuestion, AgentTask, Attachment } from '@ramu/shared/types'
 import { ChatActivityButton } from '../../../chat/ChatActivity'
 import {
   advisorAgentId,
@@ -27,7 +28,7 @@ import {
 } from '@ramu/shared/chat/agentTasks'
 import { sentComments } from '../../../git/ReviewChip'
 import { Attachments } from '../../../composer/Attachments'
-import { answerPairs, parseAnswerMessage } from '@ramu/shared/chat/questions'
+import { answerChoices, answerPairs, parseAnswerMessage } from '@ramu/shared/chat/questions'
 import { parseInlineUiActionMessage } from '@ramu/shared/chat/inlineUi'
 import { visibleText } from '../lib/messages'
 import { ThreadAgents } from '../lib/threadAgents'
@@ -133,6 +134,7 @@ export function UserMessage({
   event: e,
   taskId,
   latest,
+  askedQuestions,
   editor,
   onEdit,
   onOpenAgent,
@@ -140,6 +142,8 @@ export function UserMessage({
   event: Extract<AgentEvent, { kind: 'user' }>
   taskId?: string
   latest: boolean
+  /** What each question request asked, so answers show the choices they were picked from. */
+  askedQuestions?: Map<string, AgentQuestion[]>
   editor?: React.ReactNode
   onEdit?: (text: string, attachments: Attachment[]) => void
   onOpenAgent?: (agentId: string) => void
@@ -196,12 +200,39 @@ export function UserMessage({
       >
         <UserBubble>
           <span className="flex flex-col gap-2.5">
-            {answerPairs(answers.body).map((pair, index) => (
-              <span key={index} className="flex flex-col gap-0.5">
-                {pair.question && <span className="text-control text-muted-foreground">{pair.question}</span>}
-                <span>{pair.answer}</span>
-              </span>
-            ))}
+            {answerPairs(answers.body).map((pair, index) => {
+              const asked = askedQuestions?.get(answers.requestId)?.find((q) => q.question === pair.question)
+              const choices = answerChoices(asked, pair.answer)
+              return (
+                <span key={index} className="flex flex-col gap-1">
+                  {pair.question && <span className="text-control text-muted-foreground">{pair.question}</span>}
+                  {/* Every choice that was offered stays, with the picked ones marked, so the answer reads in context. */}
+                  {choices ? (
+                    <>
+                      <span role="list" className="flex flex-col gap-0.5">
+                        {choices.options.map((option) => (
+                          <span
+                            key={option.label}
+                            role="listitem"
+                            className={`flex items-center gap-2 ${option.chosen ? '' : 'text-muted-foreground'}`}
+                          >
+                            {option.chosen ? (
+                              <Check size={13} className="flex-none text-brand" aria-label={translate('Chosen')} />
+                            ) : (
+                              <span aria-hidden className="size-[13px] flex-none" />
+                            )}
+                            <span className="min-w-0 flex-1">{option.label}</span>
+                          </span>
+                        ))}
+                      </span>
+                      {choices.typed && <span>{choices.typed}</span>}
+                    </>
+                  ) : (
+                    <span>{pair.answer}</span>
+                  )}
+                </span>
+              )
+            })}
           </span>
         </UserBubble>
         <MessageActions latest={latest} className="mt-0.5 mr-1">

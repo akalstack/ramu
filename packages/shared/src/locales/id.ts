@@ -853,6 +853,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Use the fewest tokens': 'Pakai token paling sedikit',
   'Checking this host…': 'Memeriksa host ini…',
   Recommended: 'Disarankan',
+  Chosen: 'Dipilih',
   'Add another repository': 'Tambah repositori lain',
   'Optional Ramu tools stay out of the prompt until the agent asks for them.':
     'Tool Ramu opsional tidak masuk prompt sampai agent memintanya.',

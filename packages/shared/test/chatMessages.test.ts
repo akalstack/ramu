@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { answerMessage, answerPairs, parseAnswerMessage } from '../src/chat/questions'
+import { answerChoices, answerMessage, answerPairs, parseAnswerMessage } from '../src/chat/questions'
 import { parseTaskStop, taskStopPrompt } from '../src/chat/agentTasks'
 
 // Messages Ramu sends on the user's behalf: the agent reads the full text, the chat shows only what the user did.
@@ -31,5 +31,24 @@ describe('thread messages Ramu writes for the user', () => {
       parseTaskStop(taskStopPrompt({ agentId: 'a1', address: 'thread-9', name: 'Explorer "one"', status: 'running' })),
     ).toEqual({ name: "Explorer 'one'" })
     expect(parseTaskStop('Stop the build')).toBeNull()
+  })
+})
+
+describe('answerChoices', () => {
+  const options = ['Home, new thread', 'Open thread', 'Desktop'].map((label) => ({ label, description: '' }))
+  it('marks the picked choices and keeps what the person typed apart', () => {
+    expect(answerChoices({ options, multiSelect: false }, 'Open thread')).toEqual({
+      options: [
+        { label: 'Home, new thread', chosen: false },
+        { label: 'Open thread', chosen: true },
+        { label: 'Desktop', chosen: false },
+      ],
+      typed: '',
+    })
+    const several = answerChoices({ options, multiSelect: true }, 'Home, new thread, Desktop')!
+    expect(several.options.map((option) => option.chosen)).toEqual([true, false, true])
+    expect(several.typed).toBe('')
+    expect(answerChoices({ options, multiSelect: false }, 'Something else')!.typed).toBe('Something else')
+    expect(answerChoices({ options: [], multiSelect: false }, 'Free text')).toBeNull()
   })
 })
