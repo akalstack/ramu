@@ -97,7 +97,15 @@ export class SessionRecorder {
       (recorded.kind === 'agent' && recorded.status !== 'running') ||
       (recorded.kind === 'state' && recorded.state !== 'running' && recorded.state !== 'starting')
     )
-      queueMicrotask(() => void this.host.applyWaiting(id))
+      queueMicrotask(
+        () =>
+          void Promise.resolve()
+            .then(() => this.host.applyWaiting(id))
+            // The service may have closed its database since: a session that has ended has nothing left to apply.
+            .catch((error: unknown) => {
+              if ((error as { code?: unknown } | null)?.code !== 'ERR_INVALID_STATE') console.error(error)
+            }),
+      )
   }
 
   /**
