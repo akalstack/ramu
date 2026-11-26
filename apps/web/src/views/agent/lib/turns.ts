@@ -45,8 +45,6 @@ export function toTurns(blocks: Block[], events: AgentEvent[]): Turn[] {
         user: late,
         items: [],
         ended: false,
-        // The agent went on by itself after a clean result, so this reads as more of the turn above, not a new one.
-        ...(turn && !late && !turn.interrupted ? { continues: true } : {}),
         ...(at !== undefined ? { startedAt: at } : {}),
       }
       turns.push(turn)

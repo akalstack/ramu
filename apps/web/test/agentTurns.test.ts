@@ -131,31 +131,11 @@ it('marks work the agent picked up by itself as continuing the turn above, timed
     ],
     events,
   )
-  expect(turns.map(({ continues, startedAt, endedAt }) => ({ continues: !!continues, startedAt, endedAt }))).toEqual([
-    { continues: false, startedAt: 1000, endedAt: 3000 },
-    { continues: true, startedAt: 10_000, endedAt: 13_000 },
+  // Work picked up after a clean result is a turn of its own, with its own time.
+  expect(turns.map(({ startedAt, endedAt }) => ({ startedAt, endedAt }))).toEqual([
+    { startedAt: 1000, endedAt: 3000 },
+    { startedAt: 10_000, endedAt: 13_000 },
   ])
-})
-
-it('does not read a message steered in too late, or work after a stopped turn, as continuing the turn above', () => {
-  const steered: AgentEvent[] = [
-    { kind: 'user', text: 'where do things stand?', at: 1000 },
-    { kind: 'user', text: 'fix the header', steered: true, at: 2000 },
-    { ...result('Everything is in place.'), at: 3000 },
-    { kind: 'text', text: 'Fixing the header.', at: 5000 },
-  ]
-  const stopped: AgentEvent[] = [
-    { kind: 'user', text: 'go', at: 1000 },
-    { ...result('interrupted'), at: 2000 },
-    { kind: 'text', text: 'A sub-agent reported back.', at: 5000 },
-  ]
-  for (const events of [steered, stopped])
-    expect(
-      toTurns(
-        events.map((event) => ({ kind: 'event' as const, event })),
-        events,
-      )[1]!.continues,
-    ).toBeUndefined()
 })
 
 it('ends a turn when the sub-agents it started were done, never past the turn after it', () => {

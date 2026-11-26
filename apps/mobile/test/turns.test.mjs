@@ -379,7 +379,7 @@ test('work after a finished turn opens a running turn instead of folding into th
     ['user', 'summary', 'text', 'summary', 'thinking', 'text'],
   )
   assert.equal(rows[1].label, 'Worked for 1m 5s')
-  assert.equal(rows[3].running.text, 'Continuing for {0}')
+  assert.equal(rows[3].running.text, 'Working for {0}')
   assert.equal(rows.at(-1).text, 'Building the hero next.')
 })
 
@@ -540,7 +540,7 @@ test('a turn lasted until the sub-agents it started were done, never past the tu
   assert.equal(summaries(foldTurns(transcript(next), false, false))[0].label, 'Worked for 2m 0s')
 })
 
-test('work the agent picked up by itself reads as more of the turn above, not a second "Worked for"', () => {
+test('work the agent picked up by itself, as after a background command, is its own "Worked for"', () => {
   const events = [
     ...finished,
     { kind: 'thinking', text: 'The checks finished', at: 70_000 },
@@ -550,10 +550,10 @@ test('work the agent picked up by itself reads as more of the turn above, not a 
   ]
   assert.deepEqual(
     summaries(foldTurns(transcript(events), false, false)).map((r) => r.label),
-    ['Worked for 1m 5s', 'Continued for 21s'],
+    ['Worked for 1m 5s', 'Worked for 21s'],
   )
   assert.deepEqual(summaries(foldTurns(transcript(events), true, false))[1].running, {
     since: 70_000,
-    text: 'Continuing for {0}',
+    text: 'Working for {0}',
   })
 })

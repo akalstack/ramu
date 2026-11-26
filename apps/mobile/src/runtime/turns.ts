@@ -39,8 +39,9 @@ const settled = (item: TranscriptItem) =>
 /**
  * Mirrors the desktop's per-turn layout. The running turn shows its steps as they come. Once a turn is done its routine
  * steps fold into one "Worked for …" row; the answer, failed or open steps, and unanswered prompts stay visible. That
- * row keeps counting as "Working for …" while the thread is still at work under it, and work the agent picks up by
- * itself after a clean result reads "Continued for …", as more of the turn above.
+ * row keeps counting as "Working for …" while the thread is still at work under it. Work the agent picks up by itself
+ * after a clean result (a background command finished, a goal carried on) is its own "Worked for …"; only what
+ * follows a steer reads "Continued for …".
  */
 export function foldTurns(
   items: TranscriptItem[],
@@ -73,8 +74,6 @@ export function foldTurns(
   }
   const helpersOf = (turn: TranscriptItem[]) =>
     turn.flatMap((item) => (item.kind === 'agents' && !item.advisor ? item.agents : []))
-  const cleanEnd = (turn: TranscriptItem[] | undefined) =>
-    !!turn?.some((item) => item.kind === 'end' && item.ended && !item.interrupted)
   const startOf = (turn: TranscriptItem[] | undefined) => turn?.find((item) => item.at !== undefined)?.at
   // Sub-agents and awaited commands still running keep the thread working after the main agent's result.
   const helpersWorking =
@@ -104,14 +103,7 @@ export function foldTurns(
                   kind: 'summary' as const,
                   id: `summary-${user?.id ?? index}`,
                   label: say('Working'),
-                  running: {
-                    since: startedAt,
-                    // Work the agent picked up by itself after a clean result is more of the turn above.
-                    text:
-                      !user && cleanEnd(turns[index - 1])
-                        ? ('Continuing for {0}' as const)
-                        : ('Working for {0}' as const),
-                  },
+                  running: { since: startedAt, text: 'Working for {0}' as const },
                   items: [],
                 },
               ]
@@ -126,15 +118,14 @@ export function foldTurns(
         : ((result ?? ends[0])?.at ?? body.findLast((item) => item.kind !== 'note' && item.at !== undefined)?.at)
       // The result is in, yet the thread is still at work under this turn: its clock keeps running until the thread stops.
       const resumed = isLast && clean && !waiting && !nextSent && (live || helpersWorking)
-      const continues = !user && cleanEnd(turns[index - 1])
       // A message steered into a running turn starts the next turn before the result; with no stop, failure or idle
       // in between, the agent carried on rather than stopped.
       const done = result ? !result.interrupted : !isLast && !ends.length
       const duration = startedAt !== undefined && endedAt !== undefined ? Math.max(0, endedAt - startedAt) : undefined
       const total = done
         ? duration !== undefined
-          ? say(continues ? 'Continued for {0}' : 'Worked for {0}', { 0: formatDuration(duration) })
-          : say(continues ? 'Continued' : 'Worked')
+          ? say('Worked for {0}', { 0: formatDuration(duration) })
+          : say('Worked')
         : duration !== undefined
           ? say('Stopped after {0}', { 0: formatDuration(duration) })
           : say('Stopped')
@@ -164,7 +155,7 @@ export function foldTurns(
         const since = first ? startedAt : from
         const running =
           resumed && since !== undefined && (first || last)
-            ? { since, text: first && !continues ? ('Working for {0}' as const) : ('Continuing for {0}' as const) }
+            ? { since, text: first ? ('Working for {0}' as const) : ('Continuing for {0}' as const) }
             : undefined
         if (folded.length) first = false
         return [

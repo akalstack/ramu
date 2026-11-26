@@ -17,8 +17,6 @@ export type Turn = {
   items: Block[]
   ended: boolean
   interrupted?: boolean
-  /** Work the agent picked up by itself after the turn before it ended, with no message from the person. */
-  continues?: boolean
   startedAt?: number
   endedAt?: number
 }

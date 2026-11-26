@@ -146,12 +146,9 @@ it('keeps a stopped turn stopped while sub-agents wind down, and one that failed
   expect(summary(render({ ended: false, working: false, clock }))).toBe('Stopped after {0}')
 })
 
-it('reads work the agent picked up by itself as more of the turn above', () => {
-  const continued = { ...clock, continues: true }
-  expect(summary(render({ ended: true, working: false, clock: continued }))).toBe('Continued for {0}')
-  expect(summary(render({ ended: true, working: false, helpersWorking: true, clock: continued }))).toBe(
-    'Continuing for {0}',
-  )
+it('reads work the agent picked up by itself, as after a background command, as its own Worked for', () => {
+  expect(summary(render({ ended: true, working: false, clock }))).toBe('Worked for {0}')
+  expect(summary(render({ ended: true, working: false, helpersWorking: true, clock }))).toBe('Working for {0}')
 })
 
 it('keeps a changes card where its work ended, before a message steered in after it', () => {

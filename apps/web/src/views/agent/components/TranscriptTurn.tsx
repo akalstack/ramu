@@ -254,11 +254,7 @@ export function TranscriptTurn({
     <div className="turn [&_>_[data-block-index]:has(.msg.user)]:flex [&_>_[data-block-index]:has(.msg.user)]:justify-end flex flex-col gap-3.5 min-w-0">
       {dateSeparator !== undefined && <TurnDate at={dateSeparator} now={dateNow} />}
       {turn.user && renderBlock(turn.user, isLast && !answer.length && !kept.length && !folded.length)}
-      {running && live !== null && (
-        <TurnRunning
-          label={translate(turn.continues ? 'Continuing for {0}' : 'Working for {0}', { '0': formatDuration(live) })}
-        />
-      )}
+      {running && live !== null && <TurnRunning label={translate('Working for {0}', { '0': formatDuration(live) })} />}
       {/* A stopped turn keeps its duration here. */}
       {/* Not for a turn that has only just been sent: the thread reports itself busy a moment after the message. */}
       {finished && (!turn.ended || turn.interrupted) && !folded.length && (stopped || turn.items.length > 0) && (
@@ -281,19 +277,12 @@ export function TranscriptTurn({
         const settled = finished && turn.ended && !turn.interrupted && !(isLast && ctx.stopped) && !resumed
         const label = first
           ? duration !== undefined
-            ? translate(
-                settled
-                  ? turn.continues
-                    ? 'Continued for {0}'
-                    : 'Worked for {0}'
-                  : stopped
-                    ? 'Stopped after {0}'
-                    : turn.continues
-                      ? 'Continuing for {0}'
-                      : 'Working for {0}',
-                { '0': formatDuration(duration) },
-              )
-            : translate(settled ? (turn.continues ? 'Continued' : 'Worked') : stopped ? 'Stopped' : 'Working')
+            ? // Work the agent picks up by itself (a background command finished, a goal carried on) is its own piece
+              // of work with its own time: "Worked for", as any turn. Only what follows a steer reads "Continued".
+              translate(settled ? 'Worked for {0}' : stopped ? 'Stopped after {0}' : 'Working for {0}', {
+                '0': formatDuration(duration),
+              })
+            : translate(settled ? 'Worked' : stopped ? 'Stopped' : 'Working')
           : partDuration !== undefined
             ? translate(settled || index < parts.length - 1 ? 'Continued for {0}' : 'Continuing for {0}', {
                 '0': formatDuration(partDuration),
