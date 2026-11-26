@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   mergeOptionsOf,
+  parseBranchRules,
   parseListPullRequest,
   parseReviewThreads,
   pullRequestLink,
@@ -44,6 +45,44 @@ describe('GitHub pull request lists', () => {
     expect(parseListPullRequest(raw({ mergeable: 'CONFLICTING' }), 'me', new Set()).mergeable).toBe('conflicts')
     expect(parseListPullRequest(raw({ mergeStateStatus: 'BEHIND' }), 'me', new Set()).mergeable).toBe('behind')
     expect(parseListPullRequest(raw({ state: 'MERGED' }), 'me', new Set()).state).toBe('merged')
+  })
+
+  it('lists who approved and who asked for changes from each reviewer’s latest review', () => {
+    const reviewed = parseListPullRequest(
+      raw({
+        latestOpinionatedReviews: {
+          nodes: [
+            { state: 'APPROVED', author: { login: 'ana' } },
+            { state: 'CHANGES_REQUESTED', author: { login: 'bo' } },
+            { state: 'APPROVED', author: null },
+          ],
+        },
+      }),
+      'me',
+      new Set(),
+    )
+    expect(reviewed).toMatchObject({ approvedBy: ['ana'], changesRequestedBy: ['bo'] })
+    // A server that does not report reviews says nothing, so nobody is counted as missing.
+    expect(parseListPullRequest(raw(), 'me', new Set())).not.toHaveProperty('approvedBy')
+  })
+
+  it('reads what a branch’s rulesets require, taking the strictest of several', () => {
+    expect(
+      parseBranchRules([
+        { type: 'deletion' },
+        { type: 'pull_request', parameters: { required_approving_review_count: 1 } },
+        {
+          type: 'pull_request',
+          parameters: {
+            required_approving_review_count: 2,
+            require_code_owner_review: true,
+            required_review_thread_resolution: true,
+          },
+        },
+        { type: 'merge_queue' },
+      ]),
+    ).toEqual({ approvals: 2, codeOwners: true, conversations: true, queue: true })
+    expect(parseBranchRules([{ type: 'pull_request', parameters: {} }])).toEqual({})
   })
 
   it('carries the lines changed and labels when GitHub reports them, and leaves them out when it does not', () => {

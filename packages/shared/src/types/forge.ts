@@ -95,6 +95,33 @@ export interface PullRequestInput {
   branch?: string
 }
 
+/**
+ * What an open pull request still waits on people for, read from the hosting service's own rules: nothing here is a
+ * policy of Ramu's. Absent when the pull request waits on no one, or the service does not say.
+ */
+export interface PullRequestWaiting {
+  /** Approvals still needed; null when someone must approve and the service does not say how many. */
+  approvals: number | null
+  /** People and teams asked to review who have not answered. */
+  from: string[]
+  /** A code owner's approval is required and missing. */
+  codeOwner: boolean
+  /** Conversations the repository requires resolved before merging. */
+  conversations: number
+  /** Reviewers who requested changes and have not approved since. */
+  changesBy: string[]
+  /** The service merges it in a queue once it is ready. */
+  queue: boolean
+}
+
+/** What a repository's own rules require before a merge into one branch; a field is absent when not required or unknown. */
+export interface MergeRules {
+  approvals?: number
+  codeOwners?: boolean
+  conversations?: boolean
+  queue?: boolean
+}
+
 /** Whether the pull request merges cleanly into its base, as the hosting service last computed it. */
 export type PullRequestMergeability = 'clean' | 'conflicts' | 'behind' | 'blocked' | 'unknown'
 
@@ -123,6 +150,12 @@ export interface PullRequestSummary {
   /** Review threads nobody has resolved yet; null when the service does not say. */
   openThreads: number | null
   requestedReviewers: string[]
+  /** Reviewers whose latest review approves, where the service lists them. */
+  approvedBy?: string[]
+  /** Reviewers whose latest review requests changes, where the service lists them. */
+  changesRequestedBy?: string[]
+  /** What it still waits on people for; see `PullRequestWaiting`. */
+  waiting?: PullRequestWaiting
   group: PullRequestGroup
   updatedAt: number
   /** Lines added and removed, where the service reports them. */
@@ -225,6 +258,8 @@ export interface TaskPullRequest {
   stage: PullRequestStage
   /** Work an agent prepared that waits for the person to check and send: drafted replies, or a drafted review. */
   prepared?: { kind: 'replies'; count: number } | { kind: 'review' }
+  /** What it waits on people for, when its stage is waiting on review or on requested changes. */
+  waiting?: PullRequestWaiting
 }
 
 export type MergeMethod = 'merge' | 'squash' | 'rebase'

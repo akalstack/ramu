@@ -1,3 +1,4 @@
+import { pullRequestStageDetail } from '@ramu/shared/pullRequests'
 import { threadOriginLabel } from '@ramu/shared/workspace/threadOrigin'
 import { finishThreads } from '../../chat/FinishThreadDialog'
 import { animateThreadListChange } from '../../workspace/threadListMotion'
@@ -37,7 +38,7 @@ import { ICON_BUTTON_CLASS, ROW_ACTIONS_CLASS, ROW_ERROR_CLASS } from './constan
 import { InlineEdit } from './InlineEdit'
 import { TaskStateIcon } from './TaskStateIcon'
 import { AgentStack } from './AgentStack'
-import { PullRequestIcon, stageLabel } from '../../git/PullRequestIcon'
+import { PullRequestIcon } from '../../git/PullRequestIcon'
 import { offerThreadUndo } from './threadUndo'
 import { ThreadHoverCard } from './ThreadHoverCard'
 import { HoverCard, HoverCardTrigger } from '@/components/ui/hover-card'
@@ -153,11 +154,11 @@ export function TaskRow({
       {task.pullRequest ? (
         <span
           className="mode-icon flex-none inline-flex"
-          title={`#${task.pullRequest.number} · ${stageLabel(task.pullRequest.stage)} · ${task.pullRequest.title}`}
+          title={`#${task.pullRequest.number} · ${pullRequestStageDetail(task.pullRequest, t)} · ${task.pullRequest.title}`}
           role="img"
           aria-label={t('Pull request #{0}: {1}', {
             '0': String(task.pullRequest.number),
-            '1': stageLabel(task.pullRequest.stage),
+            '1': pullRequestStageDetail(task.pullRequest, t),
           })}
         >
           <PullRequestIcon pr={task.pullRequest} stage={task.pullRequest.stage} size={12} />

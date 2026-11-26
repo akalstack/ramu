@@ -4,6 +4,8 @@ import { translate } from '../src/i18n'
 import {
   diffLineMatches,
   pullRequestRowDetail,
+  pullRequestWaiting,
+  pullRequestWaitingLine,
   groupPullRequests,
   inPullRequestFilter,
   matchesPullRequest,
@@ -379,5 +381,68 @@ describe('pullRequestRowDetail', () => {
         (key, values) => translate('id', key, values),
       ),
     ).toBe('#7 · 3 balasan sudah didraf')
+  })
+})
+
+describe('what a pull request waits on people for', () => {
+  const t = (key: string, values?: Record<string, string | number>) => translate('en', key, values)
+  const open = {
+    state: 'open' as const,
+    reviewDecision: 'review-required' as const,
+    openThreads: 0,
+    requestedReviewers: ['payments-team'],
+    approvedBy: ['ana'],
+    changesRequestedBy: [],
+  }
+  const line = (pr: Parameters<typeof pullRequestWaiting>[0], rules?: Parameters<typeof pullRequestWaiting>[1]) => {
+    const waiting = pullRequestWaiting(pr, rules)
+    return waiting && pullRequestWaitingLine(waiting, t)
+  }
+
+  it('counts the approvals still missing when the branch’s rules say how many', () => {
+    expect(line(open, { approvals: 2 })).toBe('needs 1 more approval from @payments-team')
+    expect(line({ ...open, approvedBy: [] }, { approvals: 2 })).toBe('needs 2 more approvals from @payments-team')
+  })
+
+  it('names the code owner as the one missing once the count is met', () => {
+    expect(line({ ...open, approvedBy: ['ana', 'bo'] }, { approvals: 2, codeOwners: true })).toBe(
+      'needs a code owner’s approval from @payments-team',
+    )
+  })
+
+  it('says only what the service says when the rules are not readable', () => {
+    expect(line(open)).toBe('waiting on review from @payments-team')
+    expect(line({ ...open, requestedReviewers: [] })).toBe('no reviewer asked yet')
+  })
+
+  it('counts conversations only where the repository requires them resolved', () => {
+    const approved = { ...open, reviewDecision: 'approved' as const, openThreads: 2 }
+    expect(line(approved, { conversations: true })).toBe('2 conversations to resolve')
+    // Open conversations a repository does not require resolved hold nothing up.
+    expect(pullRequestWaiting(approved, {})).toBeNull()
+    expect(line({ ...open, openThreads: 1 }, { approvals: 2, conversations: true })).toBe(
+      'needs 1 more approval from @payments-team · 1 conversation to resolve',
+    )
+  })
+
+  it('says who requested changes', () => {
+    expect(line({ ...open, reviewDecision: 'changes-requested', changesRequestedBy: ['bo'] })).toBe(
+      'changes requested by @bo',
+    )
+  })
+
+  it('waits on nobody once approved, merged or closed', () => {
+    expect(pullRequestWaiting({ ...open, reviewDecision: 'approved' }, { approvals: 1 })).toBeNull()
+    expect(pullRequestWaiting({ ...open, state: 'merged' })).toBeNull()
+  })
+
+  it('shows the reason on the row in place of the stage’s own words', () => {
+    const waiting = pullRequestWaiting(open, { approvals: 2 })!
+    expect(pullRequestRowDetail({ number: 42, stage: 'review-required', waiting }, t)).toBe(
+      '#42 · needs 1 more approval from @payments-team',
+    )
+    // A stage that is the person's or the agent's keeps its own words.
+    expect(pullRequestRowDetail({ number: 42, stage: 'checks-failing', waiting }, t)).toBe('#42 · Checks failing')
+    expect(pullRequestRowDetail({ number: 42, stage: 'review-required' }, t)).toBe('#42 · Waiting on review')
   })
 })

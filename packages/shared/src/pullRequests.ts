@@ -1,11 +1,13 @@
 import type {
   ForgeService,
+  MergeRules,
   PullRequestChecksState,
   PullRequestFile,
   PullRequestGroup,
   PullRequestStage,
   PullRequestSummary,
   PullRequestThread,
+  PullRequestWaiting,
   RepositoryPullRequests,
   TaskPullRequest,
 } from './types'
@@ -34,6 +36,77 @@ export function pullRequestStage(
   if (pr.checks === 'pending') return 'checks-pending'
   if (pr.reviewDecision === 'approved' && !pr.openThreads && pr.mergeable !== 'blocked') return 'ready'
   return 'review-required'
+}
+
+/**
+ * What an open pull request waits on people for, from what the service reports of it and, when known, the rules of the
+ * branch it merges into. Null when it waits on nobody: it is approved with nothing left to resolve, or not open.
+ */
+export function pullRequestWaiting(
+  pr: Pick<
+    PullRequestSummary,
+    'state' | 'reviewDecision' | 'openThreads' | 'requestedReviewers' | 'approvedBy' | 'changesRequestedBy'
+  >,
+  rules: MergeRules | null = null,
+): PullRequestWaiting | null {
+  if (pr.state !== 'open') return null
+  const approved = pr.approvedBy?.length ?? 0
+  // The count still missing when the rules say how many; "someone" when the service only says review is required.
+  const approvals =
+    rules?.approvals !== undefined
+      ? Math.max(0, rules.approvals - approved)
+      : pr.reviewDecision === 'review-required'
+        ? null
+        : 0
+  const conversations = rules?.conversations ? (pr.openThreads ?? 0) : 0
+  const changesBy = pr.reviewDecision === 'changes-requested' ? (pr.changesRequestedBy ?? []) : []
+  const needsReview = approvals !== 0 || pr.reviewDecision === 'review-required'
+  // Every required approval is in and review is still required: the missing one is a code owner's.
+  const codeOwner = !!rules?.codeOwners && pr.reviewDecision === 'review-required' && approvals === 0
+  if (!needsReview && !conversations && pr.reviewDecision !== 'changes-requested') return null
+  return {
+    approvals: codeOwner ? 1 : approvals,
+    from: needsReview || codeOwner ? pr.requestedReviewers : [],
+    codeOwner,
+    conversations,
+    changesBy,
+    queue: !!rules?.queue,
+  }
+}
+
+/**
+ * Why a pull request waits, in one line, the same on every device: "needs 1 more approval from @ana", "changes
+ * requested by @bo", "2 conversations to resolve". Reviewers are named as the service names them.
+ */
+export function pullRequestWaitingLine(
+  waiting: PullRequestWaiting,
+  t: (key: string, values?: Record<string, string | number>) => string,
+): string {
+  const names = (list: string[]) => list.map((name) => `@${name}`).join(', ')
+  const parts: string[] = []
+  if (waiting.changesBy.length) parts.push(t('changes requested by {0}', { 0: names(waiting.changesBy) }))
+  else if (waiting.codeOwner)
+    parts.push(
+      waiting.from.length
+        ? t('needs a code owner’s approval from {0}', { 0: names(waiting.from) })
+        : t('needs a code owner’s approval'),
+    )
+  else if (waiting.approvals === null)
+    parts.push(
+      waiting.from.length ? t('waiting on review from {0}', { 0: names(waiting.from) }) : t('no reviewer asked yet'),
+    )
+  else if (waiting.approvals > 0) {
+    const need =
+      waiting.approvals === 1 ? t('needs 1 more approval') : t('needs {0} more approvals', { 0: waiting.approvals })
+    parts.push(waiting.from.length ? t('{0} from {1}', { 0: need, 1: names(waiting.from) }) : need)
+  }
+  if (waiting.conversations)
+    parts.push(
+      waiting.conversations === 1
+        ? t('1 conversation to resolve')
+        : t('{0} conversations to resolve', { 0: waiting.conversations }),
+    )
+  return parts.join(' · ')
 }
 
 /** The colour a stage is drawn in: the theme's tokens, with merged in the accent like the hosting services do. */
@@ -69,11 +142,26 @@ export const PULL_REQUEST_STAGE_LABEL: Record<PullRequestStage, string> = {
 }
 
 /**
+ * A stage in words, with the reason in its place when the pull request waits on people and the service said for what:
+ * "needs 1 more approval from @ana" instead of "Waiting on review".
+ */
+export function pullRequestStageDetail(
+  pr: Pick<TaskPullRequest, 'stage' | 'waiting'>,
+  t: (key: string, values?: Record<string, string | number>) => string,
+): string {
+  const waits =
+    pr.waiting && (pr.stage === 'review-required' || pr.stage === 'changes-requested')
+      ? pullRequestWaitingLine(pr.waiting, t)
+      : ''
+  return waits || t(PULL_REQUEST_STAGE_LABEL[pr.stage])
+}
+
+/**
  * How a pull request row reads where its next step is the person's: what an agent prepared, when it prepared
  * something, otherwise its stage. Both apps pass their own `t`.
  */
 export function pullRequestRowDetail(
-  pr: Pick<TaskPullRequest, 'number' | 'stage' | 'prepared'>,
+  pr: Pick<TaskPullRequest, 'number' | 'stage' | 'prepared' | 'waiting'>,
   t: (key: string, values?: Record<string, string | number>) => string,
 ): string {
   const what =
@@ -81,7 +169,7 @@ export function pullRequestRowDetail(
       ? pr.prepared.kind === 'review'
         ? t('Review drafted')
         : t(pr.prepared.count === 1 ? '1 reply drafted' : '{0} replies drafted', { 0: pr.prepared.count })
-      : t(PULL_REQUEST_STAGE_LABEL[pr.stage])
+      : pullRequestStageDetail(pr, t)
   return `#${pr.number} · ${what}`
 }
 

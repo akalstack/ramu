@@ -44,7 +44,7 @@ interface Link {
   number: number
   snapshot: Pick<
     PullRequestSummary,
-    'title' | 'state' | 'draft' | 'checks' | 'reviewDecision' | 'mergeable' | 'openThreads'
+    'title' | 'state' | 'draft' | 'checks' | 'reviewDecision' | 'mergeable' | 'openThreads' | 'waiting'
   >
 }
 
@@ -106,6 +106,8 @@ export class PullRequestIndex {
       reviewDecision: pr.reviewDecision ?? previous?.snapshot.reviewDecision ?? null,
       mergeable: pr.mergeable ?? previous?.snapshot.mergeable ?? 'unknown',
       openThreads: pr.openThreads ?? previous?.snapshot.openThreads ?? null,
+      // A look that does not say (a watch reads less than the list) keeps what the list last said.
+      ...((pr.waiting ?? previous?.snapshot.waiting) ? { waiting: pr.waiting ?? previous?.snapshot.waiting } : {}),
     }
     const next = [
       ...current.filter((entry) => entry.url !== pr.url),
@@ -136,6 +138,7 @@ export class PullRequestIndex {
       draft: chosen.snapshot.draft,
       stage: pullRequestStage(chosen.snapshot, { draftsReady, agentWorking }),
       ...(draftsReady && prepared ? { prepared } : {}),
+      ...(chosen.snapshot.waiting ? { waiting: chosen.snapshot.waiting } : {}),
     }
   }
 
@@ -510,6 +513,7 @@ function snapshotOf(pr: PullRequestSummary): Link['snapshot'] {
     reviewDecision: pr.reviewDecision,
     mergeable: pr.mergeable,
     openThreads: pr.openThreads,
+    ...(pr.waiting ? { waiting: pr.waiting } : {}),
   }
 }
 

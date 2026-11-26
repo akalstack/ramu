@@ -33,7 +33,7 @@ import { useComputerUse } from '../runtime/computerUse'
 import { Monitor } from 'lucide-react-native'
 import { useStore } from '../runtime/store'
 import { threadSelection, useThreadSelection } from '../runtime/threadSelection'
-import { PULL_REQUEST_STAGE_LABEL, PULL_REQUEST_STAGE_TONE } from '@ramu/shared/pullRequests'
+import { PULL_REQUEST_STAGE_TONE, pullRequestStageDetail } from '@ramu/shared/pullRequests'
 import { PullRequestGlyph } from './PullRequestParts'
 import { useOpenThread, useThreadPicker } from './paneContext'
 
@@ -142,9 +142,7 @@ export const ChatRow = memo(function ChatRow({
   const branch =
     inProject && chat.mode !== 'worktree' ? '' : chat.branch || (chat.mode === 'worktree' ? say('Worktree') : '')
   const pr = chat.pullRequest ?? null
-  const prLabel = pr
-    ? say('Pull request #{0}: {1}', { 0: pr.number, 1: say(PULL_REQUEST_STAGE_LABEL[pr.stage]) })
-    : null
+  const prLabel = pr ? say('Pull request #{0}: {1}', { 0: pr.number, 1: pullRequestStageDetail(pr, say) }) : null
   const facts = Boolean(pr || branch || project || helpers || !online)
   // Without a state to report, the reply says what the thread came to, which is what a person scans the list for.
   const reply = state ? '' : (recap ?? chat.lastReply ?? '')
@@ -303,7 +301,7 @@ export const ChatRow = memo(function ChatRow({
                       {`#${pr.number}`}
                     </T>
                     <T size={font.control} tone={PULL_REQUEST_STAGE_TONE[pr.stage]} numberOfLines={1}>
-                      {say(PULL_REQUEST_STAGE_LABEL[pr.stage])}
+                      {pullRequestStageDetail(pr, say)}
                     </T>
                   </View>
                 ) : null}

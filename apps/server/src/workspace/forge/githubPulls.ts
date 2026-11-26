@@ -1,6 +1,7 @@
 // GitHub pull request lists, actions, review threads and replies. Reads and writes go through `githubGraphql` and
 // `githubRest`, so the signed-in `gh` and a saved token behave the same.
 import type {
+  MergeRules,
   PullRequestFile,
   MergeMethod,
   MergeOptions,
@@ -19,6 +20,7 @@ import type {
   PullRequestUpdate,
 } from '@ramu/shared/types'
 import { unsupportedPullRequestText } from '@ramu/shared/pullRequestSupport'
+import { pullRequestWaiting } from '@ramu/shared/pullRequests'
 import { ForgeError, forgeRemoteOf, githubAvailability, githubGraphql, githubRest } from './github'
 import { FILES_PAGE, boundedPatch } from './adapter'
 
@@ -28,6 +30,7 @@ const PR_FRAGMENT = `fragment pr on PullRequest {
   labels(first: 10) { nodes { name } }
   author { login }
   reviewRequests(first: 10) { nodes { requestedReviewer { ... on User { login } ... on Team { slug } } } }
+  latestOpinionatedReviews(first: 20) { nodes { state author { login } } }
   reviewThreads(first: 100) { nodes { isResolved } }
   commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
 }`
@@ -52,6 +55,8 @@ export interface RawListPullRequest {
   labels?: { nodes: { name: string }[] }
   author: { login: string } | null
   reviewRequests?: { nodes: { requestedReviewer: { login?: string; slug?: string } | null }[] }
+  /** Each reviewer's latest review that approves or requests changes. */
+  latestOpinionatedReviews?: { nodes: { state: string; author: { login: string } | null }[] }
   reviewThreads?: { nodes: { isResolved: boolean }[] }
   commits?: { nodes: { commit: { statusCheckRollup: { state: string } | null } }[] }
 }
@@ -116,6 +121,10 @@ export function parseListPullRequest(
 ): PullRequestSummary {
   const state = raw.state.toUpperCase()
   const author = raw.author?.login ?? null
+  const reviewed = (verdict: string) =>
+    (raw.latestOpinionatedReviews?.nodes ?? [])
+      .filter((review) => review.state === verdict && review.author)
+      .map((review) => review.author!.login)
   return {
     number: raw.number,
     title: raw.title,
@@ -134,6 +143,9 @@ export function parseListPullRequest(
     requestedReviewers: (raw.reviewRequests?.nodes ?? [])
       .map((node) => node.requestedReviewer?.login ?? node.requestedReviewer?.slug ?? '')
       .filter(Boolean),
+    ...(raw.latestOpinionatedReviews
+      ? { approvedBy: reviewed('APPROVED'), changesRequestedBy: reviewed('CHANGES_REQUESTED') }
+      : {}),
     group:
       author && author.toLowerCase() === viewer.toLowerCase()
         ? 'mine'
@@ -208,7 +220,7 @@ export async function listPullRequests(
 ): Promise<PullRequestList> {
   const availability = await githubAvailability(cwd)
   if (availability !== 'ready') return { availability, viewer: null, pullRequests: [] }
-  const named = elsewhere ?? (await repository(cwd).then((remote) => `${remote.owner}/${remote.repo}`))
+  const named: string = elsewhere ?? (await repository(cwd).then((remote) => `${remote.owner}/${remote.repo}`))
   const scope = `repo:${named} is:pr`
   let raw: RawList
   try {
@@ -230,7 +242,64 @@ export async function listPullRequests(
     .filter(isPull)
     .filter((node) => !seen.has(node.number) && seen.add(node.number))
     .map((node) => parseListPullRequest(node, viewer, review))
-  return { availability, viewer, pullRequests }
+  return { availability, viewer, pullRequests: await withWaiting(cwd, named, pullRequests) }
+}
+
+const RULES_TTL = 10 * 60_000
+const rulesCache = new Map<string, { at: number; rules: Promise<MergeRules | null> }>()
+
+interface RawBranchRule {
+  type: string
+  parameters?: {
+    required_approving_review_count?: number
+    require_code_owner_review?: boolean
+    required_review_thread_resolution?: boolean
+  }
+}
+
+/** What GitHub's rulesets require of a pull request into `branch`; the strictest of the rules that apply. */
+export function parseBranchRules(raw: RawBranchRule[]): MergeRules {
+  const pulls = raw.filter((rule) => rule.type === 'pull_request').map((rule) => rule.parameters ?? {})
+  const approvals = Math.max(0, ...pulls.map((rule) => rule.required_approving_review_count ?? 0))
+  return {
+    ...(approvals ? { approvals } : {}),
+    ...(pulls.some((rule) => rule.require_code_owner_review) ? { codeOwners: true } : {}),
+    ...(pulls.some((rule) => rule.required_review_thread_resolution) ? { conversations: true } : {}),
+    ...(raw.some((rule) => rule.type === 'merge_queue') ? { queue: true } : {}),
+  }
+}
+
+/**
+ * The rules of one branch, read once every few minutes. Null when GitHub does not say: an older server, a repository
+ * that uses classic branch protection (readable only by its admins), or an account that cannot read rules. The pull
+ * request then says only that it waits on review.
+ */
+function branchRules(cwd: string, named: string, branch: string): Promise<MergeRules | null> {
+  const key = `${named}\n${branch}`
+  const cached = rulesCache.get(key)
+  if (cached && Date.now() - cached.at < RULES_TTL) return cached.rules
+  const rules = githubRest<RawBranchRule[]>(cwd, 'GET', `/repos/${named}/rules/branches/${encodeURIComponent(branch)}`)
+    .then((raw) => (Array.isArray(raw) && raw.length ? parseBranchRules(raw) : null))
+    .catch(() => null)
+  rulesCache.set(key, { at: Date.now(), rules })
+  if (rulesCache.size > 200) rulesCache.delete(rulesCache.keys().next().value!)
+  return rules
+}
+
+/** Adds what each open pull request waits on people for, reading each base branch's rules once. */
+async function withWaiting(
+  cwd: string,
+  named: string,
+  pullRequests: PullRequestSummary[],
+): Promise<PullRequestSummary[]> {
+  const bases = [...new Set(pullRequests.filter((pr) => pr.state === 'open' && !pr.draft).map((pr) => pr.baseBranch))]
+  const rules = new Map(
+    await Promise.all(bases.map(async (base) => [base, await branchRules(cwd, named, base)] as const)),
+  )
+  return pullRequests.map((pr) => {
+    const waiting = pr.draft ? null : pullRequestWaiting(pr, rules.get(pr.baseBranch) ?? null)
+    return waiting ? { ...pr, waiting } : pr
+  })
 }
 
 /** The server, repository and number a GitHub pull request link names; anything else is refused. */
