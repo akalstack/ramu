@@ -160,13 +160,12 @@ export function ToolGroup({
       ? // The call itself, as its row reads ("Running pnpm test"), never a count of one.
         primaryTool.title?.trim() || toolRow(primaryTool, results.get(primaryTool.toolUseId), cwd, active).line
       : describeTools(tools, results, active, cwd)
-  // Each step and each paragraph of a thought fades in once; the words of the paragraph being written do not flicker.
+  // Only a new paragraph of thought fades in. The next call, or the summary once the group settles, takes the line's
+  // place at once, as in T3 Code: a fade on every call made a busy turn flicker.
+  const newestThought = entries.findLastIndex((entry) => entry.kind === 'thinking')
+  const newestThoughtEntry = entries[newestThought]
   const headlineFade = useChatFade<HTMLSpanElement>(
-    thought
-      ? `thought:${entries.length}:${thoughtBlock(thought.text)}`
-      : running || live
-        ? `tool:${primaryTool.toolUseId}`
-        : 'summary',
+    newestThoughtEntry?.kind === 'thinking' ? `thought:${newestThought}:${thoughtBlock(newestThoughtEntry.text)}` : '',
   )
   const thoughtFade = useChatFade<HTMLSpanElement>(lastThought ? String(thoughtBlock(lastThought.text)) : '')
   return (

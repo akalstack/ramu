@@ -3,7 +3,7 @@ import { permissionKey, PermissionApprovals, commandPatterns } from './permissio
 import { goalContinues } from '@ramu/shared/chat/goalHold'
 import { commandDeploy } from '@ramu/shared/deployActions'
 import { isStaleProgress } from '@ramu/shared/chat/agentTasks'
-import { settledLength } from '@ramu/shared/chat/settledText'
+import { EMPTY_BLOCK_SCAN, scanBlocks, settledLength, type BlockScan } from '@ramu/shared/chat/settledText'
 import type { AppPreferences, AgentEvent, AgentSessionState, AgentTask } from '@ramu/shared/types'
 import type { MessageDispatcher } from './messageDispatcher'
 import type { GoalManager } from './goalManager'
@@ -16,15 +16,16 @@ import type { FallbackRouter } from './fallbackRouter'
 import type { AgentService } from '../agent'
 import type { Db } from '../db'
 
-/** A reply's whole words go out at most this often, so a fast stream costs every device a few redraws a second. */
+/** A reply's finished blocks go out at most this often. */
 const REPLY_STEP_MS = 400
-/** A reply quiet this long mid-word is sent whole. */
+/** A reply quiet this long mid-block is sent whole. */
 const REPLY_IDLE_MS = 800
 
 /** A reply still being written: its whole text so far, what of it went out and when. */
 interface HeldReply {
   event: Extract<AgentEvent, { kind: 'text' }>
   replaces?: string
+  scan: BlockScan
   sent: string
   sentAt: number
   timer?: NodeJS.Timeout
@@ -58,8 +59,8 @@ export class SessionRecorder {
   private readonly autoBackground = new Map<string, Map<string, NodeJS.Timeout>>()
 
   /**
-   * Replies still being written, by session and message. A reply goes out whole words at a time, a few times a second,
-   * whatever pieces its provider streams, so every client sees it grow without a word changing under the reader.
+   * Replies still being written, by session and message. A reply goes out a whole Markdown block at a time, whatever
+   * pieces its provider streams, so every client shows complete paragraphs, list items, tables and code blocks.
    */
   private readonly unsettled = new Map<string, Map<string, HeldReply>>()
 
@@ -83,6 +84,7 @@ export class SessionRecorder {
       held.set(recorded.messageId, {
         event: recorded,
         replaces: replacesMessageId ?? previous?.replaces,
+        scan: scanBlocks(previous?.scan ?? EMPTY_BLOCK_SCAN, recorded.text),
         sent: previous?.sent ?? '',
         sentAt: previous?.sentAt ?? Number.NEGATIVE_INFINITY,
       })
@@ -119,7 +121,7 @@ export class SessionRecorder {
     clearTimeout(entry.timer)
     entry.timer = undefined
     const now = Date.now()
-    const ready = idle ? entry.event.text : entry.event.text.slice(0, settledLength(entry.event.text))
+    const ready = idle ? entry.event.text : entry.event.text.slice(0, settledLength(entry.scan))
     // What already shows never shrinks; a provider that rewrote its text (not a continuation) replaces it.
     const fresh = ready !== '' && !entry.sent.startsWith(ready)
     const waiting = fresh && !idle && now - entry.sentAt < REPLY_STEP_MS

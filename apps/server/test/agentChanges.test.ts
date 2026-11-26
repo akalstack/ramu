@@ -68,24 +68,23 @@ describe('agent.changes', () => {
     expect(edited.lastSeq).toBe(appended.lastSeq)
   })
 
-  it('sends a reply a whole word at a time, and the rest once the agent moves on', async () => {
+  it('sends a reply a whole block at a time, and the rest once the agent moves on', async () => {
     const { svc, id, record } = await start()
     const reply = () => svc.events(id).find((event) => event.kind === 'text' && event.messageId === 'r1')
     record({ kind: 'text', text: 'Half a sen', messageId: 'r1' } as AgentEvent)
-    expect(reply()).toMatchObject({ text: 'Half a' })
+    expect(reply()).toBeUndefined()
     record({ kind: 'text', text: 'Whole sentence.\n\nNext one is hal', messageId: 'r1' } as AgentEvent)
-    // Later words of a reply already showing follow at most every 400ms.
-    await until(() => (reply() as { text: string }).text === 'Whole sentence.\n\nNext one is')
+    expect(reply()).toMatchObject({ text: 'Whole sentence.\n\n' })
     record({ kind: 'tool-use', toolUseId: 'u1', name: 'Read', input: {} } as AgentEvent)
     expect(reply()).toMatchObject({ text: 'Whole sentence.\n\nNext one is hal' })
   })
 
-  it('sends a reply that goes quiet mid-word whole, and never takes back what showed', async () => {
+  it('sends a reply that goes quiet mid-block whole, and never takes back what showed', async () => {
     const { svc, id, record } = await start()
     const reply = () => svc.events(id).find((event) => event.kind === 'text' && event.messageId === 'r2')
     record({ kind: 'text', text: 'Thinking out lou', messageId: 'r2' } as AgentEvent)
-    expect(reply()).toMatchObject({ text: 'Thinking out' })
-    await until(() => (reply() as { text: string }).text === 'Thinking out lou')
+    expect(reply()).toBeUndefined()
+    await until(() => reply() !== undefined)
     expect(reply()).toMatchObject({ text: 'Thinking out lou' })
     record({ kind: 'text', text: 'Thinking out loud.\n\nMore', messageId: 'r2' } as AgentEvent)
     await until(() => (reply() as { text: string }).text === 'Thinking out loud.\n\nMore')

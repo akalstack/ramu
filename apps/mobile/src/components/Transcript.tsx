@@ -1450,8 +1450,9 @@ function ToolGroup({ item, live }: { item: Extract<TranscriptItem, { kind: 'tool
           <Icon size={14} color={tint} />
         )}
         <View style={{ flex: 1, minWidth: 0 }}>
-          {/* The headline follows the current tool; each change fades instead of jumping. */}
-          <Arrive animate={false} identity={headline}>
+          {/* Only a new paragraph of thought fades in. The next call, or the summary once the group settles, takes the
+              line's place at once, as in T3 Code: a fade on every call made a busy turn flicker. */}
+          <Arrive animate={false} identity={thought ? `thought:${thought.id}:${thoughtLine(thought.text, true)}` : ''}>
             <ActivityText active={running > 0 || live}>{headline}</ActivityText>
           </Arrive>
         </View>
