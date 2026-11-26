@@ -47,16 +47,26 @@ const within = (path: string, root: string) => path === root || path.startsWith(
 
 type Place = 'inside' | 'project' | 'outside' | 'unknown'
 
-/** Where a path a command names falls: inside the thread's folders, one of those folders itself, or elsewhere. */
-function placeOf(word: string, scope: CommandScope): Place {
+/** A path as the shell would read it: `~` is the home folder. Null when it names another user's home. */
+function expand(word: string): string | null {
+  const literal = word.replace(/[*?[].*$/, '') || '.'
+  if (literal === '~' || literal.startsWith('~/')) return homedir() + literal.slice(1)
+  return literal.startsWith('~') ? null : literal
+}
+
+/**
+ * Where a path a command names falls: inside the thread's folders, one of those folders itself, or elsewhere. `base`
+ * is the folder the command runs in once the `cd`s before it on the line are followed; null when one of them could
+ * not be followed, so a relative path is unknown.
+ */
+function placeOf(word: string, scope: CommandScope, base: string | null = scope.cwd): Place {
   if (/[$`]/.test(word)) return 'unknown'
   const roots = [...new Set([scope.cwd, ...(scope.additionalDirs ?? []), ...(scope.covers ?? [])])].map((root) =>
     resolve(root),
   )
-  const literal = word.replace(/[*?[].*$/, '') || '.'
-  const expanded = literal === '~' || literal.startsWith('~/') ? homedir() + literal.slice(1) : literal
-  if (expanded.startsWith('~')) return 'unknown'
-  const path = resolve(scope.cwd, expanded)
+  const expanded = expand(word)
+  if (expanded === null || (base === null && !expanded.startsWith('/'))) return 'unknown'
+  const path = resolve(base ?? '/', expanded)
   if (roots.some((root) => path === root)) return 'project'
   if (roots.some((root) => within(path, root)) || TEMP_ROOTS.some((root) => within(path, resolve(root))))
     return 'inside'
@@ -105,9 +115,15 @@ const targetsOf = (args: string[]) => {
 const hasShort = (flags: string[], letters: RegExp) => flags.some((flag) => /^-[^-]/.test(flag) && letters.test(flag))
 
 /** Why a removal, or a recursive permission change, reaches beyond the thread's own work. */
-function reachBeyond(targets: string[], scope: CommandScope, recursive: boolean, verb: string): string | null {
+function reachBeyond(
+  targets: string[],
+  scope: CommandScope,
+  recursive: boolean,
+  verb: string,
+  base: string | null = scope.cwd,
+): string | null {
   for (const target of targets) {
-    const place = placeOf(target, scope)
+    const place = placeOf(target, scope, base)
     if (basename(target.replace(/\/+$/, '')) === '.git' && place !== 'unknown')
       return `${verb} the repository itself (${target})`
     if (place === 'outside') return `${verb} ${target}, outside this thread’s folders`
@@ -199,6 +215,9 @@ export function dangerousCommand(command: string, scope: CommandScope): string |
   const deploy = productionDeploy(command)
   if (deploy) return deploy
   if (/>\s*\/dev\/(?:r?disk|sd|nvme|hd|mmcblk)/.test(command)) return 'Writes directly to a disk'
+  // The folder the next command on the line runs in. `cd /tmp/work && rm -rf build` removes under /tmp, and
+  // `cd / && rm -rf etc` removes /etc: both read wrongly when every path is taken from where the thread started.
+  let base: string | null = scope.cwd
   for (const raw of commandsOf(command)) {
     const { words, admin, fromInput } = unwrap(raw)
     if (admin) return `Runs a command as administrator (${admin})`
@@ -206,10 +225,21 @@ export function dangerousCommand(command: string, scope: CommandScope): string |
     const name = basename(exe)
     const flags = flagsOf(args)
     const targets = targetsOf(args)
+    if (name === 'cd' || name === 'pushd') {
+      const to = targets[0] === undefined ? '~' : targets[0]
+      // `cd -` goes back to a folder this line does not name.
+      const expanded = /[$`]/.test(to) || args.includes('-') ? null : expand(to)
+      base = expanded === null || (base === null && !expanded.startsWith('/')) ? null : resolve(base ?? '/', expanded)
+      continue
+    }
+    if (name === 'popd') {
+      base = null
+      continue
+    }
     if (REMOVE.has(name)) {
       const recursive = name === 'rmdir' || hasShort(flags, /[rR]/) || flags.includes('--recursive') || name === 'shred'
       if (fromInput && recursive) return 'Deletes files listed at run time, which Ramu cannot check first'
-      const reason = reachBeyond(targets, scope, recursive, 'Deletes')
+      const reason = reachBeyond(targets, scope, recursive, 'Deletes', base)
       if (reason) return reason
     } else if (name === 'find' && args.some((word) => /^-(?:delete|exec|execdir|ok|okdir)$/.test(word))) {
       const deletes =
@@ -223,11 +253,11 @@ export function dangerousCommand(command: string, scope: CommandScope): string |
         ),
       )
       if (deletes) {
-        const reason = reachBeyond(starts.length ? starts : ['.'], scope, false, 'Deletes files under')
+        const reason = reachBeyond(starts.length ? starts : ['.'], scope, false, 'Deletes files under', base)
         if (reason) return reason
       }
     } else if (OWNERSHIP.has(name) && (hasShort(flags, /R/) || flags.includes('--recursive'))) {
-      const reason = reachBeyond(targets.slice(1), scope, true, 'Changes permissions on')
+      const reason = reachBeyond(targets.slice(1), scope, true, 'Changes permissions on', base)
       if (reason) return reason
     } else if (name === 'git') {
       const reason = gitDanger(args)

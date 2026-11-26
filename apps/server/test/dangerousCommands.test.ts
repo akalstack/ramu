@@ -47,6 +47,20 @@ it('looks through shells, wrappers, substitutions and chains', () => {
   expect(check('timeout 30 sudo make install')).toMatch(/administrator/)
 })
 
+it('reads each path from the folder the line has moved to', () => {
+  // Work in the temporary folder needs no approval, however the command gets there.
+  expect(check('cd /tmp/ramu-work && rm -rf build other')).toBeNull()
+  expect(check('cd /tmp && mkdir -p a && cd a && rm -rf old')).toBeNull()
+  expect(check('cd src && rm -rf generated')).toBeNull()
+  // A removal that only looks local is still caught.
+  expect(check('cd / && rm -rf etc')).toMatch(/outside/)
+  expect(check('cd .. && rm -rf app')).toMatch(/whole project/)
+  expect(check('cd ~ && rm -rf Documents')).toMatch(/outside/)
+  expect(check('cd "$TARGET" && rm -rf build')).toMatch(/cannot check/)
+  expect(check('cd - && rm -rf build')).toMatch(/cannot check/)
+  expect(check('cd "$TARGET" && rm -rf /work/app/build')).toBeNull()
+})
+
 it('asks before losing Git work, rewriting remote history, touching disks or the machine', () => {
   expect(check('git reset --hard origin/main')).toMatch(/uncommitted/)
   expect(check('git clean -fdx')).toMatch(/untracked/)
