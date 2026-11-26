@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, View } from 'react-native'
+import { ActivityIndicator, Alert, View } from 'react-native'
 import { translate } from '@ramu/shared/i18n'
 import { IDENTITY_COLORS, parseRule, ruleText, type Identity, type IdentitySnapshot } from '@ramu/shared/identities'
 import { useStore } from '../runtime/store'
-import { space, useTheme } from '../theme'
+import { showToast } from '../runtime/toast'
+import { font, space, useTheme } from '../theme'
 import { ChoiceRow, RowLabel, TextRow } from './SettingRows'
-import { Button, Card, Divider, Row, SectionLabel, T } from './ui'
+import { SheetGroup, SheetOption } from './SheetOptions'
+import { Button, Card, Divider, Row, SectionLabel, Sheet, T } from './ui'
 
 const COLOR_NAMES: Record<Identity['color'], string> = {
   violet: 'Violet',
@@ -18,9 +20,22 @@ const COLOR_NAMES: Record<Identity['color'], string> = {
   gray: 'Gray',
 }
 
+/** The same hues the desktop's dots use (Tailwind's 500s), so an identity is one color on every device. */
+const COLOR_HEX: Record<Identity['color'], string> = {
+  violet: '#8b5cf6',
+  blue: '#3b82f6',
+  green: '#22c55e',
+  amber: '#f59e0b',
+  red: '#ef4444',
+  pink: '#ec4899',
+  teal: '#14b8a6',
+  gray: '#6b7280',
+}
+
 /**
- * A host's identities on the phone: each one's name, color, Git author and rules, which connected accounts belong to
- * it, and which identity each project uses. Editing needs the device's settings changes permission; without it the
+ * A host's identities on the phone, as the desktop has them: each one's name, color, Git author and rules (with the
+ * rules Ramu suggests), which is the default, removing one, which connected accounts belong to it, which identity each
+ * project uses, and writing a project's author to its Git config. Editing needs the device's settings changes permission; without it the
  * page is read-only. Connecting a new account follows that account's own rules on the host.
  */
 export function IdentitySettings({ hostId, locked }: { hostId: string; locked: boolean }) {
@@ -54,8 +69,25 @@ export function IdentitySettings({ hostId, locked }: { hostId: string; locked: b
       setError(reason instanceof Error ? reason.message : String(reason)),
     )
   const invoke = runtime.current.invoke
-  if (!snapshot) return online ? <ActivityIndicator color={c.accent} style={{ padding: space.l }} /> : null
+  // The identity being removed, while the person chooses where its projects go.
+  const [removing, setRemoving] = useState<Identity | null>(null)
+  if (!snapshot)
+    return online ? (
+      <ActivityIndicator color={c.accent} style={{ padding: space.l }} />
+    ) : (
+      <T tone="muted" style={{ padding: space.l }}>
+        {t('Reconnect this host to see its identities.')}
+      </T>
+    )
   const { identities } = snapshot.settings
+  const usedBy = (id: string) =>
+    snapshot.projects.filter((entry) => entry.identityId === id).map((entry) => projectName(entry.projectId))
+  // Rules Ramu suggests from projects no rule catches yet, less the ones an identity already has.
+  const suggested = (identity: Identity) =>
+    [...new Set((snapshot.suggestions ?? []).map((entry) => ruleText(entry.rule)))]
+      .filter((text) => !identities.some((entry) => entry.rules.some((rule) => ruleText(rule) === text)))
+      .slice(0, 3)
+      .map((text) => ({ text, rule: parseRule(text), identity }))
   const projectName = (id: string) =>
     store.projects.find((project) => project.computerId === hostId && project.id.endsWith(`:${id}`))?.name ?? id
   return (
@@ -74,7 +106,13 @@ export function IdentitySettings({ hostId, locked }: { hostId: string; locked: b
       ) : null}
       {identities.map((identity) => (
         <View key={identity.id}>
-          <SectionLabel>{identity.name}</SectionLabel>
+          <SectionLabel
+            right={
+              <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: COLOR_HEX[identity.color] }} />
+            }
+          >
+            {identity.isDefault ? `${identity.name} · ${t('Default')}` : identity.name}
+          </SectionLabel>
           <Card style={{ marginHorizontal: space.l }}>
             <TextRow
               title={t('Name')}
@@ -111,11 +149,16 @@ export function IdentitySettings({ hostId, locked }: { hostId: string; locked: b
               value={identity.gitAuthor.email}
               maxLength={200}
               disabled={locked}
-              onCommit={(email) =>
+              onCommit={(email) => {
+                if (!/^[^\s@]+@[^\s@]+$/.test(email.trim()))
+                  return setError(t('Enter an email address, such as you@example.com.'))
+                setError('')
                 act(() =>
-                  invoke(hostId, 'identities.update', identity.id, { gitAuthor: { ...identity.gitAuthor, email } }),
+                  invoke(hostId, 'identities.update', identity.id, {
+                    gitAuthor: { ...identity.gitAuthor, email: email.trim() },
+                  }),
                 )
-              }
+              }}
             />
             <Divider inset={space.l} />
             <TextRow
@@ -135,6 +178,57 @@ export function IdentitySettings({ hostId, locked }: { hostId: string; locked: b
                 )
               }}
             />
+            {!locked && suggested(identity).length ? (
+              <View style={{ paddingHorizontal: space.l, paddingBottom: space.m, gap: space.s }}>
+                <T size={font.caption} tone="muted">
+                  {t('Suggested:')}
+                </T>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
+                  {suggested(identity).map(({ text, rule }) => (
+                    <Button
+                      key={text}
+                      kind="secondary"
+                      title={text}
+                      accessibilityLabel={t('Add rule {0}', { 0: text })}
+                      onPress={() =>
+                        rule &&
+                        act(() =>
+                          invoke(hostId, 'identities.update', identity.id, { rules: [...identity.rules, rule] }),
+                        )
+                      }
+                    />
+                  ))}
+                </View>
+              </View>
+            ) : null}
+            <Divider inset={space.l} />
+            <T size={font.caption} tone="muted" style={{ paddingHorizontal: space.l, paddingVertical: space.m }}>
+              {usedBy(identity.id).length
+                ? t('Used by {names}', { names: usedBy(identity.id).join(', ') })
+                : t('No project uses it yet.')}
+            </T>
+            {!locked && (!identity.isDefault || identities.length >= 2) ? (
+              <>
+                <Divider inset={space.l} />
+                <View style={{ flexDirection: 'row', gap: space.s, padding: space.l }}>
+                  {!identity.isDefault ? (
+                    <Button
+                      kind="secondary"
+                      title={t('Make default')}
+                      onPress={() => act(() => invoke(hostId, 'identities.update', identity.id, { isDefault: true }))}
+                    />
+                  ) : null}
+                  {identities.length >= 2 ? (
+                    <Button
+                      kind="ghost"
+                      title={t('Remove')}
+                      accessibilityLabel={t('Remove {name}', { name: identity.name })}
+                      onPress={() => setRemoving(identity)}
+                    />
+                  ) : null}
+                </View>
+              </>
+            ) : null}
           </Card>
         </View>
       ))}
@@ -187,6 +281,35 @@ export function IdentitySettings({ hostId, locked }: { hostId: string; locked: b
                     act(() => invoke(hostId, 'identities.pin', entry.projectId, value ? String(value) : null))
                   }
                 />
+                {!locked ? (
+                  <View style={{ paddingHorizontal: space.l, paddingBottom: space.m, alignItems: 'flex-start' }}>
+                    <Button
+                      kind="ghost"
+                      title={t('Write to Git config')}
+                      accessibilityLabel={t(
+                        'Sets user.name and user.email in its repositories, for commits made outside Ramu.',
+                      )}
+                      onPress={() =>
+                        Alert.alert(
+                          t('Write to Git config'),
+                          t('Sets user.name and user.email in its repositories, for commits made outside Ramu.'),
+                          [
+                            { text: t('Cancel'), style: 'cancel' },
+                            {
+                              text: t('Write to Git config'),
+                              onPress: () =>
+                                void invoke(hostId, 'identities.writeGitConfig', entry.projectId).then(
+                                  (done) => showToast(done.email, undefined, { success: true }),
+                                  (reason: unknown) =>
+                                    setError(reason instanceof Error ? reason.message : String(reason)),
+                                ),
+                            },
+                          ],
+                        )
+                      }
+                    />
+                  </View>
+                ) : null}
               </View>
             ))}
           </Card>
@@ -202,13 +325,38 @@ export function IdentitySettings({ hostId, locked }: { hostId: string; locked: b
               act(() =>
                 invoke(hostId, 'identities.add', {
                   name: identities.length ? t('Work') : t('Personal'),
-                  gitAuthor: identities[0]?.gitAuthor ?? { name: t('Your name'), email: 'you@example.com' },
+                  // The host's own Git author for the first one; a later one starts from the first and is edited.
+                  gitAuthor: identities[0]?.gitAuthor ?? {
+                    name: snapshot.gitUser.name ?? t('Your name'),
+                    email: snapshot.gitUser.email ?? 'you@example.com',
+                  },
                 }),
               )
             }
           />
         </Row>
       ) : null}
+      <Sheet
+        open={!!removing}
+        onClose={() => setRemoving(null)}
+        title={removing ? t('Remove {name}?', { name: removing.name }) : ''}
+      >
+        <SheetGroup title={t('Move its projects to')}>
+          {identities
+            .filter((entry) => entry.id !== removing?.id)
+            .map((entry) => (
+              <SheetOption
+                key={entry.id}
+                title={entry.name}
+                onPress={() => {
+                  const gone = removing
+                  setRemoving(null)
+                  if (gone) act(() => invoke(hostId, 'identities.remove', gone.id, entry.id))
+                }}
+              />
+            ))}
+        </SheetGroup>
+      </Sheet>
     </View>
   )
 }

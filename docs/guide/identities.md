@@ -4,7 +4,7 @@
 
 An **identity** groups the accounts that belong together, such as Work and Personal: a Git author (name and email), and which of this host's connected accounts it uses. Ramu picks a project's identity from its folder or remote, so you never switch by hand. With one account of each kind, nothing changes.
 
-**Settings → Identities** lists each identity with its name, color, Git author and rules, and which identity each project uses. You put an account in an identity where that account is connected (below). **Add identity** starts one. One identity is the default for projects no rule matches.
+**Settings → Identities** lists each identity with its name, color, Git author and rules, and which identity each project uses. You put an account in an identity where that account is connected (below). **Add identity** starts one. One identity is the default for projects no rule matches. The phone's **Settings → Identities** does the same for the selected host: it edits each identity, adds the rules Ramu suggests, makes one the default, removes one (choosing where its projects go), assigns accounts and projects, and writes a project's author to its Git config.
 
 ### Which identity a project uses
 
