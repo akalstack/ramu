@@ -133,3 +133,33 @@ it('keeps the live group thought in view after its call finishes, until the grou
     'Read the config before editing',
   )
 })
+
+it('names the command itself, not a count of one, while it runs and once the group settles', () => {
+  const bash = (id: string, summary: string) => ({ kind: 'tool-use' as const, toolUseId: id, name: 'Bash', summary })
+  const group = (results: Map<string, ToolResult>, live: boolean) =>
+    renderToStaticMarkup(
+      createElement(ToolGroup, {
+        tools: [bash('a', 'pnpm lint'), bash('b', 'pnpm test')],
+        results,
+        cwd: '',
+        active: live,
+        live,
+      }),
+    )
+  const ran = (id: string): [string, ToolResult] => [
+    id,
+    { kind: 'tool-result', toolUseId: id, summary: 'ok', isError: false },
+  ]
+  const running = group(new Map([ran('a')]), true)
+  expect(running).toContain('Running pnpm test')
+  expect(running).not.toContain('1 command')
+  const single = renderToStaticMarkup(
+    createElement(ToolGroup, {
+      tools: [bash('a', 'pnpm lint'), { ...tool, toolUseId: 'r' }],
+      results: new Map([ran('a'), ran('r')]),
+      cwd: '',
+      active: false,
+    }),
+  )
+  expect(single).toContain('Ran pnpm lint')
+})

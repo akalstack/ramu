@@ -350,12 +350,6 @@ export function PullRequestSection({
           )}
         </>
       )}
-      <details className="text-caption">
-        <summary className="cursor-default text-muted-foreground">{t('GitHub access')}</summary>
-        <div className="mt-1.5">
-          <ForgeAccessPanel taskId={taskId} repoId={binding.repoId} />
-        </div>
-      </details>
     </div>
   )
 }

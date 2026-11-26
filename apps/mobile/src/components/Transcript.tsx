@@ -1393,12 +1393,13 @@ function ToolGroup({ item, live }: { item: Extract<TranscriptItem, { kind: 'tool
     ? thoughtLine(thought.text, true) || say('Thinking')
     : live || running || failed
       ? `${words?.verb ?? ''} ${words?.subject ?? ''}`.trim()
-      : // A settled group reads as the desktop's does: "Ran 2 commands, Read 3 files".
+      : // A settled group reads as the desktop's does: "Ran pnpm test, Read 3 files".
         summarizeTools(
           item.tools.map((tool) => ({
             name: tool.source.name,
             running: tool.status === 'in_progress',
             kind: tool.source.kind,
+            subject: tool.file?.name ?? tool.source.summary,
             ...(tool.source.title ? { title: tool.source.title } : {}),
             ...(tool.ramu && tool.source.ramu
               ? {

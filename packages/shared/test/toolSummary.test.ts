@@ -22,6 +22,23 @@ describe('summarizeTools', () => {
     )
   })
 
+  it('names what a tool called once acted on, keeping counts for the rest', () => {
+    expect(
+      summarizeTools(
+        [
+          call('Bash', { subject: 'pnpm test\nsecond line' }),
+          call('Read', { subject: 'a.ts' }),
+          call('Read', { subject: 'b.ts' }),
+        ],
+        say,
+      ),
+    ).toBe('Ran pnpm test, Read 2 files')
+    expect(summarizeTools([call('Bash', { running: true, subject: 'pnpm build' })], say)).toBe('Running pnpm build')
+    expect(summarizeTools([call('Bash', { subject: `echo ${'word '.repeat(20)}` })], say)).toMatch(
+      /^Ran echo word( word)*…$/,
+    )
+  })
+
   it('names a tool outside the table by its own words, or by what it does', () => {
     expect(summarizeTools([call('mcp__jira__addWorklog'), call('mcp__jira__addWorklog')], say)).toBe(
       'Used AddWorklog ×2',

@@ -16,6 +16,19 @@ export interface SummaryTool {
   kind?: AgentToolKind
   /** The provider's own title for the call. */
   title?: string
+  /** What the call acted on (the command, the file's name, the pattern), named when it is the only call of its tool. */
+  subject?: string
+}
+
+/** A subject short enough to sit beside the group's other parts: its first line, cut at a word near the limit. */
+function shortSubject(subject: string | undefined): string | undefined {
+  const line = subject?.trim().split('\n')[0]?.trim()
+  // A summary that is only the call's JSON input names nothing a person would read.
+  if (!line || /^[{[]/.test(line)) return undefined
+  if (line.length <= 60) return line
+  const cut = line.slice(0, 60)
+  const space = cut.lastIndexOf(' ')
+  return `${space > 40 ? cut.slice(0, space) : cut}…`
 }
 
 type Say = (text: string, values?: Record<string, string | number>) => string
@@ -37,8 +50,9 @@ const VERBS: Record<string, [string, string, string]> = {
 export const toolLabel = (name: string) => mcpToolWords(name, '').verb
 
 /**
- * One line for a group of tool calls, the same on the desktop and the phone: "Ran 2 commands, Read 3 files". Calls of
+ * One line for a group of tool calls, the same on the desktop and the phone: "Ran pnpm test, Read 3 files". Calls of
  * one tool are counted together, in the order each tool first appears, and a kind still running reads in the present.
+ * A tool called once names what it acted on, since "Ran 1 command" says nothing the icon does not.
  */
 export function summarizeTools(tools: SummaryTool[], say: Say): string {
   const keyOf = (tool: SummaryTool) => (tool.ramu ? `ramu:${tool.ramu.key}` : tool.name)
@@ -64,6 +78,8 @@ export function summarizeTools(tools: SummaryTool[], say: Say): string {
           : `${say(toolVerb(KIND_VERB[kind], running))} ${n > 1 ? `${n} · ` : ''}${first.title ?? say(KIND_LABEL[kind])}`
       }
       const verb = say(toolVerb(verbs[0], running))
+      const subject = n === 1 && verbs[1] ? shortSubject(first.subject) : undefined
+      if (subject) return `${verb} ${subject}`
       return verbs[1]
         ? say('{verb} {count} {unit}', { verb, count: n, unit: say(n === 1 ? verbs[1] : verbs[2]) })
         : verb

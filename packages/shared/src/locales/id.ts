@@ -4915,7 +4915,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Masuk ke GitHub dengan gh auth login, atau simpan token GitHub di Pengaturan, untuk membuat pull request di sini.',
   'Account for this repository': 'Akun untuk repositori ini',
   'Choose an account': 'Pilih akun',
-  'GitHub access': 'Akses GitHub',
   'Several GitHub accounts are saved. Choose one in Settings before publishing.':
     'Beberapa akun GitHub tersimpan. Pilih satu di Pengaturan sebelum memublikasikan.',
   'Publishing as {0}': 'Memublikasikan sebagai {0}',
