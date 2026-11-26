@@ -1,3 +1,4 @@
+import { pullRequestWaitingDetail } from '@ramu/shared/pullRequests'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { titleSourceNote } from '@ramu/shared/chat/threadStatus'
 import { Folder, GitBranch } from 'lucide-react'
@@ -216,6 +217,11 @@ function ThreadCardBody({ task, status, hostName, workspaceName, sharedWorkspace
             #{task.pullRequest.number} {task.pullRequest.title}
           </span>
           <StageChip stage={task.pullRequest.stage} className="ml-auto" />
+        </div>
+      )}
+      {task.pullRequest && pullRequestWaitingDetail(task.pullRequest.stage, task.pullRequest.waiting, t) && (
+        <div className="text-caption text-muted-foreground">
+          {pullRequestWaitingDetail(task.pullRequest.stage, task.pullRequest.waiting, t)}
         </div>
       )}
       {offline ? (

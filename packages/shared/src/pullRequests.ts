@@ -150,6 +150,19 @@ export const PULL_REQUEST_STAGE_LABEL: Record<PullRequestStage, string> = {
 }
 
 /**
+ * What a pull request waits on people for, as a line beside its stage; null when its stage is not a wait on people
+ * or the service did not say. A stage badge stays short, and this says the rest.
+ */
+export function pullRequestWaitingDetail(
+  stage: PullRequestStage,
+  waiting: PullRequestWaiting | undefined,
+  t: (key: string, values?: Record<string, string | number>) => string,
+): string | null {
+  if (!waiting || (stage !== 'review-required' && stage !== 'changes-requested')) return null
+  return pullRequestWaitingLine(waiting, t) || null
+}
+
+/**
  * A stage in words, with the reason in its place when the pull request waits on people and the service said for what:
  * "needs 1 more approval from @ana" instead of "Waiting on review".
  */
@@ -157,11 +170,7 @@ export function pullRequestStageDetail(
   pr: Pick<TaskPullRequest, 'stage' | 'waiting'>,
   t: (key: string, values?: Record<string, string | number>) => string,
 ): string {
-  const waits =
-    pr.waiting && (pr.stage === 'review-required' || pr.stage === 'changes-requested')
-      ? pullRequestWaitingLine(pr.waiting, t)
-      : ''
-  return waits || t(PULL_REQUEST_STAGE_LABEL[pr.stage])
+  return pullRequestWaitingDetail(pr.stage, pr.waiting, t) ?? t(PULL_REQUEST_STAGE_LABEL[pr.stage])
 }
 
 /**

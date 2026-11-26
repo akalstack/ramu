@@ -15,7 +15,7 @@ import {
   type LucideIcon,
 } from 'lucide-react-native'
 import type { ForgeService, PullRequestStage, PullRequestSummary } from '@ramu/shared/types'
-import { pullRequestGlyph, pullRequestRef } from '@ramu/shared/pullRequests'
+import { pullRequestGlyph, pullRequestRef, pullRequestWaitingDetail } from '@ramu/shared/pullRequests'
 import {
   READINESS_WAITING,
   readinessRows,
@@ -111,6 +111,11 @@ export function PullRequestIdentity({
           .filter(Boolean)
           .join(' · ')}
       </T>
+      {pullRequestWaitingDetail(stage, pr.waiting, say) ? (
+        <T size={font.caption} tone="muted">
+          {pullRequestWaitingDetail(stage, pr.waiting, say)}
+        </T>
+      ) : null}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
         <BranchName name={pr.baseBranch} />
         <ArrowLeft size={11} color={c.muted} />

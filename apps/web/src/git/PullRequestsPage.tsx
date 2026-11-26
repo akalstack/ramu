@@ -28,6 +28,7 @@ import {
   type PullRequestFilter,
   type PullRequestRow,
   type PullRequestSort,
+  pullRequestWaitingDetail,
 } from '@ramu/shared/pullRequests'
 import { cn } from 'cn'
 import { t, useLanguage } from '../i18n'
@@ -317,9 +318,16 @@ export function PullRequestsPage() {
                 {label}
               </span>
             ))}
-            {(pr.author || thread) && (
+            {(pr.author || thread || pr.waiting) && (
               <span className="min-w-0 shrink-[3] truncate">
-                {[pr.author, thread ? t('In {0}', { '0': thread.title }) : ''].filter(Boolean).join(' · ')}
+                {[
+                  pr.author,
+                  thread ? t('In {0}', { '0': thread.title }) : '',
+                  // On whom it waits and for what, beside the short stage at the line's end.
+                  pullRequestWaitingDetail(entry.stage, pr.waiting, t) ?? '',
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
               </span>
             )}
           </span>

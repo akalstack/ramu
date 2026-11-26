@@ -6,6 +6,7 @@ import {
   PULL_REQUEST_STAGE_LABEL,
   pullRequestRef,
   type MergedPullRequestRow,
+  pullRequestWaitingDetail,
 } from '@ramu/shared/pullRequests'
 import { font, radius, space, useTheme } from '../theme'
 import { ago, useSay } from '../i18n'
@@ -52,7 +53,7 @@ export function PullRequestListRow({
         say('Pull request #{0}: {1}', { 0: pr.number, 1: pr.title }),
         pullRequestRepoLabel(row),
         FORGE_NAMES[row.service],
-        say(PULL_REQUEST_STAGE_LABEL[row.stage]),
+        pullRequestWaitingDetail(row.stage, pr.waiting, say) ?? say(PULL_REQUEST_STAGE_LABEL[row.stage]),
         hostName ? say('On {0}', { 0: hostName }) : null,
         thread ? say('In {0}', { 0: thread.title }) : null,
       ]
@@ -103,6 +104,12 @@ export function PullRequestListRow({
             </View>
           ) : null}
         </View>
+        {/* On whom it waits and for what, under the facts and above the short stage. */}
+        {pullRequestWaitingDetail(row.stage, pr.waiting, say) ? (
+          <T size={font.caption} tone="muted" numberOfLines={1}>
+            {pullRequestWaitingDetail(row.stage, pr.waiting, say)}
+          </T>
+        ) : null}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, overflow: 'hidden' }}>
           <StageText stage={row.stage} />
           {checksAside ? <ChecksLine checks={pr.checks} compact /> : null}

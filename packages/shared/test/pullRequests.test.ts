@@ -5,6 +5,7 @@ import {
   diffLineMatches,
   pullRequestRowDetail,
   pullRequestWaiting,
+  pullRequestWaitingDetail,
   pullRequestWaitingLine,
   groupPullRequests,
   inPullRequestFilter,
@@ -434,6 +435,13 @@ describe('what a pull request waits on people for', () => {
   it('waits on nobody once approved, merged or closed', () => {
     expect(pullRequestWaiting({ ...open, reviewDecision: 'approved' }, { approvals: 1 })).toBeNull()
     expect(pullRequestWaiting({ ...open, state: 'merged' })).toBeNull()
+  })
+
+  it('gives the reason as a line beside the stage only while the stage is a wait on people', () => {
+    const waiting = pullRequestWaiting(open, { approvals: 2 })!
+    expect(pullRequestWaitingDetail('review-required', waiting, t)).toBe('needs 1 more approval from @payments-team')
+    expect(pullRequestWaitingDetail('checks-failing', waiting, t)).toBeNull()
+    expect(pullRequestWaitingDetail('review-required', undefined, t)).toBeNull()
   })
 
   it('shows the reason on the row in place of the stage’s own words', () => {

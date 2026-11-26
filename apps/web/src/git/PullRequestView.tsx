@@ -47,6 +47,7 @@ import {
   pullRequestStage,
   shownReviewThreads,
   type PullRequestNextStep,
+  pullRequestWaitingDetail,
 } from '@ramu/shared/pullRequests'
 import { PullRequestReadiness } from './PullRequestReadiness'
 import { forgeBrand } from '@ramu/shared/brands'
@@ -381,6 +382,7 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
               pr.reviewDecision === 'approved' ||
               pr.reviewDecision === 'changes-requested' ||
               pr.requestedReviewers.length > 0 ||
+              pr.waiting !== undefined ||
               (pr.additions !== undefined && pr.deletions !== undefined)) && (
               <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
                 {/* The stage pill already says when checks fail or run; repeat them only when it is about something else. */}
@@ -397,10 +399,15 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
                     {t('Changes requested')}
                   </span>
                 )}
-                {pr.requestedReviewers.length > 0 && (
-                  <span className="min-w-0 truncate">
-                    {t('Review requested from {0}', { '0': pr.requestedReviewers.join(', ') })}
-                  </span>
+                {/* What it waits on, as the Git host's rules say; who was asked when the host said no more. */}
+                {pullRequestWaitingDetail(stage, pr.waiting, t) ? (
+                  <span className="min-w-0 truncate">{pullRequestWaitingDetail(stage, pr.waiting, t)}</span>
+                ) : (
+                  pr.requestedReviewers.length > 0 && (
+                    <span className="min-w-0 truncate">
+                      {t('Review requested from {0}', { '0': pr.requestedReviewers.join(', ') })}
+                    </span>
+                  )
                 )}
                 {pr.additions !== undefined && pr.deletions !== undefined && (
                   <span
