@@ -1902,6 +1902,7 @@ async function performInvoke(
       : {
           permissions: Object.fromEntries(DEVICE_PERMISSIONS.map((permission) => [permission, { until: null }])),
           pending: [],
+          blocked: [],
         }
   } else if (method === 'device.agentPairing') {
     if (!device) throw new Error('This computer’s agents are already here.')
