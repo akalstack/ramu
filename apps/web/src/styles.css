@@ -366,6 +366,19 @@ kbd {
     display: none;
   }
 }
+/* Two shadcn primitives (the message scroller's viewport and the code block's body) ask for a thin native bar with
+   utilities, which beat the base layer above: the transcript then showed two thumbs side by side, the native one and
+   the floating one. Unlayered, so it wins over those utilities without editing the upstream files. A native bar's
+   gutter is given back too, since the floating thumb takes no width. */
+.scrollbar-thin,
+.scrollbar-gutter-stable,
+[data-slot='message-scroller-viewport'] {
+  scrollbar-width: none;
+  scrollbar-gutter: auto;
+}
+:is(.scrollbar-thin, .scrollbar-gutter-stable, [data-slot='message-scroller-viewport'])::-webkit-scrollbar {
+  display: none;
+}
 /* Above every dialog, menu, toast and tooltip, since any of them can scroll. */
 .floating-scrollbars {
   @apply fixed top-0 left-0 size-0 z-1400 pointer-events-none;
