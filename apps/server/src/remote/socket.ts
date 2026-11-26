@@ -186,6 +186,10 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
         if (!chunk.startsWith('data: ') || ws.readyState !== ws.OPEN || catchingUp) return true
         const json = chunk.slice(6).trimEnd()
         if (!wanted(json) || held(json)) return true
+        if (json.length > (MAX_REQUEST_BYTES - 1024) / 3 && Buffer.byteLength(json) > MAX_REQUEST_BYTES - 1024) {
+          log(`An event on ${/^\{"channel":"([^"]*)"/.exec(json)?.[1] ?? 'a channel'} was too large to send.`)
+          return true
+        }
         ws.send(`{"t":"event",${json.slice(1)}`)
         if (eventsQueued() < maxBuffered) return true
         if (!canCatchUp) return false
@@ -204,10 +208,23 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
     // Answers are sent whatever is queued: the client asked for each, and calls in flight are capped. Only events,
     // which a client never asked for one by one, end a connection that falls too far behind (see `sink.write`).
     // Ending it here dropped a desktop that opened a long thread from several places at once, and it asked again.
-    const send = (frame: SocketServerFrame) => {
+    const send = (frame: SocketServerFrame, method?: string) => {
       if (ws.readyState !== ws.OPEN) return
-      const text = encodeSocketFrame(frame)
-      const bytes = Buffer.byteLength(text)
+      let text = encodeSocketFrame(frame)
+      let bytes = Buffer.byteLength(text)
+      // A client closes its whole connection on a message over its limit, and asks again once reconnected: one answer
+      // too large fails alone, named in the log so the method can be fixed.
+      if (bytes > MAX_REQUEST_BYTES && frame.t === 'result') {
+        const size = Math.round(bytes / 1_000_000)
+        log(`${method ?? 'A call'} answered ${size} MB, more than a client accepts; it was refused.`)
+        text = encodeSocketFrame({
+          t: 'error',
+          id: frame.id,
+          error: `The answer was too large to send (${size} MB).`,
+          status: 500,
+        })
+        bytes = Buffer.byteLength(text)
+      }
       answersQueued += bytes
       ws.send(text, () => (answersQueued -= bytes))
     }
@@ -284,7 +301,7 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
         .invoke(device, { method: frame.method, args: frame.args, operationKey: frame.operationKey }, req)
         .then((result) => {
           if (result.ok) {
-            send({ t: 'result', id: frame.id, value: result.value })
+            send({ t: 'result', id: frame.id, value: result.value }, frame.method)
             result.after?.()
           } else send({ t: 'error', id: frame.id, error: result.error, status: result.status })
         })

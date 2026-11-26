@@ -164,6 +164,25 @@ it('does not drop a client for a pause of the service itself', async () => {
   expect(ws.readyState).toBe(ws.OPEN)
 })
 
+it('refuses one answer too large for a client instead of losing the connection to it', async () => {
+  const logged: string[] = []
+  const huge = 'x'.repeat(17_000_000)
+  const { connect } = await start(
+    { invoke: async (_device, request) => ({ ok: true, value: request.method === 'huge' ? huge : 'small' }) },
+    { heartbeatMs: 10_000, log: (m: string) => logged.push(m) },
+  )
+  const { ws, frames, until } = connect()
+  await until(() => frames.some((frame) => frame.t === 'ready'))
+  ws.send(encodeSocketFrame({ t: 'invoke', id: 1, method: 'huge', args: [] }))
+  ws.send(encodeSocketFrame({ t: 'invoke', id: 2, method: 'small', args: [] }))
+  await until(() => frames.some((frame) => frame.t === 'result' && frame.id === 2))
+  expect(frames.find((frame) => frame.t === 'error' && frame.id === 1)).toMatchObject({
+    error: expect.stringContaining('too large'),
+  })
+  expect(logged.some((line) => line.startsWith('huge answered 17 MB'))).toBe(true)
+  expect(ws.readyState).toBe(ws.OPEN)
+})
+
 it('refuses an unauthenticated upgrade before any socket exists', async () => {
   const { connect, sockets } = await start()
   const { ws } = connect(SOCKET_PATH, 'bad')
