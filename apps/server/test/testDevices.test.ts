@@ -1,10 +1,16 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { processFor, TestDevices } from '../src/testDevice/testDevices'
 import { elementsText, parseSnapshot, type AgentDeviceSession } from '../src/testDevice/agentDevice'
-import { chosenConfig, parseDoctor, type SimlockHost } from '../src/testDevice/simlock'
+import {
+  chosenConfig,
+  parseDoctor,
+  simlockEnvironment,
+  simlockToolDir,
+  type SimlockHost,
+} from '../src/testDevice/simlock'
 import { avccUnits, FrameReader, parameterSets } from '../src/testDevice/deviceVideo'
 
 vi.mock('../src/testDevice/simlock', async (original) => ({
@@ -315,4 +321,19 @@ it('gives back devices an earlier run of Ramu held, since Simlock keeps renewing
   expect(calls).not.toContainEqual(['token', 'revoke', 'tok_mine'])
   expect(calls).toContainEqual(['release', 'lease-old'])
   expect(calls).not.toContainEqual(['release', 'lease-other'])
+})
+
+it('points the Simlock node shim at the Ramu running now when the one it was installed with moved', () => {
+  const tools = mkdtempSync(join(tmpdir(), 'ramu-tools-'))
+  vi.stubEnv('RAMU_TOOLS_DIR', tools)
+  try {
+    const shim = join(simlockToolDir(), 'bin/node')
+    mkdirSync(join(simlockToolDir(), 'bin'), { recursive: true })
+    writeFileSync(shim, '#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec "/gone/checkout/Electron" "$@"\n')
+    simlockEnvironment()
+    expect(readFileSync(shim, 'utf8')).toBe(`#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec "${process.execPath}" "$@"\n`)
+  } finally {
+    vi.unstubAllEnvs()
+    rmSync(tools, { recursive: true, force: true })
+  }
 })

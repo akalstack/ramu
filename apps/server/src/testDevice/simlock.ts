@@ -1,7 +1,7 @@
 // Simlock, the device daemon under Ramu's test devices, and agent-device, which it supervises: installed pinned into
 // Ramu's tools folder, run with Ramu's own Node, and configured for what Ramu relies on. Agents never see either.
 import { execFile } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { chmod, mkdir, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -58,8 +58,28 @@ function javaHome(): string | undefined {
   return undefined
 }
 
+/** The `node` Simlock runs on: Ramu's executable, which inside the desktop app is Electron run as plain Node. */
+const shimText = () => `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec "${process.execPath}" "$@"\n`
+
+/**
+ * Points the `node` shim at the Ramu running now. The executable it was installed with moves: a development checkout
+ * is deleted, an update replaces the service's copy of the app, and a shim left on the old path breaks test devices.
+ */
+export function refreshSimlockShim(): void {
+  const shim = join(shimDir(), 'node')
+  if (!existsSync(shim)) return
+  try {
+    if (readFileSync(shim, 'utf8') === shimText()) return
+    writeFileSync(shim, shimText())
+    chmodSync(shim, 0o755)
+  } catch {
+    // A shim that cannot be rewritten fails on use with its own error, as before.
+  }
+}
+
 /** The environment Simlock and agent-device run in: Ramu's Node first on PATH, and their homes under Ramu's folder. */
 export function simlockEnvironment(): NodeJS.ProcessEnv {
+  refreshSimlockShim()
   const java = javaHome()
   return {
     ...process.env,
@@ -157,8 +177,7 @@ export async function installSimlock(exec: Exec = execute, npm: string | null = 
     `agent-device@${AGENT_DEVICE_VERSION}`,
   ])
   const shim = join(dir, 'bin/node')
-  // Inside the desktop app Ramu's executable is Electron, which runs as plain Node with this variable.
-  await writeFile(shim, `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec "${process.execPath}" "$@"\n`)
+  await writeFile(shim, shimText())
   await chmod(shim, 0o755)
   const version = (await simlock(['--version'], exec)).trim()
   if (!version.includes(SIMLOCK_VERSION)) throw new Error(`Installed Simlock ${version}, expected ${SIMLOCK_VERSION}.`)
