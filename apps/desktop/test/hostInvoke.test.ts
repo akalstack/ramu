@@ -75,6 +75,10 @@ describe('routeInvoke', () => {
 })
 
 describe('isHostInvokeAllowed', () => {
+  it("reaches another host's servers and resources, so its threads show Servers and Resources covers it", () => {
+    for (const method of ['servers.list', 'servers.stop', 'resources.snapshot', 'resources.host'])
+      expect(isHostInvokeAllowed(method)).toBe(true)
+  })
   it('allows Shared MCP status while keeping administration on its execution host', () => {
     expect(isHostInvokeAllowed('mcp.status')).toBe(true)
     for (const method of [

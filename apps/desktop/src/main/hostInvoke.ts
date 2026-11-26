@@ -48,6 +48,10 @@ const DOMAINS = new Set([
   'deploy',
   'ci',
   'abilities',
+  // What a thread's work is listening on and what its host's machine holds: read and stopped on that host, so a
+  // thread there shows its Servers and the Resources panel covers it.
+  'servers',
+  'resources',
 ])
 /** Methods inside an allowed domain that still open a native dialog or menu on this machine. */
 const NATIVE = new Set([
