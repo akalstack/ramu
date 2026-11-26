@@ -72,7 +72,9 @@ function InlineCode({ code, c }: { code: string; c: ReturnType<typeof useTheme>[
         color: c.text,
         backgroundColor: c.fill,
         borderRadius: radius.xs,
-        paddingHorizontal: 4,
+        // Room around the letters that grows with the text size, as the desktop's does.
+        paddingHorizontal: Math.round(prose.code * 0.4),
+        paddingVertical: Math.round(prose.code * 0.15),
       }}
     >
       {code}

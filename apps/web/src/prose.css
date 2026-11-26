@@ -164,11 +164,12 @@
     margin-bottom: 0;
   }
 
-  /* Inline code reads as part of the sentence: smaller, soft, and its padding kept when it wraps. */
+  /* Inline code reads as part of the sentence: smaller, soft, and its padding kept when it wraps. The padding scales
+     with the text, so the tint has room around the letters at every text size instead of hugging them. */
   .ramu-prose :not(pre) > code {
     background: rgb(var(--ink) / 0.06);
     border-radius: var(--radius-xs);
-    padding: 1px 4px;
+    padding: 0.15em 0.4em;
     color: var(--text-body);
     font-family: var(--mono);
     font-size: var(--prose-code);
