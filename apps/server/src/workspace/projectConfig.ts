@@ -20,6 +20,10 @@ export const shipConfigSchema = z.object({
   finishLine: z.enum(FINISH_LINES).optional(),
   maxCiFixes: shipRounds.optional(),
   maxReviewRounds: shipRounds.optional(),
+  /** `false` keeps a step with a person here whatever the host is set to; `true` grants nothing. */
+  sendReplies: z.boolean().optional(),
+  autoMerge: z.boolean().optional(),
+  autoDeploy: z.boolean().optional(),
 })
 export type ShipConfig = z.infer<typeof shipConfigSchema>
 
@@ -116,7 +120,12 @@ export function loadProjectConfig(root: string | null): ProjectConfigResult {
 
 /** Shipping starts without the fresh copy when the Git host is this slow; the last fetched one applies then. */
 const FETCH_WAIT_MS = 15_000
-const UNREADABLE_SHIP: ShipConfig = { finishLine: 'pull-request' }
+const UNREADABLE_SHIP: ShipConfig = {
+  finishLine: 'pull-request',
+  sendReplies: false,
+  autoMerge: false,
+  autoDeploy: false,
+}
 
 /**
  * The `ship` limits as committed on the default branch, never the checkout's copy: an agent works in the checkout and

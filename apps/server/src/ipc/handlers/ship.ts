@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { FINISH_LINES, type FinishLine } from '@ramu/shared/ship'
+import { FINISH_LINES, type FinishLine, type ShipOptions } from '@ramu/shared/ship'
 import { id } from '../schemas'
 import type { RegisterHandlers } from '../types'
 
@@ -31,6 +31,16 @@ export const registerShipHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id, z.enum(FINISH_LINES).nullable()]),
       run: (projectId: string, finishLine: FinishLine | null) => {
         ship().setProjectFinishLine(project(projectId), finishLine)
+        return ship().projectStatus(projectId)
+      },
+    },
+    'ship.setOptions': {
+      args: z.tuple([
+        id,
+        z.object({ sendReplies: z.boolean(), autoMerge: z.boolean(), autoDeploy: z.boolean() }).partial().strict(),
+      ]),
+      run: (projectId: string, options: Partial<ShipOptions>) => {
+        ship().setProjectOptions(project(projectId), options)
         return ship().projectStatus(projectId)
       },
     },

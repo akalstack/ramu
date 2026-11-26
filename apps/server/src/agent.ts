@@ -661,6 +661,9 @@ export class AgentService {
   }
 
   /** Runs a thread's project's migrations against production before any production deploy goes out. */
+  set shipDeploys(ship: UserRequests['shipDeploys']) {
+    this.parts.requests.shipDeploys = ship
+  }
   set beforeProduction(run: UserRequests['beforeProduction']) {
     this.parts.requests.beforeProduction = run
   }

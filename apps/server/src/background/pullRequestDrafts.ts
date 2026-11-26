@@ -15,6 +15,7 @@ import { coversPath } from '../agent/covers'
 import type { Workspace } from '../workspace/workspace'
 import type { AgentService } from '../agent'
 import {
+  deleteComment,
   pullRequestStatus,
   replyToThread,
   requestReviews,
@@ -305,7 +306,12 @@ export class PullRequestDrafts {
    * Pushes (when asked), then posts each checked reply, then resolves and re-requests review. A failed push posts
    * nothing. Each posted reply is recorded at once, and a reply already on the thread is never posted again.
    */
-  async sendReplies(batchId: string, input: SendRepliesInput): Promise<SendRepliesResult> {
+  async sendReplies(
+    batchId: string,
+    input: SendRepliesInput,
+    /** Only the drafts that report a fix, leaving the rest drafted for the person. */
+    only?: 'fixed',
+  ): Promise<SendRepliesResult & { postedIds: string[] }> {
     const found = this.list().find((entry) => entry.id === batchId)
     if (found?.kind !== 'replies')
       throw new Error('These replies were already sent or replaced. Refresh and try again.')
@@ -329,6 +335,7 @@ export class PullRequestDrafts {
     }
     const threads = await reviewThreads(cwd, batch.url)
     const failed: SendRepliesResult['failed'] = []
+    const postedIds: string[] = []
     let posted = 0
     const record = (threadId: string, change: Partial<ReviewReplyDraft>) => {
       batch = {
@@ -339,6 +346,7 @@ export class PullRequestDrafts {
     }
     for (const draft of batch.drafts) {
       if (draft.outcome === 'skipped' || draft.postedId || !draft.reply) continue
+      if (only && draft.outcome !== only) continue
       const body =
         draft.outcome === 'fixed' && draft.commit ? `${draft.reply}\n\nFixed in ${draft.commit}.` : draft.reply
       const thread = threads.find((entry) => entry.id === draft.threadId)
@@ -347,6 +355,7 @@ export class PullRequestDrafts {
         const id = already?.id ?? (await replyToThread(cwd, batch.url, draft.threadId, body))
         record(draft.threadId, { postedId: id, error: null })
         posted++
+        if (!already) postedIds.push(id)
         if (input.resolveFixed && draft.outcome === 'fixed' && thread?.resolvable && !thread.resolved)
           await resolveThread(cwd, batch.url, draft.threadId).catch(() => {})
       } catch (error) {
@@ -355,12 +364,50 @@ export class PullRequestDrafts {
         failed.push({ threadId: draft.threadId, error: message })
       }
     }
-    if (input.requestReview && batch.reviewers.length && !failed.length)
+    // Replies still waiting for the person keep the round open: review is asked for again once they are sent.
+    const waiting = batch.drafts.some((draft) => draft.outcome !== 'skipped' && !draft.postedId && draft.reply)
+    if (input.requestReview && batch.reviewers.length && !failed.length && !waiting)
       await requestReviews(cwd, batch.url, batch.reviewers).catch((error) =>
         failed.push({ threadId: '', error: error instanceof Error ? error.message : String(error) }),
       )
-    if (!failed.length) this.discard(batch.id)
-    return { pushed, posted, failed }
+    if (!failed.length && !waiting) this.discard(batch.id)
+    return { pushed, posted, failed, postedIds }
+  }
+
+  /**
+   * For a shipping thread between turns: pushes its branch and posts the replies that only report a fix, on every pull
+   * request it has a round drafted for. A round whose push or post fails is left as drafted, for the person.
+   */
+  async sendFixed(sessionId: string): Promise<{ url: string; number: number; commentIds: string[] }[]> {
+    const sent: { url: string; number: number; commentIds: string[] }[] = []
+    for (const batch of this.list()) {
+      if (batch.kind !== 'replies' || batch.sessionId !== sessionId) continue
+      if (!batch.drafts.some((draft) => draft.outcome === 'fixed' && !draft.postedId && draft.reply)) continue
+      try {
+        const result = await this.sendReplies(
+          batch.id,
+          { push: true, resolveFixed: true, requestReview: true, edits: [] },
+          'fixed',
+        )
+        sent.push({ url: batch.url, number: batch.number, commentIds: result.postedIds })
+      } catch (error) {
+        console.error('Ship replies:', batch.url, error)
+      }
+    }
+    return sent
+  }
+
+  /** Deletes replies posted for a thread on one of its pull requests. */
+  async deleteReplies(sessionId: string, url: string, commentIds: string[]): Promise<void> {
+    const session = this.agents.get(sessionId)
+    for (const binding of this.workspace.listBindings(session.taskId)) {
+      if (binding.folderOnly || binding.notGit) continue
+      const status = await pullRequestStatus(binding.cwd, url).catch(() => null)
+      if (status?.pullRequest?.url !== url) continue
+      for (const id of commentIds) await deleteComment(binding.cwd, url, id)
+      return
+    }
+    throw new Error('The pull request’s checkout is gone. Delete the replies on the Git host instead.')
   }
 
   async sendReview(

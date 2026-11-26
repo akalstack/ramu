@@ -17,6 +17,7 @@ vi.mock('../src/workspace/forge', () => ({
   deleteComment: vi.fn(),
   submitReview: vi.fn(),
   setThreadStatus: vi.fn(),
+  pullRequestAction: vi.fn(),
 }))
 
 const URL = 'https://github.com/o/r/pull/7'
@@ -94,6 +95,24 @@ it('posts conversation writes at once in Full access and offers Undo, but approv
   const undone = await writes.undo(card.id, posted.id)
   expect(forge.deleteComment).toHaveBeenCalledWith('/repo', URL, 'IC_1')
   expect(undone.items.find((item) => item.id === posted.id)?.state).toBe('undone')
+})
+
+it('lets a shipping thread turn on the Git host’s auto-merge without the person, and nothing else', async () => {
+  const auto = { kind: 'action', action: { kind: 'auto-merge', method: 'squash', deleteBranch: true } } as const
+  // Without Ship's say, it waits like every decision.
+  expect((await writes.request('session', URL, auto)).state).toBe('waiting')
+  expect(forge.pullRequestAction).not.toHaveBeenCalled()
+  writes.mayDecide = (sessionId, action) => sessionId === 'session' && action === 'auto-merge'
+  expect((await writes.request('session', URL, auto)).state).toBe('posted')
+  expect(forge.pullRequestAction).toHaveBeenCalledWith('/repo', URL, auto.action)
+  // A plain merge, a close and an approval still wait, whatever Ship says.
+  writes.mayDecide = () => true
+  const merge = await writes.request('session', URL, {
+    kind: 'action',
+    action: { kind: 'merge', method: 'squash', deleteBranch: true },
+  })
+  const approval = await writes.request('session', URL, { kind: 'review', verdict: 'approve', body: '', comments: [] })
+  expect([merge.state, approval.state]).toEqual(['waiting', 'waiting'])
 })
 
 it('posts nothing when the identity check stops it', async () => {

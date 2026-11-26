@@ -105,6 +105,81 @@ describe('project finish line', () => {
   })
 })
 
+describe('what Ship may do without asking', () => {
+  it('follows the person’s choices, held to what the repository keeps with a person', async () => {
+    expect((await ship.projectStatus('project')).options).toEqual({
+      sendReplies: true,
+      autoMerge: false,
+      autoDeploy: true,
+    })
+    ship.setProjectOptions('project', { autoMerge: true })
+    // The finish line chosen before stays when an option changes, and the other way round.
+    ship.setProjectFinishLine('project', 'merged')
+    expect(await ship.projectStatus('project')).toMatchObject({ chosen: 'merged', options: { autoMerge: true } })
+    vi.mocked(committedShipConfig).mockResolvedValue({ autoMerge: false, sendReplies: false })
+    expect(await ship.projectStatus('project')).toMatchObject({
+      options: { sendReplies: false, autoMerge: false, autoDeploy: true },
+      forbidden: ['sendReplies', 'autoMerge'],
+    })
+  })
+
+  it('merges on its own only through the Git host’s auto-merge, when the project allows it and ships that far', async () => {
+    ship.setProjectFinishLine('project', 'merged')
+    await ship.start('session')
+    expect(ship.mayDecide('session', 'auto-merge')).toBe(false)
+    ship.setProjectOptions('project', { autoMerge: true })
+    const { instructions } = await ship.start('session')
+    expect(instructions).toMatch(/whenChecksPass: true/)
+    expect(ship.mayDecide('session', 'auto-merge')).toBe(true)
+    expect(ship.mayDecide('session', 'merge')).toBe(false)
+    expect(ship.mayDecide('other', 'auto-merge')).toBe(false)
+    // A run that stops at review never merges, whatever the switch says.
+    await ship.start('session', 'review')
+    expect(ship.mayDecide('session', 'auto-merge')).toBe(false)
+  })
+
+  it('deploys to production unasked only after the project’s first deploy was allowed', async () => {
+    live = 'https://shop.example.com'
+    await ship.start('session')
+    expect(ship.mayDeploy('session')).toBe(false)
+    ship.deployAllowed('session')
+    expect((await ship.projectStatus('project')).deployedOnce).toBe(true)
+    expect(ship.mayDeploy('session')).toBe(true)
+    // Not for a run that stops before production, and not when the project turned it off.
+    await ship.start('session', 'merged')
+    expect(ship.mayDeploy('session')).toBe(false)
+    ship.setProjectOptions('project', { autoDeploy: false })
+    await ship.start('session')
+    expect(ship.mayDeploy('session')).toBe(false)
+  })
+
+  it('posts a shipping thread’s fix replies between turns and lists them, and Undo deletes them', async () => {
+    const sendFixedReplies = vi.fn(async () => [{ url: checkout.url, number: 7, commentIds: ['c1', 'c2'] }])
+    const deleteReplies = vi.fn(async () => {})
+    const agents = { get: () => session, enqueueBackground: enqueue } as unknown as AgentService
+    ship = new ShipService(
+      ws,
+      agents,
+      { watch, status: (_cwd, url) => ({ sessionId: watched.get(url) ?? null, threads: [] }) },
+      { liveAddress: () => live, viewer: () => viewer, sendFixedReplies, deleteReplies },
+      () => {},
+    )
+    await ship.start('session')
+    // Not while the agent is still writing its round.
+    session.state = 'running'
+    await poll()
+    expect(sendFixedReplies).not.toHaveBeenCalled()
+    session.state = 'idle'
+    await poll()
+    expect(sendFixedReplies).toHaveBeenCalledWith('session')
+    const [entry] = ship.activity()
+    expect(entry).toMatchObject({ kind: 'replies-sent', number: 7, replies: 2 })
+    await ship.undo(entry!.id)
+    expect(deleteReplies).toHaveBeenCalledWith('session', checkout.url, ['c1', 'c2'])
+    expect(ship.activity()[0]?.undoneAt).toBeTypeOf('number')
+  })
+})
+
 describe('rounds', () => {
   it('tells the agent to push check fixes and asks the person once the limit is spent', async () => {
     vi.mocked(committedShipConfig).mockResolvedValue({ maxCiFixes: 2 })
@@ -119,7 +194,8 @@ describe('rounds', () => {
     expect(texts()).toHaveLength(1)
     expect(texts()[0]).toMatch(/ask_user/)
     // Review rounds have their own limit.
-    expect(ship.before(checkout, 'reviews')).toMatch(/Push and reply/)
+    // Review rounds have their own limit; replies that report a fix go out without the person.
+    expect(ship.before(checkout, 'reviews')).toMatch(/Ramu pushes the branch and posts those replies/)
     ship.moreRounds('session')
     expect(ship.held('session', 'checks')).toBe(false)
     expect(ship.before(checkout, 'checks')).toMatch(/push it/)

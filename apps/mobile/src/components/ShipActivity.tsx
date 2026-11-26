@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Alert, View } from 'react-native'
-import { shipActivityText } from '@ramu/shared/ship'
+import { shipActivityText, shipUndoText } from '@ramu/shared/ship'
 import type { ShipActivity } from '@ramu/shared/types/ship'
 import { ago, useSay } from '../i18n'
 import { useStore } from '../runtime/store'
@@ -66,31 +66,24 @@ export function ShipActivityList({ hostId }: { hostId: string | null }) {
 
   if (!entries.length) return null
   const undo = (entry: Entry) =>
-    Alert.alert(
-      say('Undo this fix?'),
-      say('Ramu adds a commit that reverts {0} on {1} and pushes it, then tells the thread not to push it again.', {
-        0: `${entry.from.slice(0, 7)}..${entry.to.slice(0, 7)}`,
-        1: entry.number === null ? entry.url : `#${entry.number}`,
-      }),
-      [
-        { text: say('Cancel'), style: 'cancel' },
-        {
-          text: say('Undo fix'),
-          style: 'destructive',
-          onPress: () => {
-            setBusy(true)
-            void runtime.current
-              .invoke(entry.hostId, 'ship.undo', entry.id)
-              .then(
-                () => read(),
-                (reason: unknown) =>
-                  Alert.alert(say('That didn’t work'), reason instanceof Error ? reason.message : String(reason)),
-              )
-              .finally(() => setBusy(false))
-          },
+    Alert.alert(shipUndoText(entry, say).title, shipUndoText(entry, say).body, [
+      { text: say('Cancel'), style: 'cancel' },
+      {
+        text: shipUndoText(entry, say).confirm,
+        style: 'destructive',
+        onPress: () => {
+          setBusy(true)
+          void runtime.current
+            .invoke(entry.hostId, 'ship.undo', entry.id)
+            .then(
+              () => read(),
+              (reason: unknown) =>
+                Alert.alert(say('That didn’t work'), reason instanceof Error ? reason.message : String(reason)),
+            )
+            .finally(() => setBusy(false))
         },
-      ],
-    )
+      },
+    ])
   return (
     <Section title={say('Done for you')} count={entries.length}>
       <T size={font.caption} tone="muted" style={{ paddingHorizontal: space.l, paddingBottom: space.s }}>

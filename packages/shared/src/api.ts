@@ -1704,6 +1704,11 @@ export interface RamuMethods extends ArtifactMethods {
     projectId: string,
     finishLine: import('./ship').FinishLine | null,
   ): import('./types/ship').ShipProjectStatus
+  /** Chooses what Ship may do for the project without asking; the repository's committed limits still apply. */
+  'ship.setOptions'(
+    projectId: string,
+    options: Partial<import('./ship').ShipOptions>,
+  ): import('./types/ship').ShipProjectStatus
   /** What Set up CI would add to a repository of the project, from its last fetched default branch. */
   'ci.preview'(projectId: string, repoId: string): CiPreview
   /**

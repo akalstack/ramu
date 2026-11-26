@@ -81,6 +81,15 @@ export class UserRequests {
   >()
   /** Threads that allowed production deploys for themselves; kept in memory, so a restart asks again. */
   private productionAllowed = new Set<string>()
+  /**
+   * Ship's say on production deploys, set by the server: a shipping thread whose project already had its first
+   * production deploy allowed may deploy without the card, and each allowed deploy is reported so that first one counts.
+   */
+  shipDeploys: { may(sessionId: string): boolean; allowed(sessionId: string): void } | undefined
+  /** A production deploy that needs no card: the thread allowed them, or Ship may run this one. */
+  private deploysFreely(id: string): boolean {
+    return this.productionAllowed.has(id) || this.shipDeploys?.may(id) === true
+  }
   /** Provider requests whose migrations are running, so a second click does not run them twice. */
   private migrating = new Set<string>()
   /**
@@ -101,7 +110,7 @@ export class UserRequests {
   ): Promise<boolean> {
     if (signal?.aborted || this.host.shutdown() || !['starting', 'running'].includes(this.host.get(id).state))
       return Promise.reject(new Error('This permission request is no longer active.'))
-    if (options.productionDeploy && this.productionAllowed.has(id)) return Promise.resolve(true)
+    if (options.productionDeploy && this.deploysFreely(id)) return Promise.resolve(true)
     const requestId = randomUUID()
     return new Promise((resolve, reject) => {
       const abort = () => finish(false, true)
@@ -394,7 +403,7 @@ export class UserRequests {
     const session = this.host.get(id)
     if (!['running', 'starting', 'needs-input'].includes(session.state)) return
     if (request.productionDeploy) {
-      if (this.productionAllowed.has(id))
+      if (this.deploysFreely(id))
         try {
           this.replyPermission(id, request.requestId, true)
         } catch {
@@ -456,12 +465,15 @@ export class UserRequests {
     const appPermission = this.appPermissions.get(requestId)
     if (appPermission) {
       if (appPermission.sessionId !== id) throw new Error('This approval belongs to another thread.')
+      if (allow && appPermission.options.productionDeploy) this.shipDeploys?.allowed(id)
       if (allow && scope === 'thread') this.productionAllowed.add(id)
       else if (allow && scope === 'user') appPermission.options.always?.()
       appPermission.finish(allow)
       return
     }
     if (request.productionDeploy && allow) {
+      // Not when Ship answered for the person: only their own Allow puts a project's first deploy behind it.
+      if (!this.shipDeploys?.may(id)) this.shipDeploys?.allowed(id)
       if (scope === 'thread') this.productionAllowed.add(id)
       this.deployAfterMigrations(id, requestId)
       return

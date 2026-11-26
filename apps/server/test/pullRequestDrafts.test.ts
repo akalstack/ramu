@@ -99,7 +99,33 @@ describe('drafted review replies', () => {
     expect(order).toEqual(['push', 'reply:t1', 'review:ana,bo'])
     expect(vi.mocked(replyToThread).mock.calls[0]![3]).toBe('Renamed it.\n\nFixed in abc1234.')
     expect(resolveThread).toHaveBeenCalledWith('/repo', URL, 't1')
-    expect(result).toEqual({ pushed: true, posted: 1, failed: [] })
+    expect(result).toMatchObject({ pushed: true, posted: 1, failed: [] })
+    expect(drafts.get(URL)).toBeNull()
+  })
+
+  it('for a shipping thread, sends only the replies that report a fix and keeps the rest for the person', async () => {
+    const batch = {
+      ...round(),
+      drafts: [
+        { threadId: 't1', outcome: 'fixed' as const, reply: 'Renamed it.', commit: 'abc1234' },
+        { threadId: 't2', outcome: 'no-change' as const, reply: 'I would keep this name.', commit: null },
+      ],
+    }
+    ws.setAppState('pull-request-drafts', [batch])
+    expect(await drafts.sendFixed('session')).toEqual([{ url: URL, number: 7, commentIds: ['posted-t1'] }])
+    // Pushed first, the fix reported, and review not asked for again while a reply still waits.
+    expect(order).toEqual(['push', 'reply:t1'])
+    const left = drafts.get(URL)
+    expect(left?.kind === 'replies' && left.drafts.map((draft) => [draft.threadId, draft.postedId ?? null])).toEqual([
+      ['t1', 'posted-t1'],
+      ['t2', null],
+    ])
+    // Nothing more to send on its own: the next look posts nothing.
+    expect(await drafts.sendFixed('session')).toEqual([])
+    // The person sends the rest, and only then are the reviewers asked again.
+    order.length = 0
+    await drafts.sendReplies(batch.id, { push: false, resolveFixed: true, requestReview: true, edits: [] })
+    expect(order).toEqual(['reply:t2', 'review:ana,bo'])
     expect(drafts.get(URL)).toBeNull()
   })
 

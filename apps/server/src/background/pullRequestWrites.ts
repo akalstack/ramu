@@ -233,6 +233,12 @@ export class PullRequestWrites {
     private readonly guard: (taskId: string, cwd: string, action: string) => Promise<void>,
   ) {}
 
+  /**
+   * Ship's say on a decision, set by the server: a shipping thread whose project allows it may turn on the Git host's
+   * auto-merge without the person. Every other decision waits, whatever this returns for it.
+   */
+  mayDecide: (sessionId: string, action: string) => boolean = () => false
+
   list(): PullRequestWriteCard[] {
     return this.workspace.getAppState<PullRequestWriteCard[]>(KEY, [])
   }
@@ -356,7 +362,10 @@ export class PullRequestWrites {
     }
     this.save({ ...card, items: [...card.items, item] })
     const session = this.agents.get(sessionId)
-    if (session.settings.access === 'full' && !item.decision) {
+    // The one decision Ship may make: the Git host's own auto-merge, which still waits for its reviews and checks.
+    const shipped =
+      write.kind === 'action' && write.action.kind === 'auto-merge' && this.mayDecide(sessionId, 'auto-merge')
+    if (shipped || (session.settings.access === 'full' && !item.decision)) {
       const posted = await this.post(card.id, [item.id])
       const after = posted.items.find((entry) => entry.id === item.id)!
       return {

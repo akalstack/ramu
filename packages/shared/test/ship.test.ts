@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest'
 import type { PullRequestInfo } from '../src/types'
 import { translate } from '../src/i18n'
 import {
+  DEFAULT_SHIP_OPTIONS,
   shipActivityText,
+  shipOptions,
+  shipUndoText,
   defaultFinishLine,
   earlierFinishLine,
   reachableFinishLines,
@@ -75,6 +78,9 @@ describe('what a project shows', () => {
     repositoryLimit: 'review' as const,
     finishLine: 'review' as const,
     limits: { maxCiFixes: 2, maxReviewRounds: 5 },
+    options: DEFAULT_SHIP_OPTIONS,
+    forbidden: [],
+    deployedOnce: false,
   }
 
   it('offers only the finish lines the repository allows', () => {
@@ -84,7 +90,7 @@ describe('what a project shows', () => {
 
   it('explains shipping in the person’s language, with the repository’s limit', () => {
     expect(shipExplanation(status, (key, values) => translate('en', key, values))).toEqual([
-      'Ask an agent to ship and it fixes failing checks and handles review rounds on its own, up to 2 and 5 rounds, then stops at Ready for review. Approving, merging and production deploys still ask you.',
+      'Ask an agent to ship and it fixes failing checks and handles review rounds on its own, up to 2 and 5 rounds, then stops at Ready for review. Approving always asks you; merging and production deploys ask unless turned on below.',
       'This repository’s ramu.json stops shipping at Ready for review.',
     ])
     expect(shipExplanation(status, (key, values) => translate('id', key, values))[1]).toBe(
@@ -103,5 +109,36 @@ it('says what Ship did unasked, and that it was undone', () => {
   expect(shipActivityText({ ...entry, number: null, undoneAt: 1 }, t)).toEqual({
     title: 'Fixed failing checks',
     detail: 'Undone with a revert',
+  })
+})
+
+describe('what Ship may do without asking', () => {
+  it('sends fix replies and keeps deploying by default, and merges only when asked to', () => {
+    expect(shipOptions(undefined)).toEqual({ sendReplies: true, autoMerge: false, autoDeploy: true })
+    expect(shipOptions({ autoMerge: true }).autoMerge).toBe(true)
+  })
+
+  it('lets a repository keep a step with a person, never give one away', () => {
+    expect(shipOptions({ autoMerge: true, sendReplies: true }, { autoMerge: true, sendReplies: true })).toEqual({
+      sendReplies: false,
+      autoMerge: false,
+      autoDeploy: true,
+    })
+    // Nothing a repository says turns on what the person left off.
+    expect(shipOptions({ autoMerge: false }, {}).autoMerge).toBe(false)
+  })
+
+  it('says what replies it posted and what undoing them does', () => {
+    const say = (key: string, values?: Record<string, string | number>) => translate('en', key, values)
+    const entry = { kind: 'replies-sent' as const, number: 42, url: 'https://example.com/pr/42', replies: 2 }
+    expect(shipActivityText(entry, say)).toEqual({
+      title: 'Replied to reviewers on #42',
+      detail: '2 replies reporting fixes',
+    })
+    expect(shipUndoText(entry, say)).toEqual({
+      title: 'Delete these replies?',
+      body: 'Ramu deletes the replies it posted on #42. The fixes stay pushed.',
+      confirm: 'Delete replies',
+    })
   })
 })

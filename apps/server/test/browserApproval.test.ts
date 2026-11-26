@@ -69,6 +69,27 @@ it('offers Always allow for an MCP tool that asks, which switches the tool to Al
   expect(await remembered).toBe(true)
   expect(always).toHaveBeenCalledOnce()
 })
+it('lets Ship deploy to production without the card once it may, still migrating first, and counts only the person’s own Allow', async () => {
+  const s = setup()
+  const migrate = vi.fn(async () => 'Ran npm run migrate against production first.')
+  s.requests.beforeProduction = migrate
+  let may = false
+  const allowed = vi.fn()
+  s.requests.shipDeploys = { may: () => may, allowed }
+  // The project's first production deploy asks, and the person's Allow is what puts it behind the project.
+  const first = s.requests.approveProductionDeploy('session', 'Platform CLI', 'Run fly deploy')
+  expect(s.events.at(-1)).toMatchObject({ productionDeploy: true })
+  s.requests.replyPermission('session', s.requestId(), true)
+  expect(await first).toContain('Ran')
+  expect(allowed).toHaveBeenCalledWith('session')
+  // Later ones in a shipping thread run without asking; the migrations still go first.
+  may = true
+  const asked = s.events.length
+  expect(await s.requests.approveProductionDeploy('session', 'Platform CLI', 'Run fly deploy')).toContain('Ran')
+  expect(s.events.length).toBe(asked)
+  expect(migrate).toHaveBeenCalledTimes(2)
+  expect(allowed).toHaveBeenCalledOnce()
+})
 it('asks before a production deploy until the thread allows them, migrating first, and never offers a lasting allow', async () => {
   const s = setup()
   const migrate = vi.fn(async () => 'Ran npm run migrate against production first.')

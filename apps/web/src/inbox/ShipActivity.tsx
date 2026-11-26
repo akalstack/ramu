@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { GitPullRequest } from 'lucide-react'
-import { shipActivityText } from '@ramu/shared/ship'
+import { shipActivityText, shipUndoText } from '@ramu/shared/ship'
 import type { ShipActivity } from '@ramu/shared/types/ship'
 import { Button } from '@/components/desktop-button'
 import { Dialog } from '../Menu'
@@ -90,8 +90,8 @@ export function ShipActivityList() {
       </InboxList>
       {undoing && (
         <Dialog
-          title={t('Undo this fix?')}
-          confirmLabel={t('Undo fix')}
+          title={shipUndoText(undoing, t).title}
+          confirmLabel={shipUndoText(undoing, t).confirm}
           danger
           busy={busy}
           error={error}
@@ -102,15 +102,7 @@ export function ShipActivityList() {
             setError(null)
           }}
         >
-          <p className="m-0">
-            {t(
-              'Ramu adds a commit that reverts {0} on {1} and pushes it, then tells the thread not to push it again.',
-              {
-                0: `${undoing.from.slice(0, 7)}..${undoing.to.slice(0, 7)}`,
-                1: undoing.number === null ? undoing.url : `#${undoing.number}`,
-              },
-            )}
-          </p>
+          <p className="m-0">{shipUndoText(undoing, t).body}</p>
         </Dialog>
       )}
     </FeedSection>

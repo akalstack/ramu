@@ -340,6 +340,12 @@ it('reads Ship’s limit from the default branch, not from a branch an agent cha
   run('checkout', '-q', 'main')
   writeFileSync(join(root, 'ramu.json'), JSON.stringify({ ship: { finishLine: 'somewhere' } }))
   run('commit', '-q', '-am', 'Typo')
-  expect(await committedShipConfig(root)).toEqual({ finishLine: 'pull-request' })
+  // Nor does it let Ship take a step without a person there.
+  expect(await committedShipConfig(root)).toEqual({
+    finishLine: 'pull-request',
+    sendReplies: false,
+    autoMerge: false,
+    autoDeploy: false,
+  })
   expect(loadProjectConfig(root).error).toBeDefined()
 })

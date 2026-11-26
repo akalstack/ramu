@@ -8,12 +8,16 @@ import type { PullRequestFeedbackKind } from '@ramu/shared/types'
 import { parseForgeRemote } from '@ramu/shared/forgeRemote'
 import {
   DEFAULT_SHIP_LIMITS,
+  DEFAULT_SHIP_OPTIONS,
   FINISH_LINES,
+  SHIP_OPTIONS,
   defaultFinishLine,
   earlierFinishLine,
+  shipOptions,
   shipStep,
   type FinishLine,
   type ShipLimits,
+  type ShipOptions,
   type ShipStep,
 } from '@ramu/shared/ship'
 import type { ShipActivity, ShipProjectStatus } from '@ramu/shared/types/ship'
@@ -45,6 +49,9 @@ interface ShipRun {
   taskId: string
   finishLine: FinishLine
   limits: ShipLimits
+  /** What this run may do without asking, fixed when it started from the Git host's copy of the limits. */
+  options?: ShipOptions
+  projectId?: string
   rounds: Record<PullRequestFeedbackKind, number>
   /** The kind of round whose limit was spent; nothing more of it is handed over until the person allows more. */
   held?: PullRequestFeedbackKind[]
@@ -59,9 +66,12 @@ interface ShipRun {
 }
 
 /** The activity entry with where its commits live, which the host keeps and clients do not need. */
-interface StoredActivity extends Omit<ShipActivity, 'title'> {
-  cwd: string
-  branch: string
+type StoredActivity = Omit<ShipActivity, 'title' | 'replies'> & {
+  /** A pushed fix: its checkout and branch. */
+  cwd?: string
+  branch?: string
+  /** Replies sent: the comments posted, which Undo deletes. */
+  commentIds?: string[]
 }
 
 const LABEL: Record<FinishLine, string> = {
@@ -79,6 +89,28 @@ export interface ShipHost {
   liveAddress(projectId: string): string | null
   /** The account a repository's pull requests were last read as. */
   viewer(repoId: string): string | null
+  /**
+   * Posts a thread's drafted replies that only report a fix, pushing the fix first, and says what went out. Replies
+   * that disagree or ask stay drafted for the person.
+   */
+  sendFixedReplies?(sessionId: string): Promise<SentReplies[]>
+  /** Takes replies back off a pull request. */
+  deleteReplies?(sessionId: string, url: string, commentIds: string[]): Promise<void>
+}
+
+/** Replies Ship posted on one pull request. */
+export interface SentReplies {
+  url: string
+  number: number
+  commentIds: string[]
+}
+
+/** A project's saved Ship choices; `finishLine` null follows the suggestion. */
+interface ProjectChoice {
+  finishLine?: FinishLine | null
+  options?: Partial<ShipOptions>
+  /** The first production deploy was allowed by the person. */
+  deployedOnce?: boolean
 }
 
 export class ShipService implements ShipRounds {
@@ -112,8 +144,13 @@ export class ShipService implements ShipRounds {
   }
 
   /** What the project's menu shows: the person's choice, what Ramu suggests, and the limit the repository sets. */
+  private choice(projectId: string): ProjectChoice {
+    return this.workspace.getAppState<ProjectChoice>(projectKey(projectId), {})
+  }
+
   async projectStatus(projectId: string): Promise<ShipProjectStatus> {
-    const chosen = this.workspace.getAppState<{ finishLine?: FinishLine | null }>(projectKey(projectId), {}).finishLine
+    const saved = this.choice(projectId)
+    const chosen = saved.finishLine
     const repositories = this.workspace.listRepositories(projectId)
     const suggestions = await Promise.all(
       repositories.map(async (repository) => {
@@ -133,17 +170,27 @@ export class ShipService implements ShipRounds {
       (line, config) => (config?.finishLine ? earlierFinishLine(config.finishLine, line) : line),
       null,
     )
+    const forbidden = forbiddenBy(committed)
     return {
       chosen: chosen ?? null,
       suggested,
       repositoryLimit,
       finishLine: earlierFinishLine(chosen ?? suggested, repositoryLimit),
       limits: limitsOf(committed),
+      options: shipOptions(saved.options, Object.fromEntries(forbidden.map((key) => [key, true]))),
+      forbidden,
+      deployedOnce: saved.deployedOnce === true,
     }
   }
 
   setProjectFinishLine(projectId: string, finishLine: FinishLine | null): void {
-    this.workspace.setAppState(projectKey(projectId), { finishLine })
+    this.workspace.setAppState(projectKey(projectId), { ...this.choice(projectId), finishLine })
+    this.changed()
+  }
+
+  setProjectOptions(projectId: string, options: Partial<ShipOptions>): void {
+    const saved = this.choice(projectId)
+    this.workspace.setAppState(projectKey(projectId), { ...saved, options: { ...saved.options, ...options } })
     this.changed()
   }
 
@@ -171,6 +218,12 @@ export class ShipService implements ShipRounds {
       taskId: session.taskId,
       finishLine,
       limits: limitsOf(committed),
+      // From the Git host's fresh copy, so a limit the team just committed applies to this run.
+      options: shipOptions(
+        this.choice(projectId).options,
+        Object.fromEntries(forbiddenBy(committed).map((key) => [key, true])),
+      ),
+      projectId,
       rounds: previous?.rounds ?? { checks: 0, reviews: 0 },
       ...(previous?.held?.length ? { held: previous.held } : {}),
       watched: previous?.watched ?? [],
@@ -232,7 +285,51 @@ export class ShipService implements ShipRounds {
     }
     return kind === 'checks'
       ? `This thread is shipping to ${LABEL[run.finishLine]}. This overrides "do not push" above: commit the fix on ${watch.branch} and push it, so the checks run again. Never push to the default branch.`
-      : `This thread is shipping to ${LABEL[run.finishLine]}. Draft the replies as asked; the person sends them with Push and reply.`
+      : `This thread is shipping to ${LABEL[run.finishLine]}. ${
+          optionsOf(run).sendReplies
+            ? 'Commit each fix on ' +
+              watch.branch +
+              ' and record it with review_reply as fixed, with its commit: Ramu pushes the branch and posts those replies itself once you finish. A reply that disagrees with the reviewer or asks a question is recorded as no-change or question and waits for the person.'
+            : 'Draft the replies as asked; the person sends them with Push and reply.'
+        }`
+  }
+
+  /**
+   * Whether a shipping thread may post this decision without the person: only the Git host's own auto-merge, which
+   * still waits for its required reviews and checks, and only when the project allows it and ships at least to merged.
+   */
+  mayDecide(sessionId: string, action: string): boolean {
+    const run = this.runOf(sessionId)
+    return (
+      !!run &&
+      action === 'auto-merge' &&
+      optionsOf(run).autoMerge &&
+      FINISH_LINES.indexOf(run.finishLine) >= FINISH_LINES.indexOf('merged')
+    )
+  }
+
+  /**
+   * Whether a shipping thread's production deploy may run without the card: the project allows it, ships all the way
+   * to production, and its first production deploy was already allowed by the person.
+   */
+  mayDeploy(sessionId: string): boolean {
+    const run = this.runOf(sessionId)
+    if (!run?.projectId || run.finishLine !== 'live' || !optionsOf(run).autoDeploy) return false
+    return this.choice(run.projectId).deployedOnce === true
+  }
+
+  /** The person allowed a production deploy in this thread: the project's first one is behind it. */
+  deployAllowed(sessionId: string): void {
+    let projectId: string
+    try {
+      projectId = this.workspace.getTask(this.agents.get(sessionId).taskId).projectId
+    } catch {
+      return
+    }
+    const saved = this.choice(projectId)
+    if (saved.deployedOnce) return
+    this.workspace.setAppState(projectKey(projectId), { ...saved, deployedOnce: true })
+    this.changed()
   }
 
   after(watch: { sessionId: string; cwd: string; branch: string; url: string }, kind: PullRequestFeedbackKind): void {
@@ -301,14 +398,14 @@ export class ShipService implements ShipRounds {
   /** What Ship did unasked in the last week, newest first, for Inbox's Done. */
   activity(): ShipActivity[] {
     return this.storedActivity()
-      .map(({ cwd: _cwd, branch: _branch, ...entry }) => {
+      .map(({ cwd: _cwd, branch: _branch, commentIds, ...entry }) => {
         let title = ''
         try {
           title = this.workspace.getTask(entry.taskId).title
         } catch {
           // A deleted thread keeps its entry, untitled, so the fix can still be undone.
         }
-        return { ...entry, title }
+        return { ...entry, title, ...(commentIds ? { replies: commentIds.length } : {}) }
       })
       .reverse()
   }
@@ -321,6 +418,19 @@ export class ShipService implements ShipRounds {
     const entry = this.storedActivity().find((candidate) => candidate.id === id)
     if (!entry) throw new Error('That fix is no longer listed.')
     if (entry.undoneAt) return this.activity()
+    const done = () =>
+      this.saveActivity(
+        this.storedActivity().map((candidate) =>
+          candidate.id === id ? { ...candidate, undoneAt: Date.now() } : candidate,
+        ),
+      )
+    if (entry.kind === 'replies-sent') {
+      if (!this.host.deleteReplies) throw new Error('Replies cannot be taken back on this host.')
+      await this.host.deleteReplies(entry.sessionId, entry.url, entry.commentIds ?? [])
+      done()
+      return this.activity()
+    }
+    if (!entry.cwd || !entry.branch || !entry.from || !entry.to) throw new Error('That fix is no longer listed.')
     if ((await currentBranch(entry.cwd)) !== entry.branch || (await headOid(entry.cwd)) !== entry.to)
       throw new Error('The branch has moved on since this fix. Undo it from the thread instead.')
     if ((await git(entry.cwd, ['status', '--porcelain'])).trim())
@@ -338,11 +448,7 @@ export class ShipService implements ShipRounds {
       await git(entry.cwd, ['reset', '--hard', entry.to]).catch(() => {})
       throw error
     }
-    this.saveActivity(
-      this.storedActivity().map((candidate) =>
-        candidate.id === id ? { ...candidate, undoneAt: Date.now() } : candidate,
-      ),
-    )
+    done()
     try {
       this.agents.enqueueBackground(
         entry.sessionId,
@@ -408,7 +514,30 @@ export class ShipService implements ShipRounds {
           console.error('Ship:', binding.cwd, error)
         }
       }
+      // Between turns, so a round the agent is still writing never goes out half drafted.
+      if (optionsOf(run).sendReplies && session.state !== 'running' && session.state !== 'starting')
+        await this.sendReplies(run).catch((error) => console.error('Ship replies:', error))
     }
+  }
+
+  /** Posts the replies that only report a fix and lists them, so the reviewer hears at once and the person can undo. */
+  private async sendReplies(run: ShipRun): Promise<void> {
+    const sent = (await this.host.sendFixedReplies?.(run.sessionId)) ?? []
+    const posted = sent.filter((entry) => entry.commentIds.length)
+    if (!posted.length) return
+    this.saveActivity([
+      ...this.storedActivity(),
+      ...posted.map((entry): StoredActivity => ({
+        id: randomUUID(),
+        kind: 'replies-sent',
+        taskId: run.taskId,
+        sessionId: run.sessionId,
+        url: entry.url,
+        number: entry.number,
+        commentIds: entry.commentIds,
+        at: Date.now(),
+      })),
+    ])
   }
 
   /** One checkout of a shipping thread: watch its pull request once it exists, and say each next step once. */
@@ -430,7 +559,10 @@ export class ShipService implements ShipRounds {
     if (step === 'working' || run.told[pr.url] === step) return
     if (pr.state === 'open' && !pr.checks.length && Date.now() - (firstSeen ?? Date.now()) < CHECKS_GRACE) return
     const branch = (await currentBranch(cwd)) ?? pr.headBranch
-    this.agents.enqueueBackground(run.sessionId, nextStep(step, run.finishLine, pr.url), { cwd, branch })
+    this.agents.enqueueBackground(run.sessionId, nextStep(step, run.finishLine, pr.url, optionsOf(run)), {
+      cwd,
+      branch,
+    })
     this.update(run.id, (entry) => ({ ...entry, told: { ...entry.told, [pr.url]: step } }))
     const latest = this.runs().find((entry) => entry.id === runId)
     if (!latest || !TERMINAL.includes(step)) return
@@ -440,6 +572,15 @@ export class ShipService implements ShipRounds {
     else this.unwatch(latest, pr.url)
   }
 }
+
+/** The options some repository's committed `ramu.json` keeps with a person. */
+function forbiddenBy(committed: (ShipConfig | null)[]): (keyof ShipOptions)[] {
+  return SHIP_OPTIONS.filter((key) => committed.some((config) => config?.[key] === false))
+}
+
+/** A run started before options existed asks for everything, as it did. */
+const optionsOf = (run: ShipRun): ShipOptions =>
+  run.options ?? { ...DEFAULT_SHIP_OPTIONS, sendReplies: false, autoDeploy: false }
 
 function limitsOf(committed: (ShipConfig | null)[]): ShipLimits {
   const lowest = (key: keyof ShipLimits) =>
@@ -453,35 +594,45 @@ function limitsOf(committed: (ShipConfig | null)[]): ShipLimits {
 function instructions(run: ShipRun, onGitHost: boolean, repositoryLimit: FinishLine | null): string {
   if (!onGitHost)
     return 'This thread has no Git repository on a hosting service, so there is no pull request to ship. Commit the finished change on a branch, run the project’s checks, and tell the person what is left.'
+  const options = optionsOf(run)
+  const merge = options.autoMerge
+    ? 'When it is approved, Ramu tells you; then call pull_request_merge with whenChecksPass: true, which turns on the Git host’s auto-merge without waiting for the person'
+    : 'When it is approved and checks pass, Ramu tells you; then merge it with pull_request_merge, which the person confirms'
+  const production = options.autoDeploy
+    ? 'deploy to production (the first production deploy of a project asks the person on a card; later ones run without asking)'
+    : 'deploy to production (the person allows it on a card)'
   const finish: Record<FinishLine, string> = {
     'pull-request': 'Stop when the pull request is open, out of draft, and its checks pass. Do not wait for review.',
     review:
       'Keep going until the pull request is approved. Never merge it: the team merges. Ramu tells you when it is approved.',
-    merged:
-      'When it is approved and checks pass, Ramu tells you; then merge it with pull_request_merge, which the person confirms.',
-    preview:
-      'When it is approved and checks pass, merge it with pull_request_merge (the person confirms). After the merge, deploy a preview or staging build and check it answers.',
-    live: 'When it is approved and checks pass, merge it with pull_request_merge (the person confirms). After the merge, deploy to production (the person allows it on a card) and check the live address answers.',
+    merged: `${merge}.`,
+    preview: `${merge}. After the merge, deploy a preview or staging build and check it answers.`,
+    live: `${merge}. After the merge, ${production} and check the live address answers.`,
   }
+  const replies = options.sendReplies
+    ? 'commit each fix and record it with review_reply as fixed, with its commit; Ramu pushes and posts those replies once you finish, and a reply that disagrees or asks a question waits for the person'
+    : 'draft replies and fixes; the person sends them'
   return [
     `Shipping to ${LABEL[run.finishLine]}${repositoryLimit === run.finishLine ? ' (the limit this repository sets)' : ''}.`,
     '1. Finish the change on a branch, never the default branch, and run the project’s build and tests.',
     '2. Review your own diff before anyone else does and fix what you find.',
     '3. Push the branch and open a pull request whose description says what changed and what you tested.',
-    `4. Ramu watches the pull request. Failing checks come back to you: fix, commit and push (up to ${run.limits.maxCiFixes} rounds). Review comments come back as rounds: draft replies and fixes; the person sends them (up to ${run.limits.maxReviewRounds} rounds).`,
+    `4. Ramu watches the pull request. Failing checks come back to you: fix, commit and push (up to ${run.limits.maxCiFixes} rounds). Review comments come back as rounds: ${replies} (up to ${run.limits.maxReviewRounds} rounds).`,
     `5. ${finish[run.finishLine]}`,
-    'Approving, merging and production deploys always wait for the person. When you are done or blocked, say so in one line.',
+    'Approving, and anything not named above as running on its own, waits for the person. When you are done or blocked, say so in one line.',
   ].join('\n')
 }
 
-function nextStep(step: ShipStep, finishLine: FinishLine, url: string): string {
+function nextStep(step: ShipStep, finishLine: FinishLine, url: string, options: ShipOptions): string {
   switch (step) {
     case 'reached':
       return `${url} reached the finish line (${LABEL[finishLine]}). Shipping is done: tell the person in one line, with the link. No other work is needed.`
     case 'merge':
-      return `${url} is approved and its checks pass. Merge it with pull_request_merge; the person confirms the merge on its card.`
+      return options.autoMerge
+        ? `${url} is approved and its checks pass. Merge it: call pull_request_merge with whenChecksPass: true, which goes out without waiting for the person.`
+        : `${url} is approved and its checks pass. Merge it with pull_request_merge; the person confirms the merge on its card.`
     case 'deploy':
-      return `${url} is merged. Finish shipping: ${finishLine === 'live' ? 'deploy to production (the person allows it on a card) and check that the live address answers' : 'deploy a preview or staging build and check that it answers'}. Then tell the person in one line.`
+      return `${url} is merged. Finish shipping: ${finishLine === 'live' ? 'deploy to production (a card asks the person when it needs to) and check that the live address answers' : 'deploy a preview or staging build and check that it answers'}. Then tell the person in one line.`
     case 'closed':
       return `${url} was closed without merging, so shipping stopped. Tell the person in one line; do not reopen it.`
     case 'working':

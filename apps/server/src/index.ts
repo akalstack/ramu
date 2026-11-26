@@ -968,10 +968,17 @@ const ship = new ShipService(
   {
     liveAddress: (projectId) => uptime.status(projectId).address,
     viewer: (repoId) => pullRequestIndex.viewer(repoId),
+    sendFixedReplies: (sessionId) => pullRequestDrafts.sendFixed(sessionId),
+    deleteReplies: (sessionId, url, commentIds) => pullRequestDrafts.deleteReplies(sessionId, url, commentIds),
   },
   () => send('workspace:changed', {}),
 )
 pullRequestWatches.ship = ship
+pullRequestWrites.mayDecide = (sessionId, action) => ship.mayDecide(sessionId, action)
+agents.shipDeploys = {
+  may: (sessionId) => ship.mayDeploy(sessionId),
+  allowed: (sessionId) => ship.deployAllowed(sessionId),
+}
 const secretFiles = new SecretFiles(join(userData, 'secret-files'))
 agents.secretFiles = secretFiles
 secretFiles.start()

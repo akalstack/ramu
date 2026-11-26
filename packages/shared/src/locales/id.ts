@@ -6216,8 +6216,29 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Suggested: {0}': 'Disarankan: {0}',
   'Preview deploy': 'Deploy preview',
   'Live in production': 'Live di production',
-  'Ask an agent to ship and it fixes failing checks and handles review rounds on its own, up to {0} and {1} rounds, then stops at {2}. Approving, merging and production deploys still ask you.':
-    'Minta agent untuk ship, lalu ia memperbaiki check yang gagal dan menangani putaran review sendiri, hingga {0} dan {1} putaran, lalu berhenti di {2}. Approve, merge, dan deploy production tetap menanyakan kamu.',
+  'Ask an agent to ship and it fixes failing checks and handles review rounds on its own, up to {0} and {1} rounds, then stops at {2}. Approving always asks you; merging and production deploys ask unless turned on below.':
+    'Minta agent untuk ship, lalu ia memperbaiki check yang gagal dan menangani putaran review sendiri, hingga {0} dan {1} putaran, lalu berhenti di {2}. Approve selalu menanyakan kamu; merge dan deploy production menanyakan kecuali diaktifkan di bawah.',
+  'Send replies that report a fix': 'Kirim balasan yang melaporkan perbaikan',
+  'After a review round, replies saying what was fixed go out at once. Replies that disagree or ask a question wait for you.':
+    'Setelah putaran review, balasan yang menyebut apa yang diperbaiki langsung dikirim. Balasan yang tidak setuju atau bertanya menunggu kamu.',
+  'Merge when approved': 'Merge saat disetujui',
+  'Turns on the Git host’s auto-merge once the pull request is approved, so it merges when its checks pass and branch protection allows.':
+    'Mengaktifkan auto-merge milik Git host setelah pull request disetujui, sehingga di-merge saat check lulus dan branch protection mengizinkan.',
+  'Deploy to production without asking again': 'Deploy ke production tanpa bertanya lagi',
+  'The first production deploy of this project asks. Later ones from a shipping thread run on their own and check the live address.':
+    'Deploy production pertama proyek ini meminta izin. Deploy berikutnya dari thread yang sedang ship berjalan sendiri dan memeriksa alamat live.',
+  'This repository’s ramu.json keeps this with a person.': 'ramu.json repositori ini membiarkan langkah ini tetap ditanyakan.',
+  'Applies after the first production deploy is allowed.': 'Berlaku setelah deploy production pertama diizinkan.',
+  'Without asking': 'Tanpa bertanya',
+  'Replied to reviewers': 'Membalas reviewer',
+  'Replied to reviewers on #{0}': 'Membalas reviewer di #{0}',
+  'Replies deleted': 'Balasan dihapus',
+  '1 reply reporting a fix': '1 balasan melaporkan perbaikan',
+  '{0} replies reporting fixes': '{0} balasan melaporkan perbaikan',
+  'Delete these replies?': 'Hapus balasan ini?',
+  'Ramu deletes the replies it posted on {0}. The fixes stay pushed.':
+    'Ramu menghapus balasan yang dikirimnya di {0}. Perbaikannya tetap di-push.',
+  'Delete replies': 'Hapus balasan',
   'This repository’s ramu.json stops shipping at {0}.': 'ramu.json repositori ini menghentikan ship di {0}.',
   Shipping: 'Ship berjalan',
   'Starting to ship': 'Memulai ship',
