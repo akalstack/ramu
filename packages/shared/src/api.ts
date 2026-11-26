@@ -186,6 +186,12 @@ export interface MobileLiveActivityContent {
   locale: 'en' | 'id'
   phase: 'working' | 'waiting' | 'finished' | 'paused'
 }
+export interface MobileLiveActivityStart {
+  token: string
+  computerId: string
+  locale: 'en' | 'id'
+  environment: 'sandbox' | 'production'
+}
 export interface MobileLiveActivityRegistration {
   activityId: string
   token: string
@@ -999,6 +1005,12 @@ export interface RamuMethods extends ArtifactMethods {
   'liveActivity.status'(): { enabled: boolean }
   'liveActivity.register'(registration: MobileLiveActivityRegistration): { enabled: boolean }
   'liveActivity.unregister'(activityId: string): void
+  /**
+   * The phone's push-to-start token for this host, so work here starts its Live Activity while Ramu is closed
+   * (iOS 17.2 and later). The phone sends it to the host it follows and takes it back when it stops following it.
+   */
+  'liveActivity.registerStart'(registration: MobileLiveActivityStart): void
+  'liveActivity.unregisterStart'(): void
   'background.status'(): BackgroundStatus
   'background.stop'(): void
   'background.start'(): void

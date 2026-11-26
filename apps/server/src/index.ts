@@ -39,7 +39,12 @@ import {
   type McpSharing,
   type SkillSharing,
 } from './agent/projectSetup'
-import { MobileLiveActivities } from './remote/mobileLiveActivity'
+import {
+  createLinkLiveActivitySender,
+  createLiveActivitySender,
+  liveActivityApnsConfig,
+  MobileLiveActivities,
+} from './remote/mobileLiveActivity'
 import { MobilePush } from './remote/mobilePush'
 import {
   DEFAULT_AGENT_SETTINGS,
@@ -672,10 +677,23 @@ const threadTitles = new ThreadTitles(
 )
 agents.providerTitle = (sessionId, title) => void threadTitles.acceptProviderTitle(sessionId, title)
 agents.onProviderTitle = agents.providerTitle
+// Live Activities update while Ramu is closed through this host's own Apple key when it has one, else through Ramu Link
+// with the host's Ramu account; signed out with no key, the phone updates them only while Ramu is open.
+const ownApnsKey = !!liveActivityApnsConfig()
+// The account service starts further down; a push asked for before it exists has no session yet.
+const linkBearer = async () => {
+  try {
+    return await account.bearer()
+  } catch {
+    return null
+  }
+}
 const mobileLiveActivities = new MobileLiveActivities(
   join(userData, 'mobile-live-activities.json'),
   () => devices.list(),
   () => agents.counts(),
+  ownApnsKey ? createLiveActivitySender() : createLinkLiveActivitySender(() => linkBearer()),
+  async () => ownApnsKey || !!(await linkBearer()),
 )
 if (fake) agents.helperHistory = async () => []
 agents.markRestoredOnBoot()
@@ -1948,10 +1966,16 @@ async function performInvoke(
     mobilePush.remove(deviceId)
   } else if (method === 'liveActivity.status') {
     if (!deviceId) throw new Error('Live Activities require a paired phone')
-    value = { enabled: mobileLiveActivities.enabled }
+    value = { enabled: await mobileLiveActivities.available() }
   } else if (method === 'liveActivity.register') {
     if (!deviceId) throw new Error('Live Activities require a paired phone')
-    value = mobileLiveActivities.register(deviceId, args?.[0])
+    value = await mobileLiveActivities.register(deviceId, args?.[0])
+  } else if (method === 'liveActivity.registerStart') {
+    if (!deviceId) throw new Error('Live Activities require a paired phone')
+    mobileLiveActivities.registerStart(deviceId, args?.[0])
+  } else if (method === 'liveActivity.unregisterStart') {
+    if (!deviceId) throw new Error('Live Activities require a paired phone')
+    mobileLiveActivities.removeStart(deviceId)
   } else if (method === 'liveActivity.unregister') {
     if (!deviceId || typeof args?.[0] !== 'string') throw new Error('Live Activities require a paired phone')
     mobileLiveActivities.remove(deviceId, args[0])

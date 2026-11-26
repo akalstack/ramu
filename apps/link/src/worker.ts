@@ -5,7 +5,9 @@
 import { cloudflare } from './cloudflare'
 import { createRelay } from './relay'
 import { sqlStore } from './sqlStore'
-import { bearerOf } from './validate'
+import { bearerOf, readJson } from './validate'
+import { apnsTokens, liveActivityPush, sendLiveActivity } from './liveActivities'
+import { LIVE_ACTIVITY_PATH } from '@ramu/shared/ramuLink'
 import { createPullRequestEvents, type Attachment, type EventSocket } from './pullRequestEvents'
 import { EVENTS_PING, EVENTS_PONG, EVENTS_SOCKET_PATH, GITHUB_APP_EVENTS_PATH } from '@ramu/shared/pullRequestEvents'
 
@@ -22,6 +24,13 @@ export interface Env {
   EVENTS: DurableObjectNamespace
   /** The Ramu GitHub App's webhook secret. */
   GITHUB_APP_WEBHOOK_SECRET: string
+  /** Live Activity pushes per account. */
+  PUSHES: RateLimit
+  /** Apple's push key (.p8 text), its key id and team id; without them Link answers 503 and hosts keep local updates. */
+  APNS_KEY?: string
+  APNS_KEY_ID?: string
+  APNS_TEAM_ID?: string
+  APNS_BUNDLE_ID: string
 }
 
 /** The path the Worker uses to start a sweep; never forwarded from a public request. */
@@ -37,6 +46,35 @@ async function accountUser(env: Env, token: string): Promise<string | null> {
   if (!response.ok) throw new Error(`The account service answered ${response.status}`)
   const user = (await response.json()) as { id?: unknown }
   return typeof user.id === 'string' && user.id.length > 0 && user.id.length <= 200 ? user.id : null
+}
+
+// A host sends a push on each change of its work; asking the account service each time would be slow, so who a session
+// belongs to is kept for a few minutes in this isolate.
+const sessions = new Map<string, { user: string; at: number }>()
+async function sessionUser(env: Env, bearer: string): Promise<string | null> {
+  const kept = sessions.get(bearer)
+  if (kept && Date.now() - kept.at < 5 * 60_000) return kept.user
+  const user = await accountUser(env, bearer)
+  if (user) sessions.set(bearer, { user, at: Date.now() })
+  if (sessions.size > 1000) sessions.delete(sessions.keys().next().value!)
+  return user
+}
+
+const apnsJwt = apnsTokens()
+
+/** A signed-in host's Live Activity push for one of its paired iPhones (see liveActivities.ts). */
+async function liveActivity(request: Request, env: Env): Promise<Response> {
+  if (!env.APNS_KEY || !env.APNS_KEY_ID || !env.APNS_TEAM_ID) return Response.json({ status: 503 }, { status: 503 })
+  const bearer = bearerOf(request.headers.get('Authorization'))
+  const user = bearer ? await sessionUser(env, bearer) : null
+  if (!user) return new Response(null, { status: 401 })
+  const { success } = await env.PUSHES.limit({ key: user })
+  if (!success) return Response.json({ status: 429 }, { status: 429 })
+  const push = liveActivityPush.safeParse(await readJson(request))
+  if (!push.success) return new Response(null, { status: 400 })
+  const key = { key: env.APNS_KEY, keyId: env.APNS_KEY_ID, teamId: env.APNS_TEAM_ID, bundleId: env.APNS_BUNDLE_ID }
+  const now = Date.now()
+  return Response.json(await sendLiveActivity(push.data, key, await apnsJwt(key, now), now))
 }
 
 function randomSlug(): string {
@@ -180,6 +218,7 @@ export default {
       return events(env).fetch(request)
     }
     if (!url.pathname.startsWith('/v1/')) return new Response('Ramu Link', { status: 404 })
+    if (url.pathname === LIVE_ACTIVITY_PATH && request.method === 'POST') return liveActivity(request, env)
     if (url.pathname === '/v1/pool' && request.method === 'GET') {
       const cached = await caches.default.match(request)
       if (cached) return cached

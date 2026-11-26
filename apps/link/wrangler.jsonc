@@ -5,6 +5,8 @@
   //   CF_ACCOUNT_ID  the account the tunnels are made in
   //   CF_ZONE_ID     the zone named by ZONE, where each host's CNAME is added
   //   GITHUB_APP_WEBHOOK_SECRET  the Ramu GitHub App's webhook secret; its webhook URL is https://ramu-link.akalstack.com/github/events
+  //   APNS_KEY       Apple's push key for the Ramu iPhone app (the .p8 file's text), for Live Activities
+  //   APNS_KEY_ID    that key's id, and APNS_TEAM_ID the Apple team that made it
   "name": "ramu-link",
   "main": "./src/worker.ts",
   "compatibility_date": "2026-11-01",
@@ -17,6 +19,7 @@
     // Cloudflare allows 1,000 tunnels per account, idle ones included; the rest is headroom.
     "CAPACITY": "950",
     "ACCOUNT_URL": "https://account.akalstack.com",
+    "APNS_BUNDLE_ID": "com.akalstack.ramu",
   },
   // Every slot, the waitlist and the session cache live in one SQLite Durable Object, so allocation is atomic.
   // Live pull request events: every host's socket and the GitHub App's deliveries meet in one PullRequestEvents object.
@@ -37,5 +40,7 @@
   "ratelimits": [
     { "name": "ALLOCATIONS", "namespace_id": "4101", "simple": { "limit": 10, "period": 60 } },
     { "name": "LOOKUPS", "namespace_id": "4102", "simple": { "limit": 60, "period": 60 } },
+    // Live Activity pushes per account: a host sends one per change in its work, a few a minute at most.
+    { "name": "PUSHES", "namespace_id": "4103", "simple": { "limit": 60, "period": 60 } },
   ],
 }

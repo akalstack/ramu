@@ -164,3 +164,58 @@ export function recommendRoutes(input: RouteInput): RouteOption[] {
   if (!linkFirst) options.push({ kind: 'link', reason: 'free-stable' })
   return options.map((option, index) => ({ ...option, recommended: index === 0 }))
 }
+
+/**
+ * Where a host hands Ramu Link a Live Activity push for one of its paired iPhones. Link holds Apple's push key, so a
+ * host needs none: it sends only what the activity shows (counts, never transcript text), and Link builds the push.
+ */
+export const LIVE_ACTIVITY_PATH = '/v1/live-activities'
+
+/**
+ * One Live Activity push: start one (with the phone's push-to-start token), or update or end one (with the token of
+ * that activity). `props` is the activity's content as the phone's widget reads it.
+ */
+export interface LiveActivityPush {
+  token: string
+  environment: 'sandbox' | 'production'
+  event: 'start' | 'update' | 'end'
+  props: string
+  /** Seconds since 1970: when the activity shows as out of date, or leaves the Lock Screen after ending. */
+  staleDate?: number
+  dismissalDate?: number
+  /** Start only: the host the activity opens when tapped, and the words iOS shows as it appears. */
+  computerId?: string
+  alert?: { title: string; body: string }
+}
+
+/** What Apple answered: 200, or the status and its reason, such as 410 for an activity that is gone. */
+export interface LiveActivityPushReply {
+  status: number
+  reason?: string
+}
+
+/** The ActivityKit attributes type of the phone's widget (expo-widgets), which a push-to-start names. */
+const LIVE_ACTIVITY_ATTRIBUTES = 'LiveActivityAttributes'
+
+/**
+ * The push Apple receives for a Live Activity, built from a bounded request by whoever holds the key (Link, or a host
+ * given its own key), so both send the same thing.
+ */
+export function liveActivityApsPayload(push: LiveActivityPush, now: number) {
+  return {
+    aps: {
+      timestamp: Math.floor(now / 1000),
+      event: push.event,
+      'content-state': { name: 'RamuWork', props: push.props },
+      ...(push.staleDate !== undefined ? { 'stale-date': push.staleDate } : {}),
+      ...(push.dismissalDate !== undefined ? { 'dismissal-date': push.dismissalDate } : {}),
+      ...(push.event === 'start'
+        ? {
+            'attributes-type': LIVE_ACTIVITY_ATTRIBUTES,
+            attributes: { url: `ramu://activity?computerId=${push.computerId}` },
+            alert: push.alert,
+          }
+        : {}),
+    },
+  }
+}

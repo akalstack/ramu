@@ -44,6 +44,8 @@ The usual next step is one tap: **Allow once** for an approval, an option for a 
 
 A paired phone gets a push when a thread finishes, stops with an error or needs you, except about a thread you are looking at: open on the phone with Ramu in front, or on screen in a focused desktop window. Opening a thread on the phone also clears its pushes from the notification list.
 
+On an iPhone, a **Live Activity** shows on the Lock Screen and in the Dynamic Island how many threads are working and waiting for you on the host you follow. It starts when work begins there: right away while Ramu is open, and on iOS 17.2 or later also while Ramu is closed, after the work has gone on for about 15 seconds. It keeps up while Ramu is closed through Ramu Link when the host is signed in to your Ramu account, and ends when the work does. Swiping it away hides it until the next work. **Settings → Notifications → Live Activities** in Ramu turns it off, and **Settings → Apps → Ramu → Live Activities** on the iPhone offers **More Frequent Updates**.
+
 Deployed apps reach you as notifications, not Brief rows. A live address that stops answering opens a **Down:** thread in the project and notifies your phone ([Live address and uptime](deploy.md#live-address-and-uptime)).
 
 ### Running and Resources

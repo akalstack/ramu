@@ -32,6 +32,7 @@ export function LiveActivityMonitor() {
     recovered = useRef(false),
     suppressed = useRef<string | null>(null)
   const syncRef = useRef<() => void>(() => {})
+  const startKey = useRef('')
   const enabled = store.drafts['live-activities-enabled'] !== 'no'
   const pc = store.computers.find((c) => c.id === store.selected)
   const chats = store.chats.filter((c) => c.computerId === store.selected && c.status !== 'archived')
@@ -48,8 +49,11 @@ export function LiveActivityMonitor() {
       value ? JSON.stringify({ computerId: value.computerId, startedAt: value.startedAt, remote: value.remote }) : '',
     )
   const suppress = (scope: string | null) => {
+    const changed = suppressed.current !== scope
     suppressed.current = scope
     latest.current.setDraft('live-activity-dismissed-scope', scope ?? '')
+    // A dismissed activity also stops the host starting one, and showing it again lets the host start it again.
+    if (changed) syncRef.current()
   }
   const registerToken = async (value: Current, token: string) => {
     if (current.current !== value || latest.current.drafts['live-activities-enabled'] === 'no') return
@@ -106,6 +110,40 @@ export function LiveActivityMonitor() {
       .catch(() => {})
     persist(null)
   }
+  /**
+   * Hands the phone's push-to-start token to the host it follows, so work there starts the activity while Ramu is
+   * closed, and takes it back from a host it no longer follows, when Live Activities are off or the current one was
+   * dismissed.
+   */
+  const syncStart = async () => {
+    const state = latest.current
+    const token = state.drafts['live-activity-start-token'] || ''
+    const want =
+      token && state.drafts['live-activities-enabled'] !== 'no' && suppressed.current !== state.selected
+        ? state.selected
+        : ''
+    const registered = state.drafts['live-activity-start-host'] || ''
+    const key = `${want}:${token}:${state.language}`
+    if (startKey.current === key && registered === want) return
+    if (registered && registered !== want && state.computers.some((c) => c.id === registered))
+      await state.invoke(registered, 'liveActivity.unregisterStart').catch(() => {})
+    if (want) {
+      const ok = await state
+        .invoke(want, 'liveActivity.registerStart', {
+          token,
+          computerId: want,
+          locale: state.language,
+          environment: __DEV__ ? 'sandbox' : 'production',
+        })
+        .then(
+          () => true,
+          () => false,
+        )
+      if (!ok) return
+    }
+    startKey.current = key
+    state.setDraft('live-activity-start-host', want)
+  }
   const synchronize = async () => {
     let state = latest.current
     if (!available || !state.ready) return
@@ -126,7 +164,11 @@ export function LiveActivityMonitor() {
           startedAt: saved.startedAt,
           remote: !!saved.remote,
         }
-      else {
+      // The host started this one while Ramu was closed (push-to-start), for the host this phone follows.
+      else if (instances[0] && !saved.computerId) {
+        current.current = { instance: instances[0], computerId: state.selected, startedAt: Date.now(), remote: false }
+        persist(current.current)
+      } else {
         for (const instance of instances) await instance.end('immediate').catch(() => {})
         if (!instances.length && saved.computerId === state.selected && saved.startedAt) {
           suppress(state.selected)
@@ -135,6 +177,7 @@ export function LiveActivityMonitor() {
       }
       if (current.current) for (const instance of instances.slice(1)) await instance.end('immediate').catch(() => {})
     }
+    await syncStart()
     state = latest.current
     if (
       state.drafts['live-activities-enabled'] === 'no' ||
@@ -242,6 +285,25 @@ export function LiveActivityMonitor() {
   useEffect(() => {
     syncRef.current()
   }, [store.ready, store.selected, pc?.status, running, waiting, enabled, store.language, available])
+  useEffect(() => {
+    if (!available) return
+    let tokens: { remove(): void } | undefined
+    let alive = true
+    void import('expo-widgets')
+      .then((module) => {
+        if (!alive) return
+        tokens = module.addPushToStartTokenListener((event) => {
+          if (latest.current.drafts['live-activity-start-token'] === event.activityPushToStartToken) return
+          latest.current.setDraft('live-activity-start-token', event.activityPushToStartToken)
+          syncRef.current()
+        })
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+      tokens?.remove()
+    }
+  }, [available])
   useEffect(() => {
     if (!available) return
     const subscription = AppState.addEventListener('change', (state) => {

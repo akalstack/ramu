@@ -93,6 +93,8 @@ const viewerMethods = new Set([
   'liveActivity.status',
   'liveActivity.register',
   'liveActivity.unregister',
+  'liveActivity.registerStart',
+  'liveActivity.unregisterStart',
 ])
 // A viewer-role device is read-only and holds no device permissions, so the screen itself, which needs Computer use,
 // stays with owner devices; a viewer may still read whether a thread has a computer.
