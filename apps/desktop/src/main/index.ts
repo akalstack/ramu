@@ -344,6 +344,9 @@ async function main() {
     event.preventDefault()
     if (quitHeld) return
     quitHeld = true
+    // The windows go at once, so quitting feels immediate and no window shows the service going away while it stops.
+    for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.hide()
+    app.dock?.hide()
     const stopService = runtimeInvoke(runtime, 'background.stop').then(() => waitForRuntimeExit(runtime, 8_000))
     void Promise.race([stopService, new Promise((resolve) => setTimeout(resolve, 10_000))])
       .catch(() => {})

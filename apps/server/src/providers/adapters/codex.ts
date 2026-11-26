@@ -5,13 +5,15 @@ import { dirname, join } from 'node:path'
 import { defineAdapter, LONG_CONTEXT_TOKENS, npmLatest, runCli } from '../adapter'
 
 /** The login's email and ChatGPT plan, from the ID token Codex keeps; the plan is as of Codex's last token refresh. */
-function codexLogin(env: NodeJS.ProcessEnv): { email?: string; plan?: string } {
+function codexLogin(env: NodeJS.ProcessEnv): { email?: string; plan?: string; accountKey?: string } {
   try {
     const file = JSON.parse(readFileSync(join(env.CODEX_HOME || join(homedir(), '.codex'), 'auth.json'), 'utf8'))
     const claims = JSON.parse(Buffer.from(String(file?.tokens?.id_token).split('.')[1] ?? '', 'base64url').toString())
     const plan = claims?.['https://api.openai.com/auth']?.chatgpt_plan_type
+    const user = claims?.['https://api.openai.com/auth']?.chatgpt_user_id ?? claims?.sub
     return {
       ...(typeof claims.email === 'string' && claims.email ? { email: claims.email } : {}),
+      ...(typeof user === 'string' && user ? { accountKey: user } : {}),
       ...(typeof plan === 'string' && plan ? { plan } : {}),
     }
   } catch {

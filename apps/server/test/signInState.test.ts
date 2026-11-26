@@ -52,12 +52,27 @@ it('names a Codex login by the email in its ChatGPT token, and never returns the
   expect(state).toEqual({ signedIn: true, detail: 'ChatGPT', email: 'me@example.com' })
   expect(JSON.stringify(state)).not.toContain(claims)
 })
+it("reads a Claude login's account id beside its config, so one login is recognised across hosts", async () => {
+  const config = mkdtempSync(join(tmpdir(), 'ramu-claude-'))
+  writeFileSync(
+    join(config, '.claude.json'),
+    JSON.stringify({ oauthAccount: { accountUuid: 'uuid-1', emailAddress: 'me@example.com' } }),
+  )
+  expect(
+    await signInState('claude-code', cli('echo \'{"loggedIn":true,"authMethod":"oauth_token"}\''), {
+      ...process.env,
+      CLAUDE_CONFIG_DIR: config,
+    }),
+  ).toEqual({ signedIn: true, detail: 'oauth_token', email: 'me@example.com', accountKey: 'uuid-1' })
+})
 it('reads Claude, Cursor and OpenCode login state', async () => {
+  // A config folder with no account file, so the machine's own Claude login never leaks into the test.
+  const empty = { ...process.env, CLAUDE_CONFIG_DIR: mkdtempSync(join(tmpdir(), 'ramu-claude-')) }
   expect(
     await signInState(
       'claude-code',
       cli('echo \'{"loggedIn":true,"authMethod":"oauth_token","email":"me@example.com"}\''),
-      process.env,
+      empty,
     ),
   ).toEqual({ signedIn: true, detail: 'oauth_token', email: 'me@example.com' })
   expect(await signInState('claude-code', cli('echo \'{"loggedIn":false}\''), process.env)).toEqual({ signedIn: false })

@@ -159,16 +159,17 @@ export function BackgroundActivityIndicator({
       <div className="ml-auto flex min-w-0 max-w-[240px] items-center gap-1">
         {(!connected || active.length > 0) && (
           <>
-            <PopoverTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  className="min-w-0 shrink h-[22px] min-h-[22px] rounded-(--radius-s) px-1.5 py-0 gap-1.5 text-caption! leading-[18px] text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover [&_svg]:size-3.5"
-                />
-              }
+            {/* Not a second trigger: the panel stays anchored to the bell, which is always there. Anchored here, it
+                lost its place and jumped to the window's corner when the running task ended while it was open. */}
+            <Button
+              variant="ghost"
+              className="min-w-0 shrink h-[22px] min-h-[22px] rounded-(--radius-s) px-1.5 py-0 gap-1.5 text-caption! leading-[18px] text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover [&_svg]:size-3.5"
               aria-label={t('Background activity')}
               aria-description={summary}
+              aria-haspopup="dialog"
+              aria-expanded={open}
               title={activityLabel}
+              onClick={() => setOpen(true)}
             >
               {connected ? (
                 <LoaderCircle data-icon="inline-start" className="text-brand animate-spin motion-reduce:animate-none" />
@@ -176,7 +177,7 @@ export function BackgroundActivityIndicator({
                 <WifiOff data-icon="inline-start" />
               )}
               <span className="truncate">{activityLabel}</span>
-            </PopoverTrigger>
+            </Button>
           </>
         )}
         <PopoverTrigger

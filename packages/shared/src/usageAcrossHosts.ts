@@ -2,7 +2,8 @@ import type { AgentProvider, UsageReading } from './types'
 import type { ProviderConfiguration } from './providers/providers'
 
 // A login's percentage is the same quota seen from every host, so percentages never add up: each login appears once,
-// with its newest reading. Account ids are local to a host; only a sign-in email matches a login across hosts.
+// with its newest reading. Ramu's account ids are local to a host; the provider's own account id, else the sign-in
+// email, matches a login across hosts.
 
 export interface HostUsage {
   hostId: string
@@ -10,6 +11,8 @@ export interface HostUsage {
   readings: readonly UsageReading[]
   /** Sign-in email per provider and local account id, where the host knows it. */
   emails: Readonly<Record<string, Readonly<Record<string, string>>>>
+  /** The provider's own account id per provider and local account id, where the host knows it (newer hosts). */
+  accountKeys?: Readonly<Record<string, Readonly<Record<string, string>>>>
 }
 
 export interface LoginUsage {
@@ -20,7 +23,9 @@ export interface LoginUsage {
   /** Where the login is signed in: each host and that host's own account id for it. */
   places: { hostId: string; accountId: string }[]
   readings: UsageReading[]
-  /** Set when a host without its email was matched to it by identical limits rather than by a sign-in email. */
+  /** The provider's own account id, when a host reported it. */
+  accountKey?: string
+  /** Set when a host without its email or account id was matched to it by identical limits. */
   matchedBy?: 'limits'
 }
 
@@ -52,7 +57,7 @@ function sameLimits(a: LoginUsage, b: LoginUsage): boolean {
   return resets > 0
 }
 
-function merge(into: LoginUsage, from: LoginUsage) {
+function combine(into: LoginUsage, from: LoginUsage) {
   for (const host of from.hosts) if (!into.hosts.includes(host)) into.hosts.push(host)
   into.places.push(...from.places)
   for (const reading of from.readings) {
@@ -60,17 +65,23 @@ function merge(into: LoginUsage, from: LoginUsage) {
     if (same < 0) into.readings.push(reading)
     else if (into.readings[same]!.updatedAt < reading.updatedAt) into.readings[same] = reading
   }
-  into.matchedBy = 'limits'
 }
 
 export function loginsAcrossHosts(hosts: readonly HostUsage[]): LoginUsage[] {
   const logins = new Map<string, LoginUsage>()
-  for (const { hostId, host, readings, emails } of hosts)
+  for (const { hostId, host, readings, emails, accountKeys } of hosts)
     for (const reading of readings) {
       const account = reading.accountId ?? 'default'
       const email = emails[reading.provider]?.[account]?.toLowerCase() ?? null
-      const key = email ? `${reading.provider}\0${email}` : `${reading.provider}\0${hostId}\0${account}`
+      const accountKey = accountKeys?.[reading.provider]?.[account]
+      const key = accountKey
+        ? `${reading.provider}\0key\0${accountKey}`
+        : email
+          ? `${reading.provider}\0email\0${email}`
+          : `${reading.provider}\0${hostId}\0${account}`
       const login = logins.get(key) ?? { provider: reading.provider, email, hosts: [], places: [], readings: [] }
+      if (accountKey) login.accountKey = accountKey
+      login.email ??= email
       if (!login.hosts.includes(host)) login.hosts.push(host)
       if (!login.places.some((place) => place.hostId === hostId && place.accountId === account))
         login.places.push({ hostId, accountId: account })
@@ -80,14 +91,37 @@ export function loginsAcrossHosts(hosts: readonly HostUsage[]): LoginUsage[] {
       else if (login.readings[same]!.updatedAt < reading.updatedAt) login.readings[same] = reading
       logins.set(key, login)
     }
-  // A host that does not know a login's email can still be signing in to the same account: match it by its limits, to
-  // a login known by email first, then to another without one. Emailed logins never merge with each other this way.
-  const merged = [...logins.values()].filter((login) => login.email)
+  // A host that reports only the email (an older Ramu, or a CLI without an account id) joins the login with that email.
+  const known: LoginUsage[] = []
   for (const login of logins.values()) {
-    if (login.email) continue
+    if (!login.email && !login.accountKey) continue
+    const twin = login.accountKey
+      ? undefined
+      : known.find((other) => other.provider === login.provider && other.email === login.email)
+    if (twin) combine(twin, login)
+    else known.push(login)
+  }
+  for (const login of known) {
+    if (!login.accountKey || !login.email) continue
+    const twin = known.find(
+      (other) =>
+        other !== login && !other.accountKey && other.provider === login.provider && other.email === login.email,
+    )
+    if (twin) {
+      combine(login, twin)
+      known.splice(known.indexOf(twin), 1)
+    }
+  }
+  // A host that knows neither can still be signing in to the same account: match it by its limits, to a known login
+  // first, then to another unknown one. Known logins never merge with each other this way.
+  const merged = known
+  for (const login of logins.values()) {
+    if (login.email || login.accountKey) continue
     const twin = merged.find((other) => other.provider === login.provider && sameLimits(other, login))
-    if (twin) merge(twin, login)
-    else merged.push(login)
+    if (twin) {
+      combine(twin, login)
+      twin.matchedBy = 'limits'
+    } else merged.push(login)
   }
   return merged
 }
