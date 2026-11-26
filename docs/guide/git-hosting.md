@@ -75,6 +75,8 @@ Choose the finish line under **Ship** in the project's **Live app…** sheet, on
 
 **Suggested** picks one for you: **Ready for review** for a repository that belongs to an organization or someone else, **Live in production** for your own with a live address (**Merged** without one), and **Pull request** without a Git host. An agent can ask for an earlier finish line, never a later one.
 
+A project that is on no Git host yet has no pull request to stop at. Asked to put it live, the agent ships its first release instead: it commits on the default branch, publishes the project to a private repository on your account (outside Full access you allow that on a card), picks a deploy platform, deploys to production and gives Ramu the address. Ramu saves it as the project's [live address](deploy.md#live-address-and-uptime), checks that it answers and keeps watching it. This happens only when you ask for live and neither you nor the repository's `ramu.json` set an earlier finish line. Later changes go through pull requests as above, and after each production deploy the agent reports the address the same way, so a deploy that does not answer is known at once.
+
 Under the finish line, the sheet shows what Ship may do without stopping for you, for the steps that finish line reaches:
 
 - **Send replies that report a fix** (on): after a review round, Ramu pushes the branch and posts the replies that only say what was fixed, and asks the reviewers again once nothing is left to send. A reply that disagrees with the reviewer or asks a question still waits for you in the **Review replies** card.

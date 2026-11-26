@@ -67,6 +67,8 @@ interface ShipRun {
   nudged?: Record<string, 'asked' | 'reminded'>
   /** Reviewers already offered a second look after their approval stopped standing, per pull request. */
   askedAgain?: Record<string, string[]>
+  /** The project has no repository on a Git host yet: shipping publishes it and puts it live, with no pull request. */
+  firstRelease?: boolean
   /** A check-fixing round handed over and not pushed yet: the commit the fix starts from. */
   pendingFix?: { url: string; cwd: string; branch: string; from: string; at: number }
 }
@@ -106,6 +108,10 @@ export interface ShipHost {
   waiting?(taskId: string, url: string): PullRequestWaiting | undefined
   /** Drafts a comment on a thread's pull request that waits for the person to post. */
   proposeComment?(sessionId: string, url: string, body: string): Promise<void>
+  /** Creates a private repository named `name` on the person's Git host from the checkout and pushes to it. */
+  publish?(cwd: string, repoId: string, name: string): Promise<void>
+  /** Keeps `url` as the project's live address and asks it once: the address now watched, and whether it answered. */
+  recordLive?(projectId: string, url: string): Promise<{ address: string; answers: boolean; status: number | null }>
 }
 
 /** Replies Ship posted on one pull request. */
@@ -219,7 +225,12 @@ export class ShipService implements ShipRounds {
       (line, config) => (config?.finishLine ? earlierFinishLine(config.finishLine, line) : line),
       null,
     )
-    const finishLine = earlierFinishLine(earlierFinishLine(status.finishLine, limit), requested)
+    const unpublished = await this.unpublished(sessionId)
+    // A project never published has no pull request to stop at. Asked to go live, its first release is publishing it
+    // and deploying it, unless the person or the repository set an earlier finish line.
+    const firstRelease =
+      requested === 'live' && unpublished.length > 0 && earlierFinishLine(status.chosen ?? 'live', limit) === 'live'
+    const finishLine = firstRelease ? 'live' : earlierFinishLine(earlierFinishLine(status.finishLine, limit), requested)
     // Starting again keeps the rounds spent, so asking to ship once more never buys the agent more rounds.
     const previous = this.runOf(sessionId)
     const run: ShipRun = {
@@ -238,12 +249,78 @@ export class ShipService implements ShipRounds {
       ...(previous?.held?.length ? { held: previous.held } : {}),
       watched: previous?.watched ?? [],
       told: {},
+      ...(firstRelease ? { firstRelease } : {}),
     }
     this.save([...this.runs().filter((entry) => entry.sessionId !== sessionId), run])
+    if (firstRelease) return { finishLine, instructions: firstReleaseInstructions(optionsOf(run)) }
     const onGitHost = this.workspace
       .listBindings(session.taskId)
       .some((binding) => !binding.folderOnly && !binding.notGit && coversPath(session.covers, binding.cwd))
     return { finishLine, instructions: instructions(run, onGitHost, limit) }
+  }
+
+  /** The thread's Git checkouts that have no remote yet. */
+  private async unpublished(sessionId: string): Promise<{ cwd: string; repoId: string }[]> {
+    const session = this.agents.get(sessionId)
+    const checkouts = this.workspace
+      .listBindings(session.taskId)
+      .filter((binding) => !binding.folderOnly && !binding.notGit && coversPath(session.covers, binding.cwd))
+    const remotes = await Promise.all(checkouts.map((binding) => git(binding.cwd, ['remote']).catch(() => 'unknown')))
+    return checkouts.filter((_binding, index) => !remotes[index]!.trim())
+  }
+
+  /**
+   * Publishes a first release's repositories to the person's Git host, private. Creating something on their account
+   * is theirs to allow outside Full access.
+   */
+  async publish(sessionId: string, name: string, signal?: AbortSignal): Promise<{ published: string[] }> {
+    if (!this.runOf(sessionId)?.firstRelease)
+      throw new Error('Publishing is part of a first release. Call ship with finishLine "live" first.')
+    if (!this.host.publish) throw new Error('This host cannot publish repositories.')
+    const unpublished = await this.unpublished(sessionId)
+    if (!unpublished.length) return { published: [] }
+    if (unpublished.length > 1)
+      throw new Error(
+        'This thread has several unpublished repositories. Ask the person to publish them in Source Control.',
+      )
+    if (this.agents.get(sessionId).settings.access !== 'full') {
+      const allowed = await this.agents.requestPermission(
+        sessionId,
+        `publishing ${name}`,
+        `Create the private repository ${name} on your Git host and push this project to it.`,
+        signal,
+      )
+      if (!allowed) throw new Error('The person declined. Do not retry; tell them what is left.')
+    }
+    const [{ cwd, repoId }] = unpublished as [{ cwd: string; repoId: string }]
+    await this.host.publish(cwd, repoId, name)
+    this.changed()
+    return { published: [(await git(cwd, ['remote', 'get-url', 'origin']).catch(() => name)).trim()] }
+  }
+
+  /**
+   * The agent deployed to production and names the address. Ramu keeps it as the project's live address, so the
+   * uptime watch follows it, and asks it once; a first release ends here when it answers.
+   */
+  async wentLive(sessionId: string, url: string): Promise<{ address: string; answers: boolean; next: string }> {
+    const run = this.runOf(sessionId)
+    if (!run?.projectId || run.finishLine !== 'live')
+      throw new Error('A live address is recorded while shipping to Live in production.')
+    if (!this.host.recordLive) throw new Error('This host cannot check a live address.')
+    const { address, answers, status } = await this.host.recordLive(run.projectId, url)
+    this.changed()
+    if (!answers)
+      return {
+        address,
+        answers,
+        next: `${address} did not answer${status ? ` (status ${status})` : ''}. Read the deploy’s logs, fix the cause, deploy again and call ship with liveAddress once more.`,
+      }
+    if (run.firstRelease) this.finish(run)
+    return {
+      address,
+      answers,
+      next: `${address} answers and is now the project’s live address, which Ramu keeps checking. Tell the person in one line, with the address.`,
+    }
   }
 
   /** The person allowed more rounds after a limit was spent. */
@@ -713,6 +790,18 @@ function instructions(run: ShipRun, onGitHost: boolean, repositoryLimit: FinishL
   ].join('\n')
 }
 
+function firstReleaseInstructions(options: ShipOptions): string {
+  return [
+    'Shipping a first release to Live in production. The project is on no Git host yet, so there is no pull request: go from here to a live address without stopping to ask between steps.',
+    '1. Finish the app, run the project’s build and tests, and commit on the default branch.',
+    '2. Publish it: call ship with publishAs set to the repository’s name. Ramu creates a private repository on the person’s Git host and pushes; outside Full access the person allows it on a card.',
+    '3. Pick where it runs: a platform the project already names (ramu.json, a platform config file), else one whose CLI is signed in on this host, else the simplest that fits the stack. Say which in one line. When it needs a token or a secret, ask once with request_secret; never ask for one in chat.',
+    `4. Deploy to production with that platform’s CLI. ${options.autoDeploy ? 'The first production deploy of a project asks the person on a card; later ones run without asking.' : 'The person allows it on a card.'}`,
+    '5. Call ship with liveAddress set to the production address. Ramu keeps it as the project’s live address, checks that it answers and tells you.',
+    'When a step fails, fix the cause and go on. When you are done or blocked, say so in one line.',
+  ].join('\n')
+}
+
 function nextStep(step: ShipStep, finishLine: FinishLine, url: string, options: ShipOptions): string {
   switch (step) {
     case 'reached':
@@ -722,7 +811,7 @@ function nextStep(step: ShipStep, finishLine: FinishLine, url: string, options: 
         ? `${url} is approved and its checks pass. Merge it: call pull_request_merge with whenChecksPass: true, which goes out without waiting for the person.`
         : `${url} is approved and its checks pass. Merge it with pull_request_merge; the person confirms the merge on its card.`
     case 'deploy':
-      return `${url} is merged. Finish shipping: ${finishLine === 'live' ? 'deploy to production (a card asks the person when it needs to) and check that the live address answers' : 'deploy a preview or staging build and check that it answers'}. Then tell the person in one line.`
+      return `${url} is merged. Finish shipping: ${finishLine === 'live' ? 'deploy to production (a card asks the person when it needs to), then call ship with liveAddress set to the production address, which Ramu checks' : 'deploy a preview or staging build and check that it answers'}. Then tell the person in one line.`
     case 'closed':
       return `${url} was closed without merging, so shipping stopped. Tell the person in one line; do not reopen it.`
     case 'working':
@@ -744,15 +833,28 @@ export function registerShipTools(server: McpServer, ship: ShipService, sessionI
     'ship',
     {
       description:
-        'Ship this thread’s change when the person asks to ship it, get it to review, merge it or put it live: Ramu watches the pull request, hands back failing checks and review rounds, and says when the finish line is reached. The project sets the finish line; finishLine can only ask for an earlier one. Follow the returned instructions. moreRounds: true when the person allows more rounds after a limit; stop: true when they want to stop shipping.',
+        'Ship this thread’s change when the person asks to ship it, get it to review, merge it or put it live: Ramu watches the pull request, hands back failing checks and review rounds, and says when the finish line is reached. The project sets the finish line; finishLine can only ask for an earlier one. Follow the returned instructions. One exception: when the person asks to put live a project that is on no Git host yet (such as one just created with project_create), pass finishLine "live"; the instructions then publish it privately, deploy it and record its address, using publishAs and liveAddress. liveAddress also records the production address after any deploy while shipping to live. moreRounds: true when the person allows more rounds after a limit; stop: true when they want to stop shipping.',
       inputSchema: {
         finishLine: z.enum(FINISH_LINES).optional(),
         moreRounds: z.boolean().optional(),
         stop: z.boolean().optional(),
+        publishAs: z
+          .string()
+          .regex(/^[A-Za-z0-9._-]{1,100}$/)
+          .optional()
+          .describe('First release only: the name of the private repository to create, such as barbershop-booking.'),
+        liveAddress: z
+          .string()
+          .max(2000)
+          .regex(/^https?:\/\/[^\s]+$/)
+          .optional()
+          .describe('The production address the deploy printed, such as https://barbershop.example.app.'),
       },
     },
-    ({ finishLine, moreRounds, stop }) =>
+    ({ finishLine, moreRounds, stop, publishAs, liveAddress }, extra) =>
       result(async () => {
+        if (publishAs) return ship.publish(sessionId, publishAs, extra.signal)
+        if (liveAddress) return ship.wentLive(sessionId, liveAddress)
         if (stop) {
           ship.end(sessionId)
           return { shipping: false }

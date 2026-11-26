@@ -1,4 +1,4 @@
-import { CREATED_REPOSITORIES } from '../../workspace/ci/setup'
+import { noteCreatedRepository } from '../../workspace/ci/setup'
 import { guardForge } from '../identityGuard'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -439,9 +439,7 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
       run: (taskId: string, repoId: string, input: PublishRepositoryInput) =>
         gitExclusive(ctx, taskId, repoId, async (cwd) => {
           await forge.publishRepository(cwd, input)
-          // Set up CI offers to require CI by default only on repositories Ramu created.
-          const created = workspace.getAppState<string[]>(CREATED_REPOSITORIES, [])
-          if (!created.includes(repoId)) workspace.setAppState(CREATED_REPOSITORIES, [...created, repoId].slice(-500))
+          noteCreatedRepository(workspace, repoId)
         }),
     },
     'forge.createPullRequest': {

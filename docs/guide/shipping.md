@@ -1,6 +1,6 @@
 # Shipping an app
 
-From one sentence on Home to a live app on your own accounts, with CI and previews for every later change. Each step links to the details. Ramu hosts nothing: the repository, hosting, database and their bills stay yours.
+From one sentence on Home to a live app on your own accounts, with CI and previews for every later change. Ask for all of it at once ("build a booking page for my barbershop and put it live") and the agent goes through steps 1 to 4 without stopping between them: it creates the project, builds it, publishes it to a private repository, deploys it and records the live address. It stops only for what is yours to decide: the questions in step 1, a token or secret on a masked card, and the first production deploy. Or take the steps one at a time. Each links to the details. Ramu hosts nothing: the repository, hosting, database and their bills stay yours.
 
 ## 1. Start something new
 
@@ -18,7 +18,7 @@ When the agent needs something only you know, such as an API key, it asks with a
 
 ## 3. Put it on GitHub
 
-**Publish to GitHub** in Source Control creates a repository on your account (private by default) and pushes the project. The latest deploy's checks and CI read from the Git host.
+**Publish to GitHub** in Source Control creates a repository on your account (private by default) and pushes the project. Asked to put the project live, the agent does this itself, always private; outside Full access it asks first. The latest deploy's checks and CI read from the Git host.
 
 ## 4. Deploy
 
@@ -31,7 +31,7 @@ Ask the project's agent to deploy. It picks a platform that suits the stack (Ver
 
 **Live app…** in the project's menu covers the rest:
 
-- **Live address:** where people use the app, which the host watches ([Live address and uptime](deploy.md#live-address-and-uptime)).
+- **Live address:** where people use the app, which the host watches ([Live address and uptime](deploy.md#live-address-and-uptime)). A deploy made while shipping to **Live in production** saves it for you.
 - **Production database:** the address migrations run against ([Migrations first](deploy.md#migrations-first)).
 - **Checks:** **Set up CI** opens a pull request with a workflow made from the project's own scripts ([Set up CI](git-hosting.md#set-up-ci)).
 

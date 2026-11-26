@@ -87,6 +87,17 @@ async function factsIn(root: string): Promise<Facts> {
 /** App state listing the repositories Ramu created on a forge, where requiring CI breaks no one's habits. */
 export const CREATED_REPOSITORIES = 'created-repositories'
 
+interface AppState {
+  getAppState<T>(key: string, fallback: T): T
+  setAppState(key: string, value: unknown): void
+}
+
+/** Remembers that Ramu created this repository on its Git host, so Set up CI offers to require CI on it. */
+export function noteCreatedRepository(state: AppState, repoId: string): void {
+  const created = state.getAppState<string[]>(CREATED_REPOSITORIES, [])
+  if (!created.includes(repoId)) state.setAppState(CREATED_REPOSITORIES, [...created, repoId].slice(-500))
+}
+
 /** What Set up CI would add, read from the last fetched default branch without asking the network. */
 export async function ciPreview(root: string): Promise<Omit<CiPreview, 'requireByDefault'>> {
   const forge = await forgeOf(root, true)

@@ -56,6 +56,25 @@ describe('uptime watch', () => {
     expect(watches.status('p1')).toMatchObject({ address: 'https://shop.example', source: 'saved' })
   })
 
+  it('takes a deploy’s address and asks it at once, keeping one the person saved', async () => {
+    const fresh = setup({ address: null, healthPath: '/api/health' })
+    expect(await fresh.watches.deployed('p1', 'https://shop.fly.dev')).toEqual({
+      address: 'https://shop.fly.dev',
+      answers: true,
+      status: 200,
+    })
+    expect(fresh.probe).toHaveBeenCalledWith('https://shop.fly.dev/api/health')
+    expect(fresh.watches.status('p1').address).toBe('https://shop.fly.dev')
+
+    const saved = setup()
+    saved.answers.push(down)
+    expect(await saved.watches.deployed('p1', 'https://shop.fly.dev')).toEqual({
+      address: 'https://shop.example',
+      answers: false,
+      status: 502,
+    })
+  })
+
   it('checks the health path on the live address the person saved', async () => {
     const { watches, probe, step } = setup({ healthPath: '/api/health' })
     await step()

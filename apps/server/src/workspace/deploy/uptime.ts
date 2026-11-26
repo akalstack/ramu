@@ -220,6 +220,24 @@ export class UptimeWatches {
     return this.status(projectId)
   }
 
+  /**
+   * A deploy just went out to `url`: it becomes the watched address unless the person saved one of their own, and is
+   * asked once now rather than at the next check.
+   */
+  async deployed(
+    projectId: string,
+    url: string,
+  ): Promise<{ address: string; answers: boolean; status: number | null }> {
+    const record = this.record(projectId)
+    const address = record.url ?? this.setAddress(projectId, url).address ?? url
+    const answer = await this.probe(checkedUrl(address, this.host.healthPath(projectId)))
+    return {
+      address,
+      answers: answer.status !== null && answer.failure === null && answered(answer.status),
+      status: answer.status,
+    }
+  }
+
   tick(now = Date.now()): Promise<void> {
     if (this.stopping || this.running || now < this.nextPoll) return this.running ?? Promise.resolve()
     this.nextPoll = now + POLL

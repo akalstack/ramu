@@ -12,6 +12,7 @@ import {
   forgetPullRequestStatus,
   githubReadToken,
   productionAddress,
+  publishRepository,
   updateRepoHook,
 } from './workspace/forge'
 import { terminalThreadRequest } from './background/agentThreads'
@@ -85,6 +86,7 @@ import { registerBackgroundTerminalTools } from './agent/backgroundTerminalTools
 import { registerBackgroundWaitTools } from './agent/backgroundWaitTools'
 import { registerUserTerminalTools } from './agent/userTerminalTools'
 import { UptimeWatches } from './workspace/deploy/uptime'
+import { noteCreatedRepository } from './workspace/ci/setup'
 import { ProjectWake } from './workspace/deploy/wake'
 import { MediaAccounts } from './media/mediaAccounts'
 import { LocalApps, type SavedApp } from './workspace/deploy/localApp'
@@ -974,6 +976,11 @@ const ship = new ShipService(
     proposeComment: async (sessionId, url, body) => {
       await pullRequestWrites.propose(sessionId, url, { kind: 'comment', body })
     },
+    publish: async (cwd, repoId, name) => {
+      await publishRepository(cwd, { name, visibility: 'private' })
+      noteCreatedRepository(workspace, repoId)
+    },
+    recordLive: (projectId, url) => uptime.deployed(projectId, url),
   },
   () => send('workspace:changed', {}),
 )

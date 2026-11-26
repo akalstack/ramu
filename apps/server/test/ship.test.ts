@@ -371,3 +371,84 @@ it('ignores a pull request merged before shipping began on a reused branch', asy
   expect(texts()).toEqual([])
   expect(ship.shipping('session')).not.toBeNull()
 })
+
+describe('a first release', () => {
+  let publish: ReturnType<typeof vi.fn<(cwd: string, repoId: string, name: string) => Promise<void>>>
+  let answers: boolean
+  let allow: ReturnType<typeof vi.fn<() => Promise<boolean>>>
+  const unpublished = () =>
+    vi.mocked(git).mockImplementation(async (_cwd, args) => (args[0] === 'remote' && args.length === 1 ? '' : ''))
+  const shipFrom = (access: 'full' | 'auto') => {
+    publish = vi.fn(async () => {})
+    allow = vi.fn(async () => true)
+    answers = true
+    const agents = {
+      get: () => ({ ...session, settings: { access } }),
+      enqueueBackground: enqueue,
+      requestPermission: allow,
+    } as unknown as AgentService
+    ship = new ShipService(
+      ws,
+      agents,
+      { watch, status: () => ({ sessionId: null, threads: [] }) },
+      {
+        liveAddress: () => live,
+        viewer: () => viewer,
+        publish,
+        recordLive: async (_projectId, url) => ({ address: url, answers, status: answers ? 200 : 502 }),
+      },
+      () => {},
+    )
+  }
+
+  it('goes to live with no pull request when a project on no Git host is asked to go live', async () => {
+    unpublished()
+    shipFrom('full')
+    const started = await ship.start('session', 'live')
+    expect(started.finishLine).toBe('live')
+    expect(started.instructions).toMatch(/first release/)
+    expect(started.instructions).toMatch(/publishAs/)
+    expect(started.instructions).not.toMatch(/pull request whose description/)
+  })
+
+  it('stays where it was when nobody asked for live, or the person chose an earlier finish line', async () => {
+    unpublished()
+    shipFrom('full')
+    expect((await ship.start('session')).finishLine).toBe('pull-request')
+    ship.setProjectFinishLine('project', 'pull-request')
+    expect((await ship.start('session', 'live')).finishLine).toBe('pull-request')
+    await expect(ship.publish('session', 'shop')).rejects.toThrow(/first release/)
+  })
+
+  it('publishes privately without asking in Full access, and asks the person otherwise', async () => {
+    unpublished()
+    shipFrom('full')
+    await ship.start('session', 'live')
+    await ship.publish('session', 'shop')
+    expect(publish).toHaveBeenCalledExactlyOnceWith('/repo', 'repo', 'shop')
+    expect(allow).not.toHaveBeenCalled()
+
+    shipFrom('auto')
+    await ship.start('session', 'live')
+    allow.mockResolvedValue(false)
+    await expect(ship.publish('session', 'shop')).rejects.toThrow(/declined/)
+    expect(publish).not.toHaveBeenCalled()
+  })
+
+  it('ends once the live address answers, and keeps shipping while it does not', async () => {
+    unpublished()
+    shipFrom('full')
+    await ship.start('session', 'live')
+    answers = false
+    const down = await ship.wentLive('session', 'https://shop.example.app')
+    expect(down).toMatchObject({ answers: false })
+    expect(down.next).toMatch(/status 502/)
+    expect(ship.shipping('session')).toBe('live')
+    answers = true
+    expect(await ship.wentLive('session', 'https://shop.example.app')).toMatchObject({
+      address: 'https://shop.example.app',
+      answers: true,
+    })
+    expect(ship.shipping('session')).toBeNull()
+  })
+})
