@@ -29,11 +29,13 @@ export function CommitPushButton({ taskId }: { taskId: string }) {
   )
   if (!changes && !busy) return null
   return (
-    <span className="commit-push-group inline-flex items-center">
+    // One control in two parts: pointing at either lights the whole of it, with a line between, so the arrow reads
+    // as belonging to the button rather than as a stray icon beside it.
+    <span className="commit-push-group group/split inline-flex items-stretch rounded-(--radius-s) transition-colors hover:bg-fill-hover focus-within:bg-fill-hover has-[[aria-expanded=true]]:bg-fill-hover">
       <Button
         variant="ghost"
         size="sm"
-        className={`${GHOST_TEXT_BUTTON_CLASS} commit-push-chip gap-1.5 rounded-r-none text-soft`}
+        className={`${GHOST_TEXT_BUTTON_CLASS} commit-push-chip gap-1.5 rounded-r-none pr-2 text-soft`}
         disabled={busy}
         title={`${t('Commit & Push')} (${formatKeys('mod+alt+p')})`}
         onClick={() => void commitAndPush(ws, taskId, false, invoke).catch(() => {})}
@@ -45,11 +47,15 @@ export function CommitPushButton({ taskId }: { taskId: string }) {
         )}
         {t('Commit & Push')}
       </Button>
+      <span
+        aria-hidden
+        className="my-1.5 w-px flex-none bg-transparent transition-colors group-hover/split:bg-(--line-strong) group-focus-within/split:bg-(--line-strong)"
+      />
       <Menu
         disabled={busy}
         label={t('More commit actions')}
         icon={<ChevronDown size={12} />}
-        className={`${GHOST_TEXT_BUTTON_CLASS} rounded-l-none px-1 text-soft`}
+        className={`${GHOST_TEXT_BUTTON_CLASS} h-auto rounded-l-none px-1.5 text-soft`}
         align="end"
         items={[
           {

@@ -165,55 +165,55 @@ export function AgentHeader({
       >
         <Search size={14} />
       </Button>
-      {(canContinue || agentCount > 0) && (
-        <Menu
-          label={translate('More actions')}
-          icon={
-            continuing ? (
-              <LoaderCircle size={14} className="spin [animation:spin_0.9s_linear_infinite]" />
-            ) : (
-              <MoreHorizontal size={14} />
-            )
-          }
-          className={ICON_BUTTON_CLASS}
-          align="end"
-          items={[
-            ...(agentCount > 0
-              ? [
-                  {
-                    key: 'agents',
-                    label: (
-                      <>
-                        <Bot size={13} /> {translate('All agents · {0}', { 0: agentCount })}
-                      </>
-                    ),
-                    onSelect: onShowAgents,
-                  },
-                ]
-              : []),
-            ...(canContinue ? continueItems : []),
-            ...(canContinue && onMakePage && !readOnly
-              ? [
-                  {
-                    key: 'make-page',
-                    label: (
-                      <>
-                        <AppWindow size={13} /> {translate('Make an artifact from this thread')}
-                      </>
-                    ),
-                    onSelect: onMakePage,
-                  },
-                ]
-              : []),
-          ]}
-        />
-      )}
+      {/* Always in its place, waiting while the thread loads: appearing later moved every button beside it. */}
+      <Menu
+        disabled={!canContinue && agentCount === 0}
+        label={translate('More actions')}
+        icon={
+          continuing ? (
+            <LoaderCircle size={14} className="spin [animation:spin_0.9s_linear_infinite]" />
+          ) : (
+            <MoreHorizontal size={14} />
+          )
+        }
+        className={ICON_BUTTON_CLASS}
+        align="end"
+        items={[
+          ...(agentCount > 0
+            ? [
+                {
+                  key: 'agents',
+                  label: (
+                    <>
+                      <Bot size={13} /> {translate('All agents · {0}', { 0: agentCount })}
+                    </>
+                  ),
+                  onSelect: onShowAgents,
+                },
+              ]
+            : []),
+          ...(canContinue ? continueItems : []),
+          ...(canContinue && onMakePage && !readOnly
+            ? [
+                {
+                  key: 'make-page',
+                  label: (
+                    <>
+                      <AppWindow size={13} /> {translate('Make an artifact from this thread')}
+                    </>
+                  ),
+                  onSelect: onMakePage,
+                },
+              ]
+            : []),
+        ]}
+      />
     </div>
   )
 }
 
 /**
- * The toolbar of a thread that is still being started: the same row, with Aside and Find waiting for the thread, so the
+ * The toolbar of a thread that is still being started: the same row, with Aside, Find and More waiting for the thread, so the
  * conversation under it is already where the thread will show it.
  */
 export function StartingAgentHeader() {
@@ -232,6 +232,15 @@ export function StartingAgentHeader() {
         disabled
       >
         <Search size={14} />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        className={ICON_BUTTON_CLASS}
+        aria-label={translate('More actions')}
+        disabled
+      >
+        <MoreHorizontal size={14} />
       </Button>
     </div>
   )
