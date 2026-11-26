@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ChangeFile } from '@ramu/shared/types'
 import { useNearViewport } from '../lib/useNearViewport'
+import { estimatedDiffHeight } from '../git/ReviewDiff'
 
 const revealListeners = new Map<string, Set<(event: CustomEvent) => void>>()
 const revealFile = (event: Event) => {
@@ -59,7 +60,8 @@ export function DeferredReviewFile({
       ) : (
         <div
           className="review-file-placeholder p-3 rounded-(--radius-m) bg-fill"
-          style={{ height: file.binary ? 100 : 350 }}
+          // About the height the card will have, so reaching it does not move the files below.
+          style={{ height: file.binary ? 100 : estimatedDiffHeight(file) + 44 }}
         >
           <span className="muted text-muted-foreground small text-caption">{file.path}</span>
         </div>

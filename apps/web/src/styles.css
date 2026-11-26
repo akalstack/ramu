@@ -469,6 +469,15 @@ kbd {
 .review-comment-line {
   @apply [background:var(--accent-wash)];
 }
+/* The lines a comment is being written on: one block, as a pull request's Files changed marks them. */
+.review-pick-line {
+  @apply [background:var(--accent-wash)];
+}
+.review-pick-bar {
+  @apply [background:var(--brand)];
+  width: 3px !important;
+  margin-left: 3px;
+}
 .review-comment-glyph::after {
   @apply [content:'●'];
   @apply text-brand;

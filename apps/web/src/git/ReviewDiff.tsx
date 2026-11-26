@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom'
 import { useAppSettings } from '../settings/AppSettings'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { ChangeFile, ReviewComment } from '@ramu/shared/types'
+import { ContentSkeleton } from '@/components/content-skeleton'
 import { monaco } from '../editor/monaco'
 import { reviewCommentMenu } from '../editor/monacoMenu'
 import { useNearViewport } from '../lib/useNearViewport'
@@ -19,6 +20,25 @@ export function enterReviewFile(fileId: string, direction: 'next' | 'previous') 
 }
 // Last measured height per file, so an editor that is remounted after scrolling away does not jump the page.
 const flowHeights = new Map<string, number>()
+
+/**
+ * About how tall a file's diff will be once its unchanged regions fold away, from its changed lines. The box takes
+ * this height from the first frame, so the files under it are roughly in place before the diff has been worked out.
+ */
+export function estimatedDiffHeight(file: Pick<ChangeFile, 'addedLines' | 'removedLines'>, lineHeight = 21): number {
+  const changed = (file.addedLines ?? 0) + (file.removedLines ?? 0)
+  // Changes come in runs of a few lines, each shown with the lines around it and a bar for what is folded between.
+  const lines = changed + Math.ceil(changed / 3) * 7 + 2
+  const cap = Math.max(320, Math.round((typeof window === 'undefined' ? 900 : window.innerHeight) * 0.8))
+  return Math.min(cap, Math.max(100, Math.round(lines * lineHeight)))
+}
+/** How the lines a comment is being written on are drawn: tinted edge to edge, with a bar in the margin. */
+const PICKED_LINES: monaco.editor.IModelDecorationOptions = {
+  isWholeLine: true,
+  className: 'review-pick-line',
+  linesDecorationsClassName: 'review-pick-bar',
+}
+
 export interface InlineReviewBlock {
   key: string
   side: 'old' | 'new'
@@ -32,6 +52,7 @@ export function ReviewDiff({
   onComment,
   flow = false,
   inlineBlocks = [],
+  picked = null,
   sideBySide: layout,
   visible = true,
 }: {
@@ -41,6 +62,8 @@ export function ReviewDiff({
   onComment?: (side: 'old' | 'new', line: number, endLine: number) => void
   flow?: boolean
   inlineBlocks?: InlineReviewBlock[]
+  /** The lines a comment is being written on: kept marked as a block while its form is open. */
+  picked?: { side: 'old' | 'new'; line: number; endLine: number } | null
   sideBySide?: boolean
   visible?: boolean
 }) {
@@ -49,7 +72,9 @@ export function ReviewDiff({
   const [localSideBySide, setSideBySide] = useState(true),
     [hasChanges, setHasChanges] = useState(false),
     [computed, setComputed] = useState(false),
-    [height, setHeight] = useState(() => flowHeights.get(file.id) ?? 300),
+    [height, setHeight] = useState(
+      () => flowHeights.get(file.id) ?? estimatedDiffHeight(file, Math.round(preferences.editorFontSize * 1.6)),
+    ),
     [capped, setCapped] = useState(false)
   const sideBySide = layout ?? localSideBySide
   const [lineChanges, setLineChanges] = useState<monaco.editor.ILineChange[]>([])
@@ -93,9 +118,12 @@ export function ReviewDiff({
     const range = selection(side)
     if (range) handlers.current.onComment?.(range.side, range.line, range.endLine)
   }
+  // Until the diff is worked out the editor holds the whole file: sizing to that, then to the folded result, made the
+  // card grow and shrink in front of the reader.
+  const settled = useRef(false)
   const size = () => {
     const diff = editor.current
-    if (!flow || !diff) return
+    if (!flow || !diff || !settled.current) return
     // A big diff scrolls inside its own bounded box instead of stretching the page, so the layout and sticky headings stay stable.
     const content = Math.max(
         100,
@@ -148,6 +176,9 @@ export function ReviewDiff({
           }
         : {}),
     })
+    // A new editor (the layout changed, the file came back into view) holds the whole file again until it is diffed.
+    settled.current = false
+    setComputed(false)
     const viewModel = diff.createViewModel({ original, modified })
     diff.setModel(viewModel)
     editor.current = diff
@@ -155,6 +186,7 @@ export function ReviewDiff({
     const updated = diff.onDidUpdateDiff(() => {
       const changes = diff.getLineChanges() ?? []
       setHasChanges(!!changes.length)
+      settled.current = true
       setComputed(true)
       setLineChanges((previous) => (JSON.stringify(previous) === JSON.stringify(changes) ? previous : changes))
       size()
@@ -164,23 +196,26 @@ export function ReviewDiff({
       ['new', diff.getModifiedEditor()] as const,
     ].flatMap(([side, pane]) => {
       const hover = pane.createDecorationsCollection()
+      const dragged = pane.createDecorationsCollection()
       let anchor: number | null = null,
         lastAnchor: number | null = null,
         endpoint = 1
+      // The lines being picked are marked whole, edge to edge, as a pull request's are: a text selection covers only
+      // the characters, so short lines in the block looked left out.
       const highlight = (start: number, end: number) =>
-        pane.setSelection(
-          new monaco.Selection(
-            Math.min(start, end),
-            1,
-            Math.max(start, end),
-            pane.getModel()!.getLineMaxColumn(Math.max(start, end)),
-          ),
-        )
+        dragged.set([
+          { range: new monaco.Range(Math.min(start, end), 1, Math.max(start, end), 1), options: PICKED_LINES },
+        ])
       const up = () => {
         if (anchor !== null) {
           const start = anchor
           anchor = null
-          handlers.current.onComment?.(side, Math.min(start, endpoint), Math.max(start, endpoint))
+          dragged.clear()
+          const from = Math.min(start, endpoint),
+            to = Math.max(start, endpoint)
+          // The editor selected the text of the lines dragged over; the block marks them now, so that selection goes.
+          pane.setSelection(new monaco.Selection(to, 1, to, 1))
+          handlers.current.onComment?.(side, from, to)
         }
       }
       window.addEventListener('mouseup', up)
@@ -189,6 +224,11 @@ export function ReviewDiff({
         pane.onDidContentSizeChange(size),
         pane.onDidChangeCursorSelection(() => {
           const range = selection(side)
+          // A drag down the line numbers moves the editor's own selection; the block follows its far end.
+          if (range && anchor !== null) {
+            endpoint = range.line < anchor ? range.line : range.endLine
+            highlight(anchor, endpoint)
+          }
           if (range) handlers.current.onSelect(range.side, range.line, range.endLine)
         }),
         pane.onMouseDown((event) => {
@@ -229,6 +269,7 @@ export function ReviewDiff({
             window.removeEventListener('mouseup', up)
             unregister()
             hover.clear()
+            dragged.clear()
           },
         },
       ]
@@ -408,6 +449,20 @@ export function ReviewDiff({
     )
     return () => collections.forEach((c) => c.clear())
   }, [comments, mounted])
+  const pickedSide = picked?.side,
+    pickedLine = picked?.line,
+    pickedEnd = picked?.endLine
+  useEffect(() => {
+    const diff = editor.current
+    if (!diff || !pickedSide || pickedLine === undefined || pickedEnd === undefined) return
+    const pane = pickedSide === 'old' ? diff.getOriginalEditor() : diff.getModifiedEditor()
+    const lines = pane.getModel()?.getLineCount() ?? 0
+    if (pickedEnd > lines) return
+    const marked = pane.createDecorationsCollection([
+      { range: new monaco.Range(pickedLine, 1, pickedEnd, 1), options: PICKED_LINES },
+    ])
+    return () => marked.clear()
+  }, [pickedSide, pickedLine, pickedEnd, mounted])
   useEffect(() => {
     const onNav = (event: Event) => {
       const detail = (event as CustomEvent).detail
@@ -549,12 +604,18 @@ export function ReviewDiff({
           <ChevronDown size={14} />
         </Button>
       </div>
-      <div
-        ref={host}
-        className="review-diff [.pair-review_&]:h-[clamp(280px,_45vh,_600px)] [.pair-review_.flowing-diff_&]:min-h-[100px] h-[410px] w-full"
-        style={flow ? { height } : undefined}
-        aria-label={t('Changes to {0}', { '0': file.path })}
-      />
+      <div className="relative">
+        <div
+          ref={host}
+          className="review-diff [.pair-review_&]:h-[clamp(280px,_45vh,_600px)] [.pair-review_.flowing-diff_&]:min-h-[100px] h-[410px] w-full transition-opacity duration-150"
+          // Shown once the diff is worked out, in one step, rather than as the whole file that then folds.
+          style={flow ? { height, opacity: computed ? 1 : 0 } : undefined}
+          aria-label={t('Changes to {0}', { '0': file.path })}
+        />
+        {flow && !computed && (
+          <ContentSkeleton variant="editor" rows={4} className="absolute inset-0 overflow-hidden" />
+        )}
+      </div>
       {mounted &&
         inlineBlocks.map((block) => {
           const target = zoneHosts.get(block.key)

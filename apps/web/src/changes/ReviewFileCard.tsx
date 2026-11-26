@@ -328,6 +328,7 @@ export function ReviewFileCard({
               onSelect={() => {}}
               onComment={(side, line, endLine) => startComment(side, line, endLine)}
               inlineBlocks={inlineBlocks}
+              picked={showComposer && !editing && location.scope !== 'file' ? location : null}
             />
           )}
           {(fileComments.length > 0 || (showComposer && location.scope === 'file') || resolved.length > 0) && (
