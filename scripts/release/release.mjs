@@ -99,8 +99,11 @@ function releaseCredits(tag, repo) {
     `tag_name=${tag}`,
     ...(previous ? ['-f', `previous_tag_name=${previous}`] : []),
   ).body
-  const commits = previous ? ghJson(`repos/${repo}/compare/${previous}...${tag}`).commits : []
-  return { generated, authors: commits.map((commit) => commit.author?.login ?? '') }
+  // Only the authors: the full comparison carries every changed file's diff, which overflows a large release's buffer.
+  const authors = previous
+    ? ghJson(`repos/${repo}/compare/${previous}...${tag}`, '--jq', '[.commits[].author.login // ""]')
+    : []
+  return { generated, authors }
 }
 // Every workspace package ships together; the desktop app reads its own package.json for app.getVersion().
 function setWorkspaceVersions(version) {
