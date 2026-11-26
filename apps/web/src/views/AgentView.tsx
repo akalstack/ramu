@@ -402,10 +402,19 @@ export const AgentView = memo(function AgentView({
   }, [nextPoint, view.sessionId, invoke])
   const compacting = session?.state !== 'stopped' && session?.state !== 'failed' && isCompacting(events)
   // From the moment a message is sent, so the end of the chat does not wait for the host to report the turn.
-  const activityLabel = compacting
+  const reportedActivity = compacting
     ? 'Compacting context…'
     : (agentActivityLabel(session?.state) ??
       (shownSubmissions.some((item) => item.state !== 'failed') ? 'Sending…' : null))
+  // The host's copy of a message can arrive a frame before the thread reports itself busy. The line stays through that
+  // gap instead of going out and coming back.
+  const [heldActivity, setHeldActivity] = useState(reportedActivity)
+  useEffect(() => {
+    if (reportedActivity) return setHeldActivity(reportedActivity)
+    const timer = setTimeout(() => setHeldActivity(null), 300)
+    return () => clearTimeout(timer)
+  }, [reportedActivity])
+  const activityLabel = reportedActivity ?? heldActivity
   // Until the thread reports more than starting, the line keeps saying what the start is doing (setup, the agent).
   const statusLabel =
     openingShown && (!session || session.state === 'starting')
