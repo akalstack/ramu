@@ -178,3 +178,51 @@ it('lists the login in use first, then the ones another host uses, then the most
   expect(rows.map((row) => row.email)).toEqual(['d@x.io', 'u@x.io', 'r@x.io', 'f@x.io'])
   expect(loginsWithRoom(rows)).toBe(3)
 })
+
+it('matches one login across hosts by the provider account id, and by email for a host that knows only that', () => {
+  const logins = loginsAcrossHosts([
+    {
+      hostId: 'a',
+      host: 'Mac',
+      readings: [reading(undefined, 40, 1)],
+      emails: { 'claude-code': { default: 'me@x.io' } },
+      accountKeys: { 'claude-code': { default: 'uuid-1' } },
+    },
+    {
+      hostId: 'b',
+      host: 'vps',
+      readings: [reading('acc-9', 55, 2)],
+      emails: {},
+      accountKeys: { 'claude-code': { 'acc-9': 'uuid-1' } },
+    },
+    {
+      hostId: 'c',
+      host: 'old',
+      readings: [reading(undefined, 50, 3)],
+      emails: { 'claude-code': { default: 'ME@x.io' } },
+    },
+  ])
+  expect(logins).toHaveLength(1)
+  expect(logins[0]).toMatchObject({ accountKey: 'uuid-1', email: 'me@x.io', hosts: ['Mac', 'vps', 'old'] })
+  expect(logins[0]!.matchedBy).toBeUndefined()
+})
+
+it('keeps two people apart when their account ids differ, even with the same limits', () => {
+  const logins = loginsAcrossHosts([
+    {
+      hostId: 'a',
+      host: 'Mac',
+      readings: [reading(undefined, 40, 1)],
+      emails: {},
+      accountKeys: { 'claude-code': { default: 'u1' } },
+    },
+    {
+      hostId: 'b',
+      host: 'vps',
+      readings: [reading(undefined, 40, 1)],
+      emails: {},
+      accountKeys: { 'claude-code': { default: 'u2' } },
+    },
+  ])
+  expect(logins).toHaveLength(2)
+})

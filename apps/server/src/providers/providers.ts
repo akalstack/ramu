@@ -7,6 +7,7 @@ import {
   AGENT_PROVIDERS,
   providerEnabled,
   supportsProviderAccounts,
+  type AccountLogin,
   type ProviderConfiguration,
   type ProviderSignIn,
   type ProviderStatus,
@@ -211,14 +212,14 @@ export class ProviderService {
     this.plans.set(key, plan)
     if (before && before !== plan) this.onPlanChange?.(provider, accountId)
   }
-  private logins = new Map<string, { at: number; email?: string; apiKey?: boolean }>()
+  private logins = new Map<string, { at: number } & AccountLogin>()
   /**
    * Each login's sign-in email and whether it runs on an API key, read at most every ten minutes, for naming logins
    * that have no label. A login with neither is named by its position.
    */
-  async accountLogins(): Promise<Record<string, Record<string, { email?: string; apiKey?: boolean }>>> {
+  async accountLogins(): Promise<Record<string, Record<string, AccountLogin>>> {
     const config = this.preferences().providerBinaries ?? {}
-    const result: Record<string, Record<string, { email?: string; apiKey?: boolean }>> = {}
+    const result: Record<string, Record<string, AccountLogin>> = {}
     await Promise.all(
       AGENT_PROVIDERS.map(async (provider) => {
         const binary = providerBinary(provider, config)
@@ -233,12 +234,18 @@ export class ProviderService {
                 () => undefined,
               )
               const apiKey = !!state?.signedIn && (!!state.apiKey || !!providerApiKey(provider, id))
-              hit = { at: Date.now(), ...(state?.email ? { email: state.email } : {}), ...(apiKey ? { apiKey } : {}) }
+              hit = {
+                at: Date.now(),
+                ...(state?.email ? { email: state.email } : {}),
+                ...(state?.accountKey ? { accountKey: state.accountKey } : {}),
+                ...(apiKey ? { apiKey } : {}),
+              }
               this.logins.set(key, hit)
             }
-            if (hit.email || hit.apiKey)
+            if (hit.email || hit.accountKey || hit.apiKey)
               (result[provider] ??= {})[id] = {
                 ...(hit.email ? { email: hit.email } : {}),
+                ...(hit.accountKey ? { accountKey: hit.accountKey } : {}),
                 ...(hit.apiKey ? { apiKey: true } : {}),
               }
           }),

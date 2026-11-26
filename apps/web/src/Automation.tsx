@@ -30,6 +30,7 @@ import {
 import { AgentControls } from './chat/AgentControls'
 import { useModelSets } from './models/ModelSets'
 import { useAppSettings } from './settings/AppSettings'
+import { useStagedValue } from './settings/stagedChanges'
 import { useHostRuntime, useWorkspace, useWorkspacesOf } from './workspace/workspace'
 import { HostProvider, useHost } from './workspace/HostProvider'
 import { useComputers } from './workspace/computers'
@@ -933,6 +934,27 @@ export function BackgroundControls({ compact = false, onInstalled }: { compact?:
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [mount only] by design; the values it reads beyond these are current as of that run
   }, [])
+  // Keep running and Start at login wait for Save changes like the rest of Settings; outside Settings they apply at once.
+  const [keepRunning, stageKeepRunning] = useStagedValue(
+    'background.keepRunning',
+    status?.keepRunning ?? false,
+    async (value: boolean) => {
+      await invoke('background.keepRunning', value)
+      await reload()
+    },
+  )
+  const [startAtLogin, stageStartAtLogin] = useStagedValue(
+    'background.login',
+    status?.loginEnabled ?? false,
+    async (value: boolean) => {
+      const result = await invoke('background.login', value)
+      if (result?.firstInstall) {
+        onInstalled?.()
+        await app.reload()
+      }
+      await reload()
+    },
+  )
   const act = async (fn: () => Promise<unknown>) => {
     setBusy(true)
     try {
@@ -1015,7 +1037,7 @@ export function BackgroundControls({ compact = false, onInstalled }: { compact?:
           <span>
             <strong>{t('Keep running when Ramu closes')}</strong>
             <span className="muted text-muted-foreground small text-caption block block">
-              {status.keepRunning
+              {keepRunning
                 ? t('Threads, schedules and your paired devices keep working after you close Ramu.')
                 : t(
                     'Closing Ramu stops the service: running threads stop, schedules wait, and paired devices can’t connect until you open Ramu again.',
@@ -1024,9 +1046,13 @@ export function BackgroundControls({ compact = false, onInstalled }: { compact?:
           </span>
           <Switch
             aria-label={t('Keep running when Ramu closes')}
-            checked={status.keepRunning}
+            checked={keepRunning}
             disabled={busy}
-            onCheckedChange={(checked) => void act(() => invoke('background.keepRunning', checked))}
+            onCheckedChange={(checked) => {
+              stageKeepRunning(checked)
+              // Start at login needs the service to outlive the app, so turning that off takes it along.
+              if (!checked && startAtLogin) stageStartAtLogin(false)
+            }}
           />
         </SettingsRow>
       )}
@@ -1035,7 +1061,7 @@ export function BackgroundControls({ compact = false, onInstalled }: { compact?:
           <span>
             <strong>{t('Start at login')}</strong>
             <span className="muted text-muted-foreground small text-caption block block">
-              {status?.keepRunning === false
+              {!keepRunning
                 ? t('Needs Keep running when Ramu closes.')
                 : t(
                     'Start the background service when you sign in. The first time, Keep host awake turns on too, while plugged in.',
@@ -1044,17 +1070,9 @@ export function BackgroundControls({ compact = false, onInstalled }: { compact?:
           </span>
           <Switch
             aria-label={t('Start at login')}
-            checked={status?.loginEnabled ?? false}
-            disabled={busy || !connected || status?.keepRunning === false}
-            onCheckedChange={(checked) =>
-              void act(async () => {
-                const result = await invoke('background.login', checked)
-                if (result?.firstInstall) {
-                  onInstalled?.()
-                  await app.reload()
-                }
-              })
-            }
+            checked={startAtLogin}
+            disabled={busy || !connected || !keepRunning}
+            onCheckedChange={stageStartAtLogin}
           />
         </SettingsRow>
       )}

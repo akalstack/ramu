@@ -333,6 +333,14 @@ function useHostLogins(open: boolean): HostLogins[] | null {
             host: computer.name,
             readings,
             emails,
+            accountKeys: Object.fromEntries(
+              Object.entries(logins).map(([provider, byId]) => [
+                provider,
+                Object.fromEntries(
+                  Object.entries(byId).flatMap(([id, login]) => (login.accountKey ? [[id, login.accountKey]] : [])),
+                ),
+              ]),
+            ),
             logins,
             config: settings?.providerBinaries,
           }

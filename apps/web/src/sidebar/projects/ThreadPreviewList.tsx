@@ -42,10 +42,7 @@ export function ThreadPreviewList({
   useLanguage()
   const { preferences } = useAppSettings()
   return (
-    <div
-      ref={ref}
-      className="task-list relative flex flex-col gap-0.5 pt-0.5 before:pointer-events-none before:absolute before:bottom-2 before:left-[15px] before:top-1 before:w-px before:bg-border before:content-['']"
-    >
+    <div ref={ref} className="task-list relative flex flex-col gap-0.5 pt-0.5">
       {preview.tasks.length === 0 && (
         <div className="muted text-muted-foreground small text-caption empty-tasks p-[4px_10px_4px_31px]">
           {t('No threads yet')}

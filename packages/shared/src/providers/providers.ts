@@ -20,6 +20,11 @@ export interface ProviderSignIn {
   detail?: string
   /** The login's email when the CLI reports it; names the account when it has no label. */
   email?: string
+  /**
+   * The provider's own id for the person signed in (Claude's account UUID, the ChatGPT user id), when it keeps one: the
+   * same on every host, so one login is recognised across hosts even where a CLI reports no email.
+   */
+  accountKey?: string
   /** The plan the login is on as the provider reports it now (`pro`, `max`, `plus`, a tier name), read at every check. */
   plan?: string
   /** Where the provider offers a bigger plan, when it says. */
@@ -132,6 +137,8 @@ export function accountDisplayName(
 /** What a login reports about itself for naming it: its sign-in email, and whether it runs on an API key. */
 export interface AccountLogin {
   email?: string
+  /** The provider's own id for the person signed in, the same on every host (see ProviderSignIn.accountKey). */
+  accountKey?: string
   apiKey?: boolean
 }
 

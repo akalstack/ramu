@@ -1,10 +1,24 @@
-import { existsSync, symlinkSync } from 'node:fs'
+import { existsSync, readFileSync, symlinkSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { defineAdapter, LONG_CONTEXT_TOKENS, npmLatest, runCli, selfUpdate } from '../adapter'
 
 /** Claude Code's own config home for the default account, where your user-level settings, skills and rules live. */
 export const claudeConfigHome = () => process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude')
+
+/** The signed-in person's account UUID and email, as Claude Code keeps them beside its config for this login. */
+function claudeAccount(env: NodeJS.ProcessEnv): { accountKey?: string; email?: string } {
+  try {
+    const file = env.CLAUDE_CONFIG_DIR ? join(env.CLAUDE_CONFIG_DIR, '.claude.json') : join(homedir(), '.claude.json')
+    const account = JSON.parse(readFileSync(file, 'utf8'))?.oauthAccount
+    return {
+      ...(typeof account?.accountUuid === 'string' && account.accountUuid ? { accountKey: account.accountUuid } : {}),
+      ...(typeof account?.emailAddress === 'string' && account.emailAddress ? { email: account.emailAddress } : {}),
+    }
+  } catch {
+    return {}
+  }
+}
 
 export const claudeCodeAdapter = defineAdapter({
   id: 'claude-code',
@@ -44,6 +58,8 @@ export const claudeCodeAdapter = defineAdapter({
       const status = JSON.parse(out)
       return status.loggedIn
         ? {
+            // An API key login has no person behind it to match across hosts.
+            ...(status.authMethod === 'api_key' ? {} : claudeAccount(env)),
             signedIn: true,
             ...(typeof status.authMethod === 'string' ? { detail: status.authMethod } : {}),
             ...(status.authMethod === 'api_key' ? { apiKey: true } : {}),
