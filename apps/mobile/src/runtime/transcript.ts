@@ -21,6 +21,7 @@ import { latestSurfaces, parseInlineUiActionMessage } from '@ramu/shared/chat/in
 import { goalChanges, goalFactLines } from '@ramu/shared/chat/goalHistory'
 import { providerWaitState, type ProviderWaitState } from '@ramu/shared/chat/providerWait'
 import { foldSettingsChanges } from '@ramu/shared/chat/settingsChanges'
+import { foldRepeats } from '@ramu/shared/chat/repeats'
 import type { TranslationValues } from '@ramu/shared/i18n'
 
 /**
@@ -238,14 +239,8 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
     else if (e.kind === 'text') {
       if (e.text.trim()) items.push({ kind: 'text', id, text: e.text })
     } else if (e.kind === 'thinking' && e.text.trim()) items.push({ kind: 'thinking', id, text: e.text })
-    else if (e.kind === 'error') {
-      // As on the desktop, the same error again in a row (a limit met by each automatic try) stays one card; the end of
-      // each failed turn in between is not something between them.
-      const at = items.findLastIndex((item) => item.kind !== 'end')
-      const previous = items[at]
-      if (previous?.kind === 'error' && previous.message === e.message) items[at] = { ...previous, id }
-      else items.push({ kind: 'error', id, message: e.message })
-    } else if (e.kind === 'content') {
+    else if (e.kind === 'error') items.push({ kind: 'error', id, message: e.message })
+    else if (e.kind === 'content') {
       const text = e.content
         .filter((c) => c.type !== 'image')
         .map((c) =>
@@ -441,11 +436,26 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
     const next = items.findIndex((item) => (positions.get(item) ?? -1) > group.launchIndex)
     items.splice(group.anchor === null || next < 0 ? items.length : next, 0, row)
   }
-  return foldSettingsChanges(
+  const settled = foldSettingsChanges(
     items,
     (item) => (item.kind === 'note' && item.settings ? { settings: item.settings, previous: item.previous } : null),
     (first, last) => (first.kind === 'note' && last.kind === 'note' ? { ...last, previous: first.previous } : last),
   )
+  // As on the desktop, the same error or notice back to back reads once with its count. The desktop draws nothing for
+  // the agent going idle or failing between them, so that boundary does not split a run here either.
+  return foldRepeats(
+    settled,
+    repeatKey,
+    (item, repeats) => ({ ...item, repeats }) as TranscriptItem,
+    (item) => item.kind === 'end' && !item.ended,
+  )
+}
+
+/** Goal, settings and limit notes carry their own state, so only plain notices and errors fold as repeats. */
+function repeatKey(item: TranscriptItem): string | null {
+  if (item.kind === 'error') return `error:${item.message}`
+  if (item.kind !== 'note' || item.goalNote || item.settings || item.wait || item.pending) return null
+  return `note:${item.title}\n${item.detail ?? ''}`
 }
 
 /** Snapshot the existing occurrences so repeated messages cannot match old history. */

@@ -37,4 +37,4 @@ When two continuations in a row change nothing, the goal stops as **No progress*
 
 ## Paused or waiting
 
-**Goal paused** means you paused it. It never resumes by itself. **Limit reached · resumes …** means a provider limit. The goal continues at the reset, unless auto-resume is off.
+**Goal paused** means you paused it. It never resumes by itself. A pause you undo within two minutes, before the agent does anything, leaves no line in the thread, and a goal you reword before work starts shows once as **Goal set** with its final wording. **Limit reached · resumes …** means a provider limit. The goal continues at the reset, unless auto-resume is off.

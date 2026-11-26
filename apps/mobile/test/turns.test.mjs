@@ -404,11 +404,51 @@ test('a steered message stays in its turn: one "Worked for" for the whole turn a
   assert.equal(rows[3].label, 'Continued for 31s')
 })
 
-test('the same error from each automatic try at a limit stays one card', () => {
-  const tryAgain = () => [
-    { kind: 'error', message: 'Claude usage limit reached.' },
-    { kind: 'result', isError: true },
-  ]
-  const items = transcript([{ kind: 'user', text: 'test' }, ...tryAgain(), ...tryAgain(), ...tryAgain()])
-  assert.equal(items.filter((item) => item.kind === 'error').length, 1)
+test('the same error or notice back to back reads once with its count, as on the desktop', () => {
+  const items = transcript([
+    { kind: 'user', text: 'go', at: 1_000 },
+    { kind: 'error', message: 'Overloaded', at: 2_000 },
+    { kind: 'state', state: 'failed', at: 2_100 },
+    { kind: 'error', message: 'Overloaded', at: 3_000 },
+    { kind: 'error', message: 'Overloaded', at: 4_000 },
+    { kind: 'recovery', state: 'resumed', at: 5_000 },
+    { kind: 'recovery', state: 'resumed', at: 6_000 },
+    { kind: 'error', message: 'Overloaded', at: 7_000 },
+  ])
+  const shown = items.filter((item) => item.kind !== 'end')
+  assert.deepEqual(
+    shown.map((item) => [item.kind, item.at, item.repeats ?? 1]),
+    [
+      ['user', 1_000, 1],
+      ['error', 2_000, 3],
+      ['note', 5_000, 2],
+      ['error', 7_000, 1],
+    ],
+  )
+  // The first keeps its id, so the row on screen and its place in the list stay put.
+  assert.equal(shown[1].id, 'event-1')
+})
+
+test('goal notes with no work between read as their net change', () => {
+  const goal = (patch = {}) => ({
+    id: 'g',
+    objective: 'Ship it',
+    status: 'active',
+    turns: 0,
+    reason: '',
+    updatedAt: 1,
+    ...patch,
+  })
+  const notes = transcript([
+    { kind: 'user', text: 'go', at: 1_000 },
+    { kind: 'goal', goal: goal() },
+    { kind: 'goal', goal: goal({ objective: 'Ship it today' }) },
+    { kind: 'text', text: 'on it', at: 2_000 },
+    { kind: 'goal', goal: goal({ objective: 'Ship it today', status: 'paused' }) },
+    { kind: 'goal', goal: goal({ objective: 'Ship it today', status: 'active' }) },
+  ]).filter((item) => item.kind === 'note')
+  assert.deepEqual(
+    notes.map((note) => [note.goalNote, note.objective]),
+    [['set', 'Ship it today']],
+  )
 })

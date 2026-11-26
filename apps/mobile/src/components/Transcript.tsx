@@ -586,8 +586,24 @@ const AnswerFooter = memo(function AnswerFooter({ at, text }: { at?: number; tex
 
 const RESUME_PROMPT = '\n\n<ramu-context>\nContinue where you left off.\n</ramu-context>'
 
+/** "×3" after a notice shown once for a run of the same one; nothing for a single occurrence. */
+function RepeatCount({ count }: { count: number | undefined }) {
+  const say = useSay()
+  if (!count || count < 2) return null
+  return (
+    <T
+      size={font.caption}
+      tone="muted"
+      accessibilityLabel={say('Happened {0} times in a row', { 0: count })}
+      style={{ fontVariant: ['tabular-nums'] }}
+    >
+      {say('×{0}', { 0: count })}
+    </T>
+  )
+}
+
 /** An error in the thread, in the same words as the desktop: what happened, then the provider's message. */
-function ErrorCard({ message, last, chat }: { message: string; last: boolean; chat: Chat }) {
+function ErrorCard({ message, last, chat, repeats }: { message: string; last: boolean; chat: Chat; repeats?: number }) {
   const { c } = useTheme()
   const say = useSay()
   const store = useStore()
@@ -618,9 +634,12 @@ function ErrorCard({ message, last, chat }: { message: string; last: boolean; ch
       >
         <CircleAlert size={15} color={c.bad} style={{ marginTop: 2 }} />
         <View style={{ flex: 1, gap: 2 }}>
-          <T size={font.control} weight="600">
-            {say(title)}
-          </T>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+            <T size={font.control} weight="600" style={{ flexShrink: 1 }}>
+              {say(title)}
+            </T>
+            <RepeatCount count={repeats} />
+          </View>
           {/* Drawn by the Markdown view so its words select with the same native menu as any reply. */}
           <Markdown text={message} density="compact" muted />
           {canRetry ? (
@@ -657,7 +676,9 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
         </MessageActions>
       )
     case 'error':
-      return <ErrorCard message={item.message} last={endedOnError(chat.items, item.id)} chat={chat} />
+      return (
+        <ErrorCard message={item.message} last={endedOnError(chat.items, item.id)} chat={chat} repeats={item.repeats} />
+      )
     case 'text':
       return (
         <MessageActions text={item.text} from="assistant">
@@ -978,9 +999,12 @@ function NoteRow({ item, chat }: { item: Extract<TranscriptItem, { kind: 'note' 
       <View style={{ flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: c.lineStrong }} />
       <View style={{ maxWidth: '78%', alignItems: 'center', gap: 2 }}>
         {change ?? (
-          <T size={font.caption} tone={item.failed ? 'bad' : 'muted'} style={{ textAlign: 'center' }}>
-            {title}
-          </T>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.s }}>
+            <T size={font.caption} tone={item.failed ? 'bad' : 'muted'} style={{ textAlign: 'center', flexShrink: 1 }}>
+              {title}
+            </T>
+            <RepeatCount count={item.repeats} />
+          </View>
         )}
         {item.detail ? (
           <T size={font.caption} tone="placeholder" style={{ textAlign: 'center' }}>

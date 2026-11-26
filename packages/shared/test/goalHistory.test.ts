@@ -20,6 +20,7 @@ const goal = (patch: Partial<ChatGoal> = {}): ChatGoal => ({
   ...patch,
 })
 const event = (value: ChatGoal | null): AgentEvent => ({ kind: 'goal', goal: value })
+const work: AgentEvent = { kind: 'text', text: 'Working on it' }
 
 it('keeps only the turning points of a goal', () => {
   const events = [
@@ -28,7 +29,8 @@ it('keeps only the turning points of a goal', () => {
     event(goal({ status: 'paused', pausedBy: 'provider-limit' })),
     event(goal({ status: 'active' })),
     event(goal({ status: 'paused' })),
-    event(goal({ status: 'active' })),
+    event(goal({ status: 'active', updatedAt: 600_000 })),
+    work,
     event(goal({ status: 'blocked', reason: 'Needs a key' })),
     event(goal({ status: 'completed' })),
   ]
@@ -46,6 +48,7 @@ it('tells a new goal, an edit and a clear apart, and leaves completion to its ow
     cleared = event(null)
   const changes = goalChanges([
     event(goal()),
+    work,
     edited,
     event(goal({ objective: 'Ship it faster', status: 'completed' })),
     next,
@@ -54,6 +57,36 @@ it('tells a new goal, an edit and a clear apart, and leaves completion to its ow
   expect([...changes.values()].map((change) => change.type)).toEqual(['set', 'edited', 'set', 'cleared'])
   expect(changes.get(cleared)?.goal.id).toBe('g2')
   expect(goalChanges([event(goal({ status: 'completed' })), event(null)]).size).toBe(0)
+})
+
+it('drops a pause the person undid moments later, before the agent did anything', () => {
+  const changes = goalChanges([
+    event(goal()),
+    work,
+    event(goal({ status: 'paused' })),
+    event(goal({ status: 'active' })),
+    event(goal({ status: 'paused' })),
+  ])
+  expect([...changes.values()].map((change) => change.type)).toEqual(['set', 'paused'])
+  // The agent's own sub-agents working meanwhile do not make the pause stand.
+  const helper: AgentEvent = { kind: 'text', text: 'Reading', agentId: 'helper' }
+  expect(
+    [
+      ...goalChanges([
+        event(goal()),
+        work,
+        event(goal({ status: 'paused' })),
+        helper,
+        event(goal({ status: 'active' })),
+      ]).values(),
+    ].map((change) => change.type),
+  ).toEqual(['set'])
+})
+
+it('reads a goal set and reworded before any work as set, at its final wording', () => {
+  const last = event(goal({ objective: 'Ship it today' }))
+  const changes = goalChanges([event(goal()), event(goal({ objective: 'Ship it soon' })), last, work])
+  expect([...changes.entries()]).toEqual([[last, { type: 'set', goal: goal({ objective: 'Ship it today' }) }]])
 })
 
 const failedCheck = (patch: Partial<GoalCheck> = {}): GoalCheck => ({
@@ -106,7 +139,7 @@ it('keeps a limit hold out of the history in its merged shape, and still shows a
   // Same status, different holder: the user pausing a held goal is a turning point.
   expect(types(goal(), hold, goal({ status: 'paused', pausedBy: 'user' }))).toEqual(['set', 'paused'])
   // The user resuming their own pause is shown; a user pause with no reason still counts.
-  expect(types(goal(), goal({ status: 'paused' }), goal())).toEqual(['set', 'paused', 'resumed'])
+  expect(types(goal(), goal({ status: 'paused' }), goal({ updatedAt: 600_000 }))).toEqual(['set', 'paused', 'resumed'])
   // A limit hold followed by another hold adds no row either way.
   expect(types(goal(), goal({ status: 'paused', pausedBy: 'provider-limit' }), hold)).toEqual(['set'])
 })

@@ -35,7 +35,8 @@ export function AgentGroup({
   const running = !offline && tasks.some(helperActive)
   const failed = statuses.includes('failed')
   return (
-    <Collapsible className="agent-group text-sm">
+    // Agents still at work open the group, as on the phone, so what is running is in view; a settled group stays a line.
+    <Collapsible className="agent-group text-sm" defaultOpen={running}>
       <CollapsibleTrigger
         render={
           <Button

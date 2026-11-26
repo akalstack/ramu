@@ -4,6 +4,7 @@ import type { AgentEvent } from '@ramu/shared/types'
 import { type ChatBlock as Block } from '@ramu/shared/chat/chatFolding'
 import { goalChanges } from '@ramu/shared/chat/goalHistory'
 import { foldSettingsChanges } from '@ramu/shared/chat/settingsChanges'
+import { foldRepeats } from '@ramu/shared/chat/repeats'
 import { latestSurfaces } from '@ramu/shared/chat/inlineUi'
 import type { AgentTask } from '@ramu/shared/types'
 
@@ -88,22 +89,13 @@ export function toBlocks(events: AgentEvent[]): Block[] {
       if (outcome && (outcome.startsWith('allowed') || outcome === 'approved' || outcome === 'allow')) continue
     }
     const last = blocks.at(-1)
-    // The same error again in a row (a limit met by each automatic try) stays one card, at its latest time; the end of
-    // each failed turn in between draws nothing, so it does not count as something between them.
-    if (event.kind === 'error') {
-      const previous = blocks.findLast((block) => !(block.kind === 'event' && block.event.kind === 'result'))
-      if (previous?.kind === 'event' && previous.event.kind === 'error' && previous.event.message === event.message) {
-        previous.event = event
-        continue
-      }
-    }
     if (event.kind === 'tool-use') {
       if (last?.kind === 'tools') last.tools.push(event)
       else blocks.push({ kind: 'tools', tools: [event] })
     } else blocks.push({ kind: 'event', event })
   }
   // Back-to-back settings changes read as one, and one that ends where it began (a switch back) leaves no line.
-  return foldSettingsChanges(
+  const settled = foldSettingsChanges(
     blocks,
     (block) =>
       block.kind === 'event' && block.event.kind === 'settings'
@@ -117,6 +109,19 @@ export function toBlocks(events: AgentEvent[]): Block[] {
         ? { ...last, event: { ...last.event, previous: first.event.previous } }
         : last,
   )
+  return foldRepeats(settled, repeatKey, (block, repeats) => ({ ...block, repeats }) as Block)
+}
+
+/** What makes two notices the same, so a run of them reads once; null for anything that always gets its own row. */
+function repeatKey(block: Block): string | null {
+  if (block.kind !== 'event') return null
+  const e = block.event
+  if (e.kind === 'error') return `error:${e.message}`
+  if (e.kind === 'result' && e.isError) return 'result:failed'
+  if (e.kind === 'recovery') return `recovery:${JSON.stringify(e.setupOmissions ?? null)}`
+  if (e.kind === 'compaction' && e.state === 'failed') return `compaction:${e.error ?? ''}`
+  if (e.kind === 'background-terminal-stop') return `stop:${e.command}`
+  return null
 }
 
 /** The position of a block in the full list; a tool group is found by its first call. */

@@ -88,19 +88,52 @@ export function goalFactLines(goal: ChatGoal): string[] {
   return lines
 }
 
+/** A pause undone within this long was a slip or a brief look, not part of the thread's story. */
+const BRIEF_PAUSE_MS = 2 * 60_000
+
+/** Events that show the agent working or the person speaking, so goal changes on either side of one both stand. */
+const AGENT_WORK = new Set<AgentEvent['kind']>([
+  'user',
+  'text',
+  'thinking',
+  'content',
+  'tool-use',
+  'error',
+  'result',
+  'question',
+  'permission-request',
+])
+
 /**
  * The goal events worth a line in the transcript. Every status tick is recorded, but the history only needs the turning points:
  * a goal set or edited, paused, resumed, blocked, stalled, failing its verification, out of turns or cleared. Completion has its own row at the end of its turn,
  * and provider waits and turn counts belong to the live tray.
+ *
+ * Changes the agent did no work between read as their net effect: a pause undone within a couple of minutes leaves no
+ * line, and a goal set and then edited reads as set, with its final wording. A longer pause stays, since it explains a
+ * gap in the thread.
  */
 export function goalChanges(events: readonly AgentEvent[]): Map<AgentEvent, GoalChange> {
   const changes = new Map<AgentEvent, GoalChange>()
   let previous: ChatGoal | null = null
+  let last: { event: AgentEvent; type: GoalChangeType; at: number } | null = null
   for (const event of events) {
-    if (event.kind !== 'goal') continue
+    if (event.kind !== 'goal') {
+      if (!event.agentId && AGENT_WORK.has(event.kind)) last = null
+      continue
+    }
     const goal = event.goal
+    const at = event.at ?? goal?.updatedAt ?? 0
     const add = (type: GoalChangeType, shown: ChatGoal) => {
-      changes.set(event, { type, goal: shown })
+      if (last?.type === 'paused' && type === 'resumed' && at - last.at <= BRIEF_PAUSE_MS) {
+        changes.delete(last.event)
+        last = null
+        return
+      }
+      const merged = (last?.type === 'set' || last?.type === 'edited') && type === 'edited' ? last.type : null
+      if (merged && last) changes.delete(last.event)
+      changes.set(event, { type: merged ?? type, goal: shown })
+      last = { event, type: merged ?? type, at }
     }
     if (!goal) {
       if (previous && previous.status !== 'completed') add('cleared', previous)
