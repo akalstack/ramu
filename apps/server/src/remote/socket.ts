@@ -168,12 +168,11 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
       destroy: () => ws.terminate(),
       end: () => ws.close(1000),
     }
+    // Answers are sent whatever is queued: the client asked for each, and calls in flight are capped. Only events,
+    // which a client never asked for one by one, end a connection that falls too far behind (see `sink.write`).
+    // Ending it here dropped a desktop that opened a long thread from several places at once, and it asked again.
     const send = (frame: SocketServerFrame) => {
       if (ws.readyState !== ws.OPEN) return
-      if (ws.bufferedAmount > maxBuffered) {
-        ws.terminate()
-        return
-      }
       ws.send(encodeSocketFrame(frame))
     }
     send({ t: 'ready', epoch: host.epoch })

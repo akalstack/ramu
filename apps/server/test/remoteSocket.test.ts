@@ -69,6 +69,20 @@ async function start(overrides: Partial<SocketHost> = {}, options = {}) {
   return { connect, sinks, invoked, sockets, port }
 }
 
+it('answers several large calls at once instead of dropping the connection', async () => {
+  const big = 'x'.repeat(3_000_000)
+  const { connect } = await start(
+    { invoke: async () => ({ ok: true, value: big }) },
+    // Smaller than the answers together, as a long thread opened from several places is to the real limit.
+    { maxBuffered: 4_000_000 },
+  )
+  const { ws, frames, until } = connect()
+  await until(() => frames.some((frame) => frame.t === 'ready'))
+  for (const id of [1, 2, 3]) ws.send(encodeSocketFrame({ t: 'invoke', id, method: 'thread', args: [] }))
+  await until(() => frames.filter((frame) => frame.t === 'result').length === 3)
+  expect(ws.readyState).toBe(ws.OPEN)
+})
+
 it('refuses an unauthenticated upgrade before any socket exists', async () => {
   const { connect, sockets } = await start()
   const { ws } = connect(SOCKET_PATH, 'bad')
