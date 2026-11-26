@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent } from 'react'
-import { ContentSkeleton } from '@/components/content-skeleton'
+import { TreeLoading } from './TreeLoading'
 import { Button } from '@/components/desktop-button'
 import type { DirEntry, RepositoryBinding } from '@ramu/shared/types'
 import { t, useLanguage } from '../../i18n'
@@ -616,7 +616,7 @@ export function RepoTree({
 
   const render = (dir: string, depth: number) =>
     children[dir] === undefined ? (
-      <ContentSkeleton rows={3} className="py-1" />
+      <TreeLoading depth={depth} />
     ) : (
       children[dir].map((e) => {
         const isFile = e.kind !== 'dir'

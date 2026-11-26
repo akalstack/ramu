@@ -28,6 +28,8 @@ vi.mock('react', async (original) => ({
   useRef(initial: unknown) {
     return (state.current.refs[state.refIndex++] ??= { current: initial })
   },
+  // The component is called as a plain function here; effects have nothing to run against.
+  useEffect() {},
 }))
 vi.mock('../src/i18n', () => ({
   useLanguage() {},

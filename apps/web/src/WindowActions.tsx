@@ -48,6 +48,7 @@ import { PROJECT_ACTIONS_EVENT, useProjectActions } from './workspace/useProject
 import { useProjectActionSettings } from './workspace/useProjectActionSettings'
 export { useProjectActions } from './workspace/useProjectActions'
 import { hostStorageFor } from './hostStorage'
+import { useHeldOrder } from './lib/heldOrder'
 
 /** Window-bar actions for the open chat, like T3 Code: saved project commands that run in a terminal. */
 export function WindowActions({ ctx, projectId }: { ctx: string; projectId?: string }) {
@@ -436,7 +437,11 @@ function ManageDialog({
   const { invoke, status } = useHost()
   const settings = useProjectActionSettings(projectId)
   const hidden = new Set(settings.hiddenIds)
-  const actions = settings.supported ? settings.actions.filter((action) => !hidden.has(action.id)) : fallbackActions
+  // The dropped order shows at once and stays until the saved actions match it.
+  const ordered = useHeldOrder(
+    settings.supported ? settings.actions.filter((action) => !hidden.has(action.id)) : fallbackActions,
+  )
+  const actions = ordered.items
   const hiddenActions = settings.actions.filter((action) => hidden.has(action.id))
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -446,7 +451,7 @@ function ManageDialog({
   const [error, setError] = useState<string | null>(null)
   const pending = useRef(false)
   const disabled = busy || settings.loading || status !== 'connected'
-  const mutate = async (operation: () => Promise<unknown>) => {
+  const mutate = async (operation: () => Promise<unknown>, failed?: () => void) => {
     if (pending.current || disabled) return
     pending.current = true
     setBusy(true)
@@ -455,6 +460,7 @@ function ManageDialog({
       await operation()
       window.dispatchEvent(new Event(PROJECT_ACTIONS_EVENT))
     } catch (reason) {
+      failed?.()
       setError(errorText(reason))
     } finally {
       pending.current = false
@@ -466,12 +472,15 @@ function ManageDialog({
     if (disabled || !settings.supported || from === to || to < 0 || to >= actions.length) return
     const next = [...actions]
     next.splice(to, 0, next.splice(from, 1)[0]!)
-    void mutate(() =>
-      invoke(
-        'projects.reorderActions',
-        projectId,
-        next.map((action) => action.id),
-      ),
+    ordered.hold(next.map((action) => action.id))
+    void mutate(
+      () =>
+        invoke(
+          'projects.reorderActions',
+          projectId,
+          next.map((action) => action.id),
+        ),
+      ordered.release,
     )
   }
   const drop = (event: DragEndEvent) => {

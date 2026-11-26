@@ -39,6 +39,7 @@ import { Attachments } from '../../../composer/Attachments'
 import { Textarea } from '@/components/ui/textarea'
 import { Menu } from '../../../Menu'
 import { useHost } from '../../../workspace/HostProvider'
+import { useHeldOrder } from '../../../lib/heldOrder'
 import { outbox, type OutboxItem } from '../../../composer/outbox'
 import { visibleText } from '../lib/messages'
 import { ICON_BUTTON_CLASS, QUEUED_MESSAGE_CLASS, GHOST_TEXT_BUTTON_CLASS } from '../styles'
@@ -319,7 +320,7 @@ function OutboxRow({
  */
 export function QueuedMessages({
   sessionId,
-  queued,
+  queued: saved,
   pending,
   paused,
   hostName,
@@ -350,12 +351,22 @@ export function QueuedMessages({
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
+  // The dropped order shows at once and stays until the host's queue matches it.
+  const ordered = useHeldOrder(saved)
+  const queued = ordered.items
   const ids = queued.map((message) => message.id)
   const reorder = (event: DragEndEvent) => {
     const from = ids.indexOf(String(event.active.id)),
       to = event.over ? ids.indexOf(String(event.over.id)) : -1
     if (readOnly || configuring || from < 0 || to < 0 || from === to) return
-    void act(() => invoke('agent.reorderQueued', sessionId, arrayMove(ids, from, to)))
+    const next = arrayMove(ids, from, to)
+    ordered.hold(next)
+    void act(() =>
+      Promise.resolve(invoke('agent.reorderQueued', sessionId, next)).catch((error: unknown) => {
+        ordered.release()
+        throw error
+      }),
+    )
   }
   return (
     <ComposerTraySection

@@ -1,4 +1,5 @@
 import { Skeleton } from '@/components/ui/skeleton'
+import { useEffect, useState } from 'react'
 import { cn } from 'cn'
 import { t, useLanguage } from '../i18n'
 
@@ -7,7 +8,14 @@ const Bar = ({ className, style }: { className?: string; style?: React.CSSProper
   <Skeleton className={cn('bg-fill rounded-(--radius-s)', className)} style={style} />
 )
 
-/** Placeholder geometry follows the content it replaces, without changing its surface. */
+/** A load this quick is not worth a placeholder: the content replaces it before it can be read. */
+const SHOW_AFTER_MS = 300
+
+/**
+ * Placeholder geometry follows the content it replaces, without changing its surface. It waits a moment before it
+ * shows: most loads finish first, and bars that appear and are at once replaced by content of another size made the
+ * surface jump twice.
+ */
 export function ContentSkeleton({
   variant = 'list',
   rows = 5,
@@ -20,6 +28,12 @@ export function ContentSkeleton({
   className?: string
 }) {
   useLanguage()
+  const [shown, setShown] = useState(false)
+  useEffect(() => {
+    const timer = setTimeout(() => setShown(true), SHOW_AFTER_MS)
+    return () => clearTimeout(timer)
+  }, [])
+  if (!shown) return <span role="status" className="sr-only" aria-label={label ?? t('Loading…')} />
   return (
     <div
       role="status"

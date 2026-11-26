@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useQueries } from '@tanstack/react-query'
 import { ArrowUp, Copy, FolderOpen } from 'lucide-react'
-import { ContentSkeleton } from '@/components/content-skeleton'
+import { TreeLoading } from './TreeLoading'
 import { Button } from '@/components/desktop-button'
 import { HOST_FILES_REPO } from '@ramu/shared/workspace/fileLinks'
 import type { DirEntry } from '@ramu/shared/types'
@@ -139,7 +139,7 @@ export function HostFolderTree({ taskId, filePath }: { taskId: string; filePath:
 
   const render = (dir: string, depth: number) => {
     const listing = children[dir]
-    if (listing === undefined) return <ContentSkeleton rows={3} className="py-1" />
+    if (listing === undefined) return <TreeLoading depth={depth} />
     if (listing instanceof Error)
       return (
         <p className="muted text-muted-foreground text-caption py-1" style={{ paddingLeft: 8 + depth * 12 }}>

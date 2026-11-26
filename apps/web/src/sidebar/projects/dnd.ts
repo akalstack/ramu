@@ -4,6 +4,7 @@ import { errorText } from '../../workspace/TaskPane'
 import { useWorkspace } from '../../workspace/workspace'
 import { useAddProject } from '../../workspace/addProject'
 import { useHost } from '../../workspace/HostProvider'
+import { useHeldOrder } from '../../lib/heldOrder'
 
 const hasFiles = (event: React.DragEvent) => event.dataTransfer.types.includes('Files')
 
@@ -12,11 +13,15 @@ export function useProjectsDragDrop() {
   const ws = useWorkspace()
   const { invoke } = useHost()
   const addProject = useAddProject()
+  // The dropped order shows at once and stays until the saved list matches it.
+  const ordered = useHeldOrder(ws.projects)
   const reorder = async (ids: string[]) => {
+    ordered.hold(ids)
     try {
       await invoke('projects.reorder', ids)
       await ws.refresh()
     } catch (e) {
+      ordered.release()
       notifyError(errorText(e), 'Projects')
     }
   }
@@ -37,5 +42,5 @@ export function useProjectsDragDrop() {
     setFolderOver(false)
     void addProject.addDropped([...event.dataTransfer.files])
   }
-  return { reorder, folderOver, onDragOver, onDragLeave, onDrop }
+  return { projects: ordered.items, reorder, folderOver, onDragOver, onDragLeave, onDrop }
 }

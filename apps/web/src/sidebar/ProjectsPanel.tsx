@@ -51,9 +51,9 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
   const recentMode = preferences.recentChatMode
   const latest = recentMode ? active.filter((t) => !t.pinnedAt).sort((a, b) => b.lastActiveAt - a.lastActiveAt) : []
   const bulk = useBulkThreadActions()
-  const { reorder, folderOver, onDragOver, onDragLeave, onDrop } = useProjectsDragDrop()
+  const { projects, reorder, folderOver, onDragOver, onDragLeave, onDrop } = useProjectsDragDrop()
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
-  const projectIds = ws.projects.map((project) => project.id)
+  const projectIds = projects.map((project) => project.id)
   const dropProject = (event: DragEndEvent) => {
     const from = projectIds.indexOf(String(event.active.id)),
       to = event.over ? projectIds.indexOf(String(event.over.id)) : -1
@@ -145,7 +145,7 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={dropProject}>
               <SortableContext items={projectIds} strategy={verticalListSortingStrategy}>
                 {identityView.arrange(
-                  ws.projects,
+                  projects,
                   (p) => p.id,
                   (p) => (
                     <ProjectGroup key={p.id} project={p} previewLimit={embedded ? EMBEDDED_THREAD_LIMIT : undefined} />
