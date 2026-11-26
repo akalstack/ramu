@@ -9,7 +9,8 @@ import { OverlayScrollArea } from '@/components/overlay-scroll-area'
 import { cn } from 'cn'
 import { FileIcon } from '../editor/FileIcon'
 import { FileDiff, FilePath, NearFileDiff, STATUS_LABEL } from '../git/PullRequestFiles'
-import { useViewedFiles } from '../git/viewedFiles'
+import { viewedKey } from '../git/viewedFiles'
+import { useViewedFiles } from '../changes/useViewedFiles'
 import { formatLocale, t, useLanguage } from '../i18n'
 import { useHost } from '../workspace/HostProvider'
 import { useHostRuntime } from '../workspace/workspace'
@@ -34,8 +35,10 @@ export function GitDetailsView({
   binding: RepositoryBinding
 }) {
   useLanguage()
-  const { invoke, id: hostId } = useHost()
-  const viewed = useViewedFiles(hostId, view.oid ? `commit:${view.oid}` : `compare:${binding.repoId}`)
+  const { invoke } = useHost()
+  // The same ticks the Changes tab keeps, per review on this device.
+  const { viewedFiles, markViewed } = useViewedFiles(view.oid ? `commit:${view.oid}` : `compare:${binding.repoId}`)
+  const isViewed = (file: (typeof files)[number]) => viewedFiles.has(viewedKey(file))
   const { on } = useHostRuntime()
   const [patch, setPatch] = useState<GitPatch | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -86,8 +89,8 @@ export function GitDetailsView({
   )
   const openByDefault = files.length <= OPEN_FILES && totals.added + totals.removed <= OPEN_LINES
   // A file ticked as viewed folds away, as it does on the hosting services, unless it was opened again by hand.
-  const isOpen = (file: (typeof files)[number]) => toggled.get(file.path) ?? (openByDefault && !viewed.isViewed(file))
-  const viewedCount = files.filter((file) => viewed.isViewed(file)).length
+  const isOpen = (file: (typeof files)[number]) => toggled.get(file.path) ?? (openByDefault && !isViewed(file))
+  const viewedCount = files.filter(isViewed).length
   const setAll = (open: boolean) => setToggled(new Map(files.map((file) => [file.path, open])))
   const anyOpen = files.some((file) => isOpen(file))
   const count = (value: number) => value.toLocaleString(formatLocale())
@@ -157,7 +160,7 @@ export function GitDetailsView({
               )}
               {files.map((file) => {
                 const open = isOpen(file)
-                const seen = viewed.isViewed(file)
+                const seen = isViewed(file)
                 const status = STATUS_LABEL[file.status]
                 return (
                   // No overflow clipping here: it would stop the file's header from staying pinned while its diff scrolls.
@@ -191,7 +194,7 @@ export function GitDetailsView({
                         <Checkbox
                           checked={seen}
                           onCheckedChange={(checked) => {
-                            viewed.setFile(file, checked === true)
+                            markViewed(viewedKey(file), checked === true)
                             // Ticking folds the file; the next one is then at the top.
                             setToggled((current) => {
                               const next = new Map(current)
