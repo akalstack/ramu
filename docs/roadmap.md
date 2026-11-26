@@ -14,7 +14,6 @@ Every change needs focused tests and typechecks for the packages it touches; des
 
 - **Transport:** a client that reconnects reads again what it shows, and a lost answer is retried under one key or reported as unknown ([Architecture](contributing/architecture.md#transport)). Still missing, and to start from measurements on real networks: a bounded event backlog on the host, so a short gap replays instead of re-reading every list; a bound on the full transcript sent when a thread is more than 2000 changes behind; one connection state shared by the desktop and the phone that tells synchronizing from current; a failed send on the desktop that outlives its view; and the phone reading again after a host restart.
 - **Windows:** a Windows build: the local service over a named pipe, finding provider CLIs, `gh` and ripgrep, keeping the host awake, and a Squirrel installer that hands `ramu://` links to the running app.
-- **Presenting from the phone:** **Present** a deck on a display the phone is connected to (AirPlay or a cable), with speaker notes on the phone ([Artifacts](guide/artifacts.md)).
 
 ## Blocked
 
