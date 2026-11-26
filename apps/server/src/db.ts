@@ -11,7 +11,10 @@ const BASELINE = 36
  * created with) and add an entry here (what an existing profile needs) together, and never edit a released entry:
  * people's threads and settings live in these files.
  */
-const MIGRATIONS: ((db: DatabaseSync) => void)[] = []
+const MIGRATIONS: ((db: DatabaseSync) => void)[] = [
+  // Listing every review sorted its whole JSON into a temporary file on each call: tens of MB written per refresh.
+  (db) => db.exec('CREATE INDEX reviews_by_time ON change_reviews(created_at)'),
+]
 
 const SCHEMA = `
 CREATE TABLE projects (
@@ -298,6 +301,8 @@ CREATE INDEX schedule_due ON schedules(state, next_run_at);
 CREATE INDEX run_queue ON schedule_runs(status, retry_at);
 
 CREATE INDEX reviews_by_session ON change_reviews(session_id, created_at);
+
+CREATE INDEX reviews_by_time ON change_reviews(created_at);
 
 CREATE INDEX sessions_by_parent ON agent_sessions(parent_session_id);
 

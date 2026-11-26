@@ -36,9 +36,9 @@ const versionOf = (path: string) => {
 
 it('upgrades an older profile in place, running each later migration once and in order', () => {
   const path = profile()
-  openDb(path).close()
+  openDb(path, []).close()
   const released = versionOf(path)
-  const db = openDb(path)
+  const db = openDb(path, [])
   db.exec("INSERT INTO projects (id, name, created_at) VALUES ('p', 'Project', 0)")
   db.close()
   const ran: string[] = []
@@ -102,6 +102,24 @@ it('refuses a profile from before the first public release without changing it',
   other.close()
   expect(() => openDb(path)).toThrow(/before 0\.1\.0/)
   expect(versionOf(path)).toBe(3)
+})
+
+it('lists reviews newest first without sorting their data into a temporary file', () => {
+  const path = profile()
+  openDb(path, []).close()
+  // A profile from before the index: the migration adds it.
+  const old = new DatabaseSync(path)
+  old.exec('DROP INDEX reviews_by_time')
+  old.close()
+  const db = openDb(path)
+  for (const query of [
+    'SELECT data FROM change_reviews ORDER BY created_at DESC, rowid DESC',
+    "SELECT data FROM change_reviews WHERE state='ready' ORDER BY created_at DESC, rowid DESC LIMIT 200",
+  ]) {
+    const plan = db.prepare(`EXPLAIN QUERY PLAN ${query}`).all() as { detail: string }[]
+    expect(plan.map((step) => step.detail).join('\n')).not.toMatch(/TEMP B-TREE/)
+  }
+  db.close()
 })
 
 it('reads an artifact as an App unless it says otherwise', () => {
