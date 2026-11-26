@@ -63,7 +63,7 @@ When a thread addresses review comments, the agent records an outcome for each t
 
 ### Shipping a change
 
-Ask a thread's agent to ship ("ship it", "get this to review", "put it live") and it carries the change to the project's finish line without you pressing each step. It works on a branch, reviews its own diff, pushes and opens the pull request, and Ramu watches it: failing checks come back to the agent, which fixes and pushes them, and review comments come back as rounds. Ramu tells the agent when the pull request is approved, merged or at the finish line, and the agent says so in one line.
+Ask a thread's agent to ship ("ship it", "get this to review", "put it live") and it carries the change to the project's finish line without you pressing each step. It works on a branch, reviews its own diff, pushes and opens the pull request, and Ramu watches it: failing checks come back to the agent, which fixes and pushes them, and review comments come back as rounds, once the reviewer has left no new comment for five minutes, so the agent answers the whole review at once. Ramu tells the agent when the pull request is approved, merged or at the finish line, and the agent says so in one line.
 
 Choose the finish line under **Ship** in the project's **Live app…** sheet, on the desktop or the phone:
 

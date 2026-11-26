@@ -31,6 +31,11 @@ import { coversPath } from '../agent/covers'
 const KEY = 'pull-request-watches'
 const INTERVAL = 60_000
 const RATE_LIMIT_PAUSE = 10 * 60_000
+/**
+ * A reviewer often leaves several comments over a few minutes. A round waits until none arrived for this long, so the
+ * agent answers the whole review once instead of fixing the first comment while the next is being written.
+ */
+export const REVIEW_QUIET_MS = 5 * 60_000
 /** Comment ids remembered per watch; the oldest are forgotten first. */
 const SEEN_LIMIT = 2_000
 interface Watch {
@@ -495,8 +500,9 @@ export class PullRequestWatchService {
   }
 
   /**
-   * New comments worth a round: in open threads, from trusted people other than the person, not yet seen. While
-   * drafted replies wait to be sent, new comments wait too, so the agent is not interrupted mid-review.
+   * New comments worth a round: in open threads, from trusted people other than the person, not yet seen, once the
+   * reviewer has gone quiet. While drafted replies wait to be sent, new comments wait too, so the agent is not
+   * interrupted mid-review.
    */
   private async pollReviews(watch: Watch, pr: PullRequestInfo): Promise<void> {
     const threads = await reviewThreads(watch.cwd, watch.url)
@@ -522,6 +528,11 @@ export class PullRequestWatchService {
         .map((comment) => comment.id),
     )
     if (!fresh.size) return
+    // Still being written: look again at the next poll. Asking by hand (Address review comments) does not wait.
+    const newest = Math.max(
+      ...threads.flatMap((thread) => thread.comments.filter((c) => fresh.has(c.id)).map((c) => c.createdAt)),
+    )
+    if (Date.now() - newest < REVIEW_QUIET_MS) return
     if (this.ship?.held(watch.sessionId, 'reviews')) return
     const waiting = this.drafts?.get(watch.url)
     if (waiting?.kind === 'replies' && waiting.drafts.some((draft) => !draft.postedId && draft.outcome !== 'skipped'))

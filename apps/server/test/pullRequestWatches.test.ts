@@ -3,7 +3,7 @@ import type { AgentSessionInfo, PullRequestInfo, PullRequestThread } from '@ramu
 import { openDb, type Db } from '../src/db'
 import { Workspace } from '../src/workspace/workspace'
 import type { AgentService } from '../src/agent'
-import { PullRequestWatchService } from '../src/background/pullRequestWatches'
+import { PullRequestWatchService, REVIEW_QUIET_MS } from '../src/background/pullRequestWatches'
 import { commitBranchInfo, currentBranch, git, headOid } from '../src/workspace/git'
 import {
   commitChecks,
@@ -147,6 +147,25 @@ describe('persistent PR watches', () => {
     await service.tick(120_000)
     expect(enqueue).toHaveBeenCalledTimes(2)
     expect(String(enqueue.mock.calls[1]![1])).toContain('[new]')
+  })
+
+  it('waits until a reviewer has stopped commenting, then hands over the whole review once', async () => {
+    pr.checks = []
+    const writing = { ...comment('c1', 'ana'), createdAt: Date.now() - 60_000 }
+    threads = [thread('t1', [writing])]
+    await watch()
+    await service.tick(0)
+    // A comment a minute old: the reviewer may still be writing the next one.
+    expect(enqueue).not.toHaveBeenCalled()
+    threads.push(thread('t2', [{ ...comment('c2', 'ana'), createdAt: Date.now() - 10_000 }]))
+    await service.tick(60_000)
+    expect(enqueue).not.toHaveBeenCalled()
+    // Quiet for long enough: both comments come in one round.
+    for (const entry of threads) entry.comments[0]!.createdAt = Date.now() - REVIEW_QUIET_MS - 1_000
+    await service.tick(120_000)
+    expect(enqueue).toHaveBeenCalledTimes(1)
+    expect(String(enqueue.mock.calls[0]![1])).toContain('Thread id: t1')
+    expect(String(enqueue.mock.calls[0]![1])).toContain('Thread id: t2')
   })
 
   it('never starts a round from comments outside the project', async () => {
