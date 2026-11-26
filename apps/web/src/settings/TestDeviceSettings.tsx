@@ -24,7 +24,7 @@ import { floatLiveView } from '../liveView/liveViewStore'
 import { useHostSelection } from '../workspace/HostSelection'
 import { useComputers } from '../workspace/computers'
 import { useWorkspace } from '../workspace/workspace'
-import { SettingsScopeContext } from './SettingsScope'
+import { SettingsScopeContext, useRemembered } from './SettingsScope'
 import { SETTINGS_FORM_CLASS } from './constants'
 
 const PLATFORM_TITLE: Record<TestPlatform, string> = { ios: 'iOS Simulator', android: 'Android emulator' }
@@ -187,7 +187,7 @@ function TestDeviceSettings({
   onLeave?: () => void
 }) {
   useLanguage()
-  const [status, setStatus] = useState<TestDeviceStatus | null>(null)
+  const [status, setStatus] = useRemembered<TestDeviceStatus | null>(`testDevices.status:${hostId}`, null)
   const [error, setError] = useState<string | null>(null)
   const [settingUp, setSettingUp] = useState(false)
   const load = useCallback(
@@ -199,7 +199,7 @@ function TestDeviceSettings({
         },
         (cause) => setError(errorText(cause)),
       ),
-    [hostId],
+    [hostId, setStatus],
   )
   useEffect(() => {
     void load()

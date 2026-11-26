@@ -1,5 +1,5 @@
 import { SettingsFieldContext } from './settingsField'
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { AppPreferences, ModelPreferences } from '@ramu/shared/types'
 import { DEFAULT_APP_PREFERENCES } from '@ramu/shared/types'
 import {
@@ -493,4 +493,33 @@ export function SettingsTargetSelector({ disabled }: { disabled: boolean }) {
       />
     </div>
   )
+}
+
+/** What each page last read from each host, for this window; see `useRemembered`. */
+const remembered = new Map<string, unknown>()
+
+/**
+ * State for something a Settings page reads from the host when it opens (a status, a list of checks). It starts from
+ * what the same page last read from the same host, and the fresh read replaces it when it arrives, so coming back to a
+ * page does not show "Checking…" and then grow again; on another host that lasted a network round trip each visit.
+ * `name` tells the page's readings apart. A host never read still starts from `initial`.
+ */
+export function useRemembered<T>(name: string, initial: T): [T, (next: T | ((previous: T) => T)) => void] {
+  const scope = useContext(SettingsScopeContext)
+  const key = `${scope?.target ?? ''}\n${name}`
+  const stored = (): T => (remembered.has(key) ? (remembered.get(key) as T) : initial)
+  const [state, setState] = useState(() => ({ key, value: stored() }))
+  const value = state.key === key ? state.value : stored()
+  const set = useCallback(
+    (next: T | ((previous: T) => T)) =>
+      setState((previous) => {
+        const base = previous.key === key ? previous.value : remembered.has(key) ? (remembered.get(key) as T) : initial
+        const value = typeof next === 'function' ? (next as (previous: T) => T)(base) : next
+        remembered.set(key, value)
+        return { key, value }
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `initial` only seeds a host never read; a new literal each render must not remake the setter
+    [key],
+  )
+  return [value, set]
 }

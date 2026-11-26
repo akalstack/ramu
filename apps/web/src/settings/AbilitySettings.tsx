@@ -28,7 +28,10 @@ import { Dropdown } from '../Menu'
 import { formatLocale, t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
 import { modelDisplayName, useModelSets } from '../models/ModelSets'
-import { useSettingsInvoke } from './SettingsScope'
+import { useRemembered, useSettingsInvoke } from './SettingsScope'
+
+/** One empty list for every reading that starts empty, so its identity does not change between renders. */
+const NONE: never[] = []
 
 const mcpValue = (tool: AbilityMcpTool) => `mcp:${tool.connectionId}:${tool.tool}`
 const mediaValue = (service: MediaService) => `media:${service}`
@@ -59,15 +62,15 @@ export function AbilitySettings({
   useLanguage()
   const invoke = useSettingsInvoke()
   const { catalogs } = useModelSets()
-  const [checks, setChecks] = useState<AbilityCheck[] | null>(null)
-  const [mcpChecks, setMcpChecks] = useState<AbilityMcpCheck[]>([])
-  const [media, setMedia] = useState<MediaService[]>([])
+  const [checks, setChecks] = useRemembered<AbilityCheck[] | null>('abilities.checks', null)
+  const [mcpChecks, setMcpChecks] = useRemembered<AbilityMcpCheck[]>('abilities.mcpChecks', NONE)
+  const [media, setMedia] = useRemembered<MediaService[]>('abilities.media', NONE)
   const [running, setRunning] = useState(false)
   // Approved Shared MCP tools an image or search ability can run on instead of a provider.
-  const [mcpTools, setMcpTools] = useState<AbilityMcpToolOption[]>([])
+  const [mcpTools, setMcpTools] = useRemembered<AbilityMcpToolOption[]>('abilities.mcpTools', NONE)
   useEffect(() => {
     void invoke('abilities.mcpTools').then(setMcpTools, () => setMcpTools([]))
-  }, [invoke])
+  }, [invoke, setMcpTools])
   const abilities: AbilityPreferences = { ...DEFAULT_ABILITY_PREFERENCES, ...value.abilities }
   useEffect(() => {
     let active = true
@@ -89,7 +92,7 @@ export function AbilitySettings({
       active = false
       window.clearInterval(timer)
     }
-  }, [invoke])
+  }, [invoke, setChecks, setMcpChecks, setMedia])
   const set = (ability: Ability, choice: AbilityChoice) =>
     onChange({ ...value, abilities: { ...abilities, choices: { ...abilities.choices, [ability]: choice } } })
   const setAutoMcp = (ability: Ability, tool: AbilityMcpTool | undefined) =>

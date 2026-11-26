@@ -3,7 +3,7 @@ import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { useStagedValue } from './stagedChanges'
 import { Check } from 'lucide-react'
 import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
-import { SettingsScopeContext } from './SettingsScope'
+import { SettingsScopeContext, useRemembered } from './SettingsScope'
 import { SETTINGS_FORM_CLASS } from './constants'
 import { ownHostId } from '../hosts'
 import type { RamuMethods } from '@ramu/shared/api'
@@ -33,7 +33,7 @@ export function ComputerSettings({
   const access = useRef({ hostId, readOnly })
   access.current = { hostId, readOnly }
   const canWrite = useCallback(() => access.current.hostId === hostId && !access.current.readOnly, [hostId])
-  const [status, setStatus] = useState<Status | null>(null)
+  const [status, setStatus] = useRemembered<Status | null>(`computer.status:${hostId}`, null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [revision, setRevision] = useState(0)
@@ -41,10 +41,9 @@ export function ComputerSettings({
   const refresh = useCallback(async () => {
     if (readOnly || access.current.readOnly || access.current.hostId !== hostId) return
     setStatus(await invokeOn(hostId, 'computer.status'))
-  }, [hostId, readOnly])
+  }, [hostId, readOnly, setStatus])
   useEffect(() => {
     let active = true
-    setStatus(null)
     void refresh().catch((reason) => active && setError(t(errorText(reason))))
     return () => {
       active = false
@@ -238,7 +237,7 @@ type LockedUse = ReturnType<RamuMethods['computer.lockedUse']>
  */
 function LockedUseRow({ hostId, visible, canWrite }: { hostId: string; visible: boolean; canWrite: () => boolean }) {
   useLanguage()
-  const [state, setState] = useState<LockedUse | null>(null)
+  const [state, setState] = useRemembered<LockedUse | null>(`computer.lockedUse:${hostId}`, null)
   const [confirming, setConfirming] = useState(false)
   const [waiting, setWaiting] = useState(false)
   const [error, setError] = useState('')
@@ -252,7 +251,7 @@ function LockedUseRow({ hostId, visible, canWrite }: { hostId: string; visible: 
     } catch (reason) {
       setError(t(errorText(reason)))
     }
-  }, [hostId, canWrite])
+  }, [canWrite, hostId, setState])
   useEffect(() => {
     if (visible) void read()
   }, [visible, read])

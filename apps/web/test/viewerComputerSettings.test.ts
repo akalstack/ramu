@@ -11,7 +11,7 @@ vi.mock('react', async () => ({
   useRef: (value: unknown) => (state.slots[state.cursor++] ??= { current: value }),
   useState: (value: unknown) => {
     const index = state.cursor++
-    if (!(index in state.slots)) state.slots[index] = index === 1 ? state.status : value
+    if (!(index in state.slots)) state.slots[index] = value
     return [state.slots[index], vi.fn()]
   },
   useEffect() {},
@@ -19,6 +19,11 @@ vi.mock('react', async () => ({
 }))
 vi.mock('../src/settings/SettingsScope', async () => ({
   SettingsScopeContext: (await import('react')).createContext(null),
+  // What the page last read from its host; the status under test stands in for it.
+  useRemembered: (name: string, initial: unknown) => [
+    name.startsWith('computer.status') ? state.status : initial,
+    vi.fn(),
+  ],
 }))
 // Staged settings apply on Save; here they apply at once so each write path still meets its access check.
 vi.mock('../src/settings/stagedChanges', () => ({

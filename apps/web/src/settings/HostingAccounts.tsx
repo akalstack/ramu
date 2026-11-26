@@ -16,7 +16,7 @@ import { Input } from '@/components/desktop-input'
 import { Dialog } from '../Menu'
 import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
-import { useSettingsInvoke, useSingleSettingsHost } from './SettingsScope'
+import { useRemembered, useSettingsInvoke, useSingleSettingsHost } from './SettingsScope'
 import { runProviderCommand } from '../models/ProviderSetupTerminal'
 import { invoke as openOnThisComputer } from '../ipc'
 import { githubTokenLink } from '@ramu/shared/githubTokenLink'
@@ -248,7 +248,7 @@ function RestartService() {
 export function HostingAccounts() {
   useLanguage()
   const invoke = useSettingsInvoke()
-  const [summary, setSummary] = useState<ForgeConnectionSummary | null>(null)
+  const [summary, setSummary] = useRemembered<ForgeConnectionSummary | null>('hosting.github', null)
   const [failed, setFailed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [open, setOpen] = useState(false)
@@ -279,10 +279,9 @@ export function HostingAccounts() {
         setBusy(false)
       },
     )
-  }, [invoke])
+  }, [invoke, setSummary])
   useEffect(() => {
-    // A different host has different accounts: forget the previous host's list, any open form and its token.
-    setSummary(null)
+    // A different host has different accounts: forget any open form and its token. The list is remembered per host.
     setForm(null)
     setRemoving(null)
     setActionError(null)
@@ -601,7 +600,7 @@ function gitlabHeadline(summary: GitlabSummary | null, failed: string | null) {
 /** GitLab merge requests, pipelines and issues use a token saved here, the host's own `glab` sign-in or `GITLAB_TOKEN`. */
 function GitlabRow({ canAdminister }: { canAdminister: boolean }) {
   const invoke = useSettingsInvoke()
-  const [summary, setSummary] = useState<GitlabSummary | null>(null)
+  const [summary, setSummary] = useRemembered<GitlabSummary | null>('hosting.gitlab', null)
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState<string | null>(null)
   const load = useCallback(
@@ -619,7 +618,7 @@ function GitlabRow({ canAdminister }: { canAdminister: boolean }) {
         },
       )
     },
-    [invoke],
+    [invoke, setSummary],
   )
   useEffect(() => load(false), [load])
   const [form, setForm] = useState(false)
@@ -764,26 +763,29 @@ function TokenServiceRow<S extends TokenSummary>({
   save: (field: string, token: string) => Promise<S> | S
   remove: () => Promise<S> | S
 }) {
-  const [summary, setSummary] = useState<S | null>(null)
+  const [summary, setSummary] = useRemembered<S | null>(`hosting.${brand}`, null)
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState<string | null>(null)
   const [form, setForm] = useState(false)
-  const call = useCallback((work: () => Promise<S> | S) => {
-    setBusy(true)
-    setFailed(null)
-    void Promise.resolve()
-      .then(work)
-      .then(
-        (next) => {
-          setSummary(next)
-          setBusy(false)
-        },
-        (reason) => {
-          setFailed(errorText(reason))
-          setBusy(false)
-        },
-      )
-  }, [])
+  const call = useCallback(
+    (work: () => Promise<S> | S) => {
+      setBusy(true)
+      setFailed(null)
+      void Promise.resolve()
+        .then(work)
+        .then(
+          (next) => {
+            setSummary(next)
+            setBusy(false)
+          },
+          (reason) => {
+            setFailed(errorText(reason))
+            setBusy(false)
+          },
+        )
+    },
+    [setSummary],
+  )
   const loadNow = useRef(load)
   loadNow.current = load
   useEffect(() => call(() => loadNow.current(false)), [call])

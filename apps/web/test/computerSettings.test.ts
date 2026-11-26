@@ -5,13 +5,18 @@ import { beforeEach, expect, it, vi } from 'vitest'
 const state = vi.hoisted(() => ({ index: 0, status: {} as Record<string, unknown>, invoke: vi.fn() }))
 vi.mock('react', async () => ({
   ...(await vi.importActual<typeof import('react')>('react')),
-  useState: (initial: unknown) => [state.index++ === 0 ? state.status : initial, vi.fn()],
+  useState: (initial: unknown) => [initial, vi.fn()],
   useEffect() {},
 }))
 vi.mock('../src/ipc', () => ({ invokeOn: state.invoke, ramu: { invoke: state.invoke } }))
 vi.mock('../src/hosts', () => ({ ownHostId: () => 'local' }))
 vi.mock('../src/settings/SettingsScope', async () => ({
   SettingsScopeContext: (await import('react')).createContext(null),
+  // What the page last read from its host; the status under test stands in for it.
+  useRemembered: (name: string, initial: unknown) => [
+    name.startsWith('computer.status') ? state.status : initial,
+    vi.fn(),
+  ],
 }))
 vi.mock('../src/workspace/computers', () => ({ useComputers: () => null }))
 vi.mock('../src/i18n', () => ({ useLanguage() {}, t: (text: string) => text }))
