@@ -6068,9 +6068,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Previous slide': 'Slide sebelumnya',
   'Next slide': 'Slide berikutnya',
   '{current} of {count}': '{current} dari {count}',
-  Present: 'Presentasikan',
-  'Show one slide at a time, full screen. Press Escape to stop.':
-    'Tampilkan satu slide per layar penuh. Tekan Escape untuk berhenti.',
   'Share PowerPoint': 'Bagikan PowerPoint',
   'Share Word': 'Bagikan Word',
   'Share CSV': 'Bagikan CSV',
@@ -6482,7 +6479,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Making the video…': 'Menyiapkan video…',
   'Run {server}’s read-only tools without asking, so scheduled runs keep going':
     'Jalankan alat baca-saja {server} tanpa bertanya, agar run terjadwal tetap berjalan',
-  'Presenter notes': 'Catatan presenter',
   'No speaker notes on this slide.': 'Tidak ada catatan pembicara di slide ini.',
   'Edit as formatted text': 'Sunting sebagai teks berformat',
   'Block {number}': 'Blok {number}',

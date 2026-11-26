@@ -298,8 +298,6 @@ interface ArtifactMethods {
   /** Says this device is (or stopped) editing an artifact's text, and returns the other devices editing it now. */
   /** `part` is where this device is: the heading above its last change, or the slide it changed. */
   'artifacts.editing'(artifactId: string, editing: boolean, part?: string | null): string[]
-  /** Tells this host's other devices which slide of a deck the person is on, so a desktop presenting it follows. */
-  'artifacts.turnSlide'(artifactId: string, index: number): void
   /** Saves the person's text for each slide of a deck as a new version on top of `base`; refused if another came since. */
   'artifacts.editSlides'(
     artifactId: string,
@@ -2153,8 +2151,6 @@ export type PushEvents = {
     run?: import('./artifacts').ArtifactRun
     notice?: { title: string; body: string }
   }
-  /** A phone turned a deck's slide; a desktop presenting that deck shows the same one. */
-  'artifacts:slide': { artifactId: string; index: number }
   /** `created` is the id of a summary that just became ready, so clients can raise one notification. */
   'summaries:changed': { created: string | null }
   'rules:changed': Record<string, never>

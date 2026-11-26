@@ -331,7 +331,6 @@ export function PageView({
   const state = useRef<InteractiveState | null>(null)
   const revision = useRef(0)
   const frame = useRef<HTMLIFrameElement>(null)
-  const stage = useRef<HTMLDivElement>(null)
   const load = useCallback(async () => {
     try {
       const [info, saved] = await Promise.all([
@@ -390,28 +389,7 @@ export function PageView({
     document?.reference.network,
   )
   const slides = document ? slideCount(document) : 0
-  // Each slide's title and notes for the presenter window, from the deck's source.
-  const deckSource = document?.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.slides)?.content
-  const slideAt = useMemo(() => {
-    if (!deckSource) return undefined
-    const deck = (JSON.parse(deckSource) as { slides: Slide[] }).slides
-    const titled = (slide: Slide | undefined) => slide?.title || slide?.body?.split('\n')[0] || ''
-    return (index: number) => ({
-      title: titled(deck[index]),
-      notes: deck[index]?.notes ?? '',
-      next: deck[index + 1] ? titled(deck[index + 1]) : null,
-    })
-  }, [deckSource])
-  const slideControls = useSlideControls(frame, stage, instance, slides, slideAt)
-  // While this deck is presented here, a phone turning its slides turns them here too.
-  const { presenting, show: showSlide } = slideControls
-  useEffect(
-    () =>
-      on('artifacts:slide', (payload) => {
-        if (presenting && payload.artifactId === artifactId) showSlide(payload.index, true)
-      }),
-    [on, presenting, artifactId, showSlide],
-  )
+  const slideControls = useSlideControls(frame, instance, slides)
   useEffect(() => setReady(false), [url])
   const askThread = useCallback(
     (prompt: string, title: string) =>
@@ -1565,8 +1543,7 @@ export function PageView({
         className={`relative min-h-0 flex-1 overflow-auto ${width ? 'flex justify-center bg-fill px-3 py-4' : ''}`}
       >
         <div
-          ref={stage}
-          className={`relative ${width ? 'h-full overflow-hidden rounded-lg bg-(--canvas)' : 'size-full'} ${slideControls.presenting ? '[&>iframe]:pointer-events-none' : ''}`}
+          className={`relative ${width ? 'h-full overflow-hidden rounded-lg bg-(--canvas)' : 'size-full'}`}
           style={{ width }}
         >
           {native && document ? <CardArtifact page={page} document={document} viewOnly={viewOnly} /> : null}

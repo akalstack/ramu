@@ -623,20 +623,6 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
         return editingPresence.mark(artifactId, device, editing, part ?? null)
       },
     },
-    'artifacts.turnSlide': {
-      args: z.tuple([
-        id,
-        z
-          .number()
-          .int()
-          .min(0)
-          .max(SLIDES_MAX - 1),
-      ]),
-      run: (artifactId: string, index: number) => {
-        if (need().pages.get(artifactId).kind !== 'slides') throw new Error('Only a deck has slides to turn.')
-        ctx.host.send('artifacts:slide', { artifactId, index })
-      },
-    },
     'artifacts.setRange': {
       args: z.tuple([id, z.number().int().positive(), z.number().int().min(1).max(DASHBOARD_RANGE_MAX).nullable()]),
       run: async (artifactId: string, base: number, days: number | null) => {
