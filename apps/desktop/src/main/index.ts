@@ -50,6 +50,7 @@ import { rememberBounds, savedBounds } from './windowBounds'
 import { runtimeBuild } from '@ramu/server/build'
 import { deviceProverFor, loadDeviceKey } from './deviceKeyStore'
 import { unloadLoginService } from './runtimeLauncher'
+import { createInvokeLog } from './invokeLog'
 import type { AppUpdateStatus } from '@ramu/shared/updates'
 import { configureDesktopLanguage, desktopLanguage, t } from './localization'
 import { editorMenu, type EditorMenuOptions } from './editorMenu'
@@ -1241,7 +1242,13 @@ async function main() {
     }
     throw new Error('Invalid request')
   }
-  ipcMain.handle('ramu:invoke', async (event, requestMethod: unknown, requestArgs: unknown, requestHost?: unknown) => {
+  const invokeLog = createInvokeLog(join(userData, 'desktop-errors.log'))
+  const handleInvoke = async (
+    event: Electron.IpcMainInvokeEvent,
+    requestMethod: unknown,
+    requestArgs: unknown,
+    requestHost?: unknown,
+  ) => {
     // Only our windows may invoke IPC. Normal calls reach their owning computer; explicit computer management validates its target below.
     // The live view window is trusted only for watching and stopping.
     const fromLive = liveWindow.owns(event.sender)
@@ -1827,6 +1834,14 @@ async function main() {
       return updateView(updateStatus!)
     }
     return runtimeInvokeRecoverable(target, method, args)
+  }
+  ipcMain.handle('ramu:invoke', async (event, requestMethod: unknown, requestArgs: unknown, requestHost?: unknown) => {
+    try {
+      return await handleInvoke(event, requestMethod, requestArgs, requestHost)
+    } catch (error) {
+      invokeLog.record(requestMethod, requestHost, error)
+      throw error
+    }
   })
 
   // Dictation bridge. Only the shell window's own main frame; audio and the lease never reach a guest page or a host.
