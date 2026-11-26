@@ -888,24 +888,27 @@ function MergeDialog({
   const methods = options.data?.methods ?? []
   const chosen = method && methods.includes(method) ? method : (methods[0] ?? null)
   const blockers = options.data?.blockers ?? []
+  // A merge queue picks the method, merges in its turn and takes a pull request whose checks have not finished.
+  const queue = !!options.data?.queue
+  const later = whenChecksPass || queue
 
   const merge = async () => {
-    if (!chosen) return
+    if (!chosen && !queue) return
     setBusy(true)
     setError(null)
     try {
       await invoke('forge.pullRequestAction', taskId, repoId, url, {
-        kind: whenChecksPass ? 'auto-merge' : 'merge',
-        method: chosen,
+        kind: whenChecksPass && !queue ? 'auto-merge' : 'merge',
+        method: chosen ?? 'merge',
         deleteBranch: deleteBranch && !!options.data?.canDeleteBranch,
       })
       try {
-        localStorage.setItem(LAST_METHOD + repoId, chosen)
+        if (chosen) localStorage.setItem(LAST_METHOD + repoId, chosen)
       } catch {
         // Remembering the method is a convenience.
       }
       // An automatic merge happens later, so its thread stays open until it does.
-      if (markDone && threadTaskId && !whenChecksPass) await invoke('tasks.done', threadTaskId, true).catch(() => {})
+      if (markDone && threadTaskId && !later) await invoke('tasks.done', threadTaskId, true).catch(() => {})
       onClose(true)
     } catch (e) {
       setError(errorText(e))
@@ -916,8 +919,16 @@ function MergeDialog({
   return (
     <Dialog
       title={t('Merge pull request')}
-      confirmLabel={busy ? t('Merging…') : whenChecksPass ? t('Merge when checks pass') : t('Merge')}
-      confirmDisabled={!chosen || (!!blockers.length && !whenChecksPass) || options.isPending}
+      confirmLabel={
+        queue
+          ? t('Add to merge queue')
+          : busy
+            ? t('Merging…')
+            : whenChecksPass
+              ? t('Merge when checks pass')
+              : t('Merge')
+      }
+      confirmDisabled={(!chosen && !queue) || (!!blockers.length && !later) || options.isPending}
       busy={busy}
       error={error ?? (options.isError ? errorText(options.error) : null)}
       onConfirm={() => void merge()}
@@ -931,6 +942,11 @@ function MergeDialog({
               <li key={blocker}>{t(blocker)}</li>
             ))}
           </ul>
+        )}
+        {queue && (
+          <p className="m-0 text-control text-muted-foreground">
+            {t('This branch merges through a queue. The hosting service merges the pull request in its turn.')}
+          </p>
         )}
         {!!methods.length && (
           <Dropdown
@@ -946,13 +962,13 @@ function MergeDialog({
             {t('Delete the branch on the hosting service')}
           </label>
         )}
-        {supportsPullRequest(service, 'auto-merge') && (
+        {supportsPullRequest(service, 'auto-merge') && !queue && (
           <label className="flex items-center gap-2 text-control">
             <Checkbox checked={whenChecksPass} onCheckedChange={(checked) => setWhenChecksPass(checked === true)} />
             {t('Merge automatically once required checks pass')}
           </label>
         )}
-        {threadTaskId && !whenChecksPass && (
+        {threadTaskId && !later && (
           <label className="flex items-center gap-2 text-control">
             <Checkbox checked={markDone} onCheckedChange={(checked) => setMarkDone(checked === true)} />
             {t('Mark its thread done')}

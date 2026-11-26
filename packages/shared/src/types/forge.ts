@@ -273,6 +273,8 @@ export interface MergeOptions {
   blockers: string[]
   /** The service can delete the head branch after merging. */
   canDeleteBranch: boolean
+  /** The branch merges through a queue: merging adds the pull request to it and the service merges it in turn. */
+  queue?: boolean
 }
 
 export type PullRequestAction =

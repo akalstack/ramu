@@ -1301,19 +1301,22 @@ function MergeSheet({
   const methods = options?.methods ?? []
   const chosen = method && methods.includes(method) ? method : (methods[0] ?? null)
   const blockers = options?.blockers ?? []
+  // A merge queue picks the method, merges in its turn and takes a pull request whose checks have not finished.
+  const queue = !!options?.queue
+  const later = whenChecksPass || queue
 
   const merge = async () => {
-    if (!chosen) return
+    if (!chosen && !queue) return
     setBusy(true)
     setError(null)
     try {
       await store.invoke(computerId, 'forge.pullRequestAction', taskId, repoId, url, {
-        kind: whenChecksPass ? 'auto-merge' : 'merge',
-        method: chosen,
+        kind: whenChecksPass && !queue ? 'auto-merge' : 'merge',
+        method: chosen ?? 'merge',
         deleteBranch: deleteBranch && !!options?.canDeleteBranch,
       })
       // An automatic merge happens later, so its thread stays open until it does.
-      if (markDone && threadTaskId && !whenChecksPass)
+      if (markDone && threadTaskId && !later)
         await store.invoke(computerId, 'tasks.done', threadTaskId, true).catch(() => {})
       onClose(true)
     } catch (e) {
@@ -1345,6 +1348,11 @@ function MergeSheet({
           ))}
         </View>
       ) : null}
+      {queue ? (
+        <T size={font.control} tone="muted" style={{ marginHorizontal: space.l }}>
+          {say('This branch merges through a queue. The hosting service merges the pull request in its turn.')}
+        </T>
+      ) : null}
       {methods.length ? (
         <SheetGroup title={say('Merge method')}>
           {methods.map((value) => (
@@ -1357,7 +1365,7 @@ function MergeSheet({
           ))}
         </SheetGroup>
       ) : null}
-      {options?.canDeleteBranch || threadTaskId || supportsPullRequest(service, 'auto-merge') ? (
+      {!queue && (options?.canDeleteBranch || threadTaskId || supportsPullRequest(service, 'auto-merge')) ? (
         <SheetGroup>
           {supportsPullRequest(service, 'auto-merge') ? (
             <SheetOption
@@ -1401,8 +1409,16 @@ function MergeSheet({
         ) : null}
         <Button
           icon={GitMerge}
-          title={busy ? say('Merging…') : whenChecksPass ? say('Merge when checks pass') : say('Merge')}
-          disabled={busy || !chosen || (!!blockers.length && !whenChecksPass)}
+          title={
+            queue
+              ? say('Add to merge queue')
+              : busy
+                ? say('Merging…')
+                : whenChecksPass
+                  ? say('Merge when checks pass')
+                  : say('Merge')
+          }
+          disabled={busy || (!chosen && !queue) || (!!blockers.length && !later)}
           onPress={() => void merge()}
         />
       </View>

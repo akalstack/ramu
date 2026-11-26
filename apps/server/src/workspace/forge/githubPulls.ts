@@ -378,7 +378,35 @@ export function mergeOptionsOf(raw: Omit<RawOne['repository'], 'pullRequest'>, p
 
 export async function mergeOptions(cwd: string, url: string): Promise<MergeOptions> {
   const { repository: raw, pr } = await readOne(cwd, url)
-  return mergeOptionsOf(raw, pr)
+  const options = mergeOptionsOf(raw, pr)
+  // The queue picks the method and removes the branch, and takes a pull request whose checks have not finished.
+  return (await mergesThroughQueue(cwd, pr.id))
+    ? { ...options, methods: [], canDeleteBranch: false, queue: true }
+    : options
+}
+
+/**
+ * Whether the base branch merges through a queue. Asked on its own, so a GitHub Enterprise Server too old to know the
+ * field still lists and reads pull requests; there, nothing merges through a queue.
+ */
+async function mergesThroughQueue(cwd: string, id: string): Promise<boolean> {
+  const raw = await githubGraphql<{ node: { isMergeQueueEnabled?: boolean } | null }>(
+    cwd,
+    'query($id: ID!) { node(id: $id) { ... on PullRequest { isMergeQueueEnabled } } }',
+    { id },
+  ).catch(() => null)
+  return raw?.node?.isMergeQueueEnabled === true
+}
+
+/** Leaves the merge to GitHub: once its requirements are met, or in its turn where the branch has a merge queue. */
+async function enableAutoMerge(cwd: string, id: string, method: MergeMethod | null): Promise<void> {
+  await githubGraphql(
+    cwd,
+    `mutation($id: ID!, $method: PullRequestMergeMethod) {
+      enablePullRequestAutoMerge(input: { pullRequestId: $id, mergeMethod: $method }) { clientMutationId }
+    }`,
+    { id, method: method ? MERGE_METHOD[method] : null },
+  )
 }
 
 const MERGE_METHOD: Record<MergeMethod, string> = { merge: 'MERGE', squash: 'SQUASH', rebase: 'REBASE' }
@@ -389,6 +417,8 @@ export async function pullRequestAction(cwd: string, url: string, action: PullRe
   const id = pr.id
   switch (action.kind) {
     case 'merge': {
+      // A branch with a merge queue refuses a direct merge; joining the queue is how it merges.
+      if (await mergesThroughQueue(cwd, id)) return enableAutoMerge(cwd, id, null)
       try {
         await githubGraphql(
           cwd,
@@ -445,14 +475,7 @@ export async function pullRequestAction(cwd: string, url: string, action: PullRe
       return
     // GitHub deletes the branch after an automatic merge only by the repository's own setting.
     case 'auto-merge':
-      await githubGraphql(
-        cwd,
-        `mutation($id: ID!, $method: PullRequestMergeMethod!) {
-          enablePullRequestAutoMerge(input: { pullRequestId: $id, mergeMethod: $method }) { clientMutationId }
-        }`,
-        { id, method: MERGE_METHOD[action.method] },
-      )
-      return
+      return enableAutoMerge(cwd, id, action.method)
     case 'update-branch':
       await githubGraphql(
         cwd,

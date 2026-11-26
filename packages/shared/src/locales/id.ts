@@ -4209,6 +4209,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   'No change': 'Tanpa perubahan',
   Skip: 'Lewati',
   'Request review': 'Minta review',
+  'Add to merge queue': 'Tambahkan ke antrean merge',
+  'This branch merges through a queue. The hosting service merges the pull request in its turn.':
+    'Branch ini di-merge lewat antrean. Layanan hosting me-merge pull request saat gilirannya.',
   Approve: 'Setujui',
   'Request changes': 'Minta perubahan',
   'Squash and merge': 'Squash dan merge',
