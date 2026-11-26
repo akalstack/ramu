@@ -65,6 +65,6 @@ On the phone, the host's own work (such as learning or recaps being generated) i
 
 - **Learned** lists "What Ramu learned" summaries ([Learning](memory-and-learning.md)).
 - **Done** shows threads finished in the last 7 days. A recap summarizes what each did, on its row, and the daily recap's state and refresh sit at the top. A recap that asks for a decision is in the Brief, with **Mark done**.
-- **Done for you**, at the top of **Done**, lists what [shipping](git-hosting.md#shipping-a-change) did without asking in the last week, such as "Fixed failing checks on #42". A row opens its thread. **Undo** pushes a commit that reverts that fix and tells the thread not to push it again. It works while nothing came after the fix on the branch and the checkout has no uncommitted changes; otherwise undo it from the thread.
+- **Done for you**, at the top of **Done**, lists what [shipping](git-hosting.md#shipping-a-change) did without asking in the last week, such as "Fixed failing checks on #42" or "Replied to reviewers on #42". A row opens its thread. **Undo** on a fix pushes a commit that reverts it and tells the thread not to push it again. It works while nothing came after the fix on the branch and the checkout has no uncommitted changes; otherwise undo it from the thread. **Undo** on replies deletes the replies Ramu posted; the fixes stay pushed.
 
 Nothing needs clearing. Rows leave as you answer or finish them.

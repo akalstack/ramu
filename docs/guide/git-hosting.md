@@ -63,7 +63,7 @@ When a thread addresses review comments, the agent records an outcome for each t
 
 ### Shipping a change
 
-Ask a thread's agent to ship ("ship it", "get this to review", "put it live") and it carries the change to the project's finish line without you pressing each step. It works on a branch, reviews its own diff, pushes and opens the pull request, and Ramu watches it: failing checks come back to the agent, which fixes and pushes them, and review comments come back as rounds whose replies wait for you in the **Review replies** card. Ramu tells the agent when the pull request is approved, merged or at the finish line, and the agent says so in one line.
+Ask a thread's agent to ship ("ship it", "get this to review", "put it live") and it carries the change to the project's finish line without you pressing each step. It works on a branch, reviews its own diff, pushes and opens the pull request, and Ramu watches it: failing checks come back to the agent, which fixes and pushes them, and review comments come back as rounds. Ramu tells the agent when the pull request is approved, merged or at the finish line, and the agent says so in one line.
 
 Choose the finish line under **Ship** in the project's **Live app…** sheet, on the desktop or the phone:
 
@@ -75,9 +75,15 @@ Choose the finish line under **Ship** in the project's **Live app…** sheet, on
 
 **Suggested** picks one for you: **Ready for review** for a repository that belongs to an organization or someone else, **Live in production** for your own with a live address (**Merged** without one), and **Pull request** without a Git host. An agent can ask for an earlier finish line, never a later one.
 
-Approving, merging and production deploys still ask you, as they do anywhere else. Ship runs up to 3 rounds of fixing checks and 5 review rounds by default; when one runs out, the agent asks whether to run more rounds or stop, and the question waits in Inbox's Brief. **Fix failing checks** and **Address review comments** still work by hand and don't count as rounds.
+Under the finish line, the sheet shows what Ship may do without stopping for you, for the steps that finish line reaches:
 
-Prepared work waits in Inbox's Brief with the answer first, such as "#42 · 3 replies drafted" or "Review drafted", and **Review and send** opens the pull request where you check and send it. Each check fix Ship pushed without asking is listed under **Done for you** in Inbox's **Done**, with **Undo** ([Learned and Done](inbox.md#learned-and-done)).
+- **Send replies that report a fix** (on): after a review round, Ramu pushes the branch and posts the replies that only say what was fixed, and asks the reviewers again once nothing is left to send. A reply that disagrees with the reviewer or asks a question still waits for you in the **Review replies** card.
+- **Merge when approved** (off): the agent turns on the Git host's own auto-merge, so the pull request merges when its checks pass and branch protection allows. A plain merge still asks you.
+- **Deploy to production without asking again** (on): a project's first production deploy asks. After you allow it, later ones from a thread shipping to **Live in production** run on their own, migrations first, and check the live address.
+
+A choice the repository's `ramu.json` keeps with a person is off and says so. Approving always asks you, as it does anywhere else. Ship runs up to 3 rounds of fixing checks and 5 review rounds by default; when one runs out, the agent asks whether to run more rounds or stop, and the question waits in Inbox's Brief. **Fix failing checks** and **Address review comments** still work by hand and don't count as rounds.
+
+Prepared work waits in Inbox's Brief with the answer first, such as "#42 · 3 replies drafted" or "Review drafted", and **Review and send** opens the pull request where you check and send it. Each check fix Ship pushed and each set of replies it posted without asking is listed under **Done for you** in Inbox's **Done**, with **Undo** (a revert commit for a fix, deleting the replies for replies) ([Learned and Done](inbox.md#learned-and-done)).
 
 A team sets the limit in `ramu.json` on the default branch ([Repository settings](configuration.md#repository-settings)). Ramu reads it from the Git host's copy of that branch, not from the thread's checkout, so an agent can't raise its own limit.
 
