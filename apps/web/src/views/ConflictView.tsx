@@ -34,20 +34,35 @@ const REASON: Record<'binary' | 'too-large' | 'deleted', string> = {
   deleted: 'One side deleted this file and the other changed it. Keep the change or the deletion.',
 }
 
-function Side({ title, lines, tone }: { title: string; lines: string[]; tone: 'current' | 'incoming' | 'base' }) {
+function Side({
+  title,
+  lines,
+  tone,
+  action,
+}: {
+  title: string
+  lines: string[]
+  tone: 'current' | 'incoming' | 'base'
+  /** The button that keeps this side, beside the code it keeps, so a narrow view needs no reading across. */
+  action?: React.ReactNode
+}) {
   return (
     <div className="flex min-w-0 flex-col">
       <div
         className={cn(
-          'px-2 py-0.5 text-caption font-medium',
+          'flex min-h-7 flex-wrap items-center gap-x-2 gap-y-1 px-2 py-0.5 text-caption font-medium',
           tone === 'current' ? 'text-ok' : tone === 'incoming' ? 'text-brand' : 'text-muted-foreground',
         )}
       >
-        {title}
+        <span className="min-w-16 flex-1 truncate" title={title}>
+          {title}
+        </span>
+        {action}
       </div>
       <pre
         className={cn(
-          'm-0 min-h-6 overflow-x-auto px-2 py-1 font-mono text-[length:var(--font-code,12px)] leading-[1.5] whitespace-pre',
+          // A long side scrolls in place, so the other side and the buttons stay in reach.
+          'm-0 max-h-[420px] min-h-6 overflow-auto px-2 py-1 font-mono text-[length:var(--font-code,12px)] leading-[1.5] whitespace-pre',
           tone === 'current' ? 'bg-ok/10' : tone === 'incoming' ? 'bg-brand/10' : 'bg-fill',
         )}
       >
@@ -127,8 +142,9 @@ export function ConflictView({ taskId, view, binding }: { taskId: string; view: 
   )
 
   return (
-    <OverlayScrollArea className="flex-1 min-h-0">
-      <div className="mx-auto flex w-full max-w-[980px] flex-col gap-4 p-6">
+    // Sized by its own pane, not the window: beside the sidebar and a thread, a wide window still leaves it narrow.
+    <OverlayScrollArea className="@container flex-1 min-h-0">
+      <div className="mx-auto flex w-full max-w-[980px] flex-col gap-4 p-3 @min-[620px]:p-6">
         <header className="flex flex-col gap-2">
           <h2 className="m-0 min-w-0 font-mono text-control font-semibold [overflow-wrap:anywhere]">{view.path}</h2>
           {data && (
@@ -204,29 +220,40 @@ export function ConflictView({ taskId, view, binding }: { taskId: string; view: 
                 <span className="mr-auto text-caption text-muted-foreground">
                   {t('Conflict {0} · line {1}', { '0': String(hunk.index + 1), '1': String(hunk.line + 1) })}
                 </span>
-                {(['current', 'incoming', 'both'] as const).map((choice) => (
-                  <Button
-                    key={choice}
-                    variant="ghost"
-                    size="xs"
-                    disabled={busy}
-                    onClick={() => void choose(choice, hunk.index)}
-                  >
-                    {t(CHOICE_LABEL[choice])}
-                  </Button>
-                ))}
+                <Button variant="ghost" size="xs" disabled={busy} onClick={() => void choose('both', hunk.index)}>
+                  {t(CHOICE_LABEL.both)}
+                </Button>
               </div>
               {context.length > 0 && (
                 <pre className="m-0 overflow-x-auto px-2 py-1 font-mono text-[length:var(--font-code,12px)] leading-[1.5] whitespace-pre text-muted-foreground">
                   {context.join('\n')}
                 </pre>
               )}
-              <div className={cn('grid gap-px bg-(--line)', hunk.base ? 'md:grid-cols-3' : 'md:grid-cols-2')}>
+              <div
+                className={cn(
+                  // One column until the pane has room for two; a column never grows past the pane for a long line.
+                  'grid grid-cols-[minmax(0,1fr)] gap-px bg-(--line) [&>*]:min-w-0',
+                  hunk.base
+                    ? '@min-[900px]:grid-cols-[repeat(3,minmax(0,1fr))]'
+                    : '@min-[620px]:grid-cols-[repeat(2,minmax(0,1fr))]',
+                )}
+              >
                 <div className="bg-background">
                   <Side
                     title={hunk.currentLabel ? t('Current · {0}', { '0': hunk.currentLabel }) : t('Current')}
                     lines={hunk.current}
                     tone="current"
+                    action={
+                      <Button
+                        variant="secondary"
+                        size="xs"
+                        className="flex-none"
+                        disabled={busy}
+                        onClick={() => void choose('current', hunk.index)}
+                      >
+                        {t(CHOICE_LABEL.current)}
+                      </Button>
+                    }
                   />
                 </div>
                 {hunk.base && (
@@ -239,6 +266,17 @@ export function ConflictView({ taskId, view, binding }: { taskId: string; view: 
                     title={hunk.incomingLabel ? t('Incoming · {0}', { '0': hunk.incomingLabel }) : t('Incoming')}
                     lines={hunk.incoming}
                     tone="incoming"
+                    action={
+                      <Button
+                        variant="secondary"
+                        size="xs"
+                        className="flex-none"
+                        disabled={busy}
+                        onClick={() => void choose('incoming', hunk.index)}
+                      >
+                        {t(CHOICE_LABEL.incoming)}
+                      </Button>
+                    }
                   />
                 </div>
               </div>

@@ -164,7 +164,7 @@ Agents use `ci_setup`: it writes the same file into the thread's checkout (or re
 
 ## Conflicts
 
-When a merge, rebase or pull stops on conflicts, Source Control lists the files under **Merge changes**. Opening one shows each conflict as an editor would: **Current** (the branch you are on), **Incoming** (what is being merged in) and the common ancestor when Git recorded it, with a few lines above for context.
+When a merge, rebase or pull stops on conflicts, Source Control lists the files under **Merge changes**. Opening one shows each conflict as an editor would: **Current** (the branch you are on), **Incoming** (what is being merged in) and the common ancestor when Git recorded it, with a few lines above for context. The sides sit next to each other when the view has room and under each other when it is narrow, each with its own **Accept** button, and a long side scrolls in place.
 
 - **Accept current**, **Accept incoming** or **Accept both** on one conflict, on the whole file, or on every conflicted file at once (after a confirmation). Changes Git merged cleanly stay as they are.
 - A file with no markers (binary, or deleted on one side) takes one side as a whole.
