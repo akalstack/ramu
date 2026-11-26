@@ -35,6 +35,15 @@ test('a finished turn folds routine steps under "Worked for" and keeps the answe
   assert.equal(rows[2].text, 'done!')
 })
 
+test('a message on its way does not make the finished turn above read as resumed', () => {
+  // The thread is busy for the next message before the host has echoed it.
+  const resumed = foldTurns(transcript(finished), true, false)
+  assert.equal(resumed[1].running?.text, 'Working for {0}')
+  const sent = foldTurns(transcript(finished), true, false, undefined, [], true)
+  assert.equal(sent[1].label, 'Worked for 1m 5s')
+  assert.equal(sent[1].running, undefined)
+})
+
 test('the running turn is not folded and shows its steps as they come', () => {
   const rows = foldTurns(transcript(finished.slice(0, 3)), true, false)
   assert.deepEqual(

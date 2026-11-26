@@ -49,6 +49,8 @@ export function foldTurns(
   say: Say = english,
   /** Background commands the agent said it was waiting on; they are not transcript items. */
   awaited: readonly AgentTask[] = [],
+  /** A message is on its way: the thread turning busy for it must not read as the finished turn above resuming. */
+  nextSent = false,
 ): TranscriptItem[] {
   const turns: TranscriptItem[][] = []
   // Work after a turn's end opens a turn too: a goal continuing on its own must not fold into the turn that finished.
@@ -101,7 +103,7 @@ export function foldTurns(
         ? turnWorkEnd(result.at, [...helpersOf(turn), ...awaited], startOf(turns[index + 1]))
         : ((result ?? ends[0])?.at ?? body.findLast((item) => item.kind !== 'note' && item.at !== undefined)?.at)
       // The result is in, yet the thread is still at work under this turn: its clock keeps running until the thread stops.
-      const resumed = isLast && clean && !waiting && (live || helpersWorking)
+      const resumed = isLast && clean && !waiting && !nextSent && (live || helpersWorking)
       const continues = !user && cleanEnd(turns[index - 1])
       // A message steered into a running turn starts the next turn before the result; with no stop, failure or idle
       // in between, the agent carried on rather than stopped.

@@ -1005,7 +1005,9 @@ export const AgentView = memo(function AgentView({
                             >
                               <TranscriptTurn
                                 turn={turn}
-                                isLast={ti === pageTurns.length - 1}
+                                // A message just sent after a finished turn already starts the next one: until the
+                                // host's copy arrives, the thread turning busy must not read as this turn resuming.
+                                isLast={ti === pageTurns.length - 1 && !(shownSubmissions.length > 0 && turn.ended)}
                                 dateSeparator={pageTurnDate(turnDates, hiddenTurns, ti)}
                                 dateNow={dateNow}
                                 reviews={turnReviews.get(turn.key)}

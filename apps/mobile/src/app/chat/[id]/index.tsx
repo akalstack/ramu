@@ -603,6 +603,8 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
   // Folded rows are rebuilt as new objects; keeping the unchanged ones lets each memoised row skip its render.
   const previousRows = useRef<TranscriptItem[]>([])
   const learningJobs = useAutomation().of(chat?.computerId ?? '').learning?.jobs
+  // A message this phone sent that the host has not echoed yet already starts the next turn.
+  const nextSent = !!chat && store.outbox.some((item) => item.chatId === chat.id && !deliveryVisible(item, chat))
   const rows = useMemo(() => {
     const next = shareRows(
       previousRows.current,
@@ -614,6 +616,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
             chat?.status === 'needs-input',
             (text, values) => translate(store.language, text, values),
             chat?.awaited,
+            nextSent,
           ),
           reviews,
           chat?.sessionId,
@@ -624,7 +627,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
     )
     previousRows.current = next
     return next
-  }, [chat?.items, chat?.status, chat?.awaited, chat?.sessionId, reviews, learningJobs, store.language])
+  }, [chat?.items, chat?.status, chat?.awaited, chat?.sessionId, nextSent, reviews, learningJobs, store.language])
   const arrivalReady = useRef(false)
   const arrivalChat = useRef(id)
   if (arrivalChat.current !== id) {
