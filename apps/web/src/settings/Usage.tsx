@@ -514,18 +514,20 @@ function UsageDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (ope
     setReveal(!reveal)
   }
   const multiHost = (hosts?.length ?? 0) > 1
-  // This host's threads follow the settings open here, which can be newer than the copy it last answered with.
-  const rows = hosts
-    ? loginRows(
-        hosts.map((entry) => (entry.hostId === host.id ? { ...entry, config: preferences.providerBinaries } : entry)),
-        host.id,
-      )
-    : []
+  // The host being worked on follows the settings open here, which can be newer than the copy it last answered with.
+  const known = hosts?.map((entry) =>
+    entry.hostId === host.id ? { ...entry, config: preferences.providerBinaries } : entry,
+  )
+  // The login marked in use is the one the host being worked on uses.
+  const rows = known ? loginRows(known, host.id) : []
+  // "This host" is this computer, whichever host's threads are being worked on; another host goes by its name.
+  const own = ownHostId()
   const sections = ORDER.flatMap((provider) => {
-    if (!providerEnabled(preferences.providerBinaries, provider)) return []
+    // A provider turned off here still shows when another host has it on.
+    if (!known?.some((entry) => providerEnabled(entry.config, provider))) return []
     const named: LoginRow[] = providerLoginRows(rows, provider).map((row) => {
       // Named by this host's own label when it is signed in here, otherwise by email or where it is signed in.
-      const source = hosts!.find((entry) => entry.hostId === row.namedBy.hostId)
+      const source = known!.find((entry) => entry.hostId === row.namedBy.hostId)
       return {
         ...row,
         name: accountName(
@@ -537,7 +539,7 @@ function UsageDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (ope
           reveal,
         ),
         where: row.where.map((place) => ({
-          host: place.hostId === host.id ? t('This host') : place.host,
+          host: place.hostId === own ? t('This host') : place.host,
           inUse: place.inUse,
         })),
       }
