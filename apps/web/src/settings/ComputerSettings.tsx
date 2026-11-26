@@ -360,12 +360,6 @@ export function ComputerUseSettings(props: DraftProps) {
   useLanguage()
   const scope = useContext(SettingsScopeContext)
   const hostId = scope?.primaryId ?? ownHostId()
-  if (scope?.target === 'all' && scope.targets.length > 1)
-    return (
-      <p className="m-0 text-caption text-muted-foreground">
-        {t('Choose one host to manage computer use. Access belongs to the computer that runs it.')}
-      </p>
-    )
   return (
     <div className={SETTINGS_FORM_CLASS}>
       <ComputerSettings

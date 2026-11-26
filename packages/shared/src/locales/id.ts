@@ -14,8 +14,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Connect to this host to see its test devices.': 'Hubungkan ke host ini untuk melihat perangkat ujinya.',
   'Agents boot iOS Simulators and Android emulators on this host and check the app they built.':
     'Agent menyalakan iOS Simulator dan emulator Android di host ini lalu memeriksa aplikasi yang dibuatnya.',
-  'Choose one host to manage test devices. Devices belong to the computer that runs them.':
-    'Pilih satu host untuk mengelola perangkat uji. Perangkat milik komputer yang menjalankannya.',
   'Held by a thread': 'Dipakai sebuah thread',
   Setup: 'Penyiapan',
   'Show archived threads': 'Tampilkan thread yang diarsipkan',
@@ -2205,8 +2203,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'macOS akan meminta izin Perekaman Layar dan Aksesibilitas di awal. Ramu tidak tahu kapan kamu memakai mouse atau keyboard sendiri saat agent bekerja, jadi pilih Ambil kendali dulu. Mematikan ini mencabut akses semua thread.',
   'Computer use': 'Penggunaan komputer',
   'Agent access': 'Akses agent',
-  'Choose one host to manage computer use. Access belongs to the computer that runs it.':
-    'Pilih satu host untuk mengelola penggunaan komputer. Akses dimiliki komputer yang menjalankannya.',
   '{0} now uses this address.': '{0} sekarang memakai alamat ini.',
   'That address did not prove it is {0}, so nothing changed. Pair it again to add it as a new host.':
     'Alamat itu tidak terbukti milik {0}, jadi tidak ada yang berubah. Pasangkan lagi untuk menambahkannya sebagai host baru.',

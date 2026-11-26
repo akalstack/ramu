@@ -42,9 +42,14 @@ interface Target {
   needsPermission?: boolean
 }
 
-/** These pages configure one machine (binaries, login, service, network), so "all environments" has no meaning. */
+/**
+ * These pages configure one machine (binaries, login, service, network, its screen and its test devices), so "all
+ * environments" has no meaning: offered there, it only drew a page asking to choose one host.
+ */
 const SINGLE_ENVIRONMENT_SECTIONS: readonly string[] = [
   'providers',
+  'computer',
+  'devices',
   'agent-setup',
   'plugins',
   'identities',

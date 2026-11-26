@@ -407,12 +407,6 @@ export function TestDevicesPage({ onLeave }: { onLeave?: () => void }) {
   useLanguage()
   const scope = useContext(SettingsScopeContext)
   const hostId = scope?.primaryId ?? ownHostId()
-  if (scope?.target === 'all' && scope.targets.length > 1)
-    return (
-      <p className="m-0 text-caption text-muted-foreground">
-        {t('Choose one host to manage test devices. Devices belong to the computer that runs them.')}
-      </p>
-    )
   return (
     <TestDeviceSettings
       key={`devices:${hostId}`}
