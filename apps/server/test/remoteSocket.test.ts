@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterEach, expect, it } from 'vitest'
@@ -80,6 +81,30 @@ it('answers several large calls at once instead of dropping the connection', asy
   await until(() => frames.some((frame) => frame.t === 'ready'))
   for (const id of [1, 2, 3]) ws.send(encodeSocketFrame({ t: 'invoke', id, method: 'thread', args: [] }))
   await until(() => frames.filter((frame) => frame.t === 'result').length === 3)
+  expect(ws.readyState).toBe(ws.OPEN)
+})
+
+it('does not count answers on their way as events a client fell behind on', async () => {
+  // Random, so the connection's compression cannot shrink it below the limit.
+  const big = randomBytes(9_000_000).toString('base64')
+  const { connect, sinks } = await start(
+    { invoke: async () => ({ ok: true, value: big }) },
+    // A paused client answers no pings, so the heartbeat waits longer than the pause.
+    { maxBuffered: 4_000_000, heartbeatMs: 10_000 },
+  )
+  const { ws, frames, until } = connect()
+  await until(() => frames.some((frame) => frame.t === 'ready') && sinks.size === 1)
+  const [sink] = [...sinks]
+  // A client busy elsewhere reads nothing for a moment, so the answer stays queued on the host.
+  const socket = (ws as unknown as { _socket: { pause(): void; resume(): void } })._socket
+  socket.pause()
+  ws.send(encodeSocketFrame({ t: 'invoke', id: 1, method: 'thread', args: [] }))
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  // A small event arrives meanwhile, as terminal output does.
+  expect(sink!.write(`data: ${JSON.stringify({ channel: 'term:changed', payload: {} })}\n\n`)).toBe(true)
+  expect(sink!.writableLength).toBeLessThan(4_000_000)
+  socket.resume()
+  await until(() => frames.some((frame) => frame.t === 'result'))
   expect(ws.readyState).toBe(ws.OPEN)
 })
 

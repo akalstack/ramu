@@ -150,6 +150,10 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
         return false
       }
     }
+    // Answers still on their way, which the event limit leaves out: a long thread being sent must not make the next
+    // event look like a client that fell behind.
+    let answersQueued = 0
+    const eventsQueued = () => Math.max(0, ws.bufferedAmount - answersQueued)
     const sink: EventSink = {
       write(chunk) {
         // Only data lines are events; SSE comments (keep-alives) have no meaning here.
@@ -157,10 +161,10 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
         const json = chunk.slice(6).trimEnd()
         if (!wanted(json) || held(json)) return true
         ws.send(`{"t":"event",${json.slice(1)}`)
-        return ws.bufferedAmount < maxBuffered
+        return eventsQueued() < maxBuffered
       },
       get writableLength() {
-        return ws.bufferedAmount
+        return eventsQueued()
       },
       get destroyed() {
         return ws.readyState === ws.CLOSED || ws.readyState === ws.CLOSING
@@ -173,7 +177,10 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
     // Ending it here dropped a desktop that opened a long thread from several places at once, and it asked again.
     const send = (frame: SocketServerFrame) => {
       if (ws.readyState !== ws.OPEN) return
-      ws.send(encodeSocketFrame(frame))
+      const text = encodeSocketFrame(frame)
+      const bytes = Buffer.byteLength(text)
+      answersQueued += bytes
+      ws.send(text, () => (answersQueued -= bytes))
     }
     send({ t: 'ready', epoch: host.epoch })
     // A client that already has an event stream asks for calls only, so nothing is delivered twice.
