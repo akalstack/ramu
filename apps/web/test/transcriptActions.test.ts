@@ -21,7 +21,7 @@ vi.mock('../src/chat/GoalBar', () => ({ GoalDone: () => null, GoalNote: () => nu
 vi.mock('../src/views/agent/components/ThinkingRow', () => ({
   ThinkingRow: ({ text }: { text: string }) => createElement('div', {}, text),
 }))
-vi.mock('../src/Changes', () => ({ TurnChanges: () => null }))
+vi.mock('../src/Changes', () => ({ TurnChanges: () => createElement('aside', {}, 'Changes card') }))
 vi.mock('../src/learning/TurnLearning', () => ({ TurnLearning: () => null }))
 vi.mock('../src/views/agent/components/AdvisorActivity', () => ({ AdvisorActivity: () => null }))
 vi.mock('../src/views/agent/components/AgentGroup', () => ({ AgentGroup: () => null }))
@@ -151,4 +151,50 @@ it('reads work the agent picked up by itself as more of the turn above', () => {
   expect(summary(render({ ended: true, working: false, helpersWorking: true, clock: continued }))).toBe(
     'Continuing for {0}',
   )
+})
+
+it('keeps a changes card where its work ended, before a message steered in after it', () => {
+  const steer: ChatBlock = { kind: 'event', event: { kind: 'user', text: 'Also fix the tests', steered: true } }
+  const turn: Turn = { key: 0, user, items: [progress, steer, answer], ended: true }
+  const html = renderToStaticMarkup(
+    createElement(TranscriptTurn, {
+      turn,
+      isLast: true,
+      ctx: {
+        sessionId: 'session',
+        cwd: '/project',
+        taskId: 'task',
+        blocks: [user, ...turn.items],
+        results: new Map(),
+        outcomes: new Map(),
+        questionStates: new Map(),
+        askedQuestions: new Map(),
+        interactive: { revisions: new Map(), updates: new Map() },
+        goalNotes: new Map(),
+        liveText: null,
+        live: true,
+        working: false,
+        needsInput: false,
+        busyAgent: false,
+        statusGroup: undefined,
+        stopped: false,
+        helpersWorking: false,
+        latestAssistant: answer,
+        hasSourceSeq: false,
+        eventSequences: new Map([[steer.kind === 'event' ? steer.event : null!, 10]]),
+        onBackground: undefined,
+        onOpenAgent: () => {},
+        onStopTask: () => {},
+        onOpenQuestion: () => {},
+        onReviewAccess: () => {},
+        onEditMessage: () => {},
+      } as TranscriptContext,
+      dateSeparator: undefined,
+      dateNow: Date.now(),
+      reviews: [{ id: 'review', endSeq: 5 }] as never,
+      completedGoals: undefined,
+    }),
+  )
+  expect(html.indexOf('Changes card')).toBeGreaterThan(-1)
+  expect(html.indexOf('Changes card')).toBeLessThan(html.indexOf('Also fix the tests'))
 })

@@ -239,6 +239,15 @@ export function TranscriptTurn({
   // ran, as on the phone.
   const stopped =
     finished && (!!turn.interrupted || (isLast && !!ctx.stopped) || (!turn.ended && turn.endedAt !== undefined))
+  // A review belongs where its work ended: before the first message steered in after it, as on the phone. Pinned to
+  // the turn's end it slid down under everything a later steer started.
+  const reviewPart = (review: TurnReview) => {
+    const at = parts.findIndex((part) => {
+      const seq = part.steer?.kind === 'event' ? ctx.eventSequences.get(part.steer.event) : undefined
+      return seq !== undefined && review.endSeq !== undefined && seq > review.endSeq
+    })
+    return at < 0 ? parts.length : at
+  }
   return (
     <div className="turn [&_>_[data-block-index]:has(.msg.user)]:flex [&_>_[data-block-index]:has(.msg.user)]:justify-end flex flex-col gap-3.5 min-w-0">
       {dateSeparator !== undefined && <TurnDate at={dateSeparator} now={dateNow} />}
@@ -284,6 +293,11 @@ export function TranscriptTurn({
             : translate('Continued')
         return (
           <Fragment key={part.steer ? blockIndex(part.steer, blocks) : 'start'}>
+            {reviews
+              ?.filter((review) => reviewPart(review) === index)
+              .map((review) => (
+                <TurnChanges key={review.id} review={review} />
+              ))}
             {part.steer && renderBlock(part.steer)}
             {part.folded.length > 0 && (
               <TurnSummary
@@ -298,9 +312,11 @@ export function TranscriptTurn({
         )
       })}
       {answer.map((b) => renderBlock(b, b === ctx.latestAssistant))}
-      {reviews?.map((review) => (
-        <TurnChanges key={review.id} review={review} />
-      ))}
+      {reviews
+        ?.filter((review) => reviewPart(review) === parts.length)
+        .map((review) => (
+          <TurnChanges key={review.id} review={review} />
+        ))}
       {turn.ended && (
         <TurnLearning
           sessionId={ctx.sessionId}
