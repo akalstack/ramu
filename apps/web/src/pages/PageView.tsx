@@ -523,27 +523,33 @@ export function PageView({
             onSelect: () => void artifactApp.openWindow().catch((e) => notifyError(message(e))),
           },
         ]),
-    {
-      key: 'app',
-      label: artifactApp.installed ? t('Uninstall app') : t('Install as app'),
-      disabled: artifactApp.installed === null,
-      onSelect: () =>
-        void (artifactApp.installed ? artifactApp.remove() : artifactApp.install())
-          .then(() =>
-            setStatus(
-              artifactApp.installed
-                ? t('Removed “{title}” from your apps.', { title: page.title })
-                : t('Installed “{title}”. Open it from {place}.', { title: page.title, place: appsPlace() }),
-            ),
-          )
-          .catch((e) => notifyError(message(e), page.title)),
-    },
-    {
-      key: 'app-icon',
-      label: t('App icon…'),
-      disabled: viewOnly,
-      onSelect: () => setDialog({ kind: 'app-icon' }),
-    },
+    // Only something to operate is an app: a doc, a deck or a diagram opens in its own window but is not installed.
+    // One installed before this rule keeps its entries, so it can still be uninstalled.
+    ...(page.kind === 'app' || artifactApp.installed
+      ? [
+          {
+            key: 'app',
+            label: artifactApp.installed ? t('Uninstall app') : t('Install as app'),
+            disabled: artifactApp.installed === null,
+            onSelect: () =>
+              void (artifactApp.installed ? artifactApp.remove() : artifactApp.install())
+                .then(() =>
+                  setStatus(
+                    artifactApp.installed
+                      ? t('Removed “{title}” from your apps.', { title: page.title })
+                      : t('Installed “{title}”. Open it from {place}.', { title: page.title, place: appsPlace() }),
+                  ),
+                )
+                .catch((e) => notifyError(message(e), page.title)),
+          },
+          {
+            key: 'app-icon',
+            label: t('App icon…'),
+            disabled: viewOnly,
+            onSelect: () => setDialog({ kind: 'app-icon' }),
+          },
+        ]
+      : []),
     {
       key: 'duplicate',
       label: t('Duplicate'),
