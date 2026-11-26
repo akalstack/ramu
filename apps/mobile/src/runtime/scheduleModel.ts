@@ -260,7 +260,7 @@ export function sortSchedules(schedules: Schedule[]): Schedule[] {
   )
 }
 
-export { runTone, type RunTone } from '@ramu/shared/scheduleRuns'
+export { runTone } from '@ramu/shared/scheduleRuns'
 
 export const RUN_LABELS: Record<ScheduleRun['status'], Record<Lang, string>> = {
   queued: { en: 'Queued', id: 'Antre' },

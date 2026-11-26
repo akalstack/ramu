@@ -157,7 +157,17 @@ it('asks an aside with the model chosen in the thread, so it is answered by that
   }
   ;(asideBox(RenderAside()).onChange as (value: string) => void)('Why this way?')
   await (asideBox(RenderAside()).onSubmit as () => Promise<void>)()
-  expect(state.invoke).toHaveBeenCalledWith('aside.ask', 's', null, 'Quoted', 'assistant', 'Why this way?', settings)
+  // The aside's own choices (none here) travel after the thread's model.
+  expect(state.invoke).toHaveBeenCalledWith(
+    'aside.ask',
+    's',
+    null,
+    'Quoted',
+    'assistant',
+    'Why this way?',
+    settings,
+    {},
+  )
 })
 
 it('does not fetch a revert plan or rewind when a viewer reaches an already-open edit dialog', async () => {

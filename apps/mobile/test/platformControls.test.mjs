@@ -254,6 +254,8 @@ function load(file, os, overrides = {}, globals = {}) {
       if (id === './goalVerify') return goalVerify
       if (id === '@ramu/shared/sync/streamSync')
         return load('../../../packages/shared/src/sync/streamSync.ts', os, {}, globals)
+      if (id === '@ramu/shared/transcriptChanges')
+        return load('../../../packages/shared/src/transcriptChanges.ts', os, {}, globals)
       if (id === '../../../runtime/recentThreads') return recentThreads
       if (id === '../../../runtime/threadGroups') return threadGroups
       if (id === '../../../runtime/threadsSync') return threadsSync
