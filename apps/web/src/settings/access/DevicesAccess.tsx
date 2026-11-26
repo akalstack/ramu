@@ -2,6 +2,8 @@ import { useContext } from 'react'
 import type { Computer } from '@ramu/shared/types'
 import { t, useLanguage } from '../../i18n'
 import { useComputers } from '../../workspace/computers'
+import { refusedPermission } from '@ramu/shared/devicePermissions'
+import { PermissionNeeded } from '../DevicePermissions'
 import { SettingsScopeContext } from '../SettingsScope'
 import type { DraftProps } from '../ToggleRow'
 import { AccessSection } from './AccessSection'
@@ -27,10 +29,7 @@ export function DevicesAccessSettings(props: DraftProps) {
     <div className="settings-form flex flex-col gap-0">
       {here?.local === false ? (
         <>
-          <AccessSection
-            title={t('Devices')}
-            help={t('You are looking at {0}. Who can connect is set on that host.', { 0: here.name })}
-          />
+          <OtherHost host={here} />
           <LinkedHosts computers={state.computers} />
         </>
       ) : (
@@ -52,6 +51,41 @@ function ThisHost({ computers, ...props }: DraftProps & { computers: Computer[] 
       <PairedDevices status={status} onStatus={setStatus} />
       <AccountDevices />
       <LinkedHosts computers={computers} status={status} onStatus={setStatus} />
+    </>
+  )
+}
+
+/**
+ * Another host's devices, managed from here when this computer has full access and that host's Change settings
+ * permission; how that host is reached stays on it. Without the permission, one tap asks the person there for it.
+ */
+function OtherHost({ host }: { host: Computer }) {
+  const [status, setStatus, reload, error] = useNetworkStatus(2500)
+  if (error) {
+    const permission = refusedPermission(error)
+    return (
+      <AccessSection
+        title={t('Devices')}
+        help={
+          permission
+            ? t('You are looking at {0}. To connect and remove its devices from here, it needs to allow this.', {
+                0: host.name,
+              })
+            : t(
+                'You are looking at {0}. Its devices are managed on that host, or from a device with full access and its Change settings permission.',
+                { 0: host.name },
+              )
+        }
+      >
+        <PermissionNeeded host={host.id} permission={permission} />
+      </AccessSection>
+    )
+  }
+  if (!status) return null
+  return (
+    <>
+      <ConnectDevice onClosed={() => void reload()} />
+      <PairedDevices status={status} onStatus={setStatus} />
     </>
   )
 }

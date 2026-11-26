@@ -1043,7 +1043,11 @@ export interface RamuMethods extends ArtifactMethods {
   'terminalCommand.status'(): import('./types').TerminalCommandStatus
   'terminalCommand.install'(): import('./types').TerminalCommandStatus
   'terminalCommand.remove'(): import('./types').TerminalCommandStatus
-  /** Access from other devices. These run only for the local desktop app, never for a paired device. */
+  /**
+   * Access from other devices. These run only for the local desktop app, except device management
+   * (`DEVICE_MANAGEMENT_METHODS` in `devicePermissions.ts`), which a paired full-access device may also use with the
+   * settings permission.
+   */
   'network.status'(): NetworkStatus
   'network.configure'(input: NetworkSettingsInput): NetworkStatus
   /** A new one-time code. `owner` names the dialog that made it: its next offer replaces this one while unused. */
@@ -1052,7 +1056,7 @@ export interface RamuMethods extends ArtifactMethods {
   'network.cancelOffer'(offerId: string): boolean
   /** What became of one offer: pending, redeemed by a device, cancelled or expired. */
   'network.offer'(offerId: string): PairingOfferStatus
-  /** Pairs a device that asked, spending the given open offer (and its access). Host-only, like the rest of `network.*`. */
+  /** Pairs a device that asked, spending the given open offer (and its access). */
   'network.approveRequest'(requestId: string, access: 'owner' | 'viewer'): NetworkStatus
   'network.denyRequest'(requestId: string): NetworkStatus
   /** Sets where a paired device's permission stands: allowed, ask first or blocked. Host-only. */
@@ -1078,6 +1082,8 @@ export interface RamuMethods extends ArtifactMethods {
   /** Answers an invitation, accepted or not, so it is not offered again. Host only. */
   'network.dismissPairBack'(id: string): void
   'network.revoke'(deviceId: string): NetworkStatus
+  /** Removes every paired phone and computer except the calling one; linked hosts and this computer keep working. */
+  'network.revokeOthers'(): NetworkStatus
   /** Days an unused device stays paired (1 to 3650), `never`, or null for the server default. Host-only, like the rest of `network.*`. */
   'network.setDeviceLifetime'(days: number | 'never' | null): NetworkStatus
   /** A tunnel's https:// address for this host, or null to remove it. */
@@ -2179,6 +2185,8 @@ export type PushEvents = {
   /** A device signed in to this host's Ramu account that the host paired on its own. Sent only to apps on the host. */
   'pairing:joined': { deviceId: string; name: string; role: 'owner' | 'viewer'; email: string }
   'pairBack:invites': { invites: import('./types').PairBackInvite[] }
+  /** A paired device changed this host's devices. Sent only to apps on the host itself. */
+  'devices:changed': import('./types').DeviceChange
   /** Paired devices asking for a permission, waiting for the person here. Sent only to apps on the host itself. */
   'permission:requests': { requests: NetworkStatus['permissionRequests'] }
   'notify:inapp': {

@@ -928,6 +928,7 @@ async function main() {
     deliver: (id, ...[channel, payload]) => {
       if (id === LOCAL && channel === 'pairing:requests') pairing.receive(payload.requests)
       if (id === LOCAL && channel === 'pairing:joined') pairing.joined(payload)
+      if (id === LOCAL && channel === 'devices:changed') pairing.changed(payload)
       if (id === LOCAL && channel === 'account:changed') void accountHosts.connect()
       if (id === LOCAL && channel === 'permission:requests') permissions.receive(payload.requests)
       observeHostActivity(id, ...([channel, payload] as PushArgs))

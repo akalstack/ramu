@@ -15,7 +15,7 @@ import { errorText } from '../../lib/errors'
 import { t } from '../../i18n'
 import { CopyButton } from '../CopyAddressButton'
 import { PairingCode } from '../PairingCode'
-import { defaultPairUrl, pairingNetwork, pairQrText } from '../pairingOffer'
+import { defaultPairUrl, pairingNetwork, pairQrText } from '@ramu/shared/pairingOffer'
 import { PairRoute } from '../PairRoute'
 import { useSettingsInvoke } from '../SettingsScope'
 import { usePairingOffer } from '../usePairingOffer'
@@ -65,7 +65,8 @@ export function PairDialog({ onClose }: { onClose: () => void }) {
   const ready = !!status?.reachable
   const { offer, now, error, joined } = usePairingOffer(invoke, role, ready)
   const [qrUrl, setQrUrl] = useState('')
-  const change = status ? pairingNetwork(status) : null
+  // Another host's network is set on that host; a device managing its devices only shows the code.
+  const change = status && !status.self ? pairingNetwork(status) : null
   const allow = async () => {
     if (!change) return
     setAllowing(true)

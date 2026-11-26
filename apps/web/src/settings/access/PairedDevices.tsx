@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
-import type { NetworkDevice, NetworkStatus } from '@ramu/shared/types'
+import type { DeviceChange, NetworkDevice, NetworkStatus } from '@ramu/shared/types'
+import { deviceChangeText } from '@ramu/shared/deviceChanges'
 import { permissionsFor } from '@ramu/shared/devicePermissions'
 import { osLine } from '@ramu/shared/deviceOs'
 import { SettingsAdvanced, SettingsLabel, SettingsRow } from '@/components/settings-row'
@@ -99,33 +100,34 @@ export function PairedDevices({
   }
   // Another host's agents are listed under Linked hosts, with the access their threads get.
   const devices = status.devices.filter((device) => device.kind !== 'host')
+  // Set when this computer manages another host's devices: it is one of them, and that host keeps the limits.
+  const self = status.self
+  const others = devices.filter((device) => device.id !== self)
   const [lifetime, stageLifetime] = useStagedValue(
     'network.deviceLifetime',
     String(status.deviceLifetime?.days),
     (value) =>
       change('network.setDeviceLifetime', value === 'default' ? null : value === 'never' ? 'never' : Number(value)),
   )
-  // One at a time, so a refusal names the device it stopped at and the rest stay listed.
-  const removeAll = async (ids: string[]) => {
-    for (const id of ids) await change('network.revoke', id)
-  }
   return (
     <AccessSection
       title={t('Devices')}
       help={t('Phones and computers paired with this host. Remove one and it must pair again to reconnect.')}
       actions={
-        devices.length > 1 ? (
+        others.length > (self ? 0 : 1) ? (
           <Button variant="secondary" size="sm" onClick={() => setRemovingOthers(true)}>
             {t('Remove others')}
           </Button>
         ) : undefined
       }
     >
-      <PermissionRequests status={status} invoke={change} />
+      {!self && <PermissionRequests status={status} invoke={change} />}
       {devices.map((device) => (
         <PairedDeviceRow
           key={device.id}
           device={device}
+          self={device.id === self}
+          limits={!self}
           invoke={change}
           onRemove={() => setRemoving(device)}
           onRename={() => setRenaming(device)}
@@ -135,25 +137,28 @@ export function PairedDevices({
       {!devices.length && (
         <SettingsEmpty>{t('No devices paired yet. Connect a phone or another computer above.')}</SettingsEmpty>
       )}
-      <SettingsAdvanced>
-        {status.deviceLifetime && (
-          <SettingsRow>
-            <SettingsLabel
-              title={t('Keep devices paired')}
-              help={t(
-                'A device unused for this long must be paired again. Each use resets the timer. Changes apply when each device next connects.',
-              )}
-            />
-            <Dropdown
-              label={t('Keep devices paired')}
-              value={lifetime}
-              options={lifetimeOptions(status.deviceLifetime.days, status.deviceLifetime.saved)}
-              onChange={stageLifetime}
-            />
-          </SettingsRow>
-        )}
-        <DefaultPermissions status={status} invoke={change} />
-      </SettingsAdvanced>
+      <DeviceChanges changes={status.changes ?? []} />
+      {!self && (
+        <SettingsAdvanced>
+          {status.deviceLifetime && (
+            <SettingsRow>
+              <SettingsLabel
+                title={t('Keep devices paired')}
+                help={t(
+                  'A device unused for this long must be paired again. Each use resets the timer. Changes apply when each device next connects.',
+                )}
+              />
+              <Dropdown
+                label={t('Keep devices paired')}
+                value={lifetime}
+                options={lifetimeOptions(status.deviceLifetime.days, status.deviceLifetime.saved)}
+                onChange={stageLifetime}
+              />
+            </SettingsRow>
+          )}
+          <DefaultPermissions status={status} invoke={change} />
+        </SettingsAdvanced>
+      )}
       {renaming && (
         <RenameDialog
           title={t('Rename {0}', { 0: renaming.name })}
@@ -177,12 +182,12 @@ export function PairedDevices({
       {removingOthers && (
         <ConfirmDialog
           danger
-          title={t('Remove {0} devices?', { 0: devices.length })}
+          title={t('Remove {0} devices?', { 0: others.length })}
           confirmLabel={t('Remove all')}
           onCancel={() => setRemovingOthers(false)}
           onConfirm={() => {
             setRemovingOthers(false)
-            void removeAll(devices.map((device) => device.id))
+            void change('network.revokeOthers')
           }}
         >
           <p>
@@ -193,6 +198,21 @@ export function PairedDevices({
         </ConfirmDialog>
       )}
     </AccessSection>
+  )
+}
+
+/** What paired devices changed here lately, newest first, so a removal made from a phone is never a mystery. */
+function DeviceChanges({ changes }: { changes: DeviceChange[] }) {
+  if (!changes.length) return null
+  return (
+    <div className="mt-3 flex flex-col gap-1" role="list" aria-label={t('Changes from other devices')}>
+      <span className="text-caption font-medium text-muted-foreground">{t('Changes from other devices')}</span>
+      {changes.slice(0, 5).map((change) => (
+        <span key={change.id} role="listitem" className="text-caption text-muted-foreground">
+          {`${deviceChangeText(change, t)} · ${timeAgo(change.at)}`}
+        </span>
+      ))}
+    </div>
   )
 }
 
@@ -236,12 +256,18 @@ function DeviceExpiry({
  */
 function PairedDeviceRow({
   device,
+  self,
+  limits,
   invoke,
   onRemove,
   onRename,
   hostDays,
 }: {
   device: NetworkDevice
+  /** This computer itself, on another host's list. */
+  self: boolean
+  /** Its permissions and pairing time, which only the host itself sets. */
+  limits: boolean
   invoke: PermissionInvoke
   onRemove: () => void
   onRename: () => void
@@ -265,7 +291,9 @@ function PairedDeviceRow({
           <DeviceIcon os={device.os} name={device.name} />
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="truncate text-control font-medium text-foreground">{device.name}</span>
+          <span className="truncate text-control font-medium text-foreground">
+            {self ? t('{0} (this computer)', { 0: device.name }) : device.name}
+          </span>
           <span className="truncate text-caption text-muted-foreground">
             {`${deviceSummary(device)} · ${t('last seen {0}', { 0: seen })}`}
           </span>
@@ -290,18 +318,20 @@ function PairedDeviceRow({
             </Button>
           </span>
         </div>
-        <Collapsible className="border-t border-border pt-1.5">
-          <CollapsibleTrigger
-            render={<Button variant="ghost" size="sm" className="group/limit text-caption text-muted-foreground" />}
-          >
-            {t('Limit this device…')}
-            <ChevronDown size={14} className="transition-transform group-data-[panel-open]/limit:rotate-180" />
-          </CollapsibleTrigger>
-          <CollapsibleContent className="flex flex-col gap-2 pt-1">
-            <DevicePermissionList device={device} invoke={invoke} />
-            <DeviceExpiry device={device} hostDays={hostDays} invoke={invoke} />
-          </CollapsibleContent>
-        </Collapsible>
+        {limits && (
+          <Collapsible className="border-t border-border pt-1.5">
+            <CollapsibleTrigger
+              render={<Button variant="ghost" size="sm" className="group/limit text-caption text-muted-foreground" />}
+            >
+              {t('Limit this device…')}
+              <ChevronDown size={14} className="transition-transform group-data-[panel-open]/limit:rotate-180" />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="flex flex-col gap-2 pt-1">
+              <DevicePermissionList device={device} invoke={invoke} />
+              <DeviceExpiry device={device} hostDays={hostDays} invoke={invoke} />
+            </CollapsibleContent>
+          </Collapsible>
+        )}
       </CollapsibleContent>
     </Collapsible>
   )

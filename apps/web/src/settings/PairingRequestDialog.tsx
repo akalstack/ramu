@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { NetworkStatus } from '@ramu/shared/types'
+import { deviceChangeText } from '@ramu/shared/deviceChanges'
 import {
   Dialog,
   DialogContent,
@@ -67,6 +68,19 @@ export function PairingRequestDialog() {
                 notify.add({ type: 'error', title: errorText(cause), timeout: TOAST_MS.error }),
               ),
           },
+        }),
+      ),
+    [],
+  )
+  // A paired device changed the devices here (from a phone, say): the person at this host hears of it at once.
+  useEffect(
+    () =>
+      ramu.on('devices:changed', (change) =>
+        notify.add({
+          type: 'info',
+          timeout: TOAST_MS.input,
+          title: deviceChangeText(change, t),
+          description: t('Review it under Devices in Settings → Devices & access.'),
         }),
       ),
     [],

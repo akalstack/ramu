@@ -353,6 +353,20 @@ function Computers() {
               <T style={{ flex: 1 }}>{say('Manage computers')}</T>
             </Row>
           </Card>
+          {pc.access !== 'viewer' ? (
+            <>
+              <SectionLabel>{say('Devices on {0}', { 0: pc.name })}</SectionLabel>
+              <Card style={{ marginHorizontal: space.l }}>
+                <Row onPress={() => router.push('/devices')}>
+                  <RowLabel
+                    title={say('Devices')}
+                    help={say('See, rename and remove the phones and computers paired with it, or connect a new one.')}
+                  />
+                  <ChevronRight size={16} color={c.muted} />
+                </Row>
+              </Card>
+            </>
+          ) : null}
           {addressOpen ? <HostAddressSheet key={pc.id} computer={pc} onClose={() => setAddressOpen(false)} /> : null}
         </>
       ) : null}

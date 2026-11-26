@@ -161,7 +161,25 @@ export interface NetworkStatus {
     /** The relay's pool as last fetched, so Settings can say a slot is free before anyone asks. */
     pool?: import('../ramuLink').LinkPool | null
   }
+  /** The calling device's own id, when a paired device asks: it never removes itself by surprise in "Remove others". */
+  self?: string
+  /** Recent changes paired devices made to this host's devices, newest first, so the person here sees who did what. */
+  changes?: DeviceChange[]
 }
+/** A change a paired device made to this host's devices, kept on the host and announced to the person there. */
+export type DeviceChange = {
+  id: string
+  at: number
+  /** The device that made it, by its id and the name this host lists it under then. */
+  byId: string
+  by: string
+} & (
+  | { action: 'removed'; deviceId: string; device: string }
+  | { action: 'removedOthers'; count: number }
+  | { action: 'renamed'; deviceId: string; device: string; name: string }
+  | { action: 'connected'; deviceId: string; device: string; role: 'owner' | 'viewer' }
+  | { action: 'declined'; device: string }
+)
 /**
  * A tunnel Ramu runs: Ramu Link (Ramu's relay, or one the person runs at `relay`), Cloudflare's quick tunnel, Tailscale
  * Funnel, or ngrok (with an optional static domain).

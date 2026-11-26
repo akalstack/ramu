@@ -74,7 +74,7 @@ import { resolveInteractiveKit } from './interactive/kit'
 import { previewInteractive } from './interactive/preview'
 import { openHeadlessPage } from './interactive/pageHeadless'
 import type { ArtifactInfo } from '@ramu/shared/artifacts'
-import type { TunnelChoice } from '@ramu/shared/types'
+import type { PairingOffer, TunnelChoice } from '@ramu/shared/types'
 import type { InstalledApp } from '@ramu/shared/updates'
 import { registerThemeTools } from './themeTools'
 import { registerScriptTools } from './agent/scriptTools'
@@ -144,18 +144,20 @@ import {
 } from '@ramu/contracts'
 import { loadConfig } from './config'
 import { DeviceStore, isHostAccess, validLifetime, type DeviceInfo, type DeviceRole } from './remote/devices'
-import { RemoteAccess, accessOf, deviceMayInvoke } from './remote/access'
+import { RemoteAccess, accessOf, remoteRefusal } from './remote/access'
 import { PermissionRequests } from './remote/permissionRequests'
+import { DeviceChanges, RemoteDeviceManagement, othersOf } from './remote/deviceManagement'
+import { deviceChangeText } from '@ramu/shared/deviceChanges'
+import { translate } from '@ramu/shared/i18n'
 import { PairBackInvites } from './remote/pairBackInvites'
 import { deviceOsSchema, readHostOs } from './remote/hostOs'
 import {
+  DEVICE_MANAGEMENT_METHODS,
   DEVICE_PERMISSIONS,
   PERMISSION_ANSWERS,
   PERMISSION_SETTINGS,
   grantFor,
   isDevicePermission,
-  permissionFor,
-  permissionRefusal,
 } from '@ramu/shared/devicePermissions'
 import { PairingError, PairingRequests } from './remote/pairingRequests'
 import { createPairingNotice } from './remote/pairingNotice'
@@ -274,7 +276,7 @@ const pairingRequests: PairingRequests = new PairingRequests({
   },
   changed: () => pairingNotice(pairingRequests.list()),
 })
-// Only the desktop apps on this machine answer permission requests, like pairing; paired devices never see them.
+// Only the desktop apps on this machine answer permission requests; paired devices never see them.
 /** What this host runs on; it does not change while the service runs. */
 const hostOs = readHostOs()
 const permissionRequests = new PermissionRequests(Date.now, (requests) => {
@@ -1866,19 +1868,10 @@ async function performInvoke(
   const deviceId = device?.id
   if (operationKey !== undefined && !(typeof operationKey === 'string' && OPERATION_KEY_PATTERN.test(operationKey)))
     throw new Error('Invalid operation key.')
-  if (remote && !deviceMayInvoke(device, method))
-    throw new InvokeRefused(
-      device?.kind === 'host'
-        ? 'A paired host may only start, check and message the threads it starts here, and offer its tools.'
-        : method.startsWith('hostThreads.') || method.startsWith('hostTools.')
-          ? 'Only a paired host can make this call.'
-          : 'This device is a viewer. This action requires full access.',
-    )
+  const refused = remote ? remoteRefusal(device, method, (id, permission) => devices.allows(id, permission)) : null
+  if (refused) throw new InvokeRefused(refused)
   if (remote && device?.kind === 'host' && !devices.hostPairingActive(device))
     throw new InvokeRefused('The person on this host turned off Agents for that computer.')
-  // Computer use, the browser, terminals, settings changes and agents each need their own grant on this host.
-  const needed = remote && device ? permissionFor(method) : null
-  if (needed && !devices.allows(device!.id, needed)) throw new InvokeRefused(permissionRefusal(needed))
   let value: unknown
   if (method === 'device.permissions') {
     value = device
@@ -2048,15 +2041,17 @@ async function performInvoke(
       os: hostOs,
       ...(network.enabled ? { listening: `${network.host}:${network.port}`, tls: Boolean(config.tls) } : {}),
     }
-  // A paired phone may see how this host is reached from anywhere and turn on Ramu Link (with the settings permission);
-  // the rest of network access, with its devices and pairing codes, stays on the host.
+  // A paired phone may see how this host is reached from anywhere and turn on Ramu Link, and manage the devices paired
+  // here (each with the settings permission); how the host is reached and what each device may do stay on the host.
   else if (method === 'network.link') value = { tunnel: networkStatus().tunnel ?? null }
   else if (method === 'network.useLink') {
     await networkMethod('network.setTunnel', [{ kind: 'link' }])
     value = { tunnel: networkStatus().tunnel ?? null }
   } else if (method.startsWith('network.')) {
-    if (remote) throw new Error('Network access is managed from the host running Ramu')
-    value = await networkMethod(method, args)
+    if (!remote) value = await networkMethod(method, args)
+    else if (device && DEVICE_MANAGEMENT_METHODS.has(method))
+      return await deviceManagement.invoke(device, method, Array.isArray(args) ? args : [])
+    else throw new Error('Network access is managed from the host running Ramu')
   } else if (method === 'background.stop') {
     return { value: undefined, after: () => void stop(true) }
   } else if (method === 'background.restart') {
@@ -2774,7 +2769,8 @@ function reachable() {
   return network.enabled
 }
 const pairingNotice = createPairingNotice({
-  // Only the desktop apps on this machine answer pairing requests; paired devices never see them.
+  // Pairing requests are pushed only to the desktop apps on this machine; a device managing devices reads them in
+  // `network.status`.
   push: (requests) => {
     const message = `data: ${JSON.stringify({ channel: 'pairing:requests', payload: { requests } })}\n\n`
     for (const client of hostClients) if (!client.destroyed) writeEvent(client, message)
@@ -2841,8 +2837,37 @@ function networkStatus() {
     reachable: reachable(),
     publicAddress: { url: publicUrl(), source: config.publicUrl ? ('command-line' as const) : ('settings' as const) },
     tunnel: tunnels.status(),
+    changes: deviceChanges.list().slice(0, 10),
   }
 }
+// Changes paired devices make to the devices here: kept, logged for a headless host, and shown on this host's desktop.
+const deviceChanges = new DeviceChanges(join(userData, 'device-changes.json'), (change) => {
+  console.log(`${deviceChangeText(change, (text, values) => translate('en', text, values))}.`)
+  const message = `data: ${JSON.stringify({ channel: 'devices:changed', payload: change })}\n\n`
+  for (const client of hostClients) if (!client.destroyed) writeEvent(client, message)
+})
+const deviceManagement = new RemoteDeviceManagement({
+  devices,
+  status: networkStatus,
+  pair: async (role, owner) => (await networkMethod('network.pair', [role, owner])) as PairingOffer,
+  cancelOffer: (offerId) => {
+    const cancelled = devices.cancelOffer(offerId)
+    syncDiscovery()
+    return cancelled
+  },
+  requests: () => pairingRequests.list(),
+  approve: (requestId, access) => {
+    const device = pairingRequests.approve(requestId, access)
+    syncDiscovery()
+    return device
+  },
+  deny: (requestId) => pairingRequests.deny(requestId),
+  removed: (ids) => {
+    for (const id of ids) pairBackInvites.forget(id)
+    dropRevoked()
+  },
+  changes: deviceChanges,
+})
 async function networkMethod(method: string, args: unknown[]) {
   if (method === 'network.status') {
     // The pool is cached for minutes; asking here keeps Settings' "a slot is free" fresh without a timer.
@@ -3034,6 +3059,14 @@ async function networkMethod(method: string, args: unknown[]) {
     dropRevoked()
     return networkStatus()
   }
+  if (method === 'network.revokeOthers') {
+    for (const device of othersOf(devices.list())) {
+      devices.revoke(device.id)
+      pairBackInvites.forget(device.id)
+    }
+    dropRevoked()
+    return networkStatus()
+  }
   throw new Error(`Unknown method ${method}`)
 }
 startRemote()
@@ -3044,6 +3077,7 @@ const pushReceipts = setInterval(() => {
 const heartbeat = setInterval(() => {
   try {
     dropRevoked()
+    deviceManagement.sweep()
     mobilePush.prune()
     void mobileLiveActivities.flush().catch(() => {})
   } catch {

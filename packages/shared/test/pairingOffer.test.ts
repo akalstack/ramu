@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { PAIR_PAGE, parsePairInput } from '@ramu/contracts'
 import type { NetworkStatus } from '@ramu/shared/types'
-import { countdown, defaultPairUrl, pairingNetwork, pairingUrls, pairQrText } from '../src/settings/pairingOffer'
+import { countdown, defaultPairUrl, pairingNetwork, pairingUrls, pairQrText } from '../src/pairingOffer'
 
 const status = (patch: Partial<NetworkStatus> = {}) =>
   ({

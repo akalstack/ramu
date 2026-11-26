@@ -1,4 +1,6 @@
 import { Notification, type BrowserWindow } from 'electron'
+import { deviceChangeText } from '@ramu/shared/deviceChanges'
+import type { DeviceChange } from '@ramu/shared/types'
 import { t } from './localization'
 
 type PairingRequest = { id: string; name: string; code: string; expiresAt: number }
@@ -45,6 +47,17 @@ export function createPairingNotifier(options: {
             : 'Signed in to your Ramu account {0}, so it paired with view-only access.',
           { 0: device.email },
         ),
+        silent: false,
+      })
+      notification.on('click', reveal)
+      notification.show()
+    },
+    /** A paired device changed the devices here; the window says the same with a toast when it is in front. */
+    changed(change: DeviceChange) {
+      if (inFront() || !Notification.isSupported()) return
+      const notification = new Notification({
+        title: deviceChangeText(change, t),
+        body: t('Review it under Devices in Settings → Devices & access.'),
         silent: false,
       })
       notification.on('click', reveal)

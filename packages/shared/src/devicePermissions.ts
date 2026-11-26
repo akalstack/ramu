@@ -128,10 +128,28 @@ const SETTINGS_DOMAINS = new Set([
 ])
 const READ = /\.(status|get|list|snapshot|catalog)$/
 
+/**
+ * Managing this host's devices from another device: list them, rename or remove one, remove the others, connect a new
+ * one and answer a nearby device's request. A full-access device needs the settings permission for each, even to list,
+ * since a device with a terminal there could do the same with `ramu pair` and `ramu devices`. Every other `network.*`
+ * call (how the host is reached, permissions, linked hosts) stays with the host.
+ */
+export const DEVICE_MANAGEMENT_METHODS: ReadonlySet<string> = new Set([
+  'network.status',
+  'network.renameDevice',
+  'network.revoke',
+  'network.revokeOthers',
+  'network.pair',
+  'network.offer',
+  'network.cancelOffer',
+  'network.approveRequest',
+  'network.denyRequest',
+])
+
 /** The permission a call needs from a paired device, or null. Reading status and settings stays open. */
 export function permissionFor(method: string): DevicePermission | null {
   if (method === 'device.agentPairing') return 'agents'
-  if (method === 'network.useLink') return 'settings'
+  if (method === 'network.useLink' || DEVICE_MANAGEMENT_METHODS.has(method)) return 'settings'
   const domain = method.split('.')[0]!
   if (domain === 'computer') return method === 'computer.status' || method === 'computer.session' ? null : 'computer'
   if (domain === 'hostBrowser') return method === 'hostBrowser.status' ? null : 'browser'

@@ -1,8 +1,8 @@
 // Pairing a phone or another computer with this host: what its QR code says, the network it needs, and which of its
-// addresses to offer. Pure, so the setup step and the Pair dialog agree and tests can check them.
+// addresses to offer. Pure, so the setup step, the Pair dialog and the phone agree and tests can check them.
 import { encodePairWebLink } from '@ramu/contracts'
-import type { NetworkSettingsInput, NetworkStatus, PairingOffer } from '@ramu/shared/types'
-import { VIRTUAL_INTERFACE } from '@ramu/shared/networkLabel'
+import type { NetworkSettingsInput, NetworkStatus, PairingOffer } from './types'
+import { VIRTUAL_INTERFACE } from './networkLabel'
 
 const LOOPBACK = /^(127\.|::1$|localhost$)/
 

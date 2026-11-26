@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import type { PairingOffer } from '@ramu/shared/types'
 import { cn } from 'cn'
 import { t } from '../i18n'
-import { countdown, pairQrText } from './pairingOffer'
+import { countdown, pairQrText } from '@ramu/shared/pairingOffer'
 import { useQrImage } from './usePairingOffer'
 
 const QR_SIZE = 184

@@ -7,7 +7,7 @@ import { Button } from '@/components/desktop-button'
 import { RowButton } from '@/components/row-button'
 import { t } from '../i18n'
 import { CopyButton } from './CopyAddressButton'
-import { pairingUrls } from './pairingOffer'
+import { pairingUrls } from '@ramu/shared/pairingOffer'
 
 type Address = PairingOffer['urls'][number]
 

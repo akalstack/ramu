@@ -44,6 +44,7 @@ export const HOST_PUSH_CHANNELS = [
   'pairing:joined',
   'permission:requests',
   'pairBack:invites',
+  'devices:changed',
   'background:connection',
 ] as const satisfies readonly (keyof PushEvents)[]
 export type HostPushChannel = (typeof HOST_PUSH_CHANNELS)[number]
@@ -118,6 +119,7 @@ const REQUIRED: Partial<Record<keyof PushEvents, Record<string, 'string' | 'numb
   'notify:open': { sessionId: 'string', taskId: 'string' },
   'background:connection': { connected: 'boolean' },
   'pairing:joined': { deviceId: 'string', name: 'string', role: 'string', email: 'string' },
+  'devices:changed': { id: 'string', at: 'number', by: 'string', action: 'string' },
 }
 
 const allChannels = new Set<string>([...HOST_PUSH_CHANNELS, ...WINDOW_PUSH_CHANNELS])

@@ -40,7 +40,8 @@ export type PermissionInvoke = (
     | 'network.setHostAccess'
     | 'network.setDeviceExpiry'
     | 'network.setDeviceLifetime'
-    | 'network.revoke',
+    | 'network.revoke'
+    | 'network.revokeOthers',
   ...args: unknown[]
 ) => Promise<void>
 

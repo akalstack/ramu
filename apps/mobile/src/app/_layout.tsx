@@ -133,6 +133,7 @@ function Navigator() {
           <Stack.Screen name="search" />
           <Stack.Screen name="schedule-edit" options={{ presentation: 'modal' }} />
           <Stack.Screen name="computers" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="devices" options={{ presentation: 'modal' }} />
           <Stack.Screen name="folders" options={{ presentation: 'modal' }} />
           <Stack.Screen name="pair" options={{ presentation: 'modal' }} />
           <Stack.Screen name="welcome" options={{ presentation: 'fullScreenModal', headerShown: false }} />

@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { CHALLENGE_PATTERN, IDENTITY_PATH, PAIR_PATH, PROTOCOL_VERSION, RENEW_PATH } from '@ramu/contracts'
 import { viewerMayInvoke } from '@ramu/shared/viewerAccess'
+import { permissionFor, permissionRefusal, type DevicePermission } from '@ramu/shared/devicePermissions'
 import { hostProof } from '@ramu/shared/hostProof'
 import type { DeviceInfo, DeviceStore } from './devices'
 import { PAIR_REQUEST_PATH, PAIR_REVEAL_PATH, PAIR_WAIT_PATH } from '@ramu/shared/pairRequest'
@@ -27,6 +28,25 @@ export const deviceMayInvoke = (device: DeviceInfo | undefined, method: string):
       !method.startsWith('hostTools.') &&
       !method.startsWith('terminalThreads.') &&
       (device?.role !== 'viewer' || viewerMayInvoke(method))
+/**
+ * Why a paired device may not make this call here, or null when it may: the role and kind come first, then the
+ * device's own grant for computer use, the browser, terminals, settings changes or agents. A missing grant is named so
+ * the device can ask the person here for it.
+ */
+export function remoteRefusal(
+  device: DeviceInfo | undefined,
+  method: string,
+  allows: (deviceId: string, permission: DevicePermission) => boolean,
+): string | null {
+  if (!deviceMayInvoke(device, method))
+    return device?.kind === 'host'
+      ? 'A paired host may only start, check and message the threads it starts here, and offer its tools.'
+      : method.startsWith('hostThreads.') || method.startsWith('hostTools.')
+        ? 'Only a paired host can make this call.'
+        : 'This device is a viewer. This action requires full access.'
+  const needed = device ? permissionFor(method) : null
+  return device && needed && !allows(device.id, needed) ? permissionRefusal(needed) : null
+}
 /** What this device is told about its own access so clients can hide actions the server would refuse. Advisory only. */
 export const accessOf = (device: DeviceInfo | undefined): 'owner' | 'viewer' =>
   device?.role === 'viewer' ? 'viewer' : 'owner'

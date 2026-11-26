@@ -10,7 +10,7 @@ To connect from anywhere instead, sign in to the same [Ramu account](account.md#
 
 ## From the desktop app
 
-**Settings → Devices & access** is one page, in the order you set a host up. The parts about who reaches this host show when Settings is on the host this window runs on; on another host they are set on that host.
+**Settings → Devices & access** is one page, in the order you set a host up. **Reachable from** and **Devices on your Ramu account** show when Settings is on the host this window runs on; on another host they are set on that host. **Connect a device** and **Devices** show for another host too when this computer may [manage its devices](#manage-devices-from-another-device).
 
 **Reachable from** is one choice:
 
@@ -27,7 +27,15 @@ Choosing **This network** or **Anywhere** also turns on **Stay reachable after a
 - Its permissions: computer use, the browser, terminals, settings changes and agents. Agents is offered only to computers: a phone or tablet connects to hosts and runs no agents of its own. Each is **Allowed**, **Ask first** (the device can request it) or **Blocked** (its requests are declined without asking). A view-only device has none.
 - **Keep paired:** how long that one device stays paired without use, or the same as the others.
 
+**Changes from other devices** under the list names what a phone or computer changed here lately ("Ahmad’s iPhone removed MacBook Air", "… connected a new device: Pixel 9") and when.
+
 When a device asks for a permission it lacks, the request shows at the top of **Devices** and opens in Ramu on this host (or as a system notification when Ramu is in the background) with **Allow this time** (until that device disconnects), **Allow for 1 hour**, **Always allow**, **Deny** and **Don’t ask again**. A request allowed for a while shows as **Allowed until** its end, until you set a lasting state. Closing the request leaves it waiting here until it lapses, and the asking device, desktop or phone, shows the answer as soon as you give it. **Advanced** under the list sets how long devices stay paired without use and what new devices get (**New devices: …**).
+
+### Manage devices from another device
+
+A phone or computer with **full access** and the host's **settings changes** permission manages that host's devices without walking to it: on the desktop, **Settings → Devices & access** with another host selected; on the phone, **Settings → Paired computers → Devices**. It lists the devices with their access and when each was last seen, renames and removes one, removes the others (every paired phone and computer but itself; linked hosts and the host's own desktop keep working), shows a code to connect a new device with **Full access** or **View only**, and answers nearby devices asking to pair. Removing itself disconnects it; it must pair again to come back. Each device's permissions, how long devices stay paired and how the host is reached stay on the host.
+
+Without the permission, the page says so with **Request access**; a host set to **Ask first** gets the request like any other. A view-only device can't manage devices. Every change shows on the host as a notification and under **Changes from other devices**, and a headless host prints it.
 
 **Devices on your Ramu account** decides whether your phone and computers signed in to this host's [Ramu account](account.md#your-hosts) connect without a code. **Connect devices on my Ramu account** lets them in with full access; **Ask me first** has you allow each here, matching the six-digit number, and choose its access. With **Ask me first** off, **Connect them view-only** under **Advanced** connects them view-only instead. Turned off, they pair with a code like any device.
 
