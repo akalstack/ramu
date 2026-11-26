@@ -89,16 +89,11 @@ export interface TerminalGroup {
 }
 
 /** The places that fill the main area instead of a thread. */
-export type GlobalPage = 'schedules' | 'inbox' | 'artifacts' | 'pulls' | 'customize'
+export const GLOBAL_PAGES = ['schedules', 'inbox', 'artifacts', 'pulls', 'customize'] as const
+export type GlobalPage = (typeof GLOBAL_PAGES)[number]
 
 export function isGlobalPage(sidebar: string): sidebar is GlobalPage {
-  return (
-    sidebar === 'schedules' ||
-    sidebar === 'inbox' ||
-    sidebar === 'artifacts' ||
-    sidebar === 'pulls' ||
-    sidebar === 'customize'
-  )
+  return (GLOBAL_PAGES as readonly string[]).includes(sidebar)
 }
 
 export interface WorkspaceUiState {

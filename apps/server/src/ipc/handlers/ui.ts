@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { TaskUiState, WorkspaceUiState } from '@ramu/shared/types'
+import { GLOBAL_PAGES, type TaskUiState, type WorkspaceUiState } from '@ramu/shared/types'
 import { id, relPath } from '../schemas'
 import type { RegisterHandlers } from '../types'
 
@@ -90,7 +90,8 @@ const taskUiSchema = z.object({
 const workspaceUiSchema = z.object({
   openTaskIds: z.array(id).max(100),
   activeTaskId: id.nullable(),
-  sidebar: z.enum(['projects', 'explorer', 'search', 'scm', 'schedules', 'inbox']),
+  // Every page the window can open; a page missing here made saving the layout fail while it was open.
+  sidebar: z.enum(['projects', 'explorer', 'search', 'scm', ...GLOBAL_PAGES]),
   collapsed: z.array(z.string().max(200)).max(500).optional(),
 })
 
