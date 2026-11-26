@@ -111,6 +111,10 @@ it('lists reviews newest first without sorting their data into a temporary file'
   const old = new DatabaseSync(path)
   old.exec('DROP INDEX reviews_by_time')
   old.close()
+  // A profile that had the index added by hand before upgrading upgrades too.
+  const manual = profile()
+  openDb(manual, []).close()
+  openDb(manual).close()
   const db = openDb(path)
   for (const query of [
     'SELECT data FROM change_reviews ORDER BY created_at DESC, rowid DESC',

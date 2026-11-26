@@ -13,7 +13,8 @@ const BASELINE = 36
  */
 const MIGRATIONS: ((db: DatabaseSync) => void)[] = [
   // Listing every review sorted its whole JSON into a temporary file on each call: tens of MB written per refresh.
-  (db) => db.exec('CREATE INDEX reviews_by_time ON change_reviews(created_at)'),
+  // A released build may already have had it added by hand to stop the writes, so it can exist before this runs.
+  (db) => db.exec('CREATE INDEX IF NOT EXISTS reviews_by_time ON change_reviews(created_at)'),
 ]
 
 const SCHEMA = `
