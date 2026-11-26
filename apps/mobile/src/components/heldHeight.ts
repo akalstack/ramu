@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { LayoutChangeEvent } from 'react-native'
-import { HOLD_PAUSE_MS, NO_HOLD, holdHeight, releaseHold } from '@ramu/shared/chat/heldHeight'
+import { HOLD_PAUSE_MS, NO_HOLD, endPause, holdHeight, releaseHold } from '@ramu/shared/chat/heldHeight'
 
 /**
  * Keeps a live tool group at the tallest height it has reached (`holdHeight`), as the desktop's does, so the chat does
@@ -26,7 +26,10 @@ export function useHeldHeight(live: boolean, identity: string) {
       release: () => {
         setHold(releaseHold(Date.now()))
         clearTimeout(pause.current)
-        pause.current = setTimeout(measure, HOLD_PAUSE_MS)
+        pause.current = setTimeout(
+          () => setHold((current) => holdHeight(endPause(current), height.current, liveNow.current, Date.now())),
+          HOLD_PAUSE_MS,
+        )
       },
     }
   })

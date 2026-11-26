@@ -91,6 +91,8 @@ describe.skipIf(process.platform === 'win32')('ensureToolsOnPath', () => {
     const tools = join(dir, 'custom/bin')
     executable(join(tools, 'npm'))
     executable(join(tools, 'ramu-test-cli'))
+    // The shell's own Node, so the fallback has nothing to add from wherever this machine keeps one.
+    executable(join(tools, 'node'))
     const system = bareSystem()
     expect(findExecutable('ramu-test-cli')).toBeNull()
     await ensureToolsOnPath(async () => [tools, system])

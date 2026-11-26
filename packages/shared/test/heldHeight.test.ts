@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { HOLD_PAUSE_MS, NO_HOLD, holdHeight, releaseHold } from '../src/chat/heldHeight'
+import { HOLD_PAUSE_MS, NO_HOLD, endPause, holdHeight, releaseHold } from '../src/chat/heldHeight'
 
 it('keeps the tallest height a live group reached, so it only grows', () => {
   let hold = holdHeight(NO_HOLD, 40, true, 0)
@@ -23,6 +23,15 @@ it('lets a fold by hand show, then holds again from where it settled', () => {
   expect(holdHeight(released, 200, true, 1000 + HOLD_PAUSE_MS - 1)).toBe(released)
   expect(holdHeight(released, 60, true, 1000 + HOLD_PAUSE_MS)).toEqual({ min: 60, pausedUntil: 0 })
   expect(tall.min).toBe(300)
+})
+
+it('picks up when the pause timer fires, even a moment before the clock says the pause is over', () => {
+  const released = releaseHold(1000)
+  // A timer set for the pause can fire a millisecond early; read as still paused, the hold never came back.
+  const early = 1000 + HOLD_PAUSE_MS - 1
+  expect(holdHeight(released, 60, true, early)).toBe(released)
+  expect(holdHeight(endPause(released), 60, true, early)).toEqual({ min: 60, pausedUntil: 0 })
+  expect(endPause(NO_HOLD)).toBe(NO_HOLD)
 })
 
 it('gives each group its own hold: A settles when done, B starts from nothing', () => {

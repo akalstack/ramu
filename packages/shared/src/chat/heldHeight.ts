@@ -23,6 +23,14 @@ export function holdHeight(hold: HeightHold, height: number, live: boolean, now:
   return min === hold.min && !hold.pausedUntil ? hold : { min, pausedUntil: 0 }
 }
 
+/**
+ * The pause is over, whatever the clock says: a timer set for the pause can fire a moment before `pausedUntil`, and a
+ * hold still read as paused then would never pick up again.
+ */
+export function endPause(hold: HeightHold): HeightHold {
+  return hold.pausedUntil ? { ...hold, pausedUntil: 0 } : hold
+}
+
 /** The person opened or folded the group or a row in it: the hold lets go so that shows, and restarts once it settles. */
 export function releaseHold(now: number): HeightHold {
   return { min: 0, pausedUntil: now + HOLD_PAUSE_MS }

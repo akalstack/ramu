@@ -1,5 +1,12 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import { HOLD_PAUSE_MS, NO_HOLD, holdHeight, releaseHold, type HeightHold } from '@ramu/shared/chat/heldHeight'
+import {
+  HOLD_PAUSE_MS,
+  NO_HOLD,
+  endPause,
+  holdHeight,
+  releaseHold,
+  type HeightHold,
+} from '@ramu/shared/chat/heldHeight'
 
 /** A call or thought the person opened inside the group's body (the group's own disclosure is outside it). */
 const OPENED_ROW = '.tool-group-body [data-open]'
@@ -54,7 +61,10 @@ export function useHeldHeight<T extends HTMLElement>(live: boolean, identity: st
     hold.current = releaseHold(Date.now())
     el.style.minHeight = ''
     clearTimeout(pause.current)
-    pause.current = setTimeout(measure, HOLD_PAUSE_MS)
+    pause.current = setTimeout(() => {
+      hold.current = endPause(hold.current)
+      measure()
+    }, HOLD_PAUSE_MS)
   }
   return { ref, release }
 }

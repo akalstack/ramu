@@ -266,8 +266,11 @@ export async function ensureToolsOnPath(readShellPath: () => Promise<string[]> =
   if (process.platform === 'win32') return
   const shellDirs = await readShellPath()
   const current = (process.env.PATH ?? '').split(delimiter).filter(Boolean)
+  const found = [...new Set([...shellDirs, ...current])]
+  process.env.PATH = found.join(delimiter)
+  // Looked for once the shell's folders are in: a Node the person's own shell has needs no fallback after it.
   const node = findExecutable('node')
-  process.env.PATH = [...new Set([...shellDirs, ...current, ...(node ? [dirname(node)] : [])])].join(delimiter)
+  if (node && !found.includes(dirname(node))) process.env.PATH = [...found, dirname(node)].join(delimiter)
 }
 
 export function providerBinary(provider: AgentProvider, overrides = configuration): string {
