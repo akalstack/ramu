@@ -53,7 +53,12 @@ export function useBulkThreadActions() {
       const changed = await each(latest.current, targets, (chat) =>
         latest.current.invoke(chat.computerId, 'tasks.done', chat.taskId, done),
       )
-      if (done && changed.length) undo(say('{0} marked done', { 0: changed.length }), changed, 'tasks.done')
+      if (done && changed.length)
+        undo(
+          changed.length === 1 ? say('Marked done') : say('Marked {0} threads done', { 0: changed.length }),
+          changed,
+          'tasks.done',
+        )
     },
     async archive(chats: readonly Chat[]) {
       const targets = chats.filter((chat) => writable(chat) && chat.status !== 'archived')
@@ -61,7 +66,12 @@ export function useBulkThreadActions() {
       const changed = await each(latest.current, targets, (chat) =>
         latest.current.invoke(chat.computerId, 'tasks.archive', chat.taskId, true),
       )
-      if (changed.length) undo(say('{0} archived', { 0: changed.length }), changed, 'tasks.archive')
+      if (changed.length)
+        undo(
+          changed.length === 1 ? say('Archived') : say('Archived {0} threads', { 0: changed.length }),
+          changed,
+          'tasks.archive',
+        )
     },
     async remove(chats: readonly Chat[]) {
       const targets = chats.filter(writable)

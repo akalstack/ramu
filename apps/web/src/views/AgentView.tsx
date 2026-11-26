@@ -147,6 +147,8 @@ import { AsidePanel } from './agent/components/AsidePanel'
 import { AgentTaskPanel } from './agent/components/AgentTaskPanel'
 import { SelectionActions } from './agent/components/SelectionActions'
 import { EditFromHereDialog } from './agent/components/EditFromHereDialog'
+import { QueuedEditChip } from './agent/components/QueuedEditChip'
+import { useQueuedEdit } from './agent/hooks/useQueuedEdit'
 import { MESSAGE_ACTION_EVENT, type MessageActionDetail } from './agent/components/MessageQuoteActions'
 import { PendingSettingsChange } from './agent/components/PendingSettingsChange'
 import { PendingSubmission } from './agent/components/PendingSubmission'
@@ -157,9 +159,9 @@ import {
   type PendingSubmission as Submission,
   type SubmissionPayload,
 } from './agent/lib/pendingSubmission'
+import { loadFailedSubmissions, saveFailedSubmissions } from './agent/lib/failedSubmissions'
 
 /** A chat with an agent: its transcript, the message box and the side panels for sub-agents and asides. */
-import { loadFailedSubmissions, saveFailedSubmissions } from './agent/lib/failedSubmissions'
 export const AgentView = memo(function AgentView({
   view,
   history,
@@ -462,7 +464,7 @@ export const AgentView = memo(function AgentView({
     working && !turns.at(-1)?.ended ? turns.at(-1)?.items.findLast((block) => block.kind === 'tools') : undefined
   // A live tool group's headline already says what the agent is doing, so it takes the status line's place.
   const liveGroup = !!statusGroup && isLiveToolGroup(statusGroup, statusGroup, turns.at(-1)!.items)
-  const completedGoals = useMemo(() => completedGoalsByTurn(events), [events])
+  const completedGoals = useMemo(() => completedGoalsByTurn(events, turns), [events, turns])
   const turnReviews = useMemo(
     () =>
       reviewsByTurn(
@@ -656,6 +658,14 @@ export const AgentView = memo(function AgentView({
     setAttachments((current) => [...current, ...files.filter((file) => !current.some((entry) => entry.id === file.id))])
     setDraft((current) => (current ? `${current}\n${text}` : text))
   }
+  const queuedEdit = useQueuedEdit({
+    sessionId: view.sessionId,
+    queued,
+    draft,
+    setDraft,
+    act,
+    focus: (caret) => focusComposer(root.current, caret),
+  })
   const editMessage = (text: string, files: Attachment[], seq?: number) => {
     if (viewOnly || seq === undefined) return
     setEditing({ seq, text, files })
@@ -1056,9 +1066,7 @@ export const AgentView = memo(function AgentView({
                                 dateSeparator={pageTurnDate(turnDates, hiddenTurns, ti)}
                                 dateNow={dateNow}
                                 reviews={turnReviews.get(turn.key)}
-                                completedGoals={completedGoals.get(
-                                  turn.user?.kind === 'event' ? turn.user.event : null,
-                                )}
+                                completedGoals={completedGoals.get(turn.key)}
                                 ctx={transcript}
                               />
                             </MessageScrollerItem>
@@ -1123,7 +1131,9 @@ export const AgentView = memo(function AgentView({
                                 message={message}
                                 // One the queue already let go of is only waiting for its message to show.
                                 readOnly={viewOnly || !steering.includes(message)}
+                                editing={queuedEdit.edit?.id === message.id}
                                 act={act}
+                                onEdit={() => queuedEdit.start(message, 'steer')}
                                 onRemoved={() => heldSteers.forget(message.id)}
                               />
                             </MessageScrollerItem>
@@ -1271,6 +1281,8 @@ export const AgentView = memo(function AgentView({
                           configuring={configuring}
                           act={act}
                           onRecall={recallIntoComposer}
+                          editingId={queuedEdit.edit?.id ?? null}
+                          onEdit={(message) => queuedEdit.start(message, 'queued')}
                         />
                       )}
                     </TrayStack>
@@ -1343,6 +1355,9 @@ export const AgentView = memo(function AgentView({
                       allowEmpty={attached.length > 0 || terminalAttachments.length > 0}
                       chips={
                         <>
+                          {queuedEdit.edit && (
+                            <QueuedEditChip kind={queuedEdit.edit.kind} onCancel={queuedEdit.cancel} />
+                          )}
                           {session && (
                             <ProviderRouteChip
                               sessionId={view.sessionId}
@@ -1407,9 +1422,11 @@ export const AgentView = memo(function AgentView({
                       onArrowUpEmpty={editing || viewOnly ? undefined : editLast}
                       chat
                       helpers={composerHelpers}
-                      onSubmit={(context) => send(action, context)}
+                      onSubmit={(context) => (queuedEdit.save() ? undefined : send(action, context))}
                       onAlternateSubmit={
-                        busyAgent && supportsSteering && !hostOffline ? (context) => send(opposite, context) : undefined
+                        busyAgent && supportsSteering && !hostOffline && !queuedEdit.edit
+                          ? (context) => send(opposite, context)
+                          : undefined
                       }
                       alternateDisabled={!session}
                       alternateLabel={opposite === 'queue' ? 'Queue' : 'Steer'}
@@ -1433,15 +1450,17 @@ export const AgentView = memo(function AgentView({
                         )
                       }
                       submitLabel={
-                        hostOffline || limitView
-                          ? 'Queue'
-                          : busyAgent
-                            ? action === 'queue'
-                              ? 'Queue'
-                              : 'Steer'
-                            : compactFirst
-                              ? 'Compact and send'
-                              : 'Send'
+                        queuedEdit.edit
+                          ? 'Save'
+                          : hostOffline || limitView
+                            ? 'Queue'
+                            : busyAgent
+                              ? action === 'queue'
+                                ? 'Queue'
+                                : 'Steer'
+                              : compactFirst
+                                ? 'Compact and send'
+                                : 'Send'
                       }
                       submitTitle={
                         compactFirst && compactOffer !== null

@@ -30,7 +30,12 @@ vi.mock('react', () => {
 })
 
 let resize: () => void = () => undefined
-const element = { offsetHeight: 40, style: { minHeight: '' } }
+let rowOpen = false
+const element = {
+  offsetHeight: 40,
+  style: { minHeight: '' },
+  querySelector: () => (rowOpen ? {} : null),
+}
 const useGroup = (live: boolean, identity = 'a') => {
   react.cursor = 0
   return useHeldHeight<HTMLElement>(live, identity)
@@ -57,6 +62,7 @@ const setUp = () => {
   )
   element.offsetHeight = 40
   element.style.minHeight = ''
+  rowOpen = false
   react.element = element
 }
 
@@ -114,4 +120,21 @@ it('drops a held height when a different group takes the place mid-hold', () => 
   element.offsetHeight = 30
   useGroup(true, 'b')
   expect(element.style.minHeight).toBe('30px')
+})
+
+it('holds nothing while a row the person opened is open, so it leaves no gap when that row closes on its own', () => {
+  vi.useFakeTimers()
+  setUp()
+  const held = useGroup(true)
+  // The person opens an image call inside the live group.
+  held.release()
+  rowOpen = true
+  element.offsetHeight = 900
+  vi.advanceTimersByTime(HOLD_PAUSE_MS)
+  expect(element.style.minHeight).toBe('')
+  // The group gains a call and is drawn again folded: the opened row is gone and nothing holds its height.
+  rowOpen = false
+  element.offsetHeight = 40
+  resize()
+  expect(element.style.minHeight).toBe('40px')
 })

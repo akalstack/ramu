@@ -79,23 +79,32 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Connect a phone': 'Hubungkan ponsel',
   'Connect a phone or computer': 'Hubungkan ponsel atau komputer',
   'Getting this host ready for your phone…': 'Menyiapkan host ini untuk ponselmu…',
-  'It can use this host now. Manage it in Settings › Devices & access.': 'Sekarang bisa memakai host ini. Kelola di Pengaturan › Perangkat & akses.',
+  'It can use this host now. Manage it in Settings › Devices & access.':
+    'Sekarang bisa memakai host ini. Kelola di Pengaturan › Perangkat & akses.',
   'Making the code…': 'Membuat kode…',
   'No address yet': 'Belum ada alamat',
-  'Or sign in to your Ramu account on both devices to connect from anywhere.': 'Atau masuk ke akun Ramu di kedua perangkat untuk terhubung dari mana saja.',
-  'Other devices can’t reach this host yet. Allow devices on this network, and the code appears here. Ramu does not encrypt this connection, so use it on a network or VPN you trust.': 'Perangkat lain belum bisa menjangkau host ini. Izinkan perangkat di jaringan ini, dan kodenya muncul di sini. Ramu tidak mengenkripsi koneksi ini, jadi pakai di jaringan atau VPN yang kamu percaya.',
+  'Or sign in to your Ramu account on both devices to connect from anywhere.':
+    'Atau masuk ke akun Ramu di kedua perangkat untuk terhubung dari mana saja.',
+  'Other devices can’t reach this host yet. Allow devices on this network, and the code appears here. Ramu does not encrypt this connection, so use it on a network or VPN you trust.':
+    'Perangkat lain belum bisa menjangkau host ini. Izinkan perangkat di jaringan ini, dan kodenya muncul di sini. Ramu tidak mengenkripsi koneksi ini, jadi pakai di jaringan atau VPN yang kamu percaya.',
   'Pair another': 'Pasangkan yang lain',
-  'Pair it once to follow threads, review changes and answer approvals from your phone.': 'Pasangkan sekali untuk mengikuti thread, meninjau perubahan, dan menjawab persetujuan dari ponselmu.',
-  'Pair it once to follow threads, review changes and answer approvals from your phone. This lets devices on your network or VPN reach this host. Ramu does not encrypt that connection, so use a network you trust.': 'Pasangkan sekali untuk mengikuti thread, meninjau perubahan, dan menjawab persetujuan dari ponselmu. Ini membuat perangkat di jaringan atau VPN-mu bisa menjangkau host ini. Ramu tidak mengenkripsi koneksi itu, jadi pakai jaringan yang kamu percaya.',
+  'Pair it once to follow threads, review changes and answer approvals from your phone.':
+    'Pasangkan sekali untuk mengikuti thread, meninjau perubahan, dan menjawab persetujuan dari ponselmu.',
+  'Pair it once to follow threads, review changes and answer approvals from your phone. This lets devices on your network or VPN reach this host. Ramu does not encrypt that connection, so use a network you trust.':
+    'Pasangkan sekali untuk mengikuti thread, meninjau perubahan, dan menjawab persetujuan dari ponselmu. Ini membuat perangkat di jaringan atau VPN-mu bisa menjangkau host ini. Ramu tidak mengenkripsi koneksi itu, jadi pakai jaringan yang kamu percaya.',
   'Pairing QR code. Scan it with your phone’s camera.': 'Kode QR pemasangan. Pindai dengan kamera ponselmu.',
-  'Scan with your phone’s camera. It opens Ramu, or the App Store or Google Play first.': 'Pindai dengan kamera ponselmu. Ramu akan terbuka, atau App Store atau Google Play dulu.',
+  'Scan with your phone’s camera. It opens Ramu, or the App Store or Google Play first.':
+    'Pindai dengan kamera ponselmu. Ramu akan terbuka, atau App Store atau Google Play dulu.',
   'Show pairing code': 'Tampilkan kode pemasangan',
-  'Shows a QR code your phone’s camera opens, a link and a one-time code. With Discoverable on, nearby devices can ask instead, and you allow them here.': 'Menampilkan kode QR yang bisa dibuka kamera ponselmu, tautan, dan kode sekali pakai. Dengan Bisa ditemukan aktif, perangkat terdekat juga bisa meminta, dan kamu mengizinkannya di sini.',
-  'This host is starting to listen for other devices. The code appears in a moment.': 'Host ini mulai menerima perangkat lain. Kodenya muncul sebentar lagi.',
+  'Shows a QR code your phone’s camera opens, a link and a one-time code. With Discoverable on, nearby devices can ask instead, and you allow them here.':
+    'Menampilkan kode QR yang bisa dibuka kamera ponselmu, tautan, dan kode sekali pakai. Dengan Bisa ditemukan aktif, perangkat terdekat juga bisa meminta, dan kamu mengizinkannya di sini.',
+  'This host is starting to listen for other devices. The code appears in a moment.':
+    'Host ini mulai menerima perangkat lain. Kodenya muncul sebentar lagi.',
   'Waiting for your phone…': 'Menunggu ponselmu…',
   'Your phone': 'Ponselmu',
   'Connect your phone': 'Hubungkan ponselmu',
-  'Scan one code and Ramu is on your phone too. Skip it for now and connect later with the phone button in the sidebar.': 'Pindai satu kode dan Ramu ada di ponselmu juga. Lewati dulu dan hubungkan nanti dengan tombol ponsel di sidebar.',
+  'Scan one code and Ramu is on your phone too. Skip it for now and connect later with the phone button in the sidebar.':
+    'Pindai satu kode dan Ramu ada di ponselmu juga. Lewati dulu dan hubungkan nanti dengan tombol ponsel di sidebar.',
   'A helper on {0}: reads only unless you ask for changes':
     'Helper di {0}: hanya membaca kecuali kamu meminta perubahan',
   'Ask {0}': 'Tanya {0}',
@@ -679,7 +688,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Choose configured steps, or choose a model and adjust its supported effort. Switching keeps your current selection and draft.':
     'Pilih langkah yang sudah diatur, atau pilih model lalu atur effort-nya. Mengganti cara ini tetap mempertahankan pilihan dan drafmu.',
 
-
   'Default Markdown view': 'Tampilan Markdown bawaan',
   'Choose how Markdown files open. Links to a specific line open Source.':
     'Pilih cara file Markdown dibuka. Tautan ke baris tertentu membuka Sumber.',
@@ -1074,7 +1082,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Same as thread': 'Sama dengan thread',
   'Answers side questions about a thread. Same as thread uses the model chosen in that thread.':
     'Menjawab pertanyaan sampingan tentang sebuah thread. Sama dengan thread memakai model yang dipilih di thread itu.',
-  'Chosen once in Models, for every feature that uses it.': 'Dipilih sekali di Model, untuk setiap fitur yang memakainya.',
+  'Chosen once in Models, for every feature that uses it.':
+    'Dipilih sekali di Model, untuk setiap fitur yang memakainya.',
   'For providers without their own tool search (Antigravity and Cursor), keep optional Ramu tools out of the prompt until the agent needs them. Claude, Codex and OpenCode always do this themselves. Applies to new provider sessions.':
     'Untuk provider tanpa pencarian tool sendiri (Antigravity dan Cursor), tool Ramu opsional tidak dimasukkan ke prompt sampai agent membutuhkannya. Claude, Codex, dan OpenCode selalu melakukannya sendiri. Berlaku untuk sesi provider baru.',
   'Load tools on demand': 'Muat tool saat dibutuhkan',
@@ -1261,8 +1270,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Updating Ramu…': 'Memperbarui Ramu…',
   'The background service is restarting with the new version.':
     'Layanan latar belakang dimulai ulang dengan versi baru.',
-  'Installing the update downloaded while Ramu was closed.':
-    'Memasang pembaruan yang diunduh saat Ramu ditutup.',
+  'Installing the update downloaded while Ramu was closed.': 'Memasang pembaruan yang diunduh saat Ramu ditutup.',
   'Keep host awake': 'Jaga host tetap aktif',
   'Prevent idle sleep on macOS while the service runs. Display sleep and manual sleep still work.':
     'Cegah macOS tidur saat idle selama layanan berjalan. Layar mati dan tidur manual tetap berfungsi.',
@@ -1296,6 +1304,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Pause goal': 'Jeda goal',
   'Resume goal': 'Lanjutkan goal',
   'Clear goal': 'Hapus goal',
+  'Clear this goal?': 'Hapus goal ini?',
+  'The thread stops working toward it on its own. Its messages and changes stay; start another with /goal.':
+    'Thread berhenti mengerjakannya sendiri. Pesan dan perubahannya tetap ada; mulai yang lain dengan /goal.',
   'Keep working until a goal is complete': 'Terus bekerja sampai goal selesai',
   '{0} continuation turns · limit {1}': '{0} giliran lanjutan · batas {1}',
   '{0} continuation turns · no limit': '{0} giliran lanjutan · tanpa batas',
@@ -1489,6 +1500,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Clear search': 'Hapus pencarian',
   'Clear all': 'Hapus semua',
   'No matches': 'Tidak ada yang cocok',
+  'Try other words, or another kind.': 'Coba kata lain, atau jenis lain.',
   'No results': 'Tidak ada hasil',
   'No matching threads': 'Tidak ada thread yang cocok',
   'No matching models': 'Tidak ada model yang cocok',
@@ -1949,7 +1961,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Send through the main agent': 'Kirim lewat agent utama',
   "This provider can't steer a running turn": 'Provider ini tidak bisa mengarahkan giliran yang sedang berjalan',
   'Applies when you send your next message': 'Berlaku saat kamu mengirim pesan berikutnya',
-  'Applies when the sub-agents and background commands finish': 'Berlaku saat sub-agen dan perintah latar belakang selesai',
+  'Applies when the sub-agents and background commands finish':
+    'Berlaku saat sub-agen dan perintah latar belakang selesai',
   'Change now and stop them': 'Ganti sekarang dan hentikan mereka',
   'Send after active tools finish': 'Kirim setelah alat aktif selesai',
   'Send when the agent finishes its turn': 'Kirim setelah giliran agent selesai',
@@ -1976,6 +1989,13 @@ export const indonesian: Readonly<Record<string, string>> = {
   'CPU {0}%': 'CPU {0}%',
   'CPU, where a full bar is one core': 'CPU, bilah penuh berarti satu inti',
   'Held while editing': 'Ditahan selama diedit',
+  'Editing in the message box': 'Sedang diedit di kotak pesan',
+  'Editing a queued message · held until you save': 'Mengedit pesan antrean · ditahan sampai kamu simpan',
+  'Editing a steering message · held until you save': 'Mengedit arahan · ditahan sampai kamu simpan',
+  'Editing a queued message': 'Mengedit pesan antrean',
+  'Editing a steering message': 'Mengedit arahan',
+  'held until you save': 'ditahan sampai kamu simpan',
+  'Cancel editing (Esc)': 'Batalkan pengeditan (Esc)',
   Held: 'Ditahan',
   'Release message': 'Lepaskan pesan',
   'Edit steering message': 'Edit pesan arahan',
@@ -1983,9 +2003,12 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Live pull request updates': 'Pembaruan pull request langsung',
   'Reviews, finished checks and merges show at once instead of at the next check. Uses the Ramu GitHub App where it is installed, and otherwise adds a webhook to the repository, which needs admin rights there and a public address for this computer (Ramu Link).':
     'Ulasan, pemeriksaan yang selesai, dan merge langsung tampil tanpa menunggu pemeriksaan berikutnya. Memakai Ramu GitHub App jika terpasang, dan jika tidak menambahkan webhook ke repositori, yang memerlukan hak admin di sana dan alamat publik untuk komputer ini (Ramu Link).',
-  'Connecting to Ramu Link for the GitHub App’s updates…': 'Menghubungkan ke Ramu Link untuk pembaruan dari GitHub App…',
-  'Sign in to your Ramu account to get the GitHub App’s updates.': 'Masuk ke akun Ramu Anda untuk menerima pembaruan dari GitHub App.',
-  'Ramu Link cannot be reached right now; Ramu keeps trying.': 'Ramu Link tidak dapat dijangkau saat ini; Ramu terus mencoba.',
+  'Connecting to Ramu Link for the GitHub App’s updates…':
+    'Menghubungkan ke Ramu Link untuk pembaruan dari GitHub App…',
+  'Sign in to your Ramu account to get the GitHub App’s updates.':
+    'Masuk ke akun Ramu Anda untuk menerima pembaruan dari GitHub App.',
+  'Ramu Link cannot be reached right now; Ramu keeps trying.':
+    'Ramu Link tidak dapat dijangkau saat ini; Ramu terus mencoba.',
   'Live via the Ramu GitHub App': 'Langsung lewat Ramu GitHub App',
   'Live via a webhook': 'Langsung lewat webhook',
   'last update {0}': 'pembaruan terakhir {0}',
@@ -1993,7 +2016,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Install the Ramu GitHub App on the repositories that are not live yet. It only reads pull requests, checks and statuses, and needs no admin rights on the repository.':
     'Pasang Ramu GitHub App di repositori yang belum langsung. App ini hanya membaca pull request, pemeriksaan, dan status, dan tidak memerlukan hak admin di repositori.',
   'Install the GitHub App': 'Pasang GitHub App',
-  'Needs admin rights on the repository to add its webhook': 'Perlu hak admin di repositori untuk menambahkan webhook-nya',
+  'Needs admin rights on the repository to add its webhook':
+    'Perlu hak admin di repositori untuk menambahkan webhook-nya',
   'GitHub cannot reach this computer yet': 'GitHub belum dapat menjangkau komputer ini',
   'GitHub refused the webhook; Ramu tries again later': 'GitHub menolak webhook; Ramu akan mencoba lagi nanti',
   '{0} — this thread starts on {1}': '{0} — thread ini dimulai di {1}',
@@ -2018,6 +2042,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   Aside: 'Pertanyaan sampingan',
   'Asides ·': 'Pertanyaan sampingan ·',
   'Ask aside': 'Tanya sampingan',
+  'What is in the attached files?': 'Apa isi file yang dilampirkan?',
   'Close aside': 'Tutup pertanyaan sampingan',
   'Delete aside': 'Hapus pertanyaan sampingan',
   'Thinking aside': 'Lagi mikir jawaban sampingan',
@@ -2370,6 +2395,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Live video': 'Video langsung',
   'Loading conversation': 'Memuat percakapan',
   'Syncing messages…': 'Menyinkronkan pesan…',
+  'Syncing…': 'Menyinkronkan…',
   'Syncing threads…': 'Menyinkronkan thread…',
   'Looking for profiles…': 'Mencari profil…',
   'Mark selected done': 'Tandai yang dipilih selesai',
@@ -2395,7 +2421,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'On. The agent can keep working while this Mac is locked.': 'Aktif. Agent bisa terus bekerja saat Mac ini terkunci.',
   Online: 'Online',
   'Open Computer Use update available': 'Pembaruan Open Computer Use tersedia',
-  'Syncing…': 'Menyinkronkan…',
   'Open Source Control': 'Buka Source Control',
   'Open a project to search inside its files': 'Buka proyek untuk mencari di file-nya',
   'Open file in editor': 'Buka file di editor',
@@ -3237,10 +3262,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Applies to this request only.': 'Hanya berlaku untuk permintaan ini.',
   'Full access still asks before this.': 'Akses penuh tetap meminta izin untuk ini.',
   'Why?': 'Kenapa?',
-  'Full access skips most approvals, but a short list of actions always asks: ones that can destroy work for good, change the computer itself, act in your name or deploy to production.':
-    'Akses penuh melewati sebagian besar izin, tetapi sejumlah kecil tindakan selalu meminta izin: yang bisa merusak pekerjaan secara permanen, mengubah komputer itu sendiri, bertindak atas namamu, atau men-deploy ke produksi.',
-  'Allow once covers only this request; the next one asks again.':
-    'Izinkan sekali hanya untuk permintaan ini; permintaan berikutnya akan bertanya lagi.',
+  'Always asks: deleting work for good, changing the computer, acting as you, deploying to production.':
+    'Selalu bertanya: menghapus pekerjaan permanen, mengubah komputer, bertindak atas namamu, deploy ke produksi.',
+  'Allow once approves just this one.': 'Izinkan sekali hanya menyetujui yang ini.',
   Allowed: 'Diizinkan',
   Denied: 'Ditolak',
   Answered: 'Dijawab',
@@ -3417,6 +3441,12 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Tidak di branch mana pun. Pindah ke branch untuk commit dan sync.',
   'Not published yet. Sync to publish it.': 'Belum dipublikasikan. Sync untuk mempublikasikan.',
   'Not pushed yet': 'Belum di-push',
+  'Not pulled yet': 'Belum di-pull',
+  '{0} of {1} viewed': '{0} dari {1} sudah dilihat',
+  'This commit changes no files.': 'Commit ini tidak mengubah file apa pun.',
+  'No differences with upstream.': 'Tidak ada perbedaan dengan upstream.',
+  'No text changes to show: a binary file, a rename or a mode change.':
+    'Tidak ada perubahan teks untuk ditampilkan: file biner, ganti nama, atau perubahan mode.',
   'Nothing to stash': 'Tidak ada yang bisa di-stash',
   'Pull ({0})': 'Pull ({0})',
   '{0} commits to pull': '{0} commit untuk di-pull',
@@ -3441,12 +3471,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Ask a second model before key decisions or when the agent is stuck.':
     'Tanya model kedua sebelum keputusan penting atau saat agent buntu.',
   'Sends the thread transcript to the advisor model and uses model tokens. Applies when a thread starts or restarts.':
-  'Not pulled yet': 'Belum di-pull',
-  '{0} of {1} viewed': '{0} dari {1} sudah dilihat',
-  'This commit changes no files.': 'Commit ini tidak mengubah file apa pun.',
-  'No differences with upstream.': 'Tidak ada perbedaan dengan upstream.',
-  'No text changes to show: a binary file, a rename or a mode change.':
-    'Tidak ada perubahan teks untuk ditampilkan: file biner, ganti nama, atau perubahan mode.',
     'Mengirim transkrip thread ke model advisor dan memakai token model. Berlaku saat thread dimulai atau dimulai ulang.',
   'Choose the model used for advice.': 'Pilih model untuk memberi saran.',
   'Pause until advice arrives. When off, the agent keeps working on other things.':
@@ -3706,7 +3730,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Finish signing in in your browser.': 'Selesaikan proses masuk di browser-mu.',
   'Uses the Gemini key saved under Media. Enter another to use that instead.':
     'Memakai kunci Gemini yang tersimpan di Media. Masukkan kunci lain untuk memakainya.',
-  'Uses your {0} key. Remove the key from {0} to stop.': 'Memakai kuncimu dari {0}. Hapus kunci itu dari {0} untuk berhenti.',
+  'Uses your {0} key. Remove the key from {0} to stop.':
+    'Memakai kuncimu dari {0}. Hapus kunci itu dari {0} untuk berhenti.',
   'Use another key': 'Pakai kunci lain',
   '{label}: signed in': '{label}: sudah masuk',
   'Finish signing in to {label} in your browser.': 'Selesaikan proses masuk ke {label} di browser-mu.',
@@ -3785,7 +3810,8 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Membuat kode sekali pakai untuk ponsel atau host lain. Masukkan di perangkat itu.',
   Forget: 'Lupakan',
   'Forget {0}?': 'Lupakan {0}?',
-  'It can now use this host. You can remove it any time under Devices in Settings → Devices & access.': 'Sekarang perangkat ini bisa memakai host ini. Kamu bisa menghapusnya kapan saja di Perangkat, di Pengaturan → Perangkat & akses.',
+  'It can now use this host. You can remove it any time under Devices in Settings → Devices & access.':
+    'Sekarang perangkat ini bisa memakai host ini. Kamu bisa menghapusnya kapan saja di Perangkat, di Pengaturan → Perangkat & akses.',
   'It stops working right away and must be paired again to reconnect.':
     'Langsung berhenti berfungsi dan harus dipasangkan lagi agar bisa tersambung.',
   SSH: 'SSH',
@@ -3813,7 +3839,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Tunnel address': 'Alamat tunnel',
   'Hosts added for agents': 'Host yang ditambahkan untuk agent',
   'They stay connected together while Ramu is open.': 'Semua tetap terhubung selama Ramu terbuka.',
-  'No devices paired yet. Connect a phone or another computer above.': 'Belum ada perangkat yang dipasangkan. Hubungkan ponsel atau komputer lain di atas.',
+  'No devices paired yet. Connect a phone or another computer above.':
+    'Belum ada perangkat yang dipasangkan. Hubungkan ponsel atau komputer lain di atas.',
   'No custom agents yet. Add one to give a helper its own model, instructions and a read-only switch.':
     'Belum ada custom agent. Tambahkan satu untuk memberi helper model, instruksi, dan sakelar baca-saja sendiri.',
   'No skills of your own yet. Create one to give agents instructions they can reuse.':
@@ -3824,7 +3851,8 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Tidak ada thread terarsip. Arsipkan thread dari menunya di sidebar untuk menyembunyikannya.',
   'No saved memories yet. Agents save them as they work, or you can use Add.':
     'Belum ada memori tersimpan. Agent menyimpannya saat bekerja, atau kamu bisa pakai Tambah.',
-  'Agents here can start threads on these hosts. They were added with ramu hosts add, so they have no row under Hosts you use.': 'Agent di sini bisa memulai thread di host ini. Host ini ditambahkan dengan ramu hosts add, jadi tidak punya baris di Host yang kamu pakai.',
+  'Agents here can start threads on these hosts. They were added with ramu hosts add, so they have no row under Hosts you use.':
+    'Agent di sini bisa memulai thread di host ini. Host ini ditambahkan dengan ramu hosts add, jadi tidak punya baris di Host yang kamu pakai.',
   '{0} · this computer is device {1} there': '{0} · komputer ini adalah perangkat {1} di sana',
   'No other hosts yet. Add a laptop, workstation or server to work on it from here.':
     'Belum ada host lain. Tambahkan laptop, workstation, atau server untuk mengerjakannya dari sini.',
@@ -3833,31 +3861,40 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Quick tunnel (Cloudflare)': 'Tunnel cepat (Cloudflare)',
   'Asking Ramu Link for an address…': 'Meminta alamat ke Ramu Link…',
   'Connecting to Ramu Link…': 'Menghubungkan ke Ramu Link…',
-  'Download': 'Unduh',
+  Download: 'Unduh',
   'Give the slot back': 'Kembalikan slot',
-  'Kept while you use it. Unused, the address is released on {0}.': 'Tetap tersedia selama dipakai. Kalau tidak dipakai, alamatnya dilepas pada {0}.',
+  'Kept while you use it. Unused, the address is released on {0}.':
+    'Tetap tersedia selama dipakai. Kalau tidak dipakai, alamatnya dilepas pada {0}.',
   'Leave the waitlist': 'Keluar dari antrean',
   'Meanwhile, you can use:': 'Sementara itu, kamu bisa pakai:',
-  'Optional. The address of a Ramu Link relay you run on your Cloudflare account. Leave empty for Ramu’s.': 'Opsional. Alamat relay Ramu Link yang kamu jalankan di akun Cloudflare-mu. Kosongkan untuk memakai milik Ramu.',
+  'Optional. The address of a Ramu Link relay you run on your Cloudflare account. Leave empty for Ramu’s.':
+    'Opsional. Alamat relay Ramu Link yang kamu jalankan di akun Cloudflare-mu. Kosongkan untuk memakai milik Ramu.',
   'Other ways to reach this host': 'Cara lain menjangkau host ini',
   'Ramu Link (full right now)': 'Ramu Link (sedang penuh)',
-  'Ramu Link can’t be reached right now{0}. Ramu will ask again.': 'Ramu Link tidak bisa dijangkau sekarang{0}. Ramu akan mencoba lagi.',
-  'Ramu Link is full right now. Saving puts this computer on the waitlist; it switches on its own when a slot frees.': 'Ramu Link sedang penuh. Kalau disimpan, komputer ini masuk antrean dan beralih sendiri saat ada slot kosong.',
-  'Ramu Link is full right now. This computer is number {0} in line and switches on its own when a slot frees.': 'Ramu Link sedang penuh. Komputer ini di antrean nomor {0} dan beralih sendiri saat ada slot kosong.',
+  'Ramu Link can’t be reached right now{0}. Ramu will ask again.':
+    'Ramu Link tidak bisa dijangkau sekarang{0}. Ramu akan mencoba lagi.',
+  'Ramu Link is full right now. Saving puts this computer on the waitlist; it switches on its own when a slot frees.':
+    'Ramu Link sedang penuh. Kalau disimpan, komputer ini masuk antrean dan beralih sendiri saat ada slot kosong.',
+  'Ramu Link is full right now. This computer is number {0} in line and switches on its own when a slot frees.':
+    'Ramu Link sedang penuh. Komputer ini di antrean nomor {0} dan beralih sendiri saat ada slot kosong.',
   'Ramu Link needs the Ramu account on this computer.': 'Ramu Link butuh akun Ramu di komputer ini.',
-  'Ramu Link used this month’s {0} and is paused until {1}. Your network and VPN still work.': 'Ramu Link sudah memakai jatah {0} bulan ini dan dijeda sampai {1}. Jaringan dan VPN-mu tetap jalan.',
+  'Ramu Link used this month’s {0} and is paused until {1}. Your network and VPN still work.':
+    'Ramu Link sudah memakai jatah {0} bulan ini dan dijeda sampai {1}. Jaringan dan VPN-mu tetap jalan.',
   'Use this': 'Pakai ini',
-  'Your Ramu account’s link is used by {0}. Give it back there (Settings → Devices & access), or use another way here.': 'Link akun Ramu-mu sedang dipakai {0}. Kembalikan di sana (Pengaturan → Perangkat & akses), atau pakai cara lain di sini.',
+  'Your Ramu account’s link is used by {0}. Give it back there (Settings → Devices & access), or use another way here.':
+    'Link akun Ramu-mu sedang dipakai {0}. Kembalikan di sana (Pengaturan → Perangkat & akses), atau pakai cara lain di sini.',
   'Your own relay': 'Relay milikmu',
   'another computer': 'komputer lain',
   '{0} free slots. Save to take one.': '{0} slot kosong. Simpan untuk mengambil satu.',
-  '{0} of {1} this month · {2} of {3} devices connected through it': '{0} dari {1} bulan ini · {2} dari {3} perangkat terhubung lewat sini',
+  '{0} of {1} this month · {2} of {3} devices connected through it':
+    '{0} dari {1} bulan ini · {2} dari {3} perangkat terhubung lewat sini',
   'Ramu Link': 'Ramu Link',
   'Your own Ramu Link relay': 'Relay Ramu Link milikmu',
   'Install Tailscale': 'Pasang Tailscale',
   'Free, with an address that stays the same.': 'Gratis, dengan alamat yang tetap.',
   'Installed here. Private and stable.': 'Sudah terpasang di sini. Privat dan stabil.',
-  'The same relay on your free Cloudflare account, with no slot to wait for.': 'Relay yang sama di akun Cloudflare gratismu, tanpa menunggu slot.',
+  'The same relay on your free Cloudflare account, with no slot to wait for.':
+    'Relay yang sama di akun Cloudflare gratismu, tanpa menunggu slot.',
   'Works now. The address changes each time Ramu starts.': 'Langsung jalan. Alamatnya berubah tiap Ramu dimulai.',
   'Installed here, with your ngrok account.': 'Sudah terpasang di sini, dengan akun ngrok-mu.',
   'Free. Install it on this computer and your devices.': 'Gratis. Pasang di komputer ini dan perangkatmu.',
@@ -3868,7 +3905,8 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Akun Ramu-mu punya link untuk {0} host, dan semuanya terpakai. Kembalikan satu untuk dipakai di sini; host itu tetap bekerja lewat jaringan dan VPN-mu.',
   'Giving back…': 'Mengembalikan…',
   'Give back and use here': 'Kembalikan dan pakai di sini',
-  '{0} of {1} this month · {2} connected through it now': '{0} dari {1} bulan ini · {2} terhubung lewat link ini sekarang',
+  '{0} of {1} this month · {2} connected through it now':
+    '{0} dari {1} bulan ini · {2} terhubung lewat link ini sekarang',
   '1 device': '1 perangkat',
   '{0} devices': '{0} perangkat',
   'Tailscale Funnel': 'Tailscale Funnel',
@@ -4211,10 +4249,15 @@ export const indonesian: Readonly<Record<string, string>> = {
   '{0} from {1}': '{0} dari {1}',
   '1 conversation to resolve': '1 percakapan perlu diselesaikan',
   '{0} conversations to resolve': '{0} percakapan perlu diselesaikan',
+  'Ready to merge': 'Siap di-merge',
   'Review requested': 'Review diminta',
   Fixed: 'Diperbaiki',
   'No change': 'Tanpa perubahan',
   Skip: 'Lewati',
+  'The host did not take it, so nothing was sent. Removing it discards the text.':
+    'Host tidak menerimanya, jadi tidak ada yang terkirim. Menghapusnya membuang teksnya.',
+  'The connection dropped before the host answered. It may have done this already, so check before trying again.':
+    'Koneksi terputus sebelum host menjawab. Mungkin sudah dijalankan, jadi periksa dulu sebelum mencoba lagi.',
   'Request review': 'Minta review',
   'Add to merge queue': 'Tambahkan ke antrean merge',
   'This branch merges through a queue. The hosting service merges the pull request in its turn.':
@@ -4227,10 +4270,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'This pull request is not open.': 'Pull request ini tidak terbuka.',
   'It is a draft. Mark it ready for review first.': 'Ini masih draf. Tandai siap direview dulu.',
   'It has conflicts with its base branch.': 'Ada konflik dengan branch dasarnya.',
-  'The host did not take it, so nothing was sent. Removing it discards the text.':
-    'Host tidak menerimanya, jadi tidak ada yang terkirim. Menghapusnya membuang teksnya.',
-  'The connection dropped before the host answered. It may have done this already, so check before trying again.':
-    'Koneksi terputus sebelum host menjawab. Mungkin sudah dijalankan, jadi periksa dulu sebelum mencoba lagi.',
   'It is behind its base branch, and this repository requires it to be up to date.':
     'Branch ini tertinggal dari branch dasarnya, dan repositori ini mewajibkannya selalu terbaru.',
   'Branch protection is blocking it. Required reviews or checks are missing.':
@@ -4264,6 +4303,11 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Pull, Push': 'Pull, Push',
   Branch: 'Branch',
   'Merge…': 'Merge…',
+  'Merge when ready…': 'Merge saat siap…',
+  '{0}’s approval no longer stands': 'persetujuan {0} tidak berlaku lagi',
+  'approvals from {0} no longer stand': 'persetujuan dari {0} tidak berlaku lagi',
+  'It cannot merge yet. The hosting service merges it once it can.':
+    'Belum bisa di-merge. Layanan hosting akan me-merge begitu bisa.',
   Merge: 'Merge',
   'Create branch from…': 'Buat branch dari…',
   'Rename branch…': 'Ganti nama branch…',
@@ -4274,11 +4318,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Create branch from {0}': 'Buat branch dari {0}',
   'Merge {0} into this branch?': 'Merge {0} ke branch ini?',
   'Creates a branch at the tip of {0} and switches to it. The checkout must be clean.':
-  'Merge when ready…': 'Merge saat siap…',
-  '{0}’s approval no longer stands': 'persetujuan {0} tidak berlaku lagi',
-  'approvals from {0} no longer stand': 'persetujuan dari {0} tidak berlaku lagi',
-  'It cannot merge yet. The hosting service merges it once it can.':
-    'Belum bisa di-merge. Layanan hosting akan me-merge begitu bisa.',
     'Membuat branch di ujung {0} lalu berpindah ke sana. Checkout harus bersih.',
   'Renames the current local branch. Its remote branch is not changed.':
     'Mengganti nama branch lokal saat ini. Branch remote tidak berubah.',
@@ -5264,6 +5303,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Put the commit on a new branch and leave this one.': 'Taruh commit di branch baru dan biarkan branch ini.',
   'Open commit {hash}': 'Buka commit {hash}',
   'not pushed': 'belum di-push',
+  'not pulled': 'belum di-pull',
   'Open {ref}': 'Buka {ref}',
   'No saved stashes. Stash changes from the ⋯ menu to set them aside.':
     'Belum ada stash. Stash perubahan dari menu ⋯ untuk menyisihkannya.',
@@ -5303,7 +5343,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   '{0} account · {1}': 'Akun {0} · {1}',
   'Manage logins…': 'Kelola login…',
   'Show accounts': 'Tampilkan akun',
-  'not pulled': 'belum di-pull',
   'Hide accounts': 'Sembunyikan akun',
   'Show account names and emails': 'Tampilkan nama dan email akun',
   'Hide account names and emails': 'Sembunyikan nama dan email akun',
@@ -5464,10 +5503,13 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Permissions on this host': 'Izin di host ini',
   'What this phone can do on {0}': 'Yang bisa dilakukan ponsel ini di {0}',
   'What this phone can do on this host': 'Yang bisa dilakukan ponsel ini di host ini',
-  'Watch and control its screen and apps from this phone.': 'Melihat dan mengendalikan layar serta aplikasinya dari ponsel ini.',
-  'Use its browser and open its dev servers on this phone.': 'Memakai browsernya dan membuka dev server-nya di ponsel ini.',
+  'Watch and control its screen and apps from this phone.':
+    'Melihat dan mengendalikan layar serta aplikasinya dari ponsel ini.',
+  'Use its browser and open its dev servers on this phone.':
+    'Memakai browsernya dan membuka dev server-nya di ponsel ini.',
   'Open and type into its terminals from this phone.': 'Membuka dan mengetik di terminalnya dari ponsel ini.',
-  'Change its settings, providers and connections from this phone.': 'Mengubah pengaturan, penyedia, dan koneksinya dari ponsel ini.',
+  'Change its settings, providers and connections from this phone.':
+    'Mengubah pengaturan, penyedia, dan koneksinya dari ponsel ini.',
   'Declined by the host': 'Ditolak oleh host',
   Deleting: 'Menghapus',
   Moving: 'Memindahkan',
@@ -5636,7 +5678,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'More for {0}': 'Lainnya untuk {0}',
   Nearby: 'Terdekat',
   'Not allowed: {0}': 'Belum diizinkan: {0}',
-  'On that host, open Devices & access and choose Connect a device. Paste its link, or type its address and code.': 'Di host itu, buka Perangkat & akses lalu pilih Hubungkan perangkat. Tempel tautannya, atau ketik alamat dan kodenya.',
+  'On that host, open Devices & access and choose Connect a device. Paste its link, or type its address and code.':
+    'Di host itu, buka Perangkat & akses lalu pilih Hubungkan perangkat. Tempel tautannya, atau ketik alamat dan kodenya.',
   'Pair {0} again': 'Pasangkan {0} lagi',
   'Pairing link, 100.64.0.7:7788 or user@host': 'Tautan pemasangan, 100.64.0.7:7788, atau user@host',
   'Pause connection': 'Jeda koneksi',
@@ -5649,7 +5692,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Let {0} connect here?': 'Izinkan {0} tersambung ke sini?',
   'Let {0} connect here…': 'Izinkan {0} tersambung ke sini…',
   'Not now': 'Nanti saja',
-  'Ramu asks on {0}. Once its owner connects, it appears under Devices, where you can remove it.': 'Ramu bertanya di {0}. Setelah pemiliknya terhubung, komputer itu muncul di Perangkat, tempat kamu bisa menghapusnya.',
+  'Ramu asks on {0}. Once its owner connects, it appears under Devices, where you can remove it.':
+    'Ramu bertanya di {0}. Setelah pemiliknya terhubung, komputer itu muncul di Perangkat, tempat kamu bisa menghapusnya.',
   'Send invitation': 'Kirim undangan',
   'This computer has no address another host can reach yet.':
     'Komputer ini belum punya alamat yang bisa dijangkau host lain.',
@@ -5689,7 +5733,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'idb installation is already running.': 'Pemasangan idb sedang berjalan.',
   'Install idb on the owning host.': 'Pasang idb di host pemilik.',
   'idb installed without its executables. Try again.': 'idb terpasang tanpa file yang bisa dijalankan. Coba lagi.',
-  'Nothing outside this computer can reach it yet. Choose Anywhere under Reachable from in Settings → Devices & access, and the address appears here.': 'Belum ada yang bisa menjangkaunya dari luar komputer ini. Pilih Di mana saja di Bisa dijangkau dari, di Pengaturan → Perangkat & akses, lalu alamatnya tampil di sini.',
+  'Nothing outside this computer can reach it yet. Choose Anywhere under Reachable from in Settings → Devices & access, and the address appears here.':
+    'Belum ada yang bisa menjangkaunya dari luar komputer ini. Pilih Di mana saja di Bisa dijangkau dari, di Pengaturan → Perangkat & akses, lalu alamatnya tampil di sini.',
   'Saved for this thread': 'Tersimpan untuk thread ini',
   'Saved and kept as {0}': 'Tersimpan dan diingat sebagai {0}',
   'Keep as {0} for later threads': 'Simpan sebagai {0} untuk thread berikutnya',
@@ -6255,7 +6300,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Deploy to production without asking again': 'Deploy ke production tanpa bertanya lagi',
   'The first production deploy of this project asks. Later ones from a shipping thread run on their own and check the live address.':
     'Deploy production pertama proyek ini meminta izin. Deploy berikutnya dari thread yang sedang ship berjalan sendiri dan memeriksa alamat live.',
-  'This repository’s ramu.json keeps this with a person.': 'ramu.json repositori ini membiarkan langkah ini tetap ditanyakan.',
+  'This repository’s ramu.json keeps this with a person.':
+    'ramu.json repositori ini membiarkan langkah ini tetap ditanyakan.',
   'Applies after the first production deploy is allowed.': 'Berlaku setelah deploy production pertama diizinkan.',
   'Without asking': 'Tanpa bertanya',
   'Replied to reviewers': 'Membalas reviewer',
@@ -6732,8 +6778,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Its thread and checkout are on this host': 'Thread dan checkout-nya ada di host ini',
   'Its pull requests show when it is back.': 'Pull request-nya tampil saat host kembali.',
   'Pull requests on {0} could not be listed': 'Pull request di {0} tidak bisa dimuat',
-  'The host answered with an error. Try again in a moment.':
-    'Host menjawab dengan galat. Coba lagi sebentar lagi.',
+  'The host answered with an error. Try again in a moment.': 'Host menjawab dengan galat. Coba lagi sebentar lagi.',
   'Choose account': 'Pilih akun',
   '{0} more notices': '{0} pemberitahuan lagi',
   '{0} hidden': '{0} disembunyikan',
@@ -7893,8 +7938,11 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Workspace · {0} repos': 'Workspace · {0} repo',
   'Project folder': 'Folder proyek',
   'Thread without a project': 'Thread tanpa proyek',
-  'Hold, then drag to move the cursor. Drag farther to repeat faster. Pinch to change the text size.':
-    'Tahan, lalu seret untuk memindahkan kursor. Seret lebih jauh untuk mengulang lebih cepat. Cubit untuk mengubah ukuran teks.',
+  'Hold, then drag to move the cursor, or lift to select text. Drag farther to repeat faster. Pinch to change the text size.':
+    'Tahan, lalu seret untuk memindahkan kursor, atau angkat untuk memilih teks. Seret lebih jauh untuk mengulang lebih cepat. Cubit untuk mengubah ukuran teks.',
+  'Start of selection': 'Awal pilihan',
+  'End of selection': 'Akhir pilihan',
+  'Select command': 'Pilih perintah',
   'This kind of file can only be previewed on the host.': 'Jenis file ini hanya bisa dipratinjau di host.',
   Navigation: 'Navigasi',
   'Function keys': 'Tombol fungsi',
@@ -7978,54 +8026,65 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Hold to choose how to send': 'Tahan untuk memilih cara mengirim',
   'Hold to choose an earlier screen': 'Tahan untuk memilih layar sebelumnya',
   'This repository has no remote to push to': 'Repositori ini tidak punya remote untuk push',
-  "Add MCP servers on the computer running Ramu.": "Tambahkan server MCP di komputer yang menjalankan Ramu.",
-  "All your hosts": "Semua host Anda",
-  "Another version there": "Versi lain di sana",
-  "Available on": "Tersedia di",
-  "Bring theme, models, rules, commit style, identities, plugins, skills and MCP servers to this host from another, or move them with a file. Credentials and paths never move.": "Bawa tema, model, aturan, gaya commit, identitas, plugin, skill, dan server MCP ke host ini dari host lain, atau pindahkan dengan file. Kredensial dan path tidak pernah ikut.",
-  "Checking your other hosts…": "Memeriksa host Anda yang lain…",
-  "Connect another host to choose it here. All your hosts reaches it once it connects.": "Hubungkan host lain untuk memilihnya di sini. Semua host Anda menjangkaunya setelah terhubung.",
-  "Copied {0} settings. {1} plugins, skills and servers wait for your review in Customize.": "{0} pengaturan disalin. {1} plugin, skill, dan server menunggu tinjauan Anda di Kustomisasi.",
-  "Dismiss {name}": "Abaikan {name}",
-  "Enter {0} on this host next. Secrets never leave the host they were entered on.": "Masukkan {0} di host ini berikutnya. Rahasia tidak pernah meninggalkan host tempat rahasia dimasukkan.",
-  "From your other hosts": "Dari host Anda yang lain",
-  "From {0} · another version than here": "Dari {0} · versi berbeda dari di sini",
-  "From {0} · needs {1} on this host": "Dari {0} · butuh {1} di host ini",
-  "From {0} · review it in Customize on the host": "Dari {0} · tinjau di Kustomisasi pada host",
-  "Install there": "Pasang di sana",
-  "Its tools are chosen here once it connects.": "Alatnya dipilih di sini setelah terhubung.",
-  "Not on {0}: {1}": "Tidak ada di {0}: {1}",
-  "Not there": "Tidak ada di sana",
-  "Plugins, skills and MCP servers are not installed yet: each waits in Customize for its review here, where you add its key.": "Plugin, skill, dan server MCP belum dipasang: masing-masing menunggu tinjauan di Kustomisasi di sini, tempat Anda menambahkan kuncinya.",
-  "Review each one to install it here. Keys and sign-ins are added on this host.": "Tinjau masing-masing untuk memasangnya di sini. Kunci dan login ditambahkan di host ini.",
-  "Runs in {0}": "Berjalan di {0}",
-  "Sent to {0} for review there.": "Dikirim ke {0} untuk ditinjau di sana.",
-  "Stays on this host: its project here has no Git remote, or it is for several projects.": "Tetap di host ini: proyeknya di sini tidak punya remote Git, atau dipakai beberapa proyek.",
-  "Stays on this host: it runs from a folder here. Publish it to Git to use it on other hosts.": "Tetap di host ini: berjalan dari folder di sini. Terbitkan ke Git untuk memakainya di host lain.",
-  "Turned on with the same tools as there: {0}": "Dinyalakan dengan alat yang sama seperti di sana: {0}",
-  "Waiting for review on {0}: {1}": "Menunggu tinjauan di {0}: {1}",
-  "Waiting for review there": "Menunggu tinjauan di sana",
-  "asks": "bertanya",
-  "including ones you connect later": "termasuk yang Anda hubungkan nanti",
-  "{0} from {1} is ready to review": "{0} dari {1} siap ditinjau",
-  "{0} is not on this host. It is added turned off; install it, then turn the server on.": "{0} tidak ada di host ini. Server ditambahkan dalam keadaan mati; pasang perintahnya, lalu nyalakan servernya.",
-  "{0} tools from {1} are ready to review": "{0} alat dari {1} siap ditinjau",
-  "Allow Change settings for this device on {0}, then it gets them.": "Izinkan Ubah pengaturan untuk perangkat ini di {0}, lalu host itu menerimanya.",
-  "Also ask your other hosts to remove it": "Minta juga host Anda yang lain menghapusnya",
-  "Could not send tools to {0}": "Tidak bisa mengirim alat ke {0}",
-  "Keep it here": "Simpan di sini",
-  "Keep {name} here": "Simpan {name} di sini",
-  "Remove here": "Hapus di sini",
-  "Removed on {0}": "Dihapus di {0}",
-  "{0} projects": "Proyek {0}",
-  "Same text there": "Teksnya sama di sana",
-  "Different text there": "Teksnya berbeda di sana",
-  "Could not check": "Tidak bisa diperiksa",
-  "On your other hosts": "Di host Anda yang lain",
-  "Copy there": "Salin ke sana",
-  "Replace there": "Ganti di sana",
-  "Export tools": "Ekspor alat",
-  "Only plugins, skills and MCP servers, to share with a colleague. Keys and paths stay here.": "Hanya plugin, skill, dan server MCP, untuk dibagikan ke rekan kerja. Kunci dan path tetap di sini.",
+  'Add MCP servers on the computer running Ramu.': 'Tambahkan server MCP di komputer yang menjalankan Ramu.',
+  'All your hosts': 'Semua host Anda',
+  'Another version there': 'Versi lain di sana',
+  'Available on': 'Tersedia di',
+  'Bring theme, models, rules, commit style, identities, plugins, skills and MCP servers to this host from another, or move them with a file. Credentials and paths never move.':
+    'Bawa tema, model, aturan, gaya commit, identitas, plugin, skill, dan server MCP ke host ini dari host lain, atau pindahkan dengan file. Kredensial dan path tidak pernah ikut.',
+  'Checking your other hosts…': 'Memeriksa host Anda yang lain…',
+  'Connect another host to choose it here. All your hosts reaches it once it connects.':
+    'Hubungkan host lain untuk memilihnya di sini. Semua host Anda menjangkaunya setelah terhubung.',
+  'Copied {0} settings. {1} plugins, skills and servers wait for your review in Customize.':
+    '{0} pengaturan disalin. {1} plugin, skill, dan server menunggu tinjauan Anda di Kustomisasi.',
+  'Dismiss {name}': 'Abaikan {name}',
+  'Enter {0} on this host next. Secrets never leave the host they were entered on.':
+    'Masukkan {0} di host ini berikutnya. Rahasia tidak pernah meninggalkan host tempat rahasia dimasukkan.',
+  'From your other hosts': 'Dari host Anda yang lain',
+  'From {0} · another version than here': 'Dari {0} · versi berbeda dari di sini',
+  'From {0} · needs {1} on this host': 'Dari {0} · butuh {1} di host ini',
+  'From {0} · review it in Customize on the host': 'Dari {0} · tinjau di Kustomisasi pada host',
+  'Install there': 'Pasang di sana',
+  'Its tools are chosen here once it connects.': 'Alatnya dipilih di sini setelah terhubung.',
+  'Not on {0}: {1}': 'Tidak ada di {0}: {1}',
+  'Not there': 'Tidak ada di sana',
+  'Plugins, skills and MCP servers are not installed yet: each waits in Customize for its review here, where you add its key.':
+    'Plugin, skill, dan server MCP belum dipasang: masing-masing menunggu tinjauan di Kustomisasi di sini, tempat Anda menambahkan kuncinya.',
+  'Review each one to install it here. Keys and sign-ins are added on this host.':
+    'Tinjau masing-masing untuk memasangnya di sini. Kunci dan login ditambahkan di host ini.',
+  'Runs in {0}': 'Berjalan di {0}',
+  'Sent to {0} for review there.': 'Dikirim ke {0} untuk ditinjau di sana.',
+  'Stays on this host: its project here has no Git remote, or it is for several projects.':
+    'Tetap di host ini: proyeknya di sini tidak punya remote Git, atau dipakai beberapa proyek.',
+  'Stays on this host: it runs from a folder here. Publish it to Git to use it on other hosts.':
+    'Tetap di host ini: berjalan dari folder di sini. Terbitkan ke Git untuk memakainya di host lain.',
+  'Turned on with the same tools as there: {0}': 'Dinyalakan dengan alat yang sama seperti di sana: {0}',
+  'Waiting for review on {0}: {1}': 'Menunggu tinjauan di {0}: {1}',
+  'Waiting for review there': 'Menunggu tinjauan di sana',
+  asks: 'bertanya',
+  'including ones you connect later': 'termasuk yang Anda hubungkan nanti',
+  '{0} from {1} is ready to review': '{0} dari {1} siap ditinjau',
+  '{0} is not on this host. It is added turned off; install it, then turn the server on.':
+    '{0} tidak ada di host ini. Server ditambahkan dalam keadaan mati; pasang perintahnya, lalu nyalakan servernya.',
+  '{0} tools from {1} are ready to review': '{0} alat dari {1} siap ditinjau',
+  'Allow Change settings for this device on {0}, then it gets them.':
+    'Izinkan Ubah pengaturan untuk perangkat ini di {0}, lalu host itu menerimanya.',
+  'Also ask your other hosts to remove it': 'Minta juga host Anda yang lain menghapusnya',
+  'Could not send tools to {0}': 'Tidak bisa mengirim alat ke {0}',
+  'Keep it here': 'Simpan di sini',
+  'Keep {name} here': 'Simpan {name} di sini',
+  'Remove here': 'Hapus di sini',
+  'Removed on {0}': 'Dihapus di {0}',
+  '{0} projects': 'Proyek {0}',
+  'Same text there': 'Teksnya sama di sana',
+  'Different text there': 'Teksnya berbeda di sana',
+  'Could not check': 'Tidak bisa diperiksa',
+  'On your other hosts': 'Di host Anda yang lain',
+  'Copy there': 'Salin ke sana',
+  'Replace there': 'Ganti di sana',
+  'Export tools': 'Ekspor alat',
+  'Only plugins, skills and MCP servers, to share with a colleague. Keys and paths stay here.':
+    'Hanya plugin, skill, dan server MCP, untuk dibagikan ke rekan kerja. Kunci dan path tetap di sini.',
   'Add and sign in': 'Tambah dan masuk',
   'Agents do not get it until you turn it on.': 'Agent tidak mendapatkannya sampai kamu menyalakannya.',
   'Agents use it in new turns.': 'Agent memakainya di giliran baru.',
@@ -8034,17 +8093,25 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Check with AI': 'Periksa dengan AI',
   'Checked by {0}. It can miss things.': 'Diperiksa oleh {0}. Bisa saja ada yang terlewat.',
   'Every agent': 'Semua agent',
-  'Have AI read its instructions, scripts and commands for anything risky.': 'Minta AI membaca instruksi, skrip, dan perintahnya untuk mencari yang berisiko.',
-  'Hosted by {0}. Every tool asks before it runs until you let it.': 'Di-host oleh {0}. Setiap alat bertanya sebelum berjalan sampai kamu mengizinkannya.',
-  'Hosted by {0}. You sign in with your own account next; every tool asks before it runs until you let it.': 'Di-host oleh {0}. Berikutnya kamu masuk dengan akunmu sendiri; setiap alat bertanya sebelum berjalan sampai kamu mengizinkannya.',
-  'It comes with 1 script its instructions call. Ramu never runs it itself.': 'Skill ini membawa 1 skrip yang dipanggil instruksinya. Ramu tidak pernah menjalankannya sendiri.',
-  'It comes with {0} scripts its instructions call. Ramu never runs them itself.': 'Skill ini membawa {0} skrip yang dipanggil instruksinya. Ramu tidak pernah menjalankannya sendiri.',
-  'Its plugin adds this server with skills that show agents how to use it.': 'Plugin-nya menambahkan server ini beserta skill yang menunjukkan cara agent memakainya.',
-  'Its skills come with the scripts they call. Ramu never runs them itself.': 'Skill-nya membawa skrip yang dipanggilnya. Ramu tidak pernah menjalankannya sendiri.',
+  'Have AI read its instructions, scripts and commands for anything risky.':
+    'Minta AI membaca instruksi, skrip, dan perintahnya untuk mencari yang berisiko.',
+  'Hosted by {0}. Every tool asks before it runs until you let it.':
+    'Di-host oleh {0}. Setiap alat bertanya sebelum berjalan sampai kamu mengizinkannya.',
+  'Hosted by {0}. You sign in with your own account next; every tool asks before it runs until you let it.':
+    'Di-host oleh {0}. Berikutnya kamu masuk dengan akunmu sendiri; setiap alat bertanya sebelum berjalan sampai kamu mengizinkannya.',
+  'It comes with 1 script its instructions call. Ramu never runs it itself.':
+    'Skill ini membawa 1 skrip yang dipanggil instruksinya. Ramu tidak pernah menjalankannya sendiri.',
+  'It comes with {0} scripts its instructions call. Ramu never runs them itself.':
+    'Skill ini membawa {0} skrip yang dipanggil instruksinya. Ramu tidak pernah menjalankannya sendiri.',
+  'Its plugin adds this server with skills that show agents how to use it.':
+    'Plugin-nya menambahkan server ini beserta skill yang menunjukkan cara agent memakainya.',
+  'Its skills come with the scripts they call. Ramu never runs them itself.':
+    'Skill-nya membawa skrip yang dipanggilnya. Ramu tidak pernah menjalankannya sendiri.',
   'One identity’s projects': 'Proyek satu identitas',
   'Reading its instructions, scripts and commands…': 'Membaca instruksi, skrip, dan perintahnya…',
   'Review plugin': 'Tinjau plugin',
-  'Review the files before installing. Its scripts come with it; Ramu never runs them itself.': 'Tinjau file sebelum memasang. Skripnya ikut terpasang; Ramu tidak pernah menjalankannya sendiri.',
+  'Review the files before installing. Its scripts come with it; Ramu never runs them itself.':
+    'Tinjau file sebelum memasang. Skripnya ikut terpasang; Ramu tidak pernah menjalankannya sendiri.',
   'Safety check': 'Pemeriksaan keamanan',
   'Too long to read in full; not checked: {0}': 'Terlalu panjang untuk dibaca seluruhnya; tidak diperiksa: {0}',
   'Used in {0} projects. Change them with Edit.': 'Dipakai di {0} proyek. Ubah lewat Edit.',
@@ -8134,7 +8201,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Signed in to your Ramu account. Turn on backups in Settings › Account.':
     'Sudah masuk ke Akun Ramu-mu. Nyalakan cadangan di Pengaturan › Akun.',
   'Let my signed-in devices connect': 'Izinkan perangkat yang masuk ke akunku terhubung',
-  'Your phone and other computers signed in to this account connect with full access, without a code. Change the access in Settings › Devices & access.': 'Ponsel dan komputer lain yang masuk ke akun ini terhubung dengan akses penuh, tanpa kode. Ubah aksesnya di Pengaturan › Perangkat & akses.',
+  'Your phone and other computers signed in to this account connect with full access, without a code. Change the access in Settings › Devices & access.':
+    'Ponsel dan komputer lain yang masuk ke akun ini terhubung dengan akses penuh, tanpa kode. Ubah aksesnya di Pengaturan › Perangkat & akses.',
   'Optional and free. Sign in so your signed-in phone and computers connect without a code, and to back up your settings.':
     'Opsional dan gratis. Masuk agar ponsel dan komputer yang masuk ke akunmu terhubung tanpa kode, dan untuk mencadangkan pengaturanmu.',
   'Pull requests, issues and reviews need it; commits work without it.':
@@ -8179,82 +8247,114 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Same as /aside: ask without interrupting the thread': 'Sama dengan /aside: tanya tanpa mengganggu thread',
   Tailscale: 'Tailscale',
   Tunnel: 'Tunnel',
-  "Answer to see the number both screens should show.": "Jawab untuk melihat angka yang harus tampil di kedua layar.",
-  "Approve only if it shows {code}.": "Setujui hanya jika menampilkan {code}.",
-  "Backed up": "Sudah dicadangkan",
-  "Backups are sealed with a key only your devices hold. Get it onto this host first.": "Cadangan dikunci dengan kunci yang hanya dimiliki perangkatmu. Dapatkan kunci itu di host ini dulu.",
-  "Backups in the account": "Cadangan di akun",
+  'Answer to see the number both screens should show.': 'Jawab untuk melihat angka yang harus tampil di kedua layar.',
+  'Approve only if it shows {code}.': 'Setujui hanya jika menampilkan {code}.',
+  'Backed up': 'Sudah dicadangkan',
+  'Backups are sealed with a key only your devices hold. Get it onto this host first.':
+    'Cadangan dikunci dengan kunci yang hanya dimiliki perangkatmu. Dapatkan kunci itu di host ini dulu.',
+  'Backups in the account': 'Cadangan di akun',
   'Change in Devices & access': 'Ubah di Perangkat & akses',
-  "Delete account…": "Hapus akun…",
-  "Deletes every backup, listed host and sign-in in the account. Settings on your hosts stay.": "Menghapus semua cadangan, host terdaftar, dan sesi masuk di akun. Pengaturan di host-mu tetap ada.",
-  "Deletes every version kept in the Ramu account. Backups on GitHub stay.": "Menghapus semua versi yang disimpan di akun Ramu. Cadangan di GitHub tetap ada.",
-  "Devices on your Ramu account": "Perangkat di akun Ramu-mu",
-  "Devices signed in to {0} find this host and connect. The account learns its name, never its address.": "Perangkat yang masuk ke {0} menemukan host ini dan terhubung. Akun hanya tahu namanya, tidak pernah alamatnya.",
-  "Finding backups…": "Mencari cadangan…",
-  "Finish signing in above. The backup turns on once you are signed in.": "Selesaikan proses masuk di atas. Pencadangan aktif setelah kamu masuk.",
-  "Finish signing in in your browser": "Selesaikan proses masuk di browser-mu",
-  "From a backup this or another of your hosts made. Nothing changes until you review it.": "Dari cadangan yang dibuat host ini atau host-mu yang lain. Tidak ada yang berubah sampai kamu meninjaunya.",
-  "Last backup: {time}. Theme, models, rules, commit style and identities; never credentials.": "Cadangan terakhir: {time}. Tema, model, aturan, gaya commit, dan identitas; tidak pernah kredensial.",
-  "Listed. Devices on your account ask here before they connect.": "Terdaftar. Perangkat di akunmu meminta izin di sini sebelum terhubung.",
-  "Listed. Devices on your account connect with full access.": "Terdaftar. Perangkat di akunmu terhubung dengan akses penuh.",
-  "Listed. Devices on your account connect with view-only access.": "Terdaftar. Perangkat di akunmu terhubung dengan akses hanya-lihat.",
-  "No Ramu account needed. Uses the GitHub account signed in on this host.": "Tidak perlu akun Ramu. Memakai akun GitHub yang masuk di host ini.",
-  "Not listed. Your other devices pair with a code.": "Tidak terdaftar. Perangkatmu yang lain dipasangkan dengan kode.",
-  "On your Ramu account": "Di akun Ramu-mu",
-  "Opens your backups on a new machine when no other device is around. A new one replaces the old.": "Membuka cadanganmu di mesin baru saat tidak ada perangkat lain. Kode baru menggantikan yang lama.",
-  "Optional, and free. Sign in with GitHub, Google or a passkey.": "Opsional dan gratis. Masuk dengan GitHub, Google, atau passkey.",
-  "Or use your recovery code": "Atau pakai kode pemulihanmu",
-  "Restore settings": "Pulihkan pengaturan",
-  "Run by Akalstack. Backups are sealed on this host before they leave it, so only your devices can open them.": "Dikelola oleh Akalstack. Cadangan dikunci di host ini sebelum keluar, jadi hanya perangkatmu yang bisa membukanya.",
-  "Sign in to your Ramu account and your phone and other computers signed in to it connect without a code.": "Masuk ke akun Ramu-mu, dan ponsel serta komputer lain yang masuk ke akun itu terhubung tanpa kode.",
-  "Sign in…": "Masuk…",
-  "The last 30 versions.": "30 versi terakhir.",
-  "The last backup failed": "Cadangan terakhir gagal",
-  "This host on your account": "Host ini di akunmu",
-  "To a private gist on your GitHub": "Ke gist privat di GitHub-mu",
-  "To your Ramu account": "Ke akun Ramu-mu",
-  "Turning it on starts sign-in.": "Menyalakannya akan memulai proses masuk.",
-  "Use your recovery code": "Pakai kode pemulihanmu",
-  "Waiting for you to approve…": "Menunggu persetujuanmu…",
-  "Your phone and other computers signed in to {0} pair with a code, like any device.": "Ponsel dan komputer lain yang masuk ke {0} dipasangkan dengan kode, seperti perangkat lain.",
-  "{0} is asking for your backup key": "{0} meminta kunci cadanganmu",
-  "Back up settings so only your devices can open them": "Cadangkan pengaturan agar hanya perangkatmu yang bisa membukanya",
-  "Your phone and other computers connect to your hosts without a code": "Ponsel dan komputer lainmu terhubung ke host-mu tanpa kode",
-  "A free Ramu Link address that reaches this host from anywhere": "Alamat Ramu Link gratis yang menjangkau host ini dari mana saja",
-  'On a host, choose who connects under Settings → Devices & access → Devices on your Ramu account.': 'Di host, pilih siapa yang terhubung di Pengaturan → Perangkat & akses → Perangkat di akun Ramu-mu.',
-  "Alpha": "Alfa",
-  "Diagnostics": "Diagnostik",
-  "Documentation": "Dokumentasi",
-  "Guides to every feature, from remote access to plugins.": "Panduan untuk setiap fitur, dari akses jarak jauh hingga plugin.",
-  "Help & feedback": "Bantuan & masukan",
-  "Legal": "Legal",
-  "License": "Lisensi",
-  "Opens an issue with this version and system filled in. Copy diagnostics below to attach them.": "Membuka issue dengan versi dan sistem ini sudah terisi. Salin diagnostik di bawah untuk melampirkannya.",
-  "Ramu is free software under the MIT License, made by Akalstack and its contributors.": "Ramu adalah perangkat lunak bebas dengan Lisensi MIT, dibuat oleh Akalstack dan para kontributornya.",
-  "Ramu is open source. Read it, build it, or contribute.": "Ramu bersifat open source. Baca, bangun, atau ikut berkontribusi.",
-  "Report a problem": "Laporkan masalah",
-  "Share an idea": "Bagikan ide",
-  "Source code": "Kode sumber",
-  "Talk a feature through with the team before anyone builds it.": "Diskusikan fitur dengan tim sebelum ada yang membangunnya.",
-  "Version {0} · Alpha": "Versi {0} · Alfa",
-  "What’s new": "Yang baru",
-  "Work with AI agents on any of your computers, from anywhere.": "Bekerja dengan agen AI di komputer mana pun milikmu, dari mana saja.",
-  "Release notes for this version.": "Catatan rilis untuk versi ini.",
-  "Guides to every feature.": "Panduan untuk setiap fitur.",
-  "Opens an issue with this version filled in.": "Membuka issue dengan versi ini sudah terisi.",
-  "Ramu is open source, under the MIT License.": "Ramu bersifat open source, dengan Lisensi MIT.",
-  "Closing Ramu stops the service: running threads stop, schedules wait, and paired devices can’t connect until you open Ramu again.": "Menutup Ramu menghentikan layanan: thread yang berjalan berhenti, jadwal menunggu, dan perangkat yang dipasangkan tidak bisa terhubung sampai kamu membuka Ramu lagi.",
-  "Keep running when Ramu closes": "Tetap berjalan saat Ramu ditutup",
-  "Needs Keep running when Ramu closes.": "Butuh Tetap berjalan saat Ramu ditutup.",
-  "Reload window and background service": "Muat ulang jendela dan layanan latar belakang",
-  "Runs while Ramu is open, and stops when you close it.": "Berjalan selama Ramu terbuka, dan berhenti saat kamu menutupnya.",
-  "Threads, schedules and your paired devices keep working after you close Ramu.": "Thread, jadwal, dan perangkat yang dipasangkan tetap bekerja setelah kamu menutup Ramu.",
-  "Restart the background service?": "Mulai ulang layanan latar belakang?",
-  "Turn on Keep running when Ramu closes first.": "Nyalakan Tetap berjalan saat Ramu ditutup terlebih dahulu.",
-  "Stay reachable after a restart": "Tetap terjangkau setelah restart",
-  "Start Ramu’s background service when you sign in, and keep this host awake while plugged in, so your devices reach it after a restart.": "Jalankan layanan latar belakang Ramu saat kamu masuk, dan jaga host ini tetap menyala selama terhubung ke listrik, agar perangkatmu bisa menjangkaunya setelah restart.",
-  "Keep the background service running when Ramu closes, start it when you sign in, and keep this host awake while plugged in, so your devices reach it.": "Biarkan layanan latar belakang tetap berjalan saat Ramu ditutup, jalankan saat kamu masuk, dan jaga host ini tetap menyala selama terhubung ke listrik, agar perangkatmu bisa menjangkaunya.",
-  "Start the background service when you sign in. The first time, Keep host awake turns on too, while plugged in.": "Jalankan layanan latar belakang saat kamu masuk. Pertama kali, Jaga host tetap menyala juga ikut aktif, selama terhubung ke listrik.",
+  'Delete account…': 'Hapus akun…',
+  'Deletes every backup, listed host and sign-in in the account. Settings on your hosts stay.':
+    'Menghapus semua cadangan, host terdaftar, dan sesi masuk di akun. Pengaturan di host-mu tetap ada.',
+  'Deletes every version kept in the Ramu account. Backups on GitHub stay.':
+    'Menghapus semua versi yang disimpan di akun Ramu. Cadangan di GitHub tetap ada.',
+  'Devices on your Ramu account': 'Perangkat di akun Ramu-mu',
+  'Devices signed in to {0} find this host and connect. The account learns its name, never its address.':
+    'Perangkat yang masuk ke {0} menemukan host ini dan terhubung. Akun hanya tahu namanya, tidak pernah alamatnya.',
+  'Finding backups…': 'Mencari cadangan…',
+  'Finish signing in above. The backup turns on once you are signed in.':
+    'Selesaikan proses masuk di atas. Pencadangan aktif setelah kamu masuk.',
+  'Finish signing in in your browser': 'Selesaikan proses masuk di browser-mu',
+  'From a backup this or another of your hosts made. Nothing changes until you review it.':
+    'Dari cadangan yang dibuat host ini atau host-mu yang lain. Tidak ada yang berubah sampai kamu meninjaunya.',
+  'Last backup: {time}. Theme, models, rules, commit style and identities; never credentials.':
+    'Cadangan terakhir: {time}. Tema, model, aturan, gaya commit, dan identitas; tidak pernah kredensial.',
+  'Listed. Devices on your account ask here before they connect.':
+    'Terdaftar. Perangkat di akunmu meminta izin di sini sebelum terhubung.',
+  'Listed. Devices on your account connect with full access.':
+    'Terdaftar. Perangkat di akunmu terhubung dengan akses penuh.',
+  'Listed. Devices on your account connect with view-only access.':
+    'Terdaftar. Perangkat di akunmu terhubung dengan akses hanya-lihat.',
+  'No Ramu account needed. Uses the GitHub account signed in on this host.':
+    'Tidak perlu akun Ramu. Memakai akun GitHub yang masuk di host ini.',
+  'Not listed. Your other devices pair with a code.': 'Tidak terdaftar. Perangkatmu yang lain dipasangkan dengan kode.',
+  'On your Ramu account': 'Di akun Ramu-mu',
+  'Opens your backups on a new machine when no other device is around. A new one replaces the old.':
+    'Membuka cadanganmu di mesin baru saat tidak ada perangkat lain. Kode baru menggantikan yang lama.',
+  'Optional, and free. Sign in with GitHub, Google or a passkey.':
+    'Opsional dan gratis. Masuk dengan GitHub, Google, atau passkey.',
+  'Or use your recovery code': 'Atau pakai kode pemulihanmu',
+  'Restore settings': 'Pulihkan pengaturan',
+  'Run by Akalstack. Backups are sealed on this host before they leave it, so only your devices can open them.':
+    'Dikelola oleh Akalstack. Cadangan dikunci di host ini sebelum keluar, jadi hanya perangkatmu yang bisa membukanya.',
+  'Sign in to your Ramu account and your phone and other computers signed in to it connect without a code.':
+    'Masuk ke akun Ramu-mu, dan ponsel serta komputer lain yang masuk ke akun itu terhubung tanpa kode.',
+  'Sign in…': 'Masuk…',
+  'The last 30 versions.': '30 versi terakhir.',
+  'The last backup failed': 'Cadangan terakhir gagal',
+  'This host on your account': 'Host ini di akunmu',
+  'To a private gist on your GitHub': 'Ke gist privat di GitHub-mu',
+  'To your Ramu account': 'Ke akun Ramu-mu',
+  'Turning it on starts sign-in.': 'Menyalakannya akan memulai proses masuk.',
+  'Use your recovery code': 'Pakai kode pemulihanmu',
+  'Waiting for you to approve…': 'Menunggu persetujuanmu…',
+  'Your phone and other computers signed in to {0} pair with a code, like any device.':
+    'Ponsel dan komputer lain yang masuk ke {0} dipasangkan dengan kode, seperti perangkat lain.',
+  '{0} is asking for your backup key': '{0} meminta kunci cadanganmu',
+  'Back up settings so only your devices can open them':
+    'Cadangkan pengaturan agar hanya perangkatmu yang bisa membukanya',
+  'Your phone and other computers connect to your hosts without a code':
+    'Ponsel dan komputer lainmu terhubung ke host-mu tanpa kode',
+  'A free Ramu Link address that reaches this host from anywhere':
+    'Alamat Ramu Link gratis yang menjangkau host ini dari mana saja',
+  'On a host, choose who connects under Settings → Devices & access → Devices on your Ramu account.':
+    'Di host, pilih siapa yang terhubung di Pengaturan → Perangkat & akses → Perangkat di akun Ramu-mu.',
+  Alpha: 'Alfa',
+  Diagnostics: 'Diagnostik',
+  Documentation: 'Dokumentasi',
+  'Guides to every feature, from remote access to plugins.':
+    'Panduan untuk setiap fitur, dari akses jarak jauh hingga plugin.',
+  'Help & feedback': 'Bantuan & masukan',
+  Legal: 'Legal',
+  License: 'Lisensi',
+  'Opens an issue with this version and system filled in. Copy diagnostics below to attach them.':
+    'Membuka issue dengan versi dan sistem ini sudah terisi. Salin diagnostik di bawah untuk melampirkannya.',
+  'Ramu is free software under the MIT License, made by Akalstack and its contributors.':
+    'Ramu adalah perangkat lunak bebas dengan Lisensi MIT, dibuat oleh Akalstack dan para kontributornya.',
+  'Ramu is open source. Read it, build it, or contribute.':
+    'Ramu bersifat open source. Baca, bangun, atau ikut berkontribusi.',
+  'Report a problem': 'Laporkan masalah',
+  'Share an idea': 'Bagikan ide',
+  'Source code': 'Kode sumber',
+  'Talk a feature through with the team before anyone builds it.':
+    'Diskusikan fitur dengan tim sebelum ada yang membangunnya.',
+  'Version {0} · Alpha': 'Versi {0} · Alfa',
+  'What’s new': 'Yang baru',
+  'Work with AI agents on any of your computers, from anywhere.':
+    'Bekerja dengan agen AI di komputer mana pun milikmu, dari mana saja.',
+  'Release notes for this version.': 'Catatan rilis untuk versi ini.',
+  'Guides to every feature.': 'Panduan untuk setiap fitur.',
+  'Opens an issue with this version filled in.': 'Membuka issue dengan versi ini sudah terisi.',
+  'Ramu is open source, under the MIT License.': 'Ramu bersifat open source, dengan Lisensi MIT.',
+  'Closing Ramu stops the service: running threads stop, schedules wait, and paired devices can’t connect until you open Ramu again.':
+    'Menutup Ramu menghentikan layanan: thread yang berjalan berhenti, jadwal menunggu, dan perangkat yang dipasangkan tidak bisa terhubung sampai kamu membuka Ramu lagi.',
+  'Keep running when Ramu closes': 'Tetap berjalan saat Ramu ditutup',
+  'Needs Keep running when Ramu closes.': 'Butuh Tetap berjalan saat Ramu ditutup.',
+  'Reload window and background service': 'Muat ulang jendela dan layanan latar belakang',
+  'Runs while Ramu is open, and stops when you close it.':
+    'Berjalan selama Ramu terbuka, dan berhenti saat kamu menutupnya.',
+  'Threads, schedules and your paired devices keep working after you close Ramu.':
+    'Thread, jadwal, dan perangkat yang dipasangkan tetap bekerja setelah kamu menutup Ramu.',
+  'Restart the background service?': 'Mulai ulang layanan latar belakang?',
+  'Turn on Keep running when Ramu closes first.': 'Nyalakan Tetap berjalan saat Ramu ditutup terlebih dahulu.',
+  'Stay reachable after a restart': 'Tetap terjangkau setelah restart',
+  'Start Ramu’s background service when you sign in, and keep this host awake while plugged in, so your devices reach it after a restart.':
+    'Jalankan layanan latar belakang Ramu saat kamu masuk, dan jaga host ini tetap menyala selama terhubung ke listrik, agar perangkatmu bisa menjangkaunya setelah restart.',
+  'Keep the background service running when Ramu closes, start it when you sign in, and keep this host awake while plugged in, so your devices reach it.':
+    'Biarkan layanan latar belakang tetap berjalan saat Ramu ditutup, jalankan saat kamu masuk, dan jaga host ini tetap menyala selama terhubung ke listrik, agar perangkatmu bisa menjangkaunya.',
+  'Start the background service when you sign in. The first time, Keep host awake turns on too, while plugged in.':
+    'Jalankan layanan latar belakang saat kamu masuk. Pertama kali, Jaga host tetap menyala juga ikut aktif, selama terhubung ke listrik.',
   'Terminal command': 'Perintah terminal',
   'Not available on this computer': 'Tidak tersedia di komputer ini',
   'Use Ramu from your terminal': 'Pakai Ramu dari terminal',
@@ -8271,7 +8371,8 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Mulai thread, pasangkan perangkat, dan periksa komputer ini dari terminal mana pun. Perintah ini berjalan di dalam aplikasi ini, jadi tidak ada lagi yang perlu dipasang.',
   'Stop running work and mark done?': 'Hentikan pekerjaan yang berjalan dan tandai selesai?',
   'Marking this done stops:': 'Menandai ini selesai akan menghentikan:',
-  '{0} background commands, with any servers they run': '{0} perintah latar belakang, beserta server yang dijalankannya',
+  '{0} background commands, with any servers they run':
+    '{0} perintah latar belakang, beserta server yang dijalankannya',
   '{0} helper agents still working': '{0} agent pembantu yang masih bekerja',
   'Using the computer': 'Penggunaan komputer',
   'Reopening the thread later starts the work again as it needs.':
@@ -8311,28 +8412,38 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Add to this thread’s changes': 'Tambahkan ke perubahan thread ini',
   'Also edited by you': 'Juga diedit olehmu',
   'Changed by you · {0} files': 'Diubah olehmu · {0} file',
-  'Held a command until “{0}” finished its own, so each thread’s changes stay apart.': 'Menahan perintah sampai “{0}” menyelesaikan perintahnya, agar perubahan tiap thread tetap terpisah.',
+  'Held a command until “{0}” finished its own, so each thread’s changes stay apart.':
+    'Menahan perintah sampai “{0}” menyelesaikan perintahnya, agar perubahan tiap thread tetap terpisah.',
   'Not undone with this turn, so your edits stay.': 'Tidak dibatalkan bersama giliran ini, agar editanmu tetap ada.',
   'Switch when they finish': 'Pindah saat selesai',
   'Switch when threads finish?': 'Pindah setelah thread selesai?',
-  'Threads are working in this checkout. Ramu switches to {0} as soon as they finish, and new messages there wait until it has.': 'Ada thread yang sedang bekerja di checkout ini. Ramu pindah ke {0} begitu semuanya selesai, dan pesan baru di sana menunggu sampai itu terjadi.',
-  'Undo and commit these files with this thread’s changes.': 'Batalkan dan commit file ini bersama perubahan thread ini.',
-  'Also edited by you, so not undone with this turn: {0}': 'Juga diedit olehmu, jadi tidak dibatalkan bersama giliran ini: {0}',
+  'Threads are working in this checkout. Ramu switches to {0} as soon as they finish, and new messages there wait until it has.':
+    'Ada thread yang sedang bekerja di checkout ini. Ramu pindah ke {0} begitu semuanya selesai, dan pesan baru di sana menunggu sampai itu terjadi.',
+  'Undo and commit these files with this thread’s changes.':
+    'Batalkan dan commit file ini bersama perubahan thread ini.',
+  'Also edited by you, so not undone with this turn: {0}':
+    'Juga diedit olehmu, jadi tidak dibatalkan bersama giliran ini: {0}',
   '{0} is restarting': '{0} sedang dimulai ulang',
-  'Service update available. Restart the service to apply it. Agents stop, and unfinished threads resume.': 'Pembaruan layanan tersedia. Mulai ulang layanan untuk menerapkannya. Agent berhenti, lalu thread yang belum selesai dilanjutkan.',
-  'Download updates automatically, then restart on its own once nothing is running and you step away. Threads keep running.': 'Unduh pembaruan otomatis, lalu mulai ulang sendiri saat tidak ada yang berjalan dan kamu sedang tidak memakai komputer. Thread tetap berjalan.',
-  'Ramu {0} is ready. It installs on its own once nothing is running and you step away, or restart now. Threads keep running.': 'Ramu {0} siap. Pembaruan terpasang sendiri saat tidak ada yang berjalan dan kamu sedang tidak memakai komputer, atau mulai ulang sekarang. Thread tetap berjalan.',
+  'Service update available. Restart the service to apply it. Agents stop, and unfinished threads resume.':
+    'Pembaruan layanan tersedia. Mulai ulang layanan untuk menerapkannya. Agent berhenti, lalu thread yang belum selesai dilanjutkan.',
+  'Download updates automatically, then restart on its own once nothing is running and you step away. Threads keep running.':
+    'Unduh pembaruan otomatis, lalu mulai ulang sendiri saat tidak ada yang berjalan dan kamu sedang tidak memakai komputer. Thread tetap berjalan.',
+  'Ramu {0} is ready. It installs on its own once nothing is running and you step away, or restart now. Threads keep running.':
+    'Ramu {0} siap. Pembaruan terpasang sendiri saat tidak ada yang berjalan dan kamu sedang tidak memakai komputer, atau mulai ulang sekarang. Thread tetap berjalan.',
   'Puts it in the message box': 'Memasukkannya ke kotak pesan',
-  'Phones and computers that pair with it, find it nearby or see it on your Ramu account show this name.': 'Ponsel dan komputer yang dipasangkan dengannya, menemukannya di sekitar, atau melihatnya di akun Ramu kamu menampilkan nama ini.',
+  'Phones and computers that pair with it, find it nearby or see it on your Ramu account show this name.':
+    'Ponsel dan komputer yang dipasangkan dengannya, menemukannya di sekitar, atau melihatnya di akun Ramu kamu menampilkan nama ini.',
   'Rename this host': 'Ganti nama host ini',
   'Rename this host…': 'Ganti nama host ini…',
-  'Saved on this device. The host keeps its own name.': 'Disimpan di perangkat ini. Host tetap memakai namanya sendiri.',
+  'Saved on this device. The host keeps its own name.':
+    'Disimpan di perangkat ini. Host tetap memakai namanya sendiri.',
   'This host lists it under this name.': 'Host ini menampilkannya dengan nama ini.',
   'Use “{0}”': 'Pakai “{0}”',
   'How {0} lists this phone.': 'Cara {0} menampilkan ponsel ini.',
   'Name on this phone': 'Nama di ponsel ini',
-  'Names': 'Nama',
-  'Only this phone uses it. The computer keeps its own name.': 'Hanya ponsel ini yang memakainya. Komputer tetap memakai namanya sendiri.',
+  Names: 'Nama',
+  'Only this phone uses it. The computer keeps its own name.':
+    'Hanya ponsel ini yang memakainya. Komputer tetap memakai namanya sendiri.',
   'The name the computer gives itself.': 'Nama yang diberikan komputer untuk dirinya sendiri.',
   'This phone’s name there': 'Nama ponsel ini di sana',
   'Use the name it paired with': 'Pakai nama saat dipasangkan',
@@ -8341,8 +8452,10 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Long-press for message actions': 'Tekan lama untuk tindakan pesan',
   'Home folder': 'Folder home',
   'Type a path': 'Ketik lokasi',
-  'Folder path on the host, like ~/code or /Volumes/Drive': 'Lokasi folder di host, misalnya ~/code atau /Volumes/Drive',
-  'This is a system folder. Open a folder inside it to add as a project.': 'Ini folder sistem. Buka folder di dalamnya untuk ditambahkan sebagai proyek.',
+  'Folder path on the host, like ~/code or /Volumes/Drive':
+    'Lokasi folder di host, misalnya ~/code atau /Volumes/Drive',
+  'This is a system folder. Open a folder inside it to add as a project.':
+    'Ini folder sistem. Buka folder di dalamnya untuk ditambahkan sebagai proyek.',
   'Copy command and output': 'Salin perintah dan output-nya',
   'Copy from terminal': 'Salin dari terminal',
   'Select text': 'Pilih teks',
@@ -8351,8 +8464,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Copy all': 'Salin semua',
   'Command and output': 'Perintah dan output',
   'No commands yet': 'Belum ada perintah',
-  'Commands you run in this terminal show up here, to copy with their output.': 'Perintah yang kamu jalankan di terminal ini muncul di sini, untuk disalin bersama output-nya.',
-  'Screen': 'Layar',
+  'Commands you run in this terminal show up here, to copy with their output.':
+    'Perintah yang kamu jalankan di terminal ini muncul di sini, untuk disalin bersama output-nya.',
+  Screen: 'Layar',
   'The rows on screen now': 'Baris yang ada di layar sekarang',
   'Pick part of the recent output': 'Pilih sebagian output terbaru',
   'Show in Files': 'Tampilkan di File',
@@ -8360,19 +8474,24 @@ export const indonesian: Readonly<Record<string, string>> = {
   '{0} more. Type to narrow the list.': '{0} lagi. Ketik untuk mempersempit daftarnya.',
   'New code in {0}': 'Kode baru dalam {0}',
   'Paste the link on your phone to open it there.': 'Tempel tautannya di ponselmu untuk membukanya di sana.',
-  'Or pick this host under Nearby hosts on the phone, and allow it when both show the same number.': 'Atau pilih host ini di Host terdekat di ponsel, lalu izinkan saat keduanya menampilkan angka yang sama.',
-  'It can read threads and answer requests, but not start threads, change files or run commands.': 'Perangkat ini bisa membaca thread dan menjawab permintaan, tapi tidak bisa memulai thread, mengubah file, atau menjalankan perintah.',
-  'It can start threads and change files here, plus what this host allows new devices.': 'Perangkat ini bisa memulai thread dan mengubah file di sini, ditambah yang diizinkan host ini untuk perangkat baru.',
+  'Or pick this host under Nearby hosts on the phone, and allow it when both show the same number.':
+    'Atau pilih host ini di Host terdekat di ponsel, lalu izinkan saat keduanya menampilkan angka yang sama.',
+  'It can read threads and answer requests, but not start threads, change files or run commands.':
+    'Perangkat ini bisa membaca thread dan menjawab permintaan, tapi tidak bisa memulai thread, mengubah file, atau menjalankan perintah.',
+  'It can start threads and change files here, plus what this host allows new devices.':
+    'Perangkat ini bisa memulai thread dan mengubah file di sini, ditambah yang diizinkan host ini untuk perangkat baru.',
   'Phones reach this host through {0}': 'Ponsel menjangkau host ini lewat {0}',
   'Address in the QR code': 'Alamat di kode QR',
   'Suggest tools while threads run': 'Sarankan alat saat thread berjalan',
-  'Show a card in a thread when the agent or a link you share points to a tool that isn’t on. Turning one on is up to you.': 'Tampilkan kartu di thread saat agen atau link yang kamu bagikan menunjuk ke alat yang belum aktif. Menyalakannya tetap keputusanmu.',
+  'Show a card in a thread when the agent or a link you share points to a tool that isn’t on. Turning one on is up to you.':
+    'Tampilkan kartu di thread saat agen atau link yang kamu bagikan menunjuk ke alat yang belum aktif. Menyalakannya tetap keputusanmu.',
   'This thread links to {0}.': 'Thread ini menautkan ke {0}.',
   'This project uses {0}.': 'Proyek ini memakai {0}.',
   'Suggested tool': 'Alat yang disarankan',
   'Hidden for this project': 'Disembunyikan untuk proyek ini',
   'Sign in to {0} to finish turning it on.': 'Masuk ke {0} untuk selesai menyalakannya.',
-  'Turn it on in Customize on the computer running Ramu.': 'Nyalakan di Kustomisasi pada komputer yang menjalankan Ramu.',
+  'Turn it on in Customize on the computer running Ramu.':
+    'Nyalakan di Kustomisasi pada komputer yang menjalankan Ramu.',
   'Turn on everywhere': 'Nyalakan di mana saja',
   'Turn on for this project': 'Nyalakan untuk proyek ini',
   'Sign in to an agent first, then turn this on again.': 'Masuk ke agen dulu, lalu nyalakan ini lagi.',
@@ -8396,83 +8515,160 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Nothing to show.': 'Tidak ada yang ditampilkan.',
   'Agents read this when the thread continues.': 'Agen membaca ini saat thread dilanjutkan.',
   'Checkpoint text': 'Teks checkpoint',
-  'From finished threads. Ramu keeps them current unless you pin them.': 'Dari thread yang selesai. Ramu terus memperbaruinya kecuali kamu menyematkannya.',
-  'Review finished threads and clean up memory now, instead of waiting for idle time.': 'Tinjau thread yang selesai dan rapikan memori sekarang, tanpa menunggu waktu senggang.',
-  'Skills Ramu learned, with their history, are in Customize → Skills.': 'Skill yang dipelajari Ramu, beserta riwayatnya, ada di Kustomisasi → Skill.',
-  'Skills you write or install, and the ones Ramu learned, are in Customize → Skills.': 'Skill yang kamu tulis atau pasang, dan yang dipelajari Ramu, ada di Kustomisasi → Skill.',
+  'From finished threads. Ramu keeps them current unless you pin them.':
+    'Dari thread yang selesai. Ramu terus memperbaruinya kecuali kamu menyematkannya.',
+  'Review finished threads and clean up memory now, instead of waiting for idle time.':
+    'Tinjau thread yang selesai dan rapikan memori sekarang, tanpa menunggu waktu senggang.',
+  'Skills Ramu learned, with their history, are in Customize → Skills.':
+    'Skill yang dipelajari Ramu, beserta riwayatnya, ada di Kustomisasi → Skill.',
+  'Skills you write or install, and the ones Ramu learned, are in Customize → Skills.':
+    'Skill yang kamu tulis atau pasang, dan yang dipelajari Ramu, ada di Kustomisasi → Skill.',
   'Tidy up now': 'Rapikan sekarang',
   'Tidying up…': 'Merapikan…',
-  'When a thread’s task is finished, save lasting notes and reusable skills. Uses model tokens when idle.': 'Saat tugas thread selesai, simpan catatan yang bertahan lama dan skill yang dapat dipakai ulang. Memakai token model saat senggang.',
+  'When a thread’s task is finished, save lasting notes and reusable skills. Uses model tokens when idle.':
+    'Saat tugas thread selesai, simpan catatan yang bertahan lama dan skill yang dapat dipakai ulang. Memakai token model saat senggang.',
   'Learning undone': 'Pembelajaran dibatalkan',
   'Undone. 1 item changed since, so it was kept.': 'Dibatalkan. 1 item sudah berubah sejak itu, jadi dibiarkan.',
-  'Undone. {0} items changed since, so they were kept.': 'Dibatalkan. {0} item sudah berubah sejak itu, jadi dibiarkan.',
-  '{0} goes back to this revision. The current one stays in its history, so you can restore it later.': '{0} kembali ke revisi ini. Versi saat ini tetap ada di riwayatnya, jadi kamu bisa memulihkannya nanti.',
-  'Ramu adds them here when it learns a skill worth repeating.': 'Ramu menambahkannya di sini saat mempelajari skill yang layak diulang.',
-  'Start Ramu’s background service when you sign in, so your devices reach this host after a restart.': 'Mulai layanan latar Ramu saat kamu masuk, agar perangkatmu bisa menjangkau host ini setelah restart.',
-  'Keep the background service running when Ramu closes and start it when you sign in, so your devices reach this host.': 'Biarkan layanan latar tetap berjalan saat Ramu ditutup dan mulai saat kamu masuk, agar perangkatmu bisa menjangkau host ini.',
+  'Undone. {0} items changed since, so they were kept.':
+    'Dibatalkan. {0} item sudah berubah sejak itu, jadi dibiarkan.',
+  '{0} goes back to this revision. The current one stays in its history, so you can restore it later.':
+    '{0} kembali ke revisi ini. Versi saat ini tetap ada di riwayatnya, jadi kamu bisa memulihkannya nanti.',
+  'Ramu adds them here when it learns a skill worth repeating.':
+    'Ramu menambahkannya di sini saat mempelajari skill yang layak diulang.',
+  'Start Ramu’s background service when you sign in, so your devices reach this host after a restart.':
+    'Mulai layanan latar Ramu saat kamu masuk, agar perangkatmu bisa menjangkau host ini setelah restart.',
+  'Keep the background service running when Ramu closes and start it when you sign in, so your devices reach this host.':
+    'Biarkan layanan latar tetap berjalan saat Ramu ditutup dan mulai saat kamu masuk, agar perangkatmu bisa menjangkau host ini.',
   'Devices & access': 'Perangkat & akses',
   'Reachable from': 'Bisa dijangkau dari',
   'This network': 'Jaringan ini',
-  'Anywhere': 'Di mana saja',
+  Anywhere: 'Di mana saja',
   'your own tunnel': 'tunnel milikmu sendiri',
-  'Only this computer uses this host. Choose This network or Anywhere to let your paired phones and computers in.': 'Hanya komputer ini yang memakai host ini. Pilih Jaringan ini atau Di mana saja agar ponsel dan komputer yang dipasangkan bisa masuk.',
-  'Paired phones and computers connect on your network or VPN.': 'Ponsel dan komputer yang dipasangkan terhubung lewat jaringan atau VPN-mu.',
+  'Only this computer uses this host. Choose This network or Anywhere to let your paired phones and computers in.':
+    'Hanya komputer ini yang memakai host ini. Pilih Jaringan ini atau Di mana saja agar ponsel dan komputer yang dipasangkan bisa masuk.',
+  'Paired phones and computers connect on your network or VPN.':
+    'Ponsel dan komputer yang dipasangkan terhubung lewat jaringan atau VPN-mu.',
   'Paired devices connect from anywhere through {0}.': 'Perangkat yang dipasangkan terhubung dari mana saja lewat {0}.',
-  'Paired devices connect on your network, and from anywhere through {0}.': 'Perangkat yang dipasangkan terhubung lewat jaringanmu, dan dari mana saja lewat {0}.',
+  'Paired devices connect on your network, and from anywhere through {0}.':
+    'Perangkat yang dipasangkan terhubung lewat jaringanmu, dan dari mana saja lewat {0}.',
   'Choose This network or Anywhere first.': 'Pilih Jaringan ini atau Di mana saja dulu.',
   'Let other devices reach this host?': 'Izinkan perangkat lain menjangkau host ini?',
   'Connect a device': 'Hubungkan perangkat',
   'Connect a device…': 'Hubungkan perangkat…',
-  'Devices': 'Perangkat',
-  'Phones and computers paired with this host. Remove one and it must pair again to reconnect.': 'Ponsel dan komputer yang dipasangkan dengan host ini. Yang dihapus harus dipasangkan lagi untuk terhubung kembali.',
+  Devices: 'Perangkat',
+  'Phones and computers paired with this host. Remove one and it must pair again to reconnect.':
+    'Ponsel dan komputer yang dipasangkan dengan host ini. Yang dihapus harus dipasangkan lagi untuk terhubung kembali.',
   'Remove others': 'Hapus yang lain',
   'Remove all': 'Hapus semua',
   'Remove {0} devices?': 'Hapus {0} perangkat?',
-  'Every phone and computer paired here stops working right away and must pair again. This computer keeps working, and so do linked hosts.': 'Setiap ponsel dan komputer yang dipasangkan di sini langsung berhenti bekerja dan harus dipasangkan lagi. Komputer ini tetap bekerja, begitu juga host yang ditautkan.',
+  'Every phone and computer paired here stops working right away and must pair again. This computer keeps working, and so do linked hosts.':
+    'Setiap ponsel dan komputer yang dipasangkan di sini langsung berhenti bekerja dan harus dipasangkan lagi. Komputer ini tetap bekerja, begitu juga host yang ditautkan.',
   'Limit this device…': 'Batasi perangkat ini…',
   'Connect devices on my Ramu account': 'Hubungkan perangkat di akun Ramu-ku',
-  'Each new device waits until you allow it here and both screens show the same number. Use it when this host holds anything sensitive.': 'Setiap perangkat baru menunggu sampai kamu mengizinkannya di sini dan kedua layar menampilkan angka yang sama. Pakai ini jika host ini menyimpan hal yang sensitif.',
+  'Each new device waits until you allow it here and both screens show the same number. Use it when this host holds anything sensitive.':
+    'Setiap perangkat baru menunggu sampai kamu mengizinkannya di sini dan kedua layar menampilkan angka yang sama. Pakai ini jika host ini menyimpan hal yang sensitif.',
   'Connect them view-only': 'Hubungkan dengan akses hanya lihat',
-  'They read threads and answer requests, but can’t start threads, change files or run commands.': 'Perangkat itu bisa membaca thread dan menjawab permintaan, tapi tidak bisa memulai thread, mengubah file, atau menjalankan perintah.',
-  'Devices signed in to {0} find this host and connect view-only. The account learns its name, never its address.': 'Perangkat yang masuk ke {0} menemukan host ini dan terhubung dengan akses hanya lihat. Akun hanya tahu namanya, tidak pernah alamatnya.',
+  'They read threads and answer requests, but can’t start threads, change files or run commands.':
+    'Perangkat itu bisa membaca thread dan menjawab permintaan, tapi tidak bisa memulai thread, mengubah file, atau menjalankan perintah.',
+  'Devices signed in to {0} find this host and connect view-only. The account learns its name, never its address.':
+    'Perangkat yang masuk ke {0} menemukan host ini dan terhubung dengan akses hanya lihat. Akun hanya tahu namanya, tidak pernah alamatnya.',
   'Linked hosts': 'Host yang ditautkan',
-  'Agents on one host can start and follow threads on another. Every start asks you on the host that sends it.': 'Agent di satu host bisa memulai dan mengikuti thread di host lain. Setiap mulai ditanyakan padamu di host yang mengirimnya.',
-  'No linked hosts. Add another host under Hosts you use, then let agents here start threads on it.': 'Belum ada host yang ditautkan. Tambahkan host lain di Host yang kamu pakai, lalu izinkan agent di sini memulai thread di sana.',
+  'Agents on one host can start and follow threads on another. Every start asks you on the host that sends it.':
+    'Agent di satu host bisa memulai dan mengikuti thread di host lain. Setiap mulai ditanyakan padamu di host yang mengirimnya.',
+  'No linked hosts. Add another host under Hosts you use, then let agents here start threads on it.':
+    'Belum ada host yang ditautkan. Tambahkan host lain di Host yang kamu pakai, lalu izinkan agent di sini memulai thread di sana.',
   'Hosts whose agents start threads here': 'Host yang agent-nya memulai thread di sini',
-  'Threads they start here never get more access than you allow, whatever they ask for.': 'Thread yang mereka mulai di sini tidak pernah mendapat akses melebihi yang kamu izinkan, apa pun yang diminta.',
+  'Threads they start here never get more access than you allow, whatever they ask for.':
+    'Thread yang mereka mulai di sini tidak pernah mendapat akses melebihi yang kamu izinkan, apa pun yang diminta.',
   'A paired computer allowed Agents': 'Komputer terpasang dengan izin Agent',
-  'Another host’s agents: start and follow threads only · last seen {0}': 'Agent host lain: hanya memulai dan mengikuti thread · terakhir terlihat {0}',
-  'Choose This network or Anywhere under Reachable from first, so {0} can reach this computer.': 'Pilih Jaringan ini atau Di mana saja di Bisa dijangkau dari dulu, agar {0} bisa menjangkau komputer ini.',
+  'Another host’s agents: start and follow threads only · last seen {0}':
+    'Agent host lain: hanya memulai dan mengikuti thread · terakhir terlihat {0}',
+  'Choose This network or Anywhere under Reachable from first, so {0} can reach this computer.':
+    'Pilih Jaringan ini atau Di mana saja di Bisa dijangkau dari dulu, agar {0} bisa menjangkau komputer ini.',
   'Allow it only if it shows {0}.': 'Izinkan hanya jika menampilkan {0}.',
   'Asking to pair': 'Minta dipasangkan',
-  'Connect and remove the devices paired with {0} from this phone. The person there allows it once.': 'Hubungkan dan hapus perangkat yang terpasang dengan {0} dari ponsel ini. Orang di sana mengizinkannya sekali.',
+  'Connect and remove the devices paired with {0} from this phone. The person there allows it once.':
+    'Hubungkan dan hapus perangkat yang terpasang dengan {0} dari ponsel ini. Orang di sana mengizinkannya sekali.',
   'Connect to {0} to manage its devices.': 'Hubungkan ke {0} untuk mengelola perangkatnya.',
   'Devices on {0}': 'Perangkat di {0}',
-  'Every other phone and computer paired with {0} stops working right away and must pair again. This phone keeps working, and so do linked hosts.': 'Setiap ponsel dan komputer lain yang terpasang dengan {0} langsung berhenti bekerja dan harus dipasangkan lagi. Ponsel ini tetap bekerja, begitu juga host yang tertaut.',
+  'Every other phone and computer paired with {0} stops working right away and must pair again. This phone keeps working, and so do linked hosts.':
+    'Setiap ponsel dan komputer lain yang terpasang dengan {0} langsung berhenti bekerja dan harus dipasangkan lagi. Ponsel ini tetap bekerja, begitu juga host yang tertaut.',
   'How {0} lists it.': 'Cara {0} mencantumkannya.',
   'Making a code…': 'Membuat kode…',
   'No devices paired yet.': 'Belum ada perangkat yang terpasang.',
   'Pairing QR code': 'Kode QR pemasangan',
   'Remove this phone from {0}?': 'Hapus ponsel ini dari {0}?',
-  'Scan it with the other device’s camera, or type the code. A new one replaces it in {0}.': 'Pindai dengan kamera perangkat lain, atau ketik kodenya. Kode baru menggantikannya dalam {0}.',
-  'See, rename and remove the phones and computers paired with it, or connect a new one.': 'Lihat, ganti nama, dan hapus ponsel serta komputer yang terpasang dengannya, atau hubungkan yang baru.',
-  'Shows a QR code and a one-time code for a phone or computer to pair with {0}.': 'Menampilkan kode QR dan kode sekali pakai agar ponsel atau komputer bisa dipasangkan dengan {0}.',
-  'This phone disconnects at once and must be paired again to reconnect.': 'Ponsel ini langsung terputus dan harus dipasangkan lagi untuk terhubung kembali.',
-  'This phone has view-only access to {0}, so its devices are managed elsewhere.': 'Ponsel ini hanya punya akses lihat ke {0}, jadi perangkatnya dikelola di tempat lain.',
+  'Scan it with the other device’s camera, or type the code. A new one replaces it in {0}.':
+    'Pindai dengan kamera perangkat lain, atau ketik kodenya. Kode baru menggantikannya dalam {0}.',
+  'See, rename and remove the phones and computers paired with it, or connect a new one.':
+    'Lihat, ganti nama, dan hapus ponsel serta komputer yang terpasang dengannya, atau hubungkan yang baru.',
+  'Shows a QR code and a one-time code for a phone or computer to pair with {0}.':
+    'Menampilkan kode QR dan kode sekali pakai agar ponsel atau komputer bisa dipasangkan dengan {0}.',
+  'This phone disconnects at once and must be paired again to reconnect.':
+    'Ponsel ini langsung terputus dan harus dipasangkan lagi untuk terhubung kembali.',
+  'This phone has view-only access to {0}, so its devices are managed elsewhere.':
+    'Ponsel ini hanya punya akses lihat ke {0}, jadi perangkatnya dikelola di tempat lain.',
   'never seen': 'belum pernah terlihat',
   '{0} (this phone)': '{0} (ponsel ini)',
   '{0} (this computer)': '{0} (komputer ini)',
-  '{0} shows each change made here. Permissions and how long devices stay paired are set there.': '{0} menampilkan setiap perubahan yang dibuat di sini. Izin dan lama perangkat tetap terpasang diatur di sana.',
+  '{0} shows each change made here. Permissions and how long devices stay paired are set there.':
+    '{0} menampilkan setiap perubahan yang dibuat di sini. Izin dan lama perangkat tetap terpasang diatur di sana.',
   '{0} removed itself': '{0} menghapus dirinya sendiri',
   '{0} removed {1}': '{0} menghapus {1}',
   '{0} removed 1 other device': '{0} menghapus 1 perangkat lain',
   '{0} removed {1} other devices': '{0} menghapus {1} perangkat lain',
   '{0} renamed {1} to {2}': '{0} mengganti nama {1} menjadi {2}',
   '{0} connected a new device: {1}': '{0} menghubungkan perangkat baru: {1}',
-  '{0} connected a new device with view-only access: {1}': '{0} menghubungkan perangkat baru dengan akses lihat saja: {1}',
+  '{0} connected a new device with view-only access: {1}':
+    '{0} menghubungkan perangkat baru dengan akses lihat saja: {1}',
   '{0} declined a pairing request from {1}': '{0} menolak permintaan pemasangan dari {1}',
   'Review it under Devices in Settings → Devices & access.': 'Tinjau di Perangkat pada Pengaturan → Perangkat & akses.',
   'Changes from other devices': 'Perubahan dari perangkat lain',
-  'You are looking at {0}. To connect and remove its devices from here, it needs to allow this.': 'Kamu sedang melihat {0}. Untuk menghubungkan dan menghapus perangkatnya dari sini, host itu perlu mengizinkannya.',
-  'You are looking at {0}. Its devices are managed on that host, or from a device with full access and its Change settings permission.': 'Kamu sedang melihat {0}. Perangkatnya dikelola di host itu, atau dari perangkat dengan akses penuh dan izin Ubah pengaturan darinya.',
+  'You are looking at {0}. To connect and remove its devices from here, it needs to allow this.':
+    'Kamu sedang melihat {0}. Untuk menghubungkan dan menghapus perangkatnya dari sini, host itu perlu mengizinkannya.',
+  'You are looking at {0}. Its devices are managed on that host, or from a device with full access and its Change settings permission.':
+    'Kamu sedang melihat {0}. Perangkatnya dikelola di host itu, atau dari perangkat dengan akses penuh dan izin Ubah pengaturan darinya.',
+  'Ramu {0} could not be downloaded': 'Ramu {0} tidak bisa diunduh',
+  'Could not check for updates': 'Tidak bisa memeriksa pembaruan',
+  'Checking for updates…': 'Memeriksa pembaruan…',
+  'You have Ramu {0}.': 'Kamu memakai Ramu {0}.',
+  'Downloading Ramu {0}…': 'Mengunduh Ramu {0}…',
+  '{1} of {2} MB. Keep working; you choose when to restart.':
+    '{1} dari {2} MB. Lanjutkan saja; kamu yang memilih kapan memulai ulang.',
+  'Ramu {0} is available': 'Ramu {0} tersedia',
+  'This build installs by hand. You have {1}.': 'Build ini dipasang manual. Kamu memakai {1}.',
+  'Ramu {0} is ready to install': 'Ramu {0} siap dipasang',
+  'Preparing Ramu {0}…': 'Menyiapkan Ramu {0}…',
+  'Restarting takes a few seconds. Threads keep running.': 'Memulai ulang hanya beberapa detik. Thread tetap berjalan.',
+  'You have {1}.': 'Kamu memakai {1}.',
+  'Ramu {0} is up to date': 'Ramu {0} sudah terbaru',
+  'Checked {1}.': 'Diperiksa {1}.',
+  'Not checked yet.': 'Belum diperiksa.',
+  'GitHub could not be reached. Check your connection, then try again.':
+    'GitHub tidak bisa dihubungi. Periksa koneksimu, lalu coba lagi.',
+  'GitHub is limiting update checks for now. Try again in an hour.':
+    'GitHub sedang membatasi pemeriksaan pembaruan. Coba lagi dalam satu jam.',
+  'The download did not match the release, so it was thrown away. Try again.':
+    'Unduhan tidak cocok dengan rilisnya, jadi dibuang. Coba lagi.',
+  'There is not enough free disk space for the update.': 'Ruang disk tidak cukup untuk pembaruan.',
+  'Something went wrong. Try again.': 'Terjadi masalah. Coba lagi.',
+  'Encrypted by your VPN': 'Dienkripsi oleh VPN-mu',
+  'Not encrypted · anyone on this network could read it':
+    'Tidak terenkripsi · siapa pun di jaringan ini bisa membacanya',
+  'Use the local network for {0}?': 'Pakai jaringan lokal untuk {0}?',
+  'It is the fastest route, but Ramu does not encrypt it: others on this Wi-Fi could read what is sent. Ramu will then use it on its own whenever it answers.':
+    'Ini rute tercepat, tetapi Ramu tidak mengenkripsinya: orang lain di Wi-Fi ini bisa membaca yang dikirim. Setelah itu Ramu akan memakainya sendiri setiap kali tersedia.',
+  'Use local network': 'Pakai jaringan lokal',
+  'The fastest that answers: local network, then VPN, then Ramu Link.':
+    'Yang tercepat yang menjawab: jaringan lokal, lalu VPN, lalu Ramu Link.',
+  'Automatic uses the fastest that answers: local network, then VPN, then Ramu Link.':
+    'Otomatis memakai yang tercepat yang menjawab: jaringan lokal, lalu VPN, lalu Ramu Link.',
+  'Show the question': 'Tampilkan pertanyaannya',
+  'Answered 1 question': 'Menjawab 1 pertanyaan',
+  'Answered {0} questions': 'Menjawab {0} pertanyaan',
+  '{0} could not be updated: {1}': '{0} tidak bisa diperbarui: {1}',
+  '{0} could not be updated': '{0} tidak bisa diperbarui',
+  '{0} could not be updated. See each card for why.': '{0} tidak bisa diperbarui. Lihat tiap kartu untuk alasannya.',
+  'Copy update command': 'Salin perintah pembaruan',
+  'Also changed in this checkout, not listed by the agent': 'Juga berubah di checkout ini, tidak dicantumkan agen',
 }

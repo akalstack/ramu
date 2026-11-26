@@ -672,32 +672,38 @@ describe('goal completion evidence', () => {
     expect(await service.updateGoal(id, 'blocked', 'Need the endpoint')).toMatchObject({ status: 'blocked' })
   })
 
-  it('requires every uncommitted change made during the goal to be accounted for, and no others', async () => {
+  it('completes with changes the evidence does not name, and records them for the person to see', async () => {
     snapshot = { root: '/repo', files: { 'notes.md': 'user-draft' } }
     service.setGoal(id, 'Login works')
     await tick(0)
-    snapshot = { root: '/repo', files: { 'notes.md': 'user-draft', 'src/auth.ts': 'h1', 'src/auth.test.ts': 'h2' } }
-    // notes.md was already dirty and has not changed since, so the goal is not answerable for it.
-    await expect(
-      service.updateGoal(id, 'completed', 'Done', { ...evidence, changedFiles: ['src/auth.ts'] }),
-    ).rejects.toThrow(/uncommitted changes.*src\/auth\.test\.ts/)
-    await expect(service.updateGoal(id, 'completed', 'Done', evidence)).rejects.toThrow(/src\/auth\.ts/)
-    // Relative, absolute and directory mentions all count, and so does a file that is not the agent's.
-    expect(
-      await service.updateGoal(id, 'completed', 'Done', {
-        ...evidence,
-        changedFiles: ['/repo/src/auth.ts'],
-        otherChanges: ['src/'],
-      }),
-    ).toMatchObject({ status: 'completed' })
+    snapshot = {
+      root: '/repo',
+      files: { 'notes.md': 'user-draft', 'src/auth.ts': 'h1', 'src/auth.test.ts': 'h2', 'other/thread.ts': 'h3' },
+    }
+    // Another thread editing the same checkout must not hold this goal; notes.md was dirty before and is unchanged.
+    const done = await service.updateGoal(id, 'completed', 'Done', {
+      ...evidence,
+      changedFiles: ['/repo/src/auth.ts'],
+      otherChanges: ['src/auth.test.ts'],
+    })
+    expect(done).toMatchObject({ status: 'completed' })
+    expect(done.evidence?.unlisted).toEqual(['other/thread.ts'])
   })
 
-  it('notices a file that was already dirty and changed again during the goal', async () => {
+  it('names nothing extra when every change is listed, by relative, absolute or directory path', async () => {
+    service.setGoal(id, 'Login works')
+    await tick(0)
+    snapshot = { root: '/repo', files: { 'src/auth.ts': 'h1', 'src/auth.test.ts': 'h2' } }
+    const done = await service.updateGoal(id, 'completed', 'Done', { ...evidence, changedFiles: ['src/'] })
+    expect(done.evidence?.unlisted).toBeUndefined()
+  })
+
+  it('names a file that was already dirty and changed again during the goal', async () => {
     snapshot = { root: '/repo', files: { 'notes.md': 'v1' } }
     service.setGoal(id, 'Login works')
     await tick(0)
     snapshot = { root: '/repo', files: { 'notes.md': 'v2' } }
-    await expect(service.updateGoal(id, 'completed', 'Done', evidence)).rejects.toThrow(/notes\.md/)
+    expect((await service.updateGoal(id, 'completed', 'Done', evidence)).evidence?.unlisted).toEqual(['notes.md'])
   })
 
   it('skips the workspace check outside a git repository or when no baseline was taken', async () => {

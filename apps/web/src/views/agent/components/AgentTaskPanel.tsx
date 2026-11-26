@@ -320,6 +320,7 @@ export function AgentTaskPanel({
                       active={running}
                       live={isLiveToolGroup(block, statusGroup, own)}
                       taskId={taskId}
+                      bare={task.taskType === 'local_bash'}
                     />
                   ) : block.event.kind === 'text' ? (
                     <AssistantText event={block.event} generating={false} actions={false} taskId={taskId} />

@@ -32,7 +32,7 @@ import type { SessionProcess } from './sessionProcess'
 import type { SessionRecorder } from './sessionRecorder'
 import type { SessionRegistry } from './sessionRegistry'
 import type { UserRequests } from './userRequests'
-import type { FallbackRouter } from './fallbackRouter'
+import type { FallbackRouter, FallbackRouterHost } from './fallbackRouter'
 import type { SessionStore } from './sessionStore'
 import type { AgentTasks } from './agentTasks'
 import type { ProviderWaits } from './providerWait'
@@ -57,6 +57,7 @@ export interface SubagentRunnerHost
       FallbackRouter,
       'attempted' | 'policyOf' | 'routing' | 'subagentSettings' | 'withStep' | 'otherAccount' | 'freshAccountUsage'
     >,
+    Pick<FallbackRouterHost, 'apiKeyLogins'>,
     Pick<ProviderWaits, 'autoResumeOf' | 'providerWait'>,
     Pick<SessionStore, 'createSession' | 'events' | 'get' | 'task'>,
     Pick<AgentTasks, 'updateTask'> {
@@ -665,6 +666,8 @@ export class SubagentRunner {
             catalogs,
             switchAt: policy.switchAt,
             attempted: new Set([settingsKey(parent.settings, catalogs)]),
+            apiKeyLogins: this.host.apiKeyLogins(),
+            from: settings,
           })
       if (!step) return
       const lines = this.host

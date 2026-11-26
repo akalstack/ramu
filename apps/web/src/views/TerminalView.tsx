@@ -430,7 +430,11 @@ export function TerminalView({
               void invoke('term.write', info.id, pendingInput).catch((e) => setError(errorText(e)))
               pendingInput = ''
             }
-            const command = resumed ? undefined : (initialCommand ?? runOnce.current)
+            const command = resumed
+              ? undefined
+              : initialCommand
+                ? initialCommand + (info.exitOnSuccess ?? '')
+                : runOnce.current
             if (command && canWrite()) {
               gate.arm()
               term.focus()

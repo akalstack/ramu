@@ -1,15 +1,14 @@
 import { VIEW_ONLY_WRITE_NOTICE } from '../../../composer/viewerAccess'
 import { t as translate, useLanguage } from '../../../i18n'
 import { Button } from '@/components/desktop-button'
-import { MessageCircle, MessageSquarePlus, Quote, X, Trash2 } from 'lucide-react'
+import { MessageCircle, MessageSquarePlus, Paperclip, Quote, X, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import type { AgentSettings, Aside } from '@ramu/shared/types'
+import type { AgentSettings, Aside, Attachment } from '@ramu/shared/types'
 import { asideDraft } from '@ramu/shared/chat/asideDraft'
 import { quotedQuestion, sideChat } from '@ramu/shared/chat/sideChat'
-import { modelDisplayName } from '@ramu/shared/providers/modelLabel'
 import { Composer } from '../../../composer/Composer'
 import { focusComposer } from '../../../composer/ComposerInput'
-import { useModelSets } from '../../../models/ModelSets'
+import { ModelChoice, type ModelChoiceValue } from '../../../settings/ModelChoice'
 import { useAppSettings } from '../../../settings/AppSettings'
 import { errorText } from '../../../lib/errors'
 import { useHost } from '../../../workspace/HostProvider'
@@ -49,7 +48,7 @@ export function AsidePanel({
 }: {
   readOnly?: boolean
   sessionId: string
-  /** The model chosen in the thread's composer, which answers the aside too. */
+  /** The model chosen in the thread's composer, which answers the aside unless one is picked for it. */
   settings?: AgentSettings
   asides: Aside[]
   open: AsideTarget
@@ -69,12 +68,11 @@ export function AsidePanel({
   const [error, setError] = useState<string | null>(null)
   const composer = useRef<HTMLDivElement>(null),
     body = useRef<HTMLDivElement>(null)
-  const { catalogs } = useModelSets()
-  // The model that answers: the one Settings names for asides, else the thread's.
-  const answering = useAppSettings().preferences.asideModel ?? settings
-  const model =
-    answering &&
-    catalogs.find((catalog) => catalog.provider === answering.provider)?.models.find((m) => m.id === answering.model)
+  const [files, setFiles] = useState<Attachment[]>([])
+  // The model that answers starts as the one Settings names for asides; empty means the thread's own. A pick here
+  // lasts while the panel is open, so a follow-up keeps the model the person chose.
+  const asideModel = useAppSettings().preferences.asideModel ?? null
+  const [picked, setPicked] = useState<ModelChoiceValue>(asideModel)
   useEffect(() => {
     setPassage(open.quote)
     setError(null)
@@ -94,7 +92,7 @@ export function AsidePanel({
   }, [messages.length, passage])
   // The composer shows a failed send itself and keeps the text, as the thread's does.
   const send = async () => {
-    const question = draft.trim()
+    const question = draft.trim() || (files.length ? translate('What is in the attached files?') : '')
     if (readOnly || !question || waiting) return
     setError(null)
     // The first question carries its passage natively; later ones continue the same aside with the passage inline.
@@ -106,9 +104,19 @@ export function AsidePanel({
       latest ? latest.quoteFrom : open.from,
       latest ? quotedQuestion(question, passage) : question,
       settings,
+      {
+        // "Same as thread" picked over a Settings aside model names the thread's model, so the pick still wins.
+        ...(picked
+          ? { model: picked }
+          : asideModel && settings
+            ? { model: { provider: settings.provider, model: settings.model, effort: settings.effort } }
+            : {}),
+        ...(files.length ? { attachmentIds: files.map((file) => file.id) } : {}),
+      },
     )
     setDraft('')
     setPassage('')
+    setFiles([])
   }
   const clear = () => {
     if (readOnly) return
@@ -170,6 +178,19 @@ export function AsidePanel({
               {message.quote && <blockquote className={QUOTE_CLASS}>{message.quote}</blockquote>}
               <Message align="end">
                 <MessageContent className="items-end">
+                  {message.attachments?.length ? (
+                    <span className="flex max-w-full flex-wrap justify-end gap-1">
+                      {message.attachments.map((file) => (
+                        <span
+                          key={file.id}
+                          className="inline-flex min-w-0 max-w-full items-center gap-1 text-caption text-muted-foreground"
+                        >
+                          <Paperclip size={12} className="flex-none" />
+                          <span className="truncate">{file.name}</span>
+                        </span>
+                      ))}
+                    </span>
+                  ) : null}
                   <UserBubble>{message.text}</UserBubble>
                 </MessageContent>
               </Message>
@@ -245,7 +266,7 @@ export function AsidePanel({
         </p>
       )}
       {error && <p className="error text-bad small text-caption aside-error m-[0_14px_6px]">{error}</p>}
-      {/* The thread's own composer, without what an aside cannot carry (files, model choice, the queue). */}
+      {/* The thread's own composer, with its files and a model of its own, without the queue an aside has no use for. */}
       <div ref={composer} className="aside-composer flex-none min-w-0 p-[0_10px_10px]">
         <Composer
           value={draft}
@@ -255,12 +276,16 @@ export function AsidePanel({
           placeholder={messages.length ? translate('Follow up…') : translate('Ask about this…')}
           submitLabel={translate('Ask aside')}
           disabled={readOnly || waiting}
+          attachments={files}
+          onAttachmentsChange={readOnly ? undefined : setFiles}
+          allowEmpty={files.length > 0}
           controls={
-            answering && (
-              <span className="min-w-0 truncate px-1 text-caption text-muted-foreground">
-                {modelDisplayName(model?.name ?? answering.model)}
-              </span>
-            )
+            <ModelChoice
+              label={translate('Aside model')}
+              value={picked}
+              emptyLabel={translate('Same as thread')}
+              onChange={setPicked}
+            />
           }
         />
       </div>

@@ -113,6 +113,20 @@ export interface RouteContext {
   apiKeyLogins?: ReadonlySet<string>
   /** Providers whose runtime is proven incompatible on this host: never an automatic destination, and not a usage limit. */
   blocked?: ReadonlySet<AgentProvider>
+  /** The login the chat runs on now; a step on the same provider stays on it unless another login runs on an API key. */
+  from?: { provider: AgentProvider; accountId?: string }
+}
+
+/**
+ * The logins a step on `provider` may start on without the person choosing: their own login for it (the chat's when it
+ * stays on its provider, otherwise the first enabled one) and any that runs on an API key. Moving to another
+ * subscription because one is limited works around the plan's limit; see `nextAccount`.
+ */
+function automaticAccounts(provider: AgentProvider, context: RouteContext): string[] {
+  const order = providerAccountOrder(context.accounts?.configuration, provider)
+  const current = context.from?.provider === provider ? context.from.accountId || 'default' : undefined
+  const own = current && order.includes(current) ? current : order[0]
+  return order.filter((id) => id === own || context.apiKeyLogins?.has(accountKey(provider, id)))
 }
 
 /** The first chain entry that is available, not tried yet and under the threshold. */
@@ -122,7 +136,7 @@ export function nextStep(chain: FallbackStep[], context: RouteContext): (Fallbac
     const step = resolveStep(entry, context.catalogs)
     if (!step || context.attempted?.has(stepKey(step)) || context.blocked?.has(step.provider)) continue
     if (context.accounts) {
-      for (const accountId of providerAccountOrder(context.accounts.configuration, step.provider)) {
+      for (const accountId of automaticAccounts(step.provider, context)) {
         const usage = context.accounts.usage.filter((reading) => (reading.accountId ?? 'default') === accountId)
         if (!isOver(peakFor(usage, step.provider, step.model, now), context.switchAt)) return { ...step, accountId }
       }
@@ -205,7 +219,7 @@ export function planRoute(
           reason: limitReason(settings.provider, peak),
         }
     }
-    const step = nextStep(order, { ...context, attempted })
+    const step = nextStep(order, { ...context, attempted, from: { provider: settings.provider, accountId } })
     return step ? { step, peak, reason: limitReason(settings.provider, peak) } : null
   }
   return null

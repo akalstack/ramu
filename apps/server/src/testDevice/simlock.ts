@@ -6,7 +6,7 @@ import { chmod, mkdir, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { ocuToolsDir } from '../computer/ocu'
-import { ensureNodeOnPath, findExecutable } from '../providers/providerBinaries'
+import { ensureToolsOnPath, findExecutable } from '../providers/providerBinaries'
 
 /** The releases Ramu installs and was checked against; the pin moves only after the plan's checks pass again. */
 export const SIMLOCK_VERSION = '0.6.0'
@@ -163,9 +163,11 @@ export function lastJson<T>(stdout: string): T {
  * Installs the pinned Simlock and agent-device under Ramu's tools folder with npm, and a `node` that is Ramu's own, so
  * their scripts and the daemon run on the Node Ramu ships rather than whatever is on PATH.
  */
-export async function installSimlock(exec: Exec = execute, npm: string | null = findExecutable('npm')): Promise<void> {
+export async function installSimlock(exec: Exec = execute, npm?: string | null): Promise<void> {
+  // npm is looked for once the person's tools are on PATH, so one only their shell knows of is found too.
+  await ensureToolsOnPath()
+  if (npm === undefined) npm = findExecutable('npm')
   if (!npm) throw new Error('Install Node.js (npm) first, then try again.')
-  ensureNodeOnPath()
   const dir = simlockToolDir()
   await mkdir(join(dir, 'bin'), { recursive: true })
   await exec(npm, [

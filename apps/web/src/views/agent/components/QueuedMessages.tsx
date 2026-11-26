@@ -31,12 +31,9 @@ import {
   Send,
   Trash2,
 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
 import type { Attachment, QueuedMessage } from '@ramu/shared/types'
-import { replaceVisibleMessage } from '@ramu/shared/chat/visibleMessage'
 import { parseTaskMessage } from '@ramu/shared/chat/agentTasks'
 import { Attachments } from '../../../composer/Attachments'
-import { Textarea } from '@/components/ui/textarea'
 import { Menu } from '../../../Menu'
 import { useHost } from '../../../workspace/HostProvider'
 import { useHeldOrder } from '../../../lib/heldOrder'
@@ -118,7 +115,9 @@ function HostQueuedRow({
   supportsSteering,
   configuring,
   reorderDisabled,
+  editing,
   act,
+  onEdit,
 }: {
   message: QueuedMessage
   sessionId: string
@@ -126,34 +125,14 @@ function HostQueuedRow({
   supportsSteering: boolean
   configuring: boolean
   reorderDisabled: boolean
+  /** This message is open in the message box, held on the host until it is saved or cancelled. */
+  editing: boolean
   act: Act
+  onEdit: () => void
 }) {
   const { invoke } = useHost()
   const relay = parseTaskMessage(message.text)
-  const ownText = visibleText(message.text)
-  const text = relay ? `To ${relay.name}: ${relay.body}` : ownText || 'Attachments'
-  // Editing happens in the row and holds the message on the host, so it keeps its place and is not sent half-changed.
-  const [draft, setDraft] = useState<string | null>(null)
-  const input = useRef<HTMLTextAreaElement>(null)
-  const editing = draft !== null
-  useEffect(() => {
-    if (!editing) return
-    input.current?.focus()
-    // Closing the editor, or leaving the chat mid-edit, releases the hold so the message goes out at its usual moment.
-    return () => void invoke('agent.holdQueued', sessionId, message.id, false).catch(() => {})
-  }, [editing, invoke, sessionId, message.id])
-  const startEdit = () => {
-    setDraft(ownText)
-    if (!message.held) void act(() => invoke('agent.holdQueued', sessionId, message.id, true))
-  }
-  const cancel = () => setDraft(null)
-  const save = () => {
-    const next = draft?.trim()
-    if (!next) return
-    if (next === ownText) return cancel()
-    setDraft(null)
-    void act(() => invoke('agent.editQueued', sessionId, message.id, replaceVisibleMessage(message.text, next)))
-  }
+  const text = relay ? `To ${relay.name}: ${relay.body}` : visibleText(message.text) || 'Attachments'
   // Steering keeps the row until the active tools finish; an idle chat sends it straight away, even with the queue paused.
   const sendNow = () => void act(() => invoke('agent.sendQueuedNow', sessionId, message.id))
   // Waiting for tools to finish is the wrong call when the turn is heading the wrong way; this stops it instead.
@@ -167,37 +146,11 @@ function HostQueuedRow({
     id: message.id,
     disabled: configuring || reorderDisabled || editing,
   })
-  if (editing)
-    return (
-      <div ref={setNodeRef} className="flex flex-col gap-2 py-1">
-        <Textarea
-          ref={input}
-          value={draft}
-          aria-label={translate('Edit queued message')}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Escape') cancel()
-            else if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-              event.preventDefault()
-              save()
-            }
-          }}
-        />
-        <div className="flex items-center justify-end gap-2">
-          <span className="mr-auto text-caption text-muted-foreground">{translate('Held while editing')}</span>
-          <Button size="sm" variant="ghost" onClick={cancel}>
-            {translate('Cancel')}
-          </Button>
-          <Button size="sm" disabled={!draft.trim()} onClick={save}>
-            {translate('Save')}
-          </Button>
-        </div>
-      </div>
-    )
   return (
     <div
       ref={setNodeRef}
       className={QUEUED_MESSAGE_CLASS}
+      aria-current={editing || undefined}
       style={{
         transform: CSS.Translate.toString(transform),
         transition,
@@ -218,6 +171,7 @@ function HostQueuedRow({
       )}
       <ListEnd size={15} className="queued-icon flex-none text-muted-foreground" aria-hidden="true" />
       <span className="queued-text" title={text}>
+        {editing ? <span className="text-primary">{translate('Editing in the message box')} · </span> : null}
         {text}
         {message.attachments?.length ? <Attachments files={message.attachments} size="small" /> : null}
       </span>
@@ -227,7 +181,7 @@ function HostQueuedRow({
           size="icon-xs"
           className={`${ICON_BUTTON_CLASS} queued-steer gap-[5px] text-soft disabled:pointer-events-none`}
           aria-label={busyAgent ? translate('Steer') : translate('Send now')}
-          disabled={configuring || (busyAgent && !supportsSteering)}
+          disabled={configuring || editing || (busyAgent && !supportsSteering)}
           onClick={sendNow}
         >
           {busyAgent ? <CornerDownRight size={14} /> : <Send size={14} />}
@@ -235,9 +189,9 @@ function HostQueuedRow({
       </div>
       <QueuedRowActions
         removeDisabled={configuring}
-        editDisabled={configuring || !!relay}
+        editDisabled={configuring || editing || !!relay}
         onRemove={() => void act(() => invoke('agent.removeQueued', sessionId, message.id))}
-        onEdit={startEdit}
+        onEdit={onEdit}
         {...(busyAgent ? { onSendNow: interruptAndSend } : {})}
       />
     </div>
@@ -316,7 +270,8 @@ function OutboxRow({
 
 /**
  * The messages waiting to be sent: those the host queued, then those held on this device while the host is
- * unreachable. The host's are edited in place; `onRecall` moves one held on this device back into the message box.
+ * unreachable. Editing opens a message in the message box: the host's stays held in its place until saved, and one held on
+ * this device moves back into the box through `onRecall`.
  */
 export function QueuedMessages({
   sessionId,
@@ -331,6 +286,8 @@ export function QueuedMessages({
   readOnly = false,
   act,
   onRecall,
+  editingId,
+  onEdit,
 }: {
   sessionId: string
   queued: QueuedMessage[]
@@ -344,6 +301,10 @@ export function QueuedMessages({
   readOnly?: boolean
   act: Act
   onRecall: (attachments: Attachment[], text: string) => void
+  /** The queued message open in the message box, if any. */
+  editingId: string | null
+  /** Opens a queued message in the message box to change it. */
+  onEdit: (message: QueuedMessage) => void
 }) {
   useLanguage()
   const { invoke } = useHost()
@@ -408,7 +369,9 @@ export function QueuedMessages({
                 supportsSteering={supportsSteering}
                 configuring={configuring || readOnly}
                 reorderDisabled={readOnly || queued.length < 2}
+                editing={editingId === message.id}
                 act={act}
+                onEdit={() => onEdit(message)}
               />
             ))}
           </SortableContext>

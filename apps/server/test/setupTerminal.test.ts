@@ -11,7 +11,12 @@ it('opens a setup PTY at home without a task and sends commands through terminal
     terminals: { open, write },
   } as unknown as Services)
   try {
-    expect(dispatcher.invoke('term.openSetup', [120, 30])).toMatchObject({ cwd: homedir(), repoId: null })
+    // A sign-in that succeeds ends the shell, so the terminal closes; one that fails stays to show its error.
+    expect(dispatcher.invoke('term.openSetup', [120, 30])).toMatchObject({
+      cwd: homedir(),
+      repoId: null,
+      exitOnSuccess: process.platform === 'win32' ? '; if ($?) { exit }' : ' && exit',
+    })
     expect(open).toHaveBeenCalledWith('provider-setup', null, homedir(), 120, 30)
     dispatcher.invoke('term.write', ['terminal', 'echo setup\r'])
     expect(write).toHaveBeenCalledWith('terminal', 'echo setup\r')

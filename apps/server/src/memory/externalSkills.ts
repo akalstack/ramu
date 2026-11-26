@@ -17,7 +17,7 @@ import type { ToolAuditFile } from '@ramu/shared/toolAudit'
 import type { LearningService } from './learning'
 import type { Workspace } from '../workspace/workspace'
 import type { AgentService } from '../agent'
-import { ensureNodeOnPath, findExecutable } from '../providers/providerBinaries'
+import { ensureToolsOnPath, findExecutable } from '../providers/providerBinaries'
 import { readSkillFolder, skillMetadata } from './skillFiles'
 import { toolKey } from '@ramu/shared/toolSync'
 import { setToolAvailability } from '../toolSync'
@@ -66,10 +66,11 @@ export class ExternalSkills {
   availability() {
     return { available: !!findExecutable('npx'), installUrl: 'https://nodejs.org/en/download' }
   }
-  private run(args: string[], cwd: string): Promise<string> {
+  private async run(args: string[], cwd: string): Promise<string> {
+    // npx is looked for once the person's tools are on PATH, so one only their shell knows of is found too.
+    await ensureToolsOnPath()
     const npx = findExecutable('npx')
     if (!npx) throw new Error('Install Node.js to get npx: https://nodejs.org/en/download')
-    ensureNodeOnPath()
     const entry =
       process.platform === 'win32' && /\.cmd$/i.test(npx)
         ? join(dirname(npx), 'node_modules', 'npm', 'bin', 'npx-cli.js')

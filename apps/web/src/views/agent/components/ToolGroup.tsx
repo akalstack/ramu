@@ -120,7 +120,13 @@ export function ToolGroup({
   live = false,
   onBackground,
   taskId,
+  bare = false,
 }: {
+  /**
+   * A lone call shown open with no row of its own, for a pane that already names it (a background command's own pane):
+   * its command and output, not a folded line repeating the pane's title.
+   */
+  bare?: boolean
   tools: ToolUse[]
   entries?: ToolEntry[]
   results: Map<string, ToolResult>
@@ -265,9 +271,10 @@ export function ToolGroup({
                 <Collapsible
                   key={t.toolUseId}
                   data-tool-use-id={t.toolUseId}
+                  {...(bare && entries.length === 1 ? { open: true } : {})}
                   className="tool [&[data-open]_>_.tool-failure]:hidden [&_[data-slot='collapsible-trigger']]:flex [&_[data-slot='collapsible-trigger']]:items-center [&_[data-slot='collapsible-trigger']]:cursor-pointer [&_[data-slot='collapsible-trigger']]:[list-style:none] [&_[data-slot='collapsible-trigger']]:min-w-0 [&_[data-slot='collapsible-trigger']]:m-0 [&_[data-slot='collapsible-trigger']]:p-[4px_6px] [&_[data-slot='collapsible-trigger']]:rounded-(--radius-s) [&_[data-slot='collapsible-trigger']]:gap-2 [&_[data-slot='collapsible-trigger']::-webkit-details-marker]:hidden [&_[data-slot='collapsible-trigger']:hover]:bg-hover [&_.caret]:text-muted-foreground [&_.caret]:flex-none [&_.caret]:[transition:transform_0.15s_var(--ease)] [&[data-open]_.caret]:[transform:rotate(90deg)] [&_>_[data-slot='collapsible-trigger']_.caret]:m-0 [&_>_[data-slot='collapsible-trigger']_.caret]:opacity-0 [&_>_[data-slot='collapsible-trigger']_.caret]:[transition:opacity_0.15s_var(--ease),_transform_0.15s_var(--ease)] [&_>_[data-slot='collapsible-trigger']]:m-0 [&_>_[data-slot='collapsible-trigger']]:p-[3px_0] [&_>_[data-slot='collapsible-trigger']]:[border-radius:0] [&_>_[data-slot='collapsible-trigger']]:gap-2 [&_>_[data-slot='collapsible-trigger']]:text-muted-foreground [&_>_[data-slot='collapsible-trigger']]:text-chat [&_>_[data-slot='collapsible-trigger']:hover]:bg-transparent [&_>_[data-slot='collapsible-trigger']:hover]:text-soft text-control text-soft rounded-(--radius-s)"
                 >
-                  <CollapsibleTrigger render={<Button variant="ghost" />}>
+                  <CollapsibleTrigger render={<Button variant="ghost" />} hidden={bare && entries.length === 1}>
                     <ToolIcon
                       tool={t}
                       content={r?.content ?? t.content}

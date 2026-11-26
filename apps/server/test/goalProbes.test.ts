@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { realGoalProbes } from '../src/agent/goalProbes'
-import { changedSince, evidenceProblem } from '../src/agent/goalEvidence'
+import { changedSince, unlistedChanges } from '../src/agent/goalEvidence'
 
 // Real git and a real shell, with real timers: the goal tests stub both so their clocks can be advanced.
 let dir: string
@@ -44,10 +44,10 @@ describe('workspace snapshot', () => {
     const changed = changedSince(before.files, after)
     const evidence = (changedFiles: string[]) => ({ checks: [{ name: 'test', passed: true }], changedFiles })
     const at = { snapshot: after, changed, cwd: join(dir, 'pkg') }
-    expect(evidenceProblem(evidence([]), at)).toContain('pkg/a.ts')
+    expect(unlistedChanges(evidence([]), at)).toContain('pkg/a.ts')
     // The agent may say it relative to the folder it works in, relative to the repository, or absolute.
     for (const path of ['a.ts', 'pkg/a.ts', join(dir, 'pkg', 'a.ts'), 'pkg'])
-      expect(evidenceProblem(evidence([path]), at), path).toBeNull()
+      expect(unlistedChanges(evidence([path]), at), path).toEqual([])
     const outside = mkdtempSync(join(tmpdir(), 'ramu-no-git-'))
     try {
       expect(await realGoalProbes.snapshot(outside)).toBeNull()

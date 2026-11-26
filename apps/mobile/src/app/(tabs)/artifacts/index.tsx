@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshControl, View } from 'react-native'
 import { useRouter } from 'expo-router'
-import { AppWindow, Pin } from 'lucide-react-native'
+import { AppWindow, Pin, Search } from 'lucide-react-native'
 import { useTabActions } from '../../../components/Overlays'
 import { ARTIFACT_KINDS, type ArtifactInfo, type ArtifactKind } from '@ramu/shared/artifacts'
 import { shortHostName } from '@ramu/shared/hostLabel'
@@ -150,6 +150,9 @@ export default function PagesScreen() {
               </Row>
             </View>
           ))
+        ) : hosts.some((host) => (pages[host.id] ?? []).length) ? (
+          // Kept artifacts that the search or kind leaves out are not "none yet".
+          <Nothing icon={Search} title={say('No matches')} detail={say('Try other words, or another kind.')} />
         ) : (
           <Nothing
             icon={AppWindow}

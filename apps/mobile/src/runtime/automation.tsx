@@ -18,7 +18,7 @@ import { useStore } from './store'
 import { buildInbox, type InboxModel } from './inbox'
 import { looseInvoke } from './settingsModel'
 import { actOnHost, applyRecapAction, RECAP_TOAST, type RecapAction } from './recapActions'
-import { showToast } from './toast'
+import { showError, showToast } from './toast'
 
 // What the computers keep beyond threads: recaps, what Ramu learned (summaries and reviews), and schedules. Every online computer is read
 // at once (Inbox shows what needs you on all of them) and refreshed when the computer says automation changed.
@@ -266,7 +266,11 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
           if (action !== 'open')
             showToast(RECAP_TOAST[action], {
               label: 'undo',
-              run: () => void api.actRecap(id, item, 'open').catch(() => {}),
+              // An undo that fails says so, as the thread undo does; a silent one leaves the recap gone with no word why.
+              run: () =>
+                void api
+                  .actRecap(id, item, 'open')
+                  .catch((error: unknown) => showError(error instanceof Error ? error.message : String(error))),
             })
         } finally {
           void load(id, ['recaps'])

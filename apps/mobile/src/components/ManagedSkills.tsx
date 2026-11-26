@@ -6,7 +6,7 @@ import { font, space, useTheme } from '../theme'
 import { useStore } from '../runtime/store'
 import { canWriteHost } from '../runtime/viewerAccess'
 import { useSay } from '../i18n'
-import { showToast } from '../runtime/toast'
+import { showError } from '../runtime/toast'
 import { RowLabel } from './SettingRows'
 import { Button, Card, Chip, Divider, Row, SectionLabel, Sheet, T } from './ui'
 import { SheetGroup, SheetOption } from './SheetOptions'
@@ -45,7 +45,7 @@ export function ManagedSkills({ hostId, locked }: { hostId: string; locked: bool
     setBusy(true)
     void work()
       .then(load)
-      .catch((error: unknown) => showToast(error instanceof Error ? error.message : String(error)))
+      .catch((error: unknown) => showError(error instanceof Error ? error.message : String(error)))
       .finally(() => setBusy(false))
   }
   const control = (skill: ManagedSkill, action: SkillAction) => {
@@ -58,7 +58,7 @@ export function ManagedSkills({ hostId, locked }: { hostId: string; locked: bool
     void store
       .invoke(hostId, 'learning.history', skill.id)
       .then((revisions) => setHistory({ id: skill.id, revisions }))
-      .catch((error: unknown) => showToast(error instanceof Error ? error.message : String(error)))
+      .catch((error: unknown) => showError(error instanceof Error ? error.message : String(error)))
       .finally(() => setBusy(false))
   }
   const revert = (skill: ManagedSkill, revision: number) =>

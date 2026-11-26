@@ -3,7 +3,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import { Clock, FolderOpen, Info, RefreshCw } from 'lucide-react'
+import { CircleAlert, Clock, FolderOpen, Info, RefreshCw } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { InlineAction } from '@/components/inline-action'
 import { hoursUntil } from '@ramu/shared/updates'
@@ -34,6 +34,7 @@ import { ProviderIcon } from '../models/ProviderIcon'
 import { SettingsField, SettingTitleHosts } from './SettingsScope'
 import type { useAccountUsage } from './Usage'
 import { SECONDARY_BUTTON_CLASS } from './constants'
+import { CopyButton } from './CopyAddressButton'
 import { ProviderAddAccount, type ProviderPrefs } from './ProviderAccountControls'
 import { ProviderLoginRow } from './ProviderLoginRow'
 import { ProviderCompatibility } from './ProviderCompatibility'
@@ -396,13 +397,37 @@ export function ProviderCard({
         </SettingsRow>
       ) : null}
       {enabled &&
-        [status?.versionError, status?.error, status?.updateError].filter(Boolean).map((message) => (
+        [status?.versionError, status?.error].filter(Boolean).map((message) => (
           <SettingsRow key={message} className="settings-stack">
             <p className="error m-0 text-bad small text-caption" role="alert">
               {message}
             </p>
           </SettingsRow>
         ))}
+      {enabled && status?.updateError && !status.updating && (
+        // A failed update says so in one place, with what to do: try again, or run the CLI's own command by hand.
+        <SettingsRow className="settings-stack">
+          <div role="alert" className="flex items-start gap-2.5 rounded-(--radius-s) bg-(--bad-wash) p-3">
+            <CircleAlert size={15} className="mt-0.5 flex-none text-bad" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <strong className="block text-control font-medium text-foreground">
+                {t('{0} could not be updated', { 0: providerName(provider) })}
+              </strong>
+              <p className="m-0 mt-0.5 text-caption text-soft [overflow-wrap:anywhere]">
+                {status.updateError.replace(/^CLI update failed:?\s*/, '')}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <Button size="sm" variant="secondary" disabled={updating !== null} onClick={onUpdate}>
+                  {t('Try again')}
+                </Button>
+                {status.updateCommand && (
+                  <CopyButton text={status.updateCommand} label={t('Copy update command')} labelled />
+                )}
+              </div>
+            </div>
+          </div>
+        </SettingsRow>
+      )}
       {enabled && (
         <Collapsible
           open={advanced}

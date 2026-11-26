@@ -15,6 +15,8 @@ import { Button } from '@/components/desktop-button'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { CalendarClock, ChevronRight, Clock, Pause, Pencil, Play, Plus, Trash2, Webhook, X, Zap } from 'lucide-react'
+import { StateDot, WorkingDot } from './sidebar/projects/TaskStateIcon'
+import { runTone } from '@ramu/shared/scheduleRuns'
 import { WebhookFields, WebhookPanel } from './WebhookSchedule'
 import { WEBHOOK_PRESETS } from '@ramu/shared/webhooks'
 import { useCallback, useEffect, useState } from 'react'
@@ -49,7 +51,6 @@ import {
   describeRule,
   canSaveSchedule,
   defaultScheduleInput,
-  isProblemRun,
   onceIso,
   onceLocalValue,
   ruleForKind,
@@ -369,6 +370,14 @@ function HostScheduleList({
     </section>
   )
 }
+const RUN_TEXT = { accent: 'text-primary', warn: 'text-warn', bad: 'text-bad', ok: 'text-(--ok)', muted: '' } as const
+const RUN_PILL = {
+  accent: 'bg-hover text-primary',
+  warn: 'bg-(--warn-wash) text-warn',
+  bad: 'bg-(--bad-wash) text-bad',
+  ok: 'bg-(--ok-wash) text-(--ok)',
+  muted: 'bg-hover text-soft',
+} as const
 const ICON_BTN =
   'ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)'
 
@@ -417,7 +426,11 @@ function ScheduleCard({
       className={`schedule-card flex flex-col gap-0.5 rounded-(--radius-m) bg-card px-3 py-2 [&:hover_.row-actions]:flex [&:focus-within_.row-actions]:flex [&:hover_.row-time]:hidden [&:focus-within_.row-time]:hidden ${selected ? 'ring-1 ring-(--line-strong)' : ''}`}
     >
       <div className="flex min-h-7 items-center gap-2">
-        {webhook ? (
+        {lastRun?.status === 'running' ? (
+          <WorkingDot label={t('running')} />
+        ) : lastRun?.status === 'needs-input' ? (
+          <StateDot kind="dot warn" label={t('needs-input')} />
+        ) : webhook ? (
           <Webhook size={14} className="flex-none text-muted-foreground" />
         ) : (
           <CalendarClock size={14} className="flex-none text-muted-foreground" />
@@ -500,7 +513,7 @@ function ScheduleCard({
         <span className="min-w-0 truncate">{meta.join(' · ')}</span>
         {/* How the last run went, without opening the history: a failure should not hide behind a count. */}
         {lastRun && (
-          <span className={`flex-none ${isProblemRun(lastRun.status) ? 'text-bad' : ''}`}>
+          <span className={`flex-none ${RUN_TEXT[runTone(lastRun.status)]}`}>
             {t('Last run {status} · {when}', { status: t(lastRun.status), when: timeAgo(lastRun.dueAt) })}
           </span>
         )}
@@ -548,9 +561,7 @@ function ScheduleCard({
           {paged.shown.map((r) => (
             <div key={r.id} className="schedule-run flex min-h-8 items-center gap-2 text-caption">
               <span
-                className={`flex-none rounded-full bg-hover px-2 text-caption whitespace-nowrap ${
-                  isProblemRun(r.status) ? 'text-bad' : 'text-soft'
-                }`}
+                className={`flex-none rounded-full px-2 text-caption whitespace-nowrap ${RUN_PILL[runTone(r.status)]}`}
               >
                 {t(r.status)}
               </span>

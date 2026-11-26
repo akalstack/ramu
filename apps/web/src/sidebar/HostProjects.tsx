@@ -120,7 +120,8 @@ function HostGroup({ computer, current, grouped }: { computer: Computer; current
   return (
     <section
       aria-label={computer.name}
-      className="min-w-0"
+      // Ungrouped, the host's list lays out as if this wrapper were not there, as it did before groups existed.
+      className={grouped ? 'min-w-0' : 'contents'}
       style={grouped ? ({ '--sticky-host-height': '2rem' } as CSSProperties) : undefined}
     >
       {grouped && (

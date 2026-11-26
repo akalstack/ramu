@@ -438,7 +438,15 @@ it("reports an updater's own reason for failing", () => {
   expect(updateFailure('/usr/bin/npm', { code: 'ENOENT' }, '', '')).toBe('CLI update failed: npm was not found.')
   expect(
     updateFailure('npm', { code: 1 }, '\u001b[31mnpm error\u001b[0m code EACCES\nnpm error permission denied\n', ''),
-  ).toBe('CLI update failed: npm error code EACCES npm error permission denied')
+  ).toBe(
+    'CLI update failed: Ramu could not write where this CLI is installed. Run the update command in a terminal, or reinstall the CLI in a folder you own. (npm error code EACCES npm error permission denied)',
+  )
+  expect(
+    updateFailure('npm', { code: 1 }, 'npm error code ENOTFOUND\nnpm error request to registry failed', ''),
+  ).toMatch(/^CLI update failed: The download server could not be reached\./)
+  expect(updateFailure('npm', { code: 1 }, 'npm error code E404\nnot found', '')).toBe(
+    'CLI update failed: npm error code E404 not found',
+  )
   expect(updateFailure('codex', { killed: true }, '', '')).toContain('longer than 5 minutes')
   expect(updateFailure('codex', { code: 1 }, '', '')).toContain('Check permissions')
 })

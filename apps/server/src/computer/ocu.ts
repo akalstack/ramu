@@ -13,7 +13,7 @@ import type {
   ComputerTarget,
 } from '@ramu/shared/computerBridge'
 import { MAX_COMPUTER_TREE_TEXT } from '@ramu/shared/computerBridge'
-import { ensureNodeOnPath, findExecutable } from '../providers/providerBinaries'
+import { ensureToolsOnPath, findExecutable } from '../providers/providerBinaries'
 
 /** The part of an MCP client this backend uses, so a fake can stand in for the native process in tests. */
 export interface OcuClient {
@@ -146,10 +146,12 @@ const execute: Exec = (file, args) =>
   )
 
 /** Installs the pinned release under Ramu's own tools folder, never globally and never as an unpinned latest. */
-export async function installOcu(exec: Exec = execute, npm: string | null = findExecutable('npm')): Promise<string> {
+export async function installOcu(exec: Exec = execute, npm?: string | null): Promise<string> {
   if (process.platform !== 'darwin') throw new Error('App-scoped computer use currently supports macOS.')
+  // npm is looked for once the person's tools are on PATH, so one only their shell knows of is found too.
+  await ensureToolsOnPath()
+  if (npm === undefined) npm = findExecutable('npm')
   if (!npm) throw new Error('Install Node.js (npm) first, then try again.')
-  ensureNodeOnPath()
   const dir = join(ocuToolsDir(), `ocu-${OCU_VERSION}`)
   await exec(npm, ['install', '--prefix', dir, '--no-audit', '--no-fund', `open-computer-use@${OCU_VERSION}`])
   const installed = join(dir, 'node_modules/.bin/ocu')

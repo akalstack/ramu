@@ -82,6 +82,7 @@ import type {
   AgentMcpStatus,
   NextMessageRoute,
   Aside,
+  AsideAskOptions,
   AgentEvent,
   Attachment,
   AgentSettings,
@@ -153,6 +154,11 @@ export interface TerminalInfo {
   exited: boolean
   /** Set for a persistent command Ramu launched for a thread. */
   background?: true
+  /**
+   * A setup terminal's ending for its command, so the shell ends (and the terminal closes) once a sign-in succeeds and
+   * stays open on a failure to show its error. Its syntax is the host's shell's.
+   */
+  exitOnSuccess?: string
 }
 
 export type BackgroundTerminalState = 'running' | 'stopping' | 'exited' | 'failed' | 'unknown'
@@ -1180,11 +1186,14 @@ export interface RamuMethods extends ArtifactMethods {
   'computers.pairSsh'(target: string, name?: string): Computers
   'computers.forget'(id: string): Computers
   'computers.retry'(id: string): Computers
-  /** Moves a saved host to a new address after that address proves it is the host paired with; otherwise changes nothing. */
-  'computers.reviewAddress'(id: string, url: string): ReviewAddressResult
+  /**
+   * Moves a saved host to a new address after that address proves it is the host paired with; otherwise changes nothing.
+   * The person's choice keeps that route; `allowPlain` records their consent to the host's unencrypted local network.
+   */
+  'computers.reviewAddress'(id: string, url: string, allowPlain?: boolean): ReviewAddressResult
   'computers.update'(
     id: string,
-    changes: { name?: string; enabled?: boolean; retryMode?: 'events' | 'periodic' },
+    changes: { name?: string; enabled?: boolean; retryMode?: 'events' | 'periodic'; routeMode?: 'auto' | 'manual' },
   ): Computers
   /** Renderer acknowledgement after its workspace has been safely persisted. */
   'skills.list'(taskId: string): SkillInfo[]
@@ -2028,7 +2037,8 @@ export interface RamuMethods extends ArtifactMethods {
   'aside.list'(sessionId: string): Aside[]
   /**
    * Starts an aside (asideId null) or continues one. Returns at once; the answer arrives as aside:changed. `settings` is
-   * the model chosen in the thread's composer when the session has not taken it yet.
+   * the model chosen in the thread's composer when the session has not taken it yet; `options` carries a model and
+   * files chosen in the aside itself.
    */
   'aside.ask'(
     sessionId: string,
@@ -2037,6 +2047,7 @@ export interface RamuMethods extends ArtifactMethods {
     quoteFrom: 'assistant' | 'user',
     question: string,
     settings?: AgentSettings,
+    options?: AsideAskOptions,
   ): Aside
   'aside.delete'(sessionId: string, asideId: string): void
   /**
@@ -2162,6 +2173,8 @@ export type PushEvents = {
     connected: boolean
     rejected?: boolean
     restarted?: boolean
+    /** The connection came back within the host's replay window and the missed events were delivered: nothing needs reading again. */
+    resumed?: boolean
     /** Turned off on this desktop; it does not try to connect. */
     paused?: boolean
     /** This computer's service is restarting on purpose and is expected back shortly. */
@@ -2173,8 +2186,6 @@ export type PushEvents = {
     error?: string
   }
   'computers:changed': Computers
-    /** The connection came back within the host's replay window and the missed events were delivered: nothing needs reading again. */
-    resumed?: boolean
   /** The number a nearby host shows while this computer asks it to pair (see `computers.pairByRequest`). */
   'computers:pairCode': { address: string; code: string }
   'computers:navigate': { hostId: string; destination: HostDestination }
@@ -2253,12 +2264,6 @@ export interface RamuBridge {
     ...args: Parameters<RamuMethods[M]>
   ): Promise<Awaited<ReturnType<RamuMethods[M]>>>
   /**
-   * Host events carry their server's host ID; window events carry the shell's host ID.
-   */
-  on<E extends keyof PushEvents>(event: E, listener: (payload: PushEvents[E], hostId?: string) => void): () => void
-  /** Device-wide UI state (panel widths and the like) shared by every window, loaded synchronously at startup. */
-  readonly deviceState: Readonly<Record<string, string>>
-  /**
    * Like `invokeOn`, for a mutation the caller may send again after a lost connection (a message kept in an outbox):
    * every attempt carries `operationKey`, so a host that already ran it answers with the first result instead of
    * running it twice.
@@ -2269,6 +2274,12 @@ export interface RamuBridge {
     method: M,
     ...args: Parameters<RamuMethods[M]>
   ): Promise<Awaited<ReturnType<RamuMethods[M]>>>
+  /**
+   * Host events carry their server's host ID; window events carry the shell's host ID.
+   */
+  on<E extends keyof PushEvents>(event: E, listener: (payload: PushEvents[E], hostId?: string) => void): () => void
+  /** Device-wide UI state (panel widths and the like) shared by every window, loaded synchronously at startup. */
+  readonly deviceState: Readonly<Record<string, string>>
   setDeviceState(key: string, value: string | null): void
   /** The on-disk path of a file or folder dropped onto the window ('' when it has none). */
   pathForFile(file: File): string

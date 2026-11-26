@@ -25,17 +25,23 @@ export const askedQuestionsOf = (events: AgentEvent[]) =>
 export const toolResultsOf = (events: AgentEvent[]) =>
   new Map(events.flatMap((e) => (e.kind === 'tool-result' ? [[e.toolUseId, e] as const] : [])))
 
-/** A finished goal stays in the turn where it completed, after that turn's answer. */
-export function completedGoalsByTurn(events: AgentEvent[]): Map<AgentEvent | null, ChatGoal[]> {
-  const byTurn = new Map<AgentEvent | null, ChatGoal[]>(),
+/**
+ * A finished goal stays in the turn where it completed, after that turn's answer: the last turn that began before it
+ * finished, by turn key. Matched by time rather than by the last message sent, because a goal often finishes in a
+ * continuation turn that no message starts, or after a message steered into a running turn, which starts none.
+ */
+export function completedGoalsByTurn(
+  events: AgentEvent[],
+  turns: readonly Pick<Turn, 'key' | 'startedAt'>[],
+): Map<number, ChatGoal[]> {
+  const byTurn = new Map<number, ChatGoal[]>(),
     seen = new Set<string>()
-  let user: AgentEvent | null = null
   for (const event of events) {
-    if (event.kind === 'user' && !event.agentId) user = event
-    else if (event.kind === 'goal' && event.goal?.status === 'completed' && !seen.has(event.goal.id)) {
-      seen.add(event.goal.id)
-      byTurn.set(user, [...(byTurn.get(user) ?? []), event.goal])
-    }
+    if (event.kind !== 'goal' || event.goal?.status !== 'completed' || seen.has(event.goal.id)) continue
+    seen.add(event.goal.id)
+    const at = event.at ?? event.goal.updatedAt
+    const turn = turns.findLast((entry) => entry.startedAt !== undefined && entry.startedAt <= at) ?? turns.at(-1)
+    if (turn) byTurn.set(turn.key, [...(byTurn.get(turn.key) ?? []), event.goal])
   }
   return byTurn
 }

@@ -12,7 +12,7 @@ import { FeedSection } from '../HomeSection'
 import { t, useLanguage } from '../i18n'
 import { timeAgo } from '../Menu'
 import { StateDot, StatusMark } from '../sidebar/projects/TaskStateIcon'
-import { threadStatus } from '@ramu/shared/chat/threadStatus'
+import { statusTone, threadStatus } from '@ramu/shared/chat/threadStatus'
 import { savedInboxTab, saveInboxTab } from './navigation'
 import { LearningReviewList } from './LearningReviews'
 import { useLearningReviews } from '../learning/learningQueries'
@@ -59,7 +59,7 @@ export function HostsInbox() {
               label={task?.title}
               mark={
                 task && status ? (
-                  <InboxMark>
+                  <InboxMark tone={statusTone(status)}>
                     <StatusMark task={task} status={status} />
                   </InboxMark>
                 ) : (

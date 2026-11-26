@@ -33,6 +33,8 @@ export async function findHostRoute(input: {
   routes: string[]
   /** Direct discovery also checks the saved address itself. */
   includeCurrent?: boolean
+  /** Candidates were already filtered for consent (`upgradeRoutes`), so an http route may follow an https one. */
+  allowDowngrade?: boolean
   /** Wait briefly for a preferred route instead of letting a faster LAN reply hide it. */
   prefer?: (address: string) => boolean
   signal: AbortSignal
@@ -48,7 +50,7 @@ export async function findHostRoute(input: {
         !url.username &&
         !url.password &&
         (input.includeCurrent || address !== input.address) &&
-        !(input.address.startsWith('https:') && url.protocol === 'http:')
+        (input.allowDowngrade || !(input.address.startsWith('https:') && url.protocol === 'http:'))
       )
     } catch {
       return false

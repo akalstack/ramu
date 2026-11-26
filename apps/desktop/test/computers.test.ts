@@ -504,6 +504,27 @@ it('keeps the working address when the new one is another host, or the pairing p
   vi.unstubAllGlobals()
 })
 
+it('leaves an encrypted route for the local network only with consent, and keeps a route chosen by hand', async () => {
+  const { servers, registry } = setup()
+  const secure = servers.add('https://studio.example', 'Secure', 'tok', Date.now(), undefined, {
+    deviceId: 'dev2',
+    hostId: HOST,
+  })
+  answeringAs(HOST, 'tok', ['http://10.0.0.5:7788', 'http://100.99.1.2:7788'])
+  // A VPN encrypts on its own, so it needs no consent.
+  expect(await registry.reviewAddress(secure.id, 'http://100.99.1.2:7788')).toBe('moved')
+  expect(servers.get(secure.id)?.routeMode).toBeUndefined()
+  expect(await registry.reviewAddress(secure.id, 'http://10.0.0.5:7788')).toBe('insecure')
+  expect(await registry.reviewAddress(secure.id, 'http://10.0.0.5:7788', { manual: true, allowPlain: true })).toBe(
+    'moved',
+  )
+  expect(servers.get(secure.id)).toMatchObject({ url: 'http://10.0.0.5:7788', routeMode: 'manual', plainLan: true })
+  registry.update(secure.id, { routeMode: 'auto' })
+  expect(servers.get(secure.id)?.routeMode).toBeUndefined()
+  expect(servers.get(secure.id)?.plainLan).toBe(true)
+  vi.unstubAllGlobals()
+})
+
 it('recognizes a nearby result by the host id bound at pairing', () => {
   const { servers, registry } = setup()
   const saved = servers.add('10.0.0.2:7788', 'Studio', 'tok', Date.now(), undefined, { hostId: HOST })

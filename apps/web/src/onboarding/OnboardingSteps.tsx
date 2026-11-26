@@ -25,7 +25,7 @@ import { RowButton } from '@/components/row-button'
 import { StepSlider } from '@/components/step-slider'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { ChoiceChip, ChoiceChips } from '@/components/choice-group'
 import { modelSearchText } from '@ramu/shared/providers/modelLabel'
 import { matchesWords } from '@ramu/shared/search/matchWords'
 import { SearchInput } from '../SearchInput'
@@ -502,21 +502,19 @@ export function EffortStep({
   const recommended = model.defaultEffort && choosableEfforts(model).includes(model.defaultEffort)
   return (
     <div className="flex flex-col gap-2">
-      <ToggleGroup
+      <ChoiceChips
         size="sm"
-        variant="outline"
-        spacing={2}
         className="flex-wrap gap-1.5"
         aria-label={t('Effort for {0}', { 0: modelDisplayName(model.name) })}
         value={choice.effort ? [choice.effort] : []}
         onValueChange={(values) => values[0] && onChoice({ ...choice, effort: values[0] as ReasoningEffort })}
       >
         {choosableEfforts(model).map((effort) => (
-          <ToggleGroupItem key={effort} value={effort} className="px-2.5">
+          <ChoiceChip key={effort} value={effort} className="px-2.5">
             {effortDisplayName(effort, model.provider)}
-          </ToggleGroupItem>
+          </ChoiceChip>
         ))}
-      </ToggleGroup>
+      </ChoiceChips>
       <p className="m-0 text-caption text-muted-foreground">
         {recommended && `${t('Recommended')}: ${effortDisplayName(model.defaultEffort!, model.provider)}. `}
         {t('Higher steps and effort give better answers on hard work but use more tokens and take longer.')}

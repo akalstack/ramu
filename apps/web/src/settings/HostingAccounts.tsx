@@ -674,9 +674,7 @@ function GitlabRow({ canAdminister }: { canAdminister: boolean }) {
                 action={t('Sign in with glab instead')}
                 onClick={() => {
                   setForm(false)
-                  runProviderCommand(t('Sign in to GitLab'), 'glab auth login')
-                  // The terminal finishes on its own time; read the sign-ins again when the person comes back.
-                  window.addEventListener('focus', () => load(false), { once: true })
+                  runProviderCommand(t('Sign in to GitLab'), 'glab auth login', () => load(false))
                 }}
               />
             ) : summary?.cli === 'no-cli' ? (

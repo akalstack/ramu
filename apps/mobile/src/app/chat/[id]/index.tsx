@@ -23,7 +23,6 @@ import {
   Activity,
   Archive,
   ArrowDown,
-  Check,
   CircleArrowUp,
   CircleCheck,
   Folder,
@@ -43,7 +42,6 @@ import {
   BookmarkCheck,
 } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../../../theme'
-import { belowHeader } from '../../../components/UndoToast'
 import { ThreadSplit } from '../../../components/SplitPane'
 import { useInDetailPane } from '../../../components/paneContext'
 import { ChatFindBar, FIND_BAR_HEIGHT } from '../../../components/ChatFindBar'
@@ -109,6 +107,8 @@ import { BottomFade, Glass, TopFade, floatingChrome } from '../../../components/
 import { ComposerDock, KeyboardLift, useKeyboardHeight } from '../../../components/Keyboard'
 import { PendingBubble } from '../../../components/Outbox'
 import { SteeringBubble } from '../../../components/SteeringBubble'
+import { useQueuedEdit } from '../../../components/queuedEdit'
+import { confirmClearGoal } from '../../../components/confirmClearGoal'
 import { QueuedOpening } from '../../../components/QueuedOpening'
 import { PlanUsageSheet } from '../../../components/PlanUsage'
 import { ContextMeter } from '../../../components/ContextMeter'
@@ -404,17 +404,6 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
   const [backgroundFor, setBackgroundFor] = useState<string | null>(null)
   const [actions, setActions] = useState<'closed' | 'menu' | 'rename'>('closed')
   const [busy, setBusy] = useState(false)
-  const [toast, setToast] = useState<string>()
-  // The toast keeps its text while it fades out.
-  const lastToast = useRef('')
-  if (toast) lastToast.current = toast
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(
-    () => () => {
-      if (toastTimer.current) clearTimeout(toastTimer.current)
-    },
-    [],
-  )
   useFocusEffect(
     useCallback(() => {
       if (!chat?.taskId || chat.projectId === STANDALONE || computer?.status !== 'online') return
@@ -502,6 +491,18 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [hostId, viewer] by design; the store is current as of that run
   }, [hostId, viewer])
   const chatDraftKey = chat ? `${chat.computerId}:chat:${chat.taskId || chat.id}` : ''
+  // A queued message or waiting steer being changed opens in the message box, on a draft of its own.
+  const queuedEdit = useQueuedEdit({
+    draftKey: chatDraftKey,
+    queue: chat?.queue ?? [],
+    setDraft: store.setDraft,
+    hold: (id, held) => {
+      if (chat) store.holdQueued(chat.id, id, held)
+    },
+    save: (id, text) => {
+      if (chat) store.editQueued(chat.id, id, text)
+    },
+  })
   const draftText = (chatDraftKey && store.drafts[chatDraftKey]) || ''
   const composerMentions = useMemo(
     () => ({ models, agents, abilities: abilityModels, mentions: draftMentions(models, agents, abilityModels) }),
@@ -783,7 +784,15 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
     const fresh = !seen.current.has(key)
     seen.current.add(key)
     if (item.kind === 'steering')
-      return <SteeringBubble chatId={chat!.id} message={item.message} readOnly={viewOnly || offline} />
+      return (
+        <SteeringBubble
+          chatId={chat!.id}
+          message={item.message}
+          readOnly={viewOnly || offline}
+          editing={queuedEdit.edit?.id === item.message.id}
+          onEdit={() => queuedEdit.open(item.message)}
+        />
+      )
     if (item.kind === 'opening') return <QueuedOpening message={item.message} />
     if (item.kind === 'pending')
       return (
@@ -1012,15 +1021,13 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
   const editPending = (text: string) => setRestore((r) => ({ text, n: (r?.n ?? 0) + 1 }))
   const editQueued: QueuedEdit = {
     hold: (id, held) => store.holdQueued(chat.id, id, held),
-    save: (id, text) => store.editQueued(chat.id, id, text),
+    open: queuedEdit.open,
+    editingId: queuedEdit.edit?.id ?? null,
   }
   const openScm = () => router.push({ pathname: '/chat/[id]/scm', params: { id: chat.id } })
   const openChanges = () => router.push({ pathname: '/chat/[id]/changes', params: { id: chat.id } })
-  const say = (text: string) => {
-    setToast(text)
-    if (toastTimer.current) clearTimeout(toastTimer.current)
-    toastTimer.current = setTimeout(() => setToast(undefined), 5000)
-  }
+  // What a header action did, in the app's one toast near the bottom, as every other action's result reads.
+  const say = (text: string) => showToast(text, undefined, { success: true })
   /** Runs a header action and says how it went; null means the person cancelled part-way, so nothing is said. */
   const act = async (fn: () => Promise<string | null>) => {
     if (busy) return
@@ -1029,7 +1036,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
       const done = await fn()
       if (done !== null) say(done)
     } catch (error) {
-      say(error instanceof Error ? error.message : String(error))
+      showError(error instanceof Error ? error.message : String(error))
     } finally {
       setBusy(false)
       setRefresh((n) => n + 1)
@@ -1419,7 +1426,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                               void latestStore.current
                                 .invoke(chat.computerId, 'tasks.pin', chat.taskId, chat.pinnedAt === null)
                                 .then(() => store.refresh(chat.computerId))
-                                .catch((error) => say(String(error)))
+                                .catch((error) => showError(String(error)))
                             },
                           },
                           {
@@ -1442,7 +1449,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                                     void latestStore.current
                                       .invoke(chat.computerId, 'tasks.generateTitle', chat.taskId, chat.settings!, true)
                                       .then(() => store.refresh(chat.computerId))
-                                      .catch((error) => say(String(error)))
+                                      .catch((error) => showError(String(error)))
                                   },
                                 },
                               ]
@@ -1463,7 +1470,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                                   offerThreadUndo(latestStore.current, chat, 'archived')
                                   goBackOrHome(router)
                                 })
-                                .catch((error) => say(String(error)))
+                                .catch((error) => showError(String(error)))
                             },
                           },
                         ]
@@ -1568,7 +1575,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                             ready.map((f) => f.fileId),
                           )
                           .then(() => say(tr('Restored the files')))
-                          .catch((e) => say(e instanceof Error ? e.message : String(e))),
+                          .catch((e) => showError(e instanceof Error ? e.message : String(e))),
                     },
                   ],
                 )
@@ -1896,6 +1903,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                         model={staged?.chatId === chat.id ? staged.model : currentModel}
                         onModel={changeModel}
                         onSend={async (text, mode, attachments, context) => {
+                          if (queuedEdit.edit) return queuedEdit.submit(text)
                           if (editing) return submitEdit(text, mode, attachments, context)
                           if (staged?.chatId === chat.id) {
                             const m = staged.model
@@ -1961,7 +1969,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                         onFindQuote={findQuote}
                         helpers={composerMentions}
                         computerId={chat.computerId}
-                        draftKey={composerDraftKey(chat)}
+                        draftKey={queuedEdit.draftKey}
                         nextMessages={nextMessages}
                         onStop={() => store.stop(chat.id)}
                         goal={chat.doneAt ? null : chat.goal}
@@ -1977,7 +1985,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                             : undefined
                         }
                         onToggleGoal={() => store.toggleGoal(chat.id)}
-                        onClearGoal={() => store.clearGoal(chat.id)}
+                        onClearGoal={() => confirmClearGoal(tr, () => store.clearGoal(chat.id))}
                         onVerifyGoal={chat.sessionId ? (command) => store.setGoalVerify(chat.id, command) : undefined}
                         onRemoveQueued={(q) => store.removeQueued(chat.id, q)}
                         onSendQueuedNow={offline ? undefined : (q) => store.sendQueuedNow(chat.id, q)}
@@ -2027,9 +2035,20 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                               : undefined
                         }
                         editing={
-                          editing ? { label: tr('Rewound to before your message. Change it and send.') } : undefined
+                          queuedEdit.edit
+                            ? {
+                                label: tr(
+                                  queuedEdit.edit.kind === 'steer'
+                                    ? 'Editing a steering message · held until you save'
+                                    : 'Editing a queued message · held until you save',
+                                ),
+                              }
+                            : editing
+                              ? { label: tr('Rewound to before your message. Change it and send.') }
+                              : undefined
                         }
                         onCancelEdit={() => {
+                          if (queuedEdit.edit) return queuedEdit.cancel()
                           setEditing(null)
                           setRestore((r) => ({ text: '', n: (r?.n ?? 0) + 1 }))
                         }}
@@ -2098,34 +2117,6 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
             </CancelPendingSettings.Provider>
           </ChatMentions.Provider>
         </MessageMenu.Provider>
-        <Presence
-          visible={Boolean(toast)}
-          style={{
-            position: 'absolute',
-            left: space.m,
-            right: space.m,
-            top: inPane ? insets.top + 56 + space.s * 3 : belowHeader(insets.top),
-          }}
-        >
-          <View pointerEvents="none">
-            <Glass
-              floating
-              radius={radius.l}
-              style={{
-                paddingHorizontal: space.l,
-                paddingVertical: space.m,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: space.s,
-              }}
-            >
-              <Check size={15} color={c.ok} />
-              <T size={font.control} weight="500" numberOfLines={2} style={{ flex: 1 }}>
-                {toast ?? lastToast.current}
-              </T>
-            </Glass>
-          </View>
-        </Presence>
         {!chat.pending ? (
           <ChatActionsSheet
             chat={chat}

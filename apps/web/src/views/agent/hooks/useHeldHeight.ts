@@ -1,12 +1,17 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { HOLD_PAUSE_MS, NO_HOLD, holdHeight, releaseHold, type HeightHold } from '@ramu/shared/chat/heldHeight'
 
+/** A call or thought the person opened inside the group's body (the group's own disclosure is outside it). */
+const OPENED_ROW = '.tool-group-body [data-open]'
+
 /**
  * Keeps a live tool group at the tallest height it has reached (`holdHeight`), so the transcript does not jump up and
  * down as lines come and go inside it while the turn runs. It writes `min-height` straight to the element, so a
  * streaming turn never re-renders for it. `release` is for the person's own clicks inside the group: the hold lets go
- * so what they open or fold shows, and picks up again once the motion has settled. `identity` names the group (its first
- * call), so a different group drawn in the same place never starts from the height the last one reached.
+ * so what they open or fold shows, and picks up again once the motion has settled. While a row inside stays open the
+ * group holds nothing: what the person opened is not a live line, and a hold taken at its height would stay behind as
+ * blank space once the row closes on its own (the group redrawn as it gains a call). `identity` names the group (its
+ * first call), so a different group drawn in the same place never starts from the height the last one reached.
  */
 export function useHeldHeight<T extends HTMLElement>(live: boolean, identity: string | undefined) {
   const ref = useRef<T>(null)
@@ -18,7 +23,8 @@ export function useHeldHeight<T extends HTMLElement>(live: boolean, identity: st
   const [measure] = useState(() => () => {
     const el = ref.current
     if (!el) return
-    const next = holdHeight(hold.current, el.offsetHeight, liveNow.current, Date.now())
+    const opened = el.querySelector(OPENED_ROW) !== null
+    const next = holdHeight(hold.current, el.offsetHeight, liveNow.current && !opened, Date.now())
     if (next === hold.current) return
     hold.current = next
     el.style.minHeight = next.min ? `${next.min}px` : ''

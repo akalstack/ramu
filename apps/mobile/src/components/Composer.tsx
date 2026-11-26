@@ -67,8 +67,8 @@ import { sharedValue } from '@ramu/shared/sharedFields'
 import { useModelFlow } from '../runtime/useModelFlow'
 import { fill, useT, useSay } from '../i18n'
 import { translate } from '@ramu/shared/i18n'
-import { Button, Chip, IconButton, Pill, Row, SHEET_SETTLE_MS, Segmented, Sheet, T, Toggle, tap, type Icon } from './ui'
-import { replaceVisibleMessage, visibleMessage } from '@ramu/shared/chat/visibleMessage'
+import { Chip, IconButton, Pill, Row, SHEET_SETTLE_MS, Segmented, Sheet, T, Toggle, tap, type Icon } from './ui'
+import type { QueuedEdit } from './queuedEdit'
 import { modelTags } from '@ramu/shared/providers/modelTags'
 import { modelLabel as pickerLabel, modelSearchText } from '@ramu/shared/providers/modelLabel'
 import { matchesWords } from '@ramu/shared/search/matchWords'
@@ -487,12 +487,9 @@ export function ModelChip({
   )
 }
 
+export type { QueuedEdit } from './queuedEdit'
+
 /** Tray rows at the top of the composer: the live goal first, then queued and steering messages. */
-/** Holds a queued message while it is edited in its row, and saves the new text in its place. */
-export interface QueuedEdit {
-  hold: (id: string, held: boolean) => void
-  save: (id: string, text: string) => void
-}
 
 export function GoalQueueTray({
   goal,
@@ -525,7 +522,7 @@ export function GoalQueueTray({
   onSendNow?: (id: string) => void
   /** Steers a queued message into the running turn once its active tools finish, without stopping it. */
   onSteer?: (id: string) => void
-  /** Edits a queued message in its row, held on the host meanwhile so it keeps its place and is not sent half-changed. */
+  /** Opens a queued message in the message box, held on the host meanwhile so it keeps its place and is not sent half-changed. */
   onEdit?: QueuedEdit
   /** Moves a queued message one place earlier or later in the queue. */
   onMove?: (id: string, delta: -1 | 1) => void
@@ -535,16 +532,6 @@ export function GoalQueueTray({
   const { c } = useTheme()
   const t = useT()
   const [verifying, setVerifying] = useState(false)
-  const [editing, setEditing] = useState<{ id: string; draft: string } | null>(null)
-  const editingId = editing?.id
-  // The last real release, kept while the host is offline (onEdit goes away then), so a hold is never left behind.
-  const release = useRef(onEdit?.hold)
-  if (onEdit) release.current = onEdit.hold
-  useEffect(() => {
-    if (!editingId) return
-    // Closing the editor, or leaving the chat mid-edit, releases the hold so the message goes out at its usual moment.
-    return () => release.current?.(editingId, false)
-  }, [editingId])
   if (!goal && !queue.length) return null
   // Only a goal the user paused reads as paused here; one held by a usage limit continues by itself and shows in the limit tray.
   const paused = isUserPaused(goal)
@@ -638,43 +625,7 @@ export function GoalQueueTray({
             ? [{ id: 'remove', title: say('Remove'), image: 'trash', attributes: { destructive: true } }]
             : []),
         ].map((action) => (Platform.OS === 'ios' ? action : { ...action, image: undefined }))
-        if (editing?.id === q.id) {
-          const save = () => {
-            const next = editing.draft.trim()
-            if (!next) return
-            setEditing(null)
-            if (next !== visibleMessage(q.text)) onEdit?.save(q.id, replaceVisibleMessage(q.text, next))
-          }
-          return (
-            <View key={q.id} style={{ gap: space.s, paddingVertical: space.xs }}>
-              <TextInput
-                value={editing.draft}
-                onChangeText={(draft) => setEditing({ id: q.id, draft })}
-                autoFocus
-                multiline
-                accessibilityLabel={say('Edit queued message')}
-                style={{
-                  color: c.text,
-                  backgroundColor: c.raised2,
-                  borderRadius: radius.m,
-                  paddingHorizontal: space.m,
-                  paddingVertical: space.s + 2,
-                  fontSize: font.body,
-                  lineHeight: 21,
-                  maxHeight: 160,
-                }}
-              />
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: space.s }}>
-                <T size={font.caption} tone="muted" style={{ flex: 1 }}>
-                  {say('Held while editing')}
-                </T>
-                <Button kind="ghost" title={say('Cancel')} onPress={() => setEditing(null)} />
-                {/* Offline, saving would go nowhere: the draft stays here until the host is back. */}
-                <Button kind="primary" title={say('Save')} disabled={!editing.draft.trim() || !onEdit} onPress={save} />
-              </View>
-            </View>
-          )
-        }
+        const editing = onEdit?.editingId === q.id
         return (
           <View key={q.id} style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}>
             <MenuView
@@ -685,10 +636,8 @@ export function GoalQueueTray({
                 const choice = nativeEvent.event
                 if (choice === 'steer') onSteer?.(q.id)
                 else if (choice === 'send') onSendNow?.(q.id)
-                else if (choice === 'edit') {
-                  setEditing({ id: q.id, draft: visibleMessage(q.text) })
-                  if (!q.held) onEdit?.hold(q.id, true)
-                } else if (choice === 'release') onEdit?.hold(q.id, false)
+                else if (choice === 'edit') onEdit?.open(q)
+                else if (choice === 'release') onEdit?.hold(q.id, false)
                 else if (choice === 'up') onMove?.(q.id, -1)
                 else if (choice === 'down') onMove?.(q.id, 1)
                 else if (choice === 'remove') onRemove?.(q.id)
@@ -708,14 +657,16 @@ export function GoalQueueTray({
                 <T size={font.control} tone="soft" numberOfLines={1} style={{ flex: 1 }}>
                   {q.text}
                 </T>
-                <T size={font.caption} tone="muted" numberOfLines={1}>
-                  {q.held
-                    ? say('Held')
-                    : q.mode === 'steer'
-                      ? t.steer
-                      : running
-                        ? say('Sends when this turn ends')
-                        : t.queued}
+                <T size={font.caption} tone={editing ? 'accent' : 'muted'} numberOfLines={1}>
+                  {editing
+                    ? say('Editing in the message box')
+                    : q.held
+                      ? say('Held')
+                      : q.mode === 'steer'
+                        ? t.steer
+                        : running
+                          ? say('Sends when this turn ends')
+                          : t.queued}
                 </T>
               </View>
             </MenuView>

@@ -21,7 +21,7 @@ import type { AgentProvider, Project } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { SegmentedControl, SegmentedItem } from '@/components/choice-group'
 import { Dialog } from '../Menu'
 import { ramu } from '../ipc'
 import { useHost } from '../workspace/HostProvider'
@@ -766,26 +766,24 @@ function ServerDetail({
                     </span>
                   )}
                 </span>
-                <ToggleGroup
+                <SegmentedControl
                   size="sm"
-                  variant="outline"
-                  spacing={0}
                   aria-label={t('{0}: when it runs', { '0': tool.name })}
                   value={[current(tool.name, tool)]}
                   onValueChange={(values) =>
                     values[0] && setChoices({ ...choices, [tool.name]: values[0] as SharedMcpToolChoice })
                   }
                 >
-                  <ToggleGroupItem value="ask" className="h-7 px-2 text-caption" title={t('Asks you before each call')}>
+                  <SegmentedItem value="ask" className="h-7 px-2 text-caption" title={t('Asks you before each call')}>
                     {t('Ask')}
-                  </ToggleGroupItem>
-                  <ToggleGroupItem value="allow" className="h-7 px-2 text-caption" title={t('Runs without asking')}>
+                  </SegmentedItem>
+                  <SegmentedItem value="allow" className="h-7 px-2 text-caption" title={t('Runs without asking')}>
                     {t('Allow')}
-                  </ToggleGroupItem>
-                  <ToggleGroupItem value="off" className="h-7 px-2 text-caption" title={t('Agents do not get it')}>
+                  </SegmentedItem>
+                  <SegmentedItem value="off" className="h-7 px-2 text-caption" title={t('Agents do not get it')}>
                     {t('Off')}
-                  </ToggleGroupItem>
-                </ToggleGroup>
+                  </SegmentedItem>
+                </SegmentedControl>
               </li>
             ))}
           </ul>

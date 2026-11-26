@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Computer } from '@ramu/shared/types'
 import { learnedRoutes } from '@ramu/shared/hostProof'
-import { hostOfUrl, networkName } from '@ramu/shared/networkLabel'
+import { hostOfUrl, networkName, routeEncrypted, routeSpeed } from '@ramu/shared/networkLabel'
 import {
   Dialog,
   DialogContent,
@@ -14,12 +14,14 @@ import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { DIALOG_SCROLLS, DialogScrollBody } from '@/components/dialog-scroll-body'
-import { Dropdown } from '../../Menu'
+import { Dialog as ConfirmDialog, Dropdown } from '../../Menu'
 import { invoke } from '../../ipc'
 import { errorText } from '../../lib/errors'
 import { t } from '../../i18n'
 import { CopyButton } from '../CopyAddressButton'
 import { HostPermissionList } from '../DevicePermissions'
+
+const AUTOMATIC = 'automatic'
 
 /** One other host's connection as this device keeps it: its name, network, reconnecting and what it may do there. */
 export function HostConnectionDialog({ computer, onClose }: { computer: Computer; onClose: () => void }) {
@@ -28,12 +30,35 @@ export function HostConnectionDialog({ computer, onClose }: { computer: Computer
   const [retryMode, setRetryMode] = useState(computer.retryMode ?? 'events'),
     [busy, setBusy] = useState(false),
     [error, setError] = useState<string | null>(null)
-  const routes = computer.url && !computer.ssh ? learnedRoutes([computer.url, ...(computer.routes ?? [])]) : []
-  const switchNetwork = async (url: string) => {
+  const routes =
+    computer.url && !computer.ssh
+      ? learnedRoutes([computer.url, ...(computer.routes ?? [])]).sort((a, b) => routeSpeed(a) - routeSpeed(b))
+      : []
+  // Leaving an encrypted route for the plain local network asks once per host; after that, Automatic may use it too.
+  const [askLan, setAskLan] = useState<string | null>(null)
+  const automatic = computer.routeMode !== 'manual'
+  const chooseNetwork = (next: string) => {
+    if (next === AUTOMATIC) return void setAutomatic()
+    if (computer.url && routeEncrypted(computer.url) && !routeEncrypted(next) && !computer.plainLan)
+      return setAskLan(next)
+    void switchNetwork(next)
+  }
+  const setAutomatic = async () => {
     setBusy(true)
     setError(null)
     try {
-      const result = await invoke('computers.reviewAddress', computer.id, url)
+      await invoke('computers.update', computer.id, { routeMode: 'auto' })
+    } catch (cause) {
+      setError(errorText(cause))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const switchNetwork = async (url: string, allowPlain = false) => {
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await invoke('computers.reviewAddress', computer.id, url, allowPlain)
       if (result === 'mismatch')
         setError(
           t('That address did not prove it is {0}, so nothing changed. Pair it again to add it as a new host.', {
@@ -103,7 +128,11 @@ export function HostConnectionDialog({ computer, onClose }: { computer: Computer
                 <CopyButton text={computer.url ?? ''} label={t('Copy address')} />
               </div>
               <p className="m-0 text-caption text-muted-foreground">
-                {computer.url?.startsWith('https:') ? t('HTTPS connection') : t('HTTP · use a VPN or trusted network')}
+                {computer.url?.startsWith('https:')
+                  ? t('HTTPS connection')
+                  : computer.url && routeEncrypted(computer.url)
+                    ? t('Encrypted by your VPN')
+                    : t('Not encrypted · anyone on this network could read it')}
                 {computer.pairedAt
                   ? ` · ${t('Paired {0}', { 0: new Date(computer.pairedAt).toLocaleDateString() })}`
                   : ''}
@@ -114,20 +143,26 @@ export function HostConnectionDialog({ computer, onClose }: { computer: Computer
                 <span>
                   <strong className="text-body font-medium">{t('Network')}</strong>
                   <span className="block mt-1 text-caption text-muted-foreground">
-                    {t(
-                      'Both devices must be on the network you pick. Ramu checks it is the same host before switching.',
-                    )}
+                    {t('Automatic uses the fastest that answers: local network, then VPN, then Ramu Link.')}
                   </span>
                 </span>
                 <Dropdown
                   label={t('Network')}
-                  value={computer.url ?? ''}
+                  value={automatic ? AUTOMATIC : (computer.url ?? '')}
                   disabled={busy}
-                  options={routes.map((route) => ({
-                    value: route,
-                    label: `${t(networkName(hostOfUrl(route)))} · ${hostOfUrl(route)}`,
-                  }))}
-                  onChange={(next) => void switchNetwork(next)}
+                  options={[
+                    {
+                      value: AUTOMATIC,
+                      label: computer.url
+                        ? `${t('Automatic')} · ${t(networkName(hostOfUrl(computer.url)))}`
+                        : t('Automatic'),
+                    },
+                    ...routes.map((route) => ({
+                      value: route,
+                      label: `${t(networkName(hostOfUrl(route)))} · ${hostOfUrl(route)}`,
+                    })),
+                  ]}
+                  onChange={chooseNetwork}
                 />
               </div>
             )}
@@ -191,6 +226,24 @@ export function HostConnectionDialog({ computer, onClose }: { computer: Computer
           </Button>
         </DialogFooter>
       </DialogContent>
+      {askLan && (
+        <ConfirmDialog
+          title={t('Use the local network for {0}?', { 0: computer.name })}
+          confirmLabel={t('Use local network')}
+          onConfirm={() => {
+            const next = askLan
+            setAskLan(null)
+            void switchNetwork(next, true)
+          }}
+          onCancel={() => setAskLan(null)}
+        >
+          <p className="m-0">
+            {t(
+              'It is the fastest route, but Ramu does not encrypt it: others on this Wi-Fi could read what is sent. Ramu will then use it on its own whenever it answers.',
+            )}
+          </p>
+        </ConfirmDialog>
+      )}
     </Dialog>
   )
 }

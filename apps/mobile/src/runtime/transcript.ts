@@ -186,12 +186,21 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
                 ? { kind: 'note', id, ...noteTitle('Message to {0}', { 0: relay.name }), detail: relay.body }
                 : pressed
                   ? { kind: 'note', id, ...noteTitle('From a card'), detail: pressed.summary }
-                  : ({
-                      kind: 'note',
-                      id,
-                      ...noteTitle("Answers to the agent's questions"),
-                      detail: answersDetail(events, answers!),
-                    } as TranscriptItem),
+                  : events.some((event) => event.kind === 'question' && event.requestId === answers!.requestId)
+                    ? // The question's card above already shows the answer; this line only marks when it was sent.
+                      ({
+                        kind: 'note',
+                        id,
+                        ...(answerPairs(answers!.body).length === 1
+                          ? noteTitle('Answered 1 question')
+                          : noteTitle('Answered {0} questions', { 0: answerPairs(answers!.body).length })),
+                      } as TranscriptItem)
+                    : ({
+                        kind: 'note',
+                        id,
+                        ...noteTitle("Answers to the agent's questions"),
+                        detail: answersDetail(events, answers!),
+                      } as TranscriptItem),
       )
     } else if (e.kind === 'goal' && goals.has(e)) {
       const { type, goal } = goals.get(e)!

@@ -17,7 +17,11 @@ export const registerTerminalHandlers: RegisterHandlers = ({ workspace, terminal
   },
   'term.openSetup': {
     args: z.tuple([dimension, dimension]),
-    run: (cols: number, rows: number) => terminals.open('provider-setup', null, homedir(), cols, rows),
+    run: (cols: number, rows: number) => ({
+      ...terminals.open('provider-setup', null, homedir(), cols, rows),
+      // Windows PowerShell 5.1, the shell there, has no `&&`.
+      exitOnSuccess: process.platform === 'win32' ? '; if ($?) { exit }' : ' && exit',
+    }),
   },
   'term.write': {
     args: z.tuple([id, z.string().max(1_000_000)]),

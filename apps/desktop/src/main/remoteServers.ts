@@ -29,6 +29,13 @@ interface StoredServer {
   hostId?: string
   /** Other addresses the host named in a proven identity answer; tried only when the saved one stops answering. */
   routes?: string[]
+  /**
+   * How this device picks among the routes: `auto` (absent) moves to the fastest that answers (LAN, then VPN, then the
+   * internet); `manual` keeps the one the person chose, falling back only when it stops answering.
+   */
+  routeMode?: 'auto' | 'manual'
+  /** The person allowed this host's unencrypted local network, so this device may leave an encrypted route for it. */
+  plainLan?: boolean
 }
 interface StoredFile {
   servers: StoredServer[]
@@ -43,6 +50,8 @@ export interface SavedServer {
   ssh?: SshRoute
   /** The host's durable id, bound at pairing. */
   hostId?: string
+  routeMode?: 'auto' | 'manual'
+  plainLan?: boolean
 }
 export interface PairedIdentity {
   deviceId?: string
@@ -52,6 +61,8 @@ export interface ComputerUpdate {
   name?: string
   enabled?: boolean
   retryMode?: 'events' | 'periodic'
+  /** `auto` hands the route back to this device, which moves to the fastest that answers. */
+  routeMode?: 'auto' | 'manual'
 }
 export interface Sealer {
   available: boolean
@@ -130,16 +141,20 @@ export class RemoteServers {
   }
 
   list(): SavedServer[] {
-    return this.read().servers.map(({ id, name, url, pairedAt, enabled, retryMode, ssh, hostId }) => ({
-      id,
-      name,
-      url,
-      pairedAt,
-      enabled: enabled !== false,
-      retryMode: retryMode === 'periodic' ? 'periodic' : 'events',
-      ...(ssh ? { ssh } : {}),
-      ...(hostId ? { hostId } : {}),
-    }))
+    return this.read().servers.map(
+      ({ id, name, url, pairedAt, enabled, retryMode, ssh, hostId, routeMode, plainLan }) => ({
+        id,
+        name,
+        url,
+        pairedAt,
+        enabled: enabled !== false,
+        retryMode: retryMode === 'periodic' ? 'periodic' : 'events',
+        ...(ssh ? { ssh } : {}),
+        ...(hostId ? { hostId } : {}),
+        ...(routeMode === 'manual' ? { routeMode } : {}),
+        ...(plainLan ? { plainLan } : {}),
+      }),
+    )
   }
   get(id: string): SavedServer | undefined {
     this.load()
@@ -154,6 +169,8 @@ export class RemoteServers {
           retryMode: server.retryMode === 'periodic' ? 'periodic' : 'events',
           ...(server.ssh ? { ssh: server.ssh } : {}),
           ...(server.hostId ? { hostId: server.hostId } : {}),
+          ...(server.routeMode === 'manual' ? { routeMode: server.routeMode } : {}),
+          ...(server.plainLan ? { plainLan: true } : {}),
         }
       : undefined
   }
@@ -284,6 +301,17 @@ export class RemoteServers {
     this.write(file)
   }
 
+  /** How this device picks the host's route, and whether the person allowed its unencrypted local network. */
+  setRouting(id: string, routing: { routeMode?: 'auto' | 'manual'; plainLan?: boolean }) {
+    const file = this.read(),
+      server = file.servers.find((entry) => entry.id === id)
+    if (!server) return
+    if (routing.routeMode === 'manual') server.routeMode = 'manual'
+    else if (routing.routeMode === 'auto') delete server.routeMode
+    if (routing.plainLan) server.plainLan = true
+    this.write(file)
+  }
+
   /** A tunnel that could not reuse its last local port moves to a new one. */
   setUrl(id: string, address: string) {
     const file = this.read(),
@@ -308,6 +336,11 @@ export class RemoteServers {
     if (changes.retryMode !== undefined) {
       if (!['events', 'periodic'].includes(changes.retryMode)) throw new Error('Invalid retry setting')
       server.retryMode = changes.retryMode
+    }
+    if (changes.routeMode !== undefined) {
+      if (!['auto', 'manual'].includes(changes.routeMode)) throw new Error('Invalid network setting')
+      if (changes.routeMode === 'manual') server.routeMode = 'manual'
+      else delete server.routeMode
     }
     this.write(file)
     return this.list().find((entry) => entry.id === id)!

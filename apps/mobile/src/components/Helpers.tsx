@@ -98,6 +98,7 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
   const id = store.language === 'id'
   useEffect(() => setDraft(''), [task?.agentId])
   if (!task) return null
+  const command = task.taskType === 'local_bash'
   const online = store.isOnline(chat.computerId)
   const viewOnly = store.computers?.find((host) => host.id === chat.computerId)?.access === 'viewer'
   const writable = () => canWriteHost(latestStore.current.computers?.find((host) => host.id === chat.computerId))
@@ -157,7 +158,8 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
         </T>
         <HelperTime task={task} online={online} />
         {task.recoveryError ? <T tone="muted">{task.recoveryError}</T> : null}
-        {task.prompt ? (
+        {/* A command's description is already the sheet's title; saying it again under Task only pushes its output down. */}
+        {task.prompt && !(command && task.prompt.trim() === task.name.trim()) ? (
           <>
             <T weight="600">{say('Task')}</T>
             <T copyable={task.prompt}>{task.prompt}</T>
@@ -166,7 +168,13 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
         {task.log ? (
           <>
             <T weight="600">{task.log.length > shown ? say('Output excerpt') : say('Output')}</T>
-            <Markdown text={task.log.slice(-shown)} />
+            {command ? (
+              <T mono size={font.caption} selectable>
+                {task.log.slice(-shown)}
+              </T>
+            ) : (
+              <Markdown text={task.log.slice(-shown)} />
+            )}
             {task.log.length > shown ? (
               <Button
                 kind="ghost"

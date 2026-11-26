@@ -1694,7 +1694,8 @@ async function main() {
     }
     if (method === 'computers.reviewAddress') {
       if (typeof args[0] !== 'string' || typeof args[1] !== 'string') throw new Error('Invalid host address')
-      return computers.reviewAddress(args[0], args[1])
+      if (args[2] !== undefined && typeof args[2] !== 'boolean') throw new Error('Invalid host address')
+      return computers.reviewAddress(args[0], args[1], { allowPlain: args[2] === true, manual: true })
     }
     if (method === 'computers.update') {
       if (typeof args[0] !== 'string' || !args[1] || typeof args[1] !== 'object' || Array.isArray(args[1]))

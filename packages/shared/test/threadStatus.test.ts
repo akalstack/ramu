@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { newerTaskSnapshot, threadStatus, titleSourceNote } from '../src/chat/threadStatus'
+import {
+  newerTaskSnapshot,
+  statusTone,
+  threadStatus,
+  titleSourceNote,
+  type ThreadStatus,
+} from '../src/chat/threadStatus'
 
 const task = (patch: Partial<Parameters<typeof threadStatus>[0]> = {}) => ({
   status: 'idle' as never,
@@ -126,4 +132,13 @@ it('says where a title came from and whether Ramu may still change it', () => {
   expect(titleSourceNote('prompt')).toContain('first message')
   // A title with no recorded source.
   expect(titleSourceNote(undefined)).toBeNull()
+})
+
+describe('statusTone', () => {
+  it('tints what waits on the person or a limit amber, a failure red, and the rest quiet', () => {
+    const tones = (kinds: ThreadStatus['kind'][]) => kinds.map((kind) => statusTone({ kind, short: '', full: '' }))
+    expect(tones(['limit', 'approval', 'input', 'blocked', 'turn-limit'])).toEqual(Array(5).fill('warn'))
+    expect(tones(['failed'])).toEqual(['bad'])
+    expect(tones(['working', 'goal', 'verifying', 'paused', 'stopped', 'finished'])).toEqual(Array(6).fill('neutral'))
+  })
 })

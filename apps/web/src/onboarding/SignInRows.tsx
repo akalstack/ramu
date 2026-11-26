@@ -154,7 +154,7 @@ export function GitHubSignIn() {
           <Button
             size="sm"
             variant="secondary"
-            onClick={() => runProviderCommand(`GitHub · ${t('Sign in')}`, 'gh auth login --web')}
+            onClick={() => runProviderCommand(`GitHub · ${t('Sign in')}`, 'gh auth login --web', check)}
           >
             {t('Sign in')}
           </Button>

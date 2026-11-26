@@ -2,7 +2,7 @@ import { createContext, useContext, type ReactNode } from 'react'
 import { useRouter } from 'expo-router'
 import type { Chat } from './types'
 import { useStore } from './store'
-import { showToast } from './toast'
+import { showError } from './toast'
 import { terminalCtx } from '../components/TerminalScreen'
 
 const RunCommandContext = createContext<((command: string) => void) | null>(null)
@@ -22,7 +22,7 @@ export function RunCommandProvider({ chat, enabled, children }: { chat: Chat; en
       ? (command: string) => {
           void store.invoke(chat.computerId, 'term.run', terminalCtx(chat), command).then(
             (terminal) => router.push({ pathname: '/chat/[id]/terminal', params: { id: chat.id, focus: terminal.id } }),
-            (error: unknown) => showToast(error instanceof Error ? error.message : String(error)),
+            (error: unknown) => showError(error instanceof Error ? error.message : String(error)),
           )
         }
       : null

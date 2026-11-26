@@ -92,7 +92,7 @@ function load(file, os, overrides = {}, globals = {}) {
     ScrollView: 'ScrollView',
     KeyboardAvoidingView: 'KeyboardAvoidingView',
     Modal: 'Modal',
-    Keyboard: { dismiss() {} },
+    Keyboard: { dismiss() {}, addListener: () => ({ remove() {} }) },
     Image: 'Image',
     Pressable: 'Pressable',
     Text: 'Text',
@@ -8652,14 +8652,21 @@ test('a choice with an unset option shows it while unset and removes the setting
   ])
 })
 
-test('an error toast sits under the header and never blocks a press, while an Undo toast stays within reach', () => {
+test('every toast sits near the bottom within reach and can be closed, errors included', () => {
   const render = (toast) => {
     const { UndoToast } = load('components/UndoToast.tsx', 'ios', {
-      react: { useEffect() {}, useSyncExternalStore: (_subscribe, read) => read() },
+      react: {
+        useEffect(effect) {
+          effect()
+        },
+        useState: (initial) => [initial, () => {}],
+        useSyncExternalStore: (_subscribe, read) => read(),
+      },
       'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 59, bottom: 34 }) },
-      '../i18n': { useT: () => ({}) },
+      '../i18n': { useT: () => ({ dismiss: 'Dismiss' }) },
       '../runtime/toast': {
         TOAST_MS: 6000,
+        ERROR_TOAST_MS: 10000,
         currentToast: () => toast,
         dismissToast() {},
         subscribeToast: () => () => {},
@@ -8668,9 +8675,13 @@ test('an error toast sits under the header and never blocks a press, while an Un
     return UndoToast()
   }
   const error = render({ id: 1, message: 'Host unreachable', error: true })
-  assert.equal(error.props.pointerEvents, 'none')
-  assert.equal(error.props.style.top, 59 + 52)
-  assert.equal(error.props.style.bottom, undefined)
+  assert.equal(error.props.pointerEvents, 'box-none')
+  assert.equal(error.props.style.bottom, 34 + 72)
+  assert.equal(error.props.style.top, undefined)
+  const labels = nodes(error)
+    .map((node) => node.props?.accessibilityLabel)
+    .filter(Boolean)
+  assert.ok(labels.includes('Dismiss'), 'an error can be closed')
 
   const undo = render({ id: 2, message: 'recapDone', action: { label: 'undo', run() {} } })
   assert.equal(undo.props.pointerEvents, 'box-none')

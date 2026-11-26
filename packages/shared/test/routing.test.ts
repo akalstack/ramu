@@ -373,19 +373,39 @@ describe('account-aware routing across providers', () => {
       }),
     ).toBeNull()
   })
-  it('selects an available login of the next provider when its primary login is limited', () => {
+  it('moves the next provider to another of its logins only when that login runs on an API key', () => {
     const usage = [
       ...windows('claude-code', 100).map((r) => ({ ...r, status: 'limited' as const })),
       ...windows('codex', 30),
     ]
+    const context = { usage: [], accounts: { configuration, usage }, catalogs: allCatalogs, switchAt: null, now: NOW }
+    expect(planRoute(settings('claude-code'), [step('codex', 'main')], context)).toBeNull()
     const route = planRoute(settings('claude-code'), [step('codex', 'main')], {
-      usage: [],
-      accounts: { configuration, usage },
-      catalogs: allCatalogs,
-      switchAt: null,
-      now: NOW,
+      ...context,
+      apiKeyLogins: new Set([accountKey('codex', 'b')]),
     })
     expect(route?.step).toMatchObject({ provider: 'codex', accountId: 'b' })
+  })
+  it('never starts another model of the same provider on a different subscription login', () => {
+    const twoModels = allCatalogs.map((catalog) =>
+      catalog.provider === 'claude-code'
+        ? { ...catalog, models: [...catalog.models, model('claude-code', 'small')] }
+        : catalog,
+    )
+    const limited = [
+      reading({ provider: 'claude-code', accountId: 'a', usedPercent: 100, status: 'limited', resetsAt: NOW + 10000 }),
+    ]
+    const context = {
+      usage: [],
+      accounts: { configuration, usage: limited },
+      catalogs: twoModels,
+      switchAt: null,
+      now: NOW,
+    }
+    expect(planRoute(settings('claude-code'), [step('claude-code', 'small')], context)).toBeNull()
+    expect(
+      nextStep([step('claude-code', 'small')], { ...context, from: { provider: 'claude-code', accountId: 'a' } }),
+    ).toBeNull()
   })
   it('isolates the current login, disabled logins, expired windows and fallback opt-out', () => {
     const context = {

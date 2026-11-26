@@ -4,7 +4,7 @@ import type { Schedule, WebhookDelivery } from '@ramu/shared/types'
 import { font, space } from '../theme'
 import { useStore } from '../runtime/store'
 import { useSay } from '../i18n'
-import { showToast } from '../runtime/toast'
+import { showError } from '../runtime/toast'
 import { Divider, SectionLabel, T, tap } from './ui'
 
 const OUTCOME: Record<WebhookDelivery['outcome'], { label: string; tone: 'soft' | 'muted' | 'bad' | 'ok' }> = {
@@ -47,7 +47,7 @@ export function WebhookDeliveries({ computer, schedule }: { computer: string; sc
     setBusy(true)
     void work()
       .then(load)
-      .catch((error: unknown) => showToast(error instanceof Error ? error.message : String(error)))
+      .catch((error: unknown) => showError(error instanceof Error ? error.message : String(error)))
       .finally(() => setBusy(false))
   }
   return (

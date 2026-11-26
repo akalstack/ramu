@@ -4,7 +4,7 @@ import { Check, ClipboardCopy, Eye, EyeOff, Globe, Plus, RefreshCw, X } from 'lu
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
 import { Textarea } from '@/components/ui/textarea'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { ChoiceChip, ChoiceChips } from '@/components/choice-group'
 import { AGENT_PROVIDERS, providerEnabled, providerName } from '@ramu/shared/providers/providers'
 import {
   environmentProblem,
@@ -203,23 +203,21 @@ export function EnvironmentSettings({
           {t('Values can only be viewed and changed on the host running Ramu. Names are shown here.')}
         </p>
       )}
-      <ToggleGroup
+      <ChoiceChips
         size="sm"
-        variant="outline"
-        spacing={2}
         className="flex-wrap gap-1.5 mb-3"
         aria-label={t('Applies to')}
         value={[scope]}
         onValueChange={(values) => values[0] && setScope(values[0] as EnvironmentScope)}
       >
         {scopes.map((item) => (
-          <ToggleGroupItem key={item} value={item} className="gap-1.5 px-2.5">
+          <ChoiceChip key={item} value={item} className="gap-1.5 px-2.5">
             {item === 'global' ? <Globe size={13} /> : <ProviderIcon provider={item} size={13} />}
             {scopeName(item)}
             {count(item) > 0 && <span className="text-muted-foreground tabular-nums">{count(item)}</span>}
-          </ToggleGroupItem>
+          </ChoiceChip>
         ))}
-      </ToggleGroup>
+      </ChoiceChips>
       <p className="muted text-muted-foreground small text-caption m-[0_0_10px]!">
         {scope === 'global'
           ? t('Used by every provider. A provider’s own variable with the same name wins.')
@@ -230,10 +228,8 @@ export function EnvironmentSettings({
       {editable ? (
         <>
           <div className="flex items-center gap-2 flex-wrap mb-2">
-            <ToggleGroup
+            <ChoiceChips
               size="sm"
-              variant="outline"
-              spacing={2}
               className="gap-1.5"
               aria-label={t('Editor')}
               value={[text === null ? 'table' : 'text']}
@@ -245,13 +241,13 @@ export function EnvironmentSettings({
                 }
               }}
             >
-              <ToggleGroupItem value="table" className="px-2.5">
+              <ChoiceChip value="table" className="px-2.5">
                 {t('Variables')}
-              </ToggleGroupItem>
-              <ToggleGroupItem value="text" className="px-2.5">
+              </ChoiceChip>
+              <ChoiceChip value="text" className="px-2.5">
                 {t('.env text')}
-              </ToggleGroupItem>
-            </ToggleGroup>
+              </ChoiceChip>
+            </ChoiceChips>
             <span className="grow" />
             {text === null && (
               <Button variant="ghost" size="sm" onClick={() => setReveal(!reveal)} aria-pressed={reveal}>

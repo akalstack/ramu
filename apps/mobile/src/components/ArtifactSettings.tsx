@@ -11,7 +11,7 @@ import {
 import { font, radius, space, useTheme } from '../theme'
 import { useStore } from '../runtime/store'
 import { useSay } from '../i18n'
-import { showToast } from '../runtime/toast'
+import { showError } from '../runtime/toast'
 import { Button, Divider, SectionLabel, Sheet, T, tap } from './ui'
 
 const RUN_STATUS: Record<ArtifactRun['status'], string> = {
@@ -80,7 +80,7 @@ export function ArtifactSettings({
       await work()
       load()
     } catch (error) {
-      showToast(error instanceof Error ? error.message : String(error))
+      showError(error instanceof Error ? error.message : String(error))
     } finally {
       setBusy(false)
     }

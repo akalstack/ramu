@@ -1,6 +1,7 @@
 // Runs inside the bundled terminal surface; no host credentials or network calls.
+// A hold that lifts without dragging sent no arrow, so it selects the word under the finger instead (`selectAt`).
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- injected into the terminal bundle as source text by gen-terminal.mjs
-function installTerminalGesture(term, post, TerminalGesture, arrowSequence, pinchFontSize, refit) {
+function installTerminalGesture(term, post, TerminalGesture, arrowSequence, pinchFontSize, refit, selectAt) {
   const gesture = new TerminalGesture()
   const pointers = new Set()
   // Two fingers pinch the text size; the phone stores the size it ends at.
@@ -14,6 +15,7 @@ function installTerminalGesture(term, post, TerminalGesture, arrowSequence, pinc
     pointer = null,
     frame = 0,
     reported = false,
+    steered = false,
     lastUi = 0,
     suppressClickUntil = 0
   const previousSelection = document.body.style.userSelect
@@ -25,6 +27,7 @@ function installTerminalGesture(term, post, TerminalGesture, arrowSequence, pinc
       suppressClickUntil = performance.now() + 200
     }
     reported = false
+    steered = false
     pointer = null
     gesture.cancel()
     document.body.style.userSelect = previousSelection
@@ -45,6 +48,7 @@ function installTerminalGesture(term, post, TerminalGesture, arrowSequence, pinc
         lastUi = now
       }
       reported = true
+      if (state.direction) steered = true
       if (state.steps && state.direction)
         post({ kind: 'input', data: arrowSequence(state.direction, term.modes.applicationCursorKeysMode) })
     }
@@ -110,11 +114,13 @@ function installTerminalGesture(term, post, TerminalGesture, arrowSequence, pinc
       pinch = null
     }
     if (pointer && pointer.id === event.pointerId) {
+      const held = reported && !steered && event.type === 'pointerup'
       if (reported) {
         event.preventDefault()
         event.stopImmediatePropagation()
       }
       cancel()
+      if (held) selectAt(event.clientX, event.clientY)
     }
   }
   document.addEventListener('pointerup', end, { capture: true, passive: false })

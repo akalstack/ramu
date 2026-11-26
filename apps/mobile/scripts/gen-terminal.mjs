@@ -22,6 +22,7 @@ const blockModule = ts.transpileModule(
 const links = readFileSync(new URL('./terminal-links.js', import.meta.url), 'utf8')
 const copy = readFileSync(new URL('./terminal-copy.js', import.meta.url), 'utf8')
 const driver = readFileSync(new URL('./terminal-gesture.js', import.meta.url), 'utf8')
+const select = readFileSync(new URL('./terminal-select.js', import.meta.url), 'utf8')
 const css = readFileSync(require.resolve('@xterm/xterm/css/xterm.css'), 'utf8')
 const html = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'"><style>${css}html,body,#terminal{margin:0;width:100%;height:100%;background:#0e0e10;overflow:hidden}</style></head><body><div id="terminal"></div><script>${js.replaceAll('</script', '<\\/script')}
 ;
@@ -35,7 +36,8 @@ const linksModule = (()=>{const exports={};${linkModule};return exports})();
 ${links};installTerminalLinks(term,post,linksModule.terminalLinkAt);
 const blocksModule = (()=>{const exports={};${blockModule};return exports})();const blocks = blocksModule.trackTerminalBlocks(term);
 ${copy};installTerminalCopy(term,post,blocksModule.terminalRowsText,blocks);
-const gestureModule = (()=>{const exports={};${gesture};return exports})();${driver};installTerminalGesture(term,post,gestureModule.TerminalGesture,gestureModule.arrowSequence,gestureModule.pinchFontSize,()=>fit.fit());
+${select};const selecting = installTerminalSelect(term,post,blocks,blocksModule.terminalBlockAt);
+const gestureModule = (()=>{const exports={};${gesture};return exports})();${driver};installTerminalGesture(term,post,gestureModule.TerminalGesture,gestureModule.arrowSequence,gestureModule.pinchFontSize,()=>fit.fit(),selecting.selectWordAt);
 term.onData(data=>{blocks.input(data);post({kind:'input',data})});term.onResize(size=>post({kind:'resize',...size}));
 function receive(event){try{const value=JSON.parse(event.data);if(value.kind==='output')term.write(value.data);if(value.kind==='reset'){term.reset();term.write(value.data)}if(value.kind==='focus')term.focus();if(value.kind==='blur')term.blur();if(value.kind==='key'&&typeof value.key==='string'&&value.key.length<32){const data=keysModule.terminalKeySequence(value.key,term.modes.applicationCursorKeysMode);blocks.input(data);post({kind:'input',data})}if(value.kind==='font'&&Number.isInteger(value.size)&&value.size>=9&&value.size<=22){term.options.fontSize=value.size;fit.fit()}}catch{}}
 window.addEventListener('message',receive);document.addEventListener('message',receive);new ResizeObserver(()=>fit.fit()).observe(document.body);setTimeout(()=>{fit.fit();post({kind:'ready'})},0);

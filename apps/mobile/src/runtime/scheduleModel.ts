@@ -260,23 +260,7 @@ export function sortSchedules(schedules: Schedule[]): Schedule[] {
   )
 }
 
-export type RunTone = 'ok' | 'warn' | 'bad' | 'accent' | 'muted'
-export function runTone(status: ScheduleRun['status']): RunTone {
-  switch (status) {
-    case 'completed':
-      return 'ok'
-    case 'failed':
-      return 'bad'
-    case 'needs-input':
-    case 'missed':
-      return 'warn'
-    case 'running':
-    case 'queued':
-      return 'accent'
-    default:
-      return 'muted'
-  }
-}
+export { runTone, type RunTone } from '@ramu/shared/scheduleRuns'
 
 export const RUN_LABELS: Record<ScheduleRun['status'], Record<Lang, string>> = {
   queued: { en: 'Queued', id: 'Antre' },

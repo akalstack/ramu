@@ -21,7 +21,7 @@ import { ShipActivityList } from './ShipActivity'
 import { buildInbox, INBOX_TABS, inboxTabOf, type InboxChat, type InboxTab } from '../runtime/inbox'
 import { STANDALONE, type Chat } from '../runtime/types'
 import { ago, useSay, useT, type Strings } from '../i18n'
-import { showToast } from '../runtime/toast'
+import { showError } from '../runtime/toast'
 import { Header, LargeTitle, PageScrollView, Screen, useScrolledUnderBar } from './Screen'
 import { TopFade } from './Glass'
 import { InboxBrief } from './InboxBrief'
@@ -227,7 +227,7 @@ export function InboxList({ pane }: { pane?: boolean }) {
     setStopping((all) => new Set(all).add(key))
     void store
       .invoke(computerId, 'activity.cancel', activityId)
-      .catch((error: unknown) => showToast(error instanceof Error ? error.message : String(error)))
+      .catch((error: unknown) => showError(error instanceof Error ? error.message : String(error)))
       .finally(() =>
         setStopping((all) => {
           const next = new Set(all)

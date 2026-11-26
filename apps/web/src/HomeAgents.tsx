@@ -7,11 +7,11 @@ import { useQuery } from '@tanstack/react-query'
 import { DateTime } from 'luxon'
 import type { AgentSessionInfo, Task } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
-import { threadStatus } from '@ramu/shared/chat/threadStatus'
+import { statusTone, threadStatus } from '@ramu/shared/chat/threadStatus'
 import { ThreadHoverCard } from './sidebar/projects/ThreadHoverCard'
 import { ArrowLeft, Check, CircleAlert, MessageCircleQuestion, RotateCcw, Square } from 'lucide-react'
 import { InboxList, InboxMark, InboxRow } from './inbox/InboxParts'
-import { StateDot, StatusMark } from './sidebar/projects/TaskStateIcon'
+import { StateDot, StatusMark, WorkingDot } from './sidebar/projects/TaskStateIcon'
 import { ICON_BUTTON_CLASS } from './sidebar/projects/constants'
 import { ramu } from './ipc'
 import { ownHostId } from './hosts'
@@ -133,7 +133,12 @@ function AgentMark({
 }) {
   if (task && !session.parentId) {
     const status = threadStatus(task, !!unread, task.goalState)
-    if (status) return <InboxMark>{<StatusMark task={task} status={status} />}</InboxMark>
+    if (status)
+      return (
+        <InboxMark tone={statusTone(status)}>
+          <StatusMark task={task} status={status} />
+        </InboxMark>
+      )
   }
   if (group === 'Limit reached' && session.waitingUntil)
     return (
@@ -150,7 +155,7 @@ function AgentMark({
   if (group === 'Running')
     return (
       <InboxMark>
-        <StateDot kind="spinner" label={t('Agent working')} />
+        <WorkingDot label={t('Agent working')} />
       </InboxMark>
     )
   if (session.state === 'failed')

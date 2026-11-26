@@ -346,7 +346,8 @@ export function ProviderSettings({
       await invoke('providers.update', provider, now)
       await refresh(false, false, [provider])
     } catch (reason) {
-      setError(errorText(reason))
+      // The card shows a failed update with its next steps; the page says it only when the card cannot.
+      await refresh(false, false, [provider]).catch(() => setError(errorText(reason)))
     } finally {
       setUpdating(null)
     }
@@ -357,9 +358,7 @@ export function ProviderSettings({
     const failed: string[] = []
     for (const { provider } of updatable) {
       setUpdating(provider)
-      await invoke('providers.update', provider).catch((reason) =>
-        failed.push(`${providerName(provider)}: ${errorText(reason)}`),
-      )
+      await invoke('providers.update', provider).catch(() => failed.push(providerName(provider)))
     }
     setUpdating(null)
     await refresh(
@@ -367,7 +366,8 @@ export function ProviderSettings({
       false,
       updatable.map((entry) => entry.provider),
     )
-    if (failed.length) setError(failed.join(' · '))
+    // Each failed card already says why and offers Try again.
+    if (failed.length) setError(t('{0} could not be updated. See each card for why.', { 0: failed.join(', ') }))
   }
   const add = (provider: AgentProvider, identityId: string) => {
     const id = crypto.randomUUID()

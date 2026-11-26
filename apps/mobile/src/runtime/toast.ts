@@ -3,8 +3,10 @@
 export interface Toast {
   /** A copy key in `i18n.ts`, or already-written text such as an error from the host. */
   message: string
-  /** Something went wrong: shown with a warning mark, under the header. */
+  /** Something went wrong: shown with an error mark, and longer, as the desktop does. */
   error?: boolean
+  /** It worked: shown with a check, as the desktop marks a success. */
+  success?: boolean
   /** `label` is a copy key too. */
   action?: { label: string; run: () => void }
   /** Bumps on every `showToast`, so the same message shown twice restarts the timer. */
@@ -17,9 +19,11 @@ const listeners = new Set<() => void>()
 const emit = () => listeners.forEach((listener) => listener())
 
 export const TOAST_MS = 6000
+/** An error stays longer, as on the desktop: it is read, not glanced at. */
+export const ERROR_TOAST_MS = 10_000
 
-export function showToast(message: string, action?: Toast['action']) {
-  current = { message, action, id: ++counter }
+export function showToast(message: string, action?: Toast['action'], options: { success?: boolean } = {}) {
+  current = { message, action, ...(options.success ? { success: true } : {}), id: ++counter }
   emit()
 }
 /** An error, shown as a toast that clears itself. */

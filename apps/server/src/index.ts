@@ -241,7 +241,7 @@ import { IdentityService } from './identities/service'
 import { ProjectPlaces } from './identities/places'
 import { setFolderEnvironment } from './userEnvironment'
 import { execFileSync } from 'node:child_process'
-import { ensureNodeOnPath, providerVariable, setAccountRestriction } from './providers/providerBinaries'
+import { ensureToolsOnPath, providerVariable, setAccountRestriction } from './providers/providerBinaries'
 import { accountKey } from '@ramu/shared/identities'
 import { setConnectionIdentityScope } from './mcp/policy'
 import { RAMU_INDEX_KEY } from '@ramu/shared/plugins'
@@ -417,8 +417,9 @@ for (let attempts = 0; attempts < 20 && !owned; attempts++) {
   }
 }
 if (!owned) throw new Error('Another service is starting; try again shortly')
-// Tools this service starts later (Open Computer Use, a skills install) are Node scripts; see `ensureNodeOnPath`.
-ensureNodeOnPath()
+// The person's tools (npm, `gh`, provider CLIs) and the Node their scripts need; see `ensureToolsOnPath`. Not awaited:
+// asking the login shell can take seconds, and each install asks again before it needs them.
+void ensureToolsOnPath()
 process.once('exit', () => {
   try {
     if (readFileSync(join(ownerPath, 'pid'), 'utf8') === String(process.pid))

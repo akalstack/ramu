@@ -60,6 +60,17 @@ export function updateFailure(
     .slice(-3)
     .join(' ')
     .slice(-400)
+  // The usual causes, said plainly with what to do; the tool's own last words follow, since they are the most exact.
+  const cause = /EACCES|EPERM|permission denied/i.test(said)
+    ? 'Ramu could not write where this CLI is installed. Run the update command in a terminal, or reinstall the CLI in a folder you own.'
+    : /ENOTFOUND|EAI_AGAIN|ETIMEDOUT|ECONNRESET|ECONNREFUSED|getaddrinfo|network|fetch failed/i.test(said)
+      ? 'The download server could not be reached. Check your connection, then try again.'
+      : /ENOSPC|no space left/i.test(said)
+        ? 'There is not enough free disk space for the update.'
+        : /EBUSY|ETXTBSY|text file busy|resource busy/i.test(said)
+          ? 'The CLI is in use. Try again once its running threads finish.'
+          : null
+  if (cause) return `CLI update failed: ${cause} (${said})`
   return said
     ? `CLI update failed: ${said}`
     : 'CLI update failed. Check permissions, network access, and how this CLI was installed.'

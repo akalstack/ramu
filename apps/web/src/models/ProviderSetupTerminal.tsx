@@ -14,7 +14,12 @@ const CLOSED = 'ramu:provider-terminal-closed'
 /** How long a sign-in is followed before the person is left to close the terminal themselves. */
 const WATCH_MS = 10 * 60_000
 
-export function runProviderCommand(title: string, command: string) {
+/**
+ * Runs a sign-in or setup command in the setup terminal. A successful command ends its shell, which closes the terminal;
+ * `onClosed` then reads the result again, so the row shows the sign-in without Check again.
+ */
+export function runProviderCommand(title: string, command: string, onClosed?: () => void) {
+  if (onClosed) window.addEventListener(CLOSED, onClosed, { once: true })
   window.dispatchEvent(new CustomEvent<SetupCommand>(OPEN, { detail: { id: crypto.randomUUID(), title, command } }))
 }
 

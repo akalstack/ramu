@@ -36,7 +36,7 @@ vi.mock('@dnd-kit/sortable', () => ({
   arrayMove: () => ['b', 'a'],
 }))
 const { QueuedMessages } = await import('../src/views/agent/components/QueuedMessages')
-const render = (readOnly: boolean) =>
+const render = (readOnly: boolean, editingId: string | null = null) =>
   renderToStaticMarkup(
     createElement(QueuedMessages, {
       sessionId: 's',
@@ -56,6 +56,8 @@ const render = (readOnly: boolean) =>
         await work()
       },
       onRecall: vi.fn(),
+      editingId,
+      onEdit: vi.fn(),
     }),
   )
 beforeEach(() => {
@@ -84,4 +86,12 @@ it('restores the host queue controls for an owner', () => {
   expect(state.menus.every((menu) => menu.items[0]?.disabled === false)).toBe(true)
   state.reorder({ active: { id: 'a' }, over: { id: 'b' } })
   expect(state.invoke).toHaveBeenCalledWith('agent.reorderQueued', 's', ['b', 'a'])
+})
+
+it('marks the message open in the message box and keeps it from being sent or edited twice', () => {
+  const html = render(false, 'a')
+  expect(html.match(/Editing in the message box/g)).toHaveLength(1)
+  const send = [...html.matchAll(/<button[^>]*aria-label="Send now"[^>]*>/g)].map(([button]) => button)
+  expect(send.map((button) => button.includes('disabled=""'))).toEqual([true, false])
+  expect(state.menus.map((menu) => !!menu.items[0]?.disabled)).toEqual([true, false])
 })

@@ -2199,12 +2199,10 @@ function FullAccessWhy({ reason }: { reason?: string }) {
             </T>
           ) : null}
           <T size={font.caption} tone="muted">
-            {say(
-              'Full access skips most approvals, but a short list of actions always asks: ones that can destroy work for good, change the computer itself, act in your name or deploy to production.',
-            )}
+            {say('Always asks: deleting work for good, changing the computer, acting as you, deploying to production.')}
           </T>
           <T size={font.caption} tone="muted">
-            {say('Allow once covers only this request; the next one asks again.')}
+            {say('Allow once approves just this one.')}
           </T>
         </View>
       ) : null}

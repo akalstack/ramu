@@ -61,24 +61,30 @@ function mentioned(path: string, mentions: readonly string[], root: string, cwd:
   })
 }
 
-/** What blocks a completion claim, or null. Deterministic: it reads the evidence and the workspace, never a model. */
-export function evidenceProblem(
-  evidence: GoalEvidence | undefined,
-  changes: { snapshot: WorkspaceSnapshot; changed: Record<string, string>; cwd: string } | null,
-): string | null {
+/** What blocks a completion claim, or null. Deterministic: it reads the evidence, never a model. */
+export function evidenceProblem(evidence: GoalEvidence | undefined): string | null {
   if (!evidence || !evidence.checks.length)
     return 'Completion needs evidence. Call update_goal with status "completed", a reason, and evidence: the checks you ran with their results (evidence.checks, each with name and passed) and the files you changed (evidence.changedFiles).'
   const failed = evidence.checks.filter((check) => !check.passed)
   if (failed.length)
     return `A failing check cannot support completion: ${failed.map((check) => check.name).join('; ')}. Fix it and run it again, or report the goal as active or blocked.`
-  if (!changes) return null
-  const listed = [...evidence.changedFiles, ...(evidence.otherChanges ?? [])]
-  const missing = Object.keys(changes.changed).filter(
-    (path) => path !== '*overflow' && !mentioned(path, listed, changes.snapshot.root, changes.cwd),
-  )
-  if (missing.length)
-    return `The workspace has uncommitted changes that your evidence does not mention: ${missing.slice(0, 20).join(', ')}${missing.length > 20 ? `, +${missing.length - 20} more` : ''}. List each in evidence.changedFiles, or in evidence.otherChanges if you did not change it, then report completion again.`
   return null
+}
+
+/**
+ * Files changed in the checkout since the goal began that the evidence names in neither list, sorted and bounded. Kept
+ * with the completion for the person to see, never a reason to refuse it: other threads edit the same checkout.
+ */
+export function unlistedChanges(
+  evidence: GoalEvidence,
+  changes: { snapshot: WorkspaceSnapshot; changed: Record<string, string>; cwd: string } | null,
+): string[] {
+  if (!changes) return []
+  const listed = [...evidence.changedFiles, ...(evidence.otherChanges ?? [])]
+  return Object.keys(changes.changed)
+    .filter((path) => path !== '*overflow' && !mentioned(path, listed, changes.snapshot.root, changes.cwd))
+    .sort()
+    .slice(0, 50)
 }
 
 /** Parent calls and their bounded results, without volatile IDs or unrelated helper output. */

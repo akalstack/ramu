@@ -92,6 +92,7 @@ import {
 } from './transport'
 import { probeReachableHosts, type ReachableHostProbe } from './reachableHosts'
 import { verifyHost, findHostRoute, chooseHostRoute, rememberRoutes, developmentHostRoute } from './hostRoutes'
+import { routeEncrypted, routeSpeed, upgradeRoutes } from '@ramu/shared/networkLabel'
 import { newerTaskSnapshot } from '@ramu/shared/chat/threadStatus'
 import {
   ACCEPTED_HOLD_MS,
@@ -185,7 +186,18 @@ interface Store extends State {
     signal: AbortSignal,
   ): Promise<string>
   /** Moves a saved host to a new address only after that address proves it is the host this phone paired with. */
-  reviewAddress(id: string, address: string, signal?: AbortSignal): Promise<ReviewAddressResult>
+  /**
+   * Moves a host to another address after proving it is the same host. `allowPlain` records the person's consent to
+   * this host's unencrypted local network; a move by hand also keeps the phone on that route (`routeMode: manual`).
+   */
+  reviewAddress(
+    id: string,
+    address: string,
+    signal?: AbortSignal,
+    options?: { allowPlain?: boolean },
+  ): Promise<ReviewAddressResult>
+  /** Back to picking the fastest route on its own, checking for a faster one now. */
+  automaticRoute(id: string): void
   probeHosts: ReachableHostProbe
   /** Turns a host's connection off without forgetting it, or back on. */
   setConnected(id: string, on: boolean): Promise<void>
@@ -857,6 +869,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                     read('agent.changes', session.id, from, known, ...(paged ? [true as const] : [])),
                   held ? (changeCursors.current.get(key) ?? 0) : 0,
                   held ? Math.max(0, ...held.keys()) : 0,
+                  pagingOf(id),
                 )
                 // Rows that arrived live while this read was in flight are in the map now; apply over those.
                 const rows = mergeTranscript(eventRows.current.get(key), result)
@@ -1244,6 +1257,59 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           : c,
       ),
     }))
+    void upgradeRoute(id)
+  }
+
+  /**
+   * Moves a connected host to a faster route when one answers: the local network over a VPN over the internet, as
+   * often as once a minute. Kept off while the person chose a route by hand; from an encrypted route it moves to the
+   * unencrypted local network only once the person allowed that for this host.
+   */
+  async function upgradeRoute(id: string) {
+    const computer = ref.current.computers.find((c) => c.id === id)
+    if (!computer?.deviceId || computer.routeMode === 'manual' || computer.status !== 'online') return
+    const candidates = upgradeRoutes(computer.address, computer.routes ?? [], computer.plainLan)
+    if (!candidates.length || !due(`upgrade:${id}`, 60_000)) return
+    const token = await readToken(id)
+    if (!token) return
+    const best = routeSpeed(candidates[0]!)
+    const found = await findHostRoute({
+      address: computer.address,
+      routes: candidates,
+      // The address itself may be http while the faster one is too; only consent decides a move off https.
+      allowDowngrade: true,
+      prefer: (address) => routeSpeed(address) === best,
+      signal: AbortSignal.timeout(6000),
+      verify: (address, signal) =>
+        verifyHost({
+          fetch: (target, init) => expoFetch(target, init) as ReturnType<Parameters<typeof verifyHost>[0]['fetch']>,
+          baseUrl: address,
+          deviceId: computer.deviceId!,
+          token,
+          expectedHostId: computer.hostId,
+          challenge: operationKey(),
+          signal,
+        }),
+      usable: (address, signal) => checkHostConnection(address, token, expoFetch as typeof globalThis.fetch, signal),
+    }).catch(() => null)
+    const current = ref.current.computers.find((c) => c.id === id)
+    if (
+      !found ||
+      !active.current ||
+      !current ||
+      current.address !== computer.address ||
+      current.routeMode === 'manual' ||
+      current.deviceId !== computer.deviceId
+    )
+      return
+    const moved: Computer = {
+      ...current,
+      address: found.address,
+      hostId: found.hostId,
+      routes: rememberRoutes(current.address, found.routes, current.routes),
+    }
+    change((s) => ({ ...s, computers: s.computers.map((c) => (c.id === id ? moved : c)) }))
+    void connect(moved, true).catch(report)
   }
 
   const reconnectTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
@@ -1276,18 +1342,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deviceId: result.deviceId,
       ...(typeof result.hostId === 'string' ? { hostId: result.hostId } : {}),
     }
-    change((s) => ({ ...s, selected: id, computers: [...s.computers.filter((c) => c.id !== id), computer] }))
+    // Another host joins the lists where it is; the one being looked at stays, so pairing does not swap the screen for
+    // a host whose threads are still loading.
+    change((s) => ({
+      ...s,
+      selected: s.selected && s.selected !== id && s.computers.some((c) => c.id === s.selected) ? s.selected : id,
+      computers: [...s.computers.filter((c) => c.id !== id), computer],
+    }))
     void connect(computer).catch(report)
     return id
   }
-  async function reviewAddressFor(id: string, address: string, signal?: AbortSignal): Promise<ReviewAddressResult> {
+  async function reviewAddressFor(
+    id: string,
+    address: string,
+    signal?: AbortSignal,
+    options: { allowPlain?: boolean } = {},
+  ): Promise<ReviewAddressResult> {
     const computer = ref.current.computers.find((c) => c.id === id)
     if (!computer) throw new Error('That host is no longer saved')
     if (signal?.aborted) return 'unreachable'
     const url = normalizeAddress(address, true)
     if (url === computer.address) return 'unchanged'
     if (!computer.deviceId) return 'unsupported'
-    if (computer.address.startsWith('https:') && url.startsWith('http:')) return 'insecure'
+    // Leaving an encrypted route for one others on the network could read needs the person's consent for this host;
+    // a VPN encrypts on its own.
+    if (routeEncrypted(computer.address) && !routeEncrypted(url) && !(computer.plainLan || options.allowPlain))
+      return 'insecure'
     const token = await readToken(id)
     if (!token) return 'unsupported'
     let failure: ReviewAddressResult = 'unreachable'
@@ -1329,6 +1409,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       routes: rememberRoutes(current.address, result.routes, current.routes),
       status: 'connecting',
       error: undefined,
+      routeMode: 'manual',
+      ...(options.allowPlain ? { plainLan: true } : {}),
     }
     change((s) => ({ ...s, computers: s.computers.map((c) => (c.id === id ? moved : c)) }))
     void connect(moved).catch(report)
@@ -1782,6 +1864,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return savePairing(name, url, result)
     },
     reviewAddress: reviewAddressFor,
+    automaticRoute: (id) => {
+      change((s) => ({
+        ...s,
+        computers: s.computers.map((c) => (c.id === id ? { ...c, routeMode: 'auto' as const } : c)),
+      }))
+      routeTimes.current.delete(`upgrade:${id}`)
+      void upgradeRoute(id)
+    },
     probeHosts: (signal, found) => {
       const computers = ref.current.computers
       return probeReachableHosts({

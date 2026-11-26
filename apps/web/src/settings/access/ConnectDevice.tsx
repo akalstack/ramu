@@ -9,7 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/desktop-button'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { SegmentedControl, SegmentedItem } from '@/components/choice-group'
 import { DIALOG_SCROLLS, DialogScrollBody } from '@/components/dialog-scroll-body'
 import { errorText } from '../../lib/errors'
 import { t } from '../../i18n'
@@ -190,23 +190,21 @@ export function PairDialog({ onClose }: { onClose: () => void }) {
 function PairAccess({ role, onChange }: { role: 'owner' | 'viewer'; onChange: (role: 'owner' | 'viewer') => void }) {
   return (
     <div className="mt-2 flex flex-col gap-1.5">
-      <ToggleGroup
+      <SegmentedControl
         size="sm"
-        variant="outline"
-        spacing={0}
         aria-label={t('Device access')}
         value={[role]}
         onValueChange={(values) => {
           if (values[0] === 'owner' || values[0] === 'viewer') onChange(values[0])
         }}
       >
-        <ToggleGroupItem value="owner" className="px-2.5">
+        <SegmentedItem value="owner" className="px-2.5">
           {t('Full access')}
-        </ToggleGroupItem>
-        <ToggleGroupItem value="viewer" className="px-2.5">
+        </SegmentedItem>
+        <SegmentedItem value="viewer" className="px-2.5">
           {t('View only')}
-        </ToggleGroupItem>
-      </ToggleGroup>
+        </SegmentedItem>
+      </SegmentedControl>
       <span className="text-caption text-muted-foreground">
         {role === 'viewer'
           ? t('It can read threads and answer requests, but not start threads, change files or run commands.')

@@ -80,10 +80,8 @@ export function useSettingsScope(section: string, host?: string) {
     : requested === 'all' && isSingleEnvironmentSection(section)
       ? current
       : requested
-  const [targets, setTargets] = useState<Target[]>([])
+  const [loadedTargets, setTargets] = useState<Target[]>([])
   const confirmedRoles = useRef(new Map<string, boolean>())
-  const latestTargets = useRef(targets)
-  latestTargets.current = targets
   const [loading, setLoading] = useState(true)
   const [revision, setRevision] = useState(0)
   const [edited, setEdited] = useState<Set<string>>(new Set())
@@ -95,6 +93,12 @@ export function useSettingsScope(section: string, host?: string) {
   const available = computers?.computers ?? [
     { id: '', name: t('This host'), local: true, status: 'connected' as const },
   ]
+  const connected = (id: string) => available.some((computer) => computer.id === id && computer.status === 'connected')
+  // Under All hosts, a host that left or went offline drops out of what shows at once, while the others stay on screen
+  // as the hosts are read again; a page never blanks because a host was added or removed.
+  const targets = target === 'all' ? loadedTargets.filter((entry) => connected(entry.id)) : loadedTargets
+  const latestTargets = useRef(targets)
+  latestTargets.current = targets
   const selected = available.filter((computer) =>
     target === 'all' ? computer.status === 'connected' : computer.id === target,
   )
@@ -173,14 +177,8 @@ export function useSettingsScope(section: string, host?: string) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [target, connections, revision] by design; the values it reads beyond these are current as of that run
   }, [target, connections, revision])
-  const ready =
-    !loading &&
-    targets.length > 0 &&
-    targets.every(
-      (entry) =>
-        entry.snapshot && available.some((computer) => computer.id === entry.id && computer.status === 'connected'),
-    ) &&
-    (target !== 'all' || selected.every((computer) => targets.some((entry) => entry.id === computer.id)))
+  // A host that just joined is read behind the page (`stale`), not waited for.
+  const ready = !loading && targets.length > 0 && targets.every((entry) => entry.snapshot && connected(entry.id))
   const primary =
     targets.find((entry) => entry.id === computers?.current && entry.snapshot) ??
     targets.find((entry) => entry.snapshot)
@@ -337,7 +335,7 @@ export function useSettingsScope(section: string, host?: string) {
     dirty,
     setError,
     revision,
-    loadKey: `${target}:${revision}:${targets.map((entry) => entry.id).join(',')}`,
+    loadKey: `${target}:${revision}`,
   }
 }
 

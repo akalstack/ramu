@@ -7,10 +7,15 @@ export const DEFAULT_GOAL_PREFERENCES: GoalPreferences = { mode: 'auto', maxTurn
 /** What the agent reports when it declares a goal complete: each check it ran and the files it changed. */
 export interface GoalEvidence {
   checks: { name: string; passed: boolean; output?: string }[]
-  /** Files the agent changed. Every uncommitted change made during the goal must appear here or in `otherChanges`. */
+  /** Files the agent changed. */
   changedFiles: string[]
   /** Uncommitted files the agent did not change (the user's, another thread's). */
   otherChanges?: string[]
+  /**
+   * Files changed in the checkout while the goal ran that neither list names, recorded by Ramu. Shown with the
+   * completion rather than refusing it: threads share checkouts, and another thread's edits must not hold this one.
+   */
+  unlisted?: string[]
 }
 /** The result of the goal's verification command, run by Ramu after a completion claim. */
 export interface GoalCheck {

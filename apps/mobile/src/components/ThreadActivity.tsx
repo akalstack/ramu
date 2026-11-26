@@ -28,6 +28,7 @@ const KIND_ICON: Record<ActivityKind | 'more', Icon> = {
 import { Helpers } from './Helpers'
 import { InputRequests } from './InputRequests'
 import { GoalQueueTray, type QueuedEdit } from './Composer'
+import { confirmClearGoal } from './confirmClearGoal'
 import { GoalSheet } from './GoalSheet'
 import { moveQueued } from '../runtime/queueOrder'
 import { showError } from '../runtime/toast'
@@ -247,7 +248,7 @@ export function ThreadActivity({
           <GoalSheet
             goal={chat.goal}
             onToggle={() => store.toggleGoal(chat.id)}
-            onClear={() => store.clearGoal(chat.id)}
+            onClear={() => confirmClearGoal(say, () => store.clearGoal(chat.id))}
             onVerify={(command) => store.setGoalVerify(chat.id, command)}
           />
         ) : null}

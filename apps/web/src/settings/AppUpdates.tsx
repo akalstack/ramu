@@ -2,7 +2,7 @@ import { useSettingsEvents, useSettingsInvoke } from './SettingsScope'
 import { SettingsRow, SettingsTitle } from '@/components/settings-row'
 import { errorText } from '../lib/errors'
 import { useEffect, useState } from 'react'
-import { Clock, Download, RefreshCw } from 'lucide-react'
+import { CheckCircle2, CircleAlert, Clock, Download, LoaderCircle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/desktop-button'
 import { Switch } from '@/components/ui/switch'
 import {
@@ -12,6 +12,8 @@ import {
   serviceReportsOlderVersion,
   type AppUpdateStatus,
 } from '@ramu/shared/updates'
+import { appUpdateView, updateErrorText } from '@ramu/shared/updateView'
+import { timeAgo } from '../Menu'
 import type { AppPreferences, BackgroundStatus } from '@ramu/shared/types'
 import { ramu } from '../ipc'
 import { allWorkspaceCheckpoints } from '../workspace/workspaceCheckpoint'
@@ -62,56 +64,7 @@ export function AppUpdates({ value, onChange }: { value: AppPreferences; onChang
   const [confirmNow, setConfirmNow] = useState(false)
   return (
     <div className="settings-form [&_p]:m-[0_0_8px] [&_>_p.muted]:m-[12px_0] [&_>_p.muted]:leading-[1.55] flex flex-col gap-0">
-      <SettingsRow className="">
-        <span>
-          <strong>
-            {t('Ramu')} {state?.currentVersion}
-          </strong>
-          <span className="muted text-muted-foreground block block small text-caption">
-            {t('Updates come from published GitHub releases.')}
-          </span>
-        </span>
-        <Button
-          variant="secondary"
-          className="bg-fill hover:bg-fill-hover"
-          disabled={working}
-          onClick={() => void act('updates.check')}
-        >
-          <RefreshCw
-            size={14}
-            className={state?.phase === 'checking' ? 'spin [animation:spin_0.9s_linear_infinite]' : ''}
-          />
-          {t('Check for updates')}
-        </Button>
-      </SettingsRow>
-      <SettingsRow setting="appUpdateChecks" className="settings-toggle">
-        <span>
-          <SettingsTitle>{t('Check app updates')}</SettingsTitle>
-          <span className="muted text-muted-foreground block block small text-caption">
-            {t('The background service checks while Ramu is closed.')}
-          </span>
-        </span>
-        <Switch
-          aria-label={t('Check app updates')}
-          checked={value.appUpdateChecks}
-          onCheckedChange={(appUpdateChecks) => onChange({ ...value, appUpdateChecks })}
-        />
-      </SettingsRow>
-      <SettingsRow setting="updateWait" className="settings-toggle">
-        <span>
-          <SettingsTitle>{t('Wait a day before offering updates')}</SettingsTitle>
-          <span className="muted text-muted-foreground block block small text-caption">
-            {t(
-              'New provider CLI and Ramu releases are offered once they have been out 24 hours, so a bad release is usually pulled before it reaches you. You can still install one now.',
-            )}
-          </span>
-        </span>
-        <Switch
-          aria-label={t('Wait a day before offering updates')}
-          checked={value.updateWait}
-          onCheckedChange={(updateWait) => onChange({ ...value, updateWait })}
-        />
-      </SettingsRow>
+      {state && <UpdateStatusRow state={state} working={working} error={error} onAct={(method) => void act(method)} />}
       {state?.waiting && (
         <SettingsRow>
           <span className="flex min-w-0 items-start gap-2">
@@ -142,6 +95,34 @@ export function AppUpdates({ value, onChange }: { value: AppPreferences; onChang
           </Button>
         </SettingsRow>
       )}
+      <SettingsRow setting="appUpdateChecks" className="settings-toggle">
+        <span>
+          <SettingsTitle>{t('Check app updates')}</SettingsTitle>
+          <span className="muted text-muted-foreground block block small text-caption">
+            {t('The background service checks while Ramu is closed.')}
+          </span>
+        </span>
+        <Switch
+          aria-label={t('Check app updates')}
+          checked={value.appUpdateChecks}
+          onCheckedChange={(appUpdateChecks) => onChange({ ...value, appUpdateChecks })}
+        />
+      </SettingsRow>
+      <SettingsRow setting="updateWait" className="settings-toggle">
+        <span>
+          <SettingsTitle>{t('Wait a day before offering updates')}</SettingsTitle>
+          <span className="muted text-muted-foreground block block small text-caption">
+            {t(
+              'New provider CLI and Ramu releases are offered once they have been out 24 hours, so a bad release is usually pulled before it reaches you. You can still install one now.',
+            )}
+          </span>
+        </span>
+        <Switch
+          aria-label={t('Wait a day before offering updates')}
+          checked={value.updateWait}
+          onCheckedChange={(updateWait) => onChange({ ...value, updateWait })}
+        />
+      </SettingsRow>
       {APP_AUTO_UPDATE && (
         <SettingsRow setting="appAutoUpdate" className="settings-toggle">
           <span>
@@ -158,58 +139,6 @@ export function AppUpdates({ value, onChange }: { value: AppPreferences; onChang
             onCheckedChange={(appAutoUpdate) => onChange({ ...value, appAutoUpdate })}
           />
         </SettingsRow>
-      )}
-      {state?.release && (
-        <SettingsRow className="">
-          <span>
-            <strong>{t('Ramu {0}', { '0': state.release.version })}</strong>
-            <span className="muted text-muted-foreground block block small text-caption">
-              {state.phase === 'downloading'
-                ? t('Downloading… {0} MB', { '0': Math.round(state.downloadedBytes / 1_000_000) })
-                : state.phase === 'ready'
-                  ? t('Downloaded')
-                  : t('Update available')}
-            </span>
-            <a className="small text-caption" href={state.release.notesUrl} target="_blank" rel="noreferrer">
-              {t('Release notes ↗')}
-            </a>
-          </span>
-          {!APP_AUTO_UPDATE ? (
-            <a href={state.release.notesUrl} target="_blank" rel="noreferrer">
-              {t('Download installer ↗')}
-            </a>
-          ) : state.phase === 'ready' ? (
-            state.supported ? (
-              <Button
-                variant="secondary"
-                className="bg-fill hover:bg-fill-hover"
-                disabled={!state.nativeReady || working}
-                onClick={() => void act('updates.restart')}
-              >
-                {state.nativeReady ? t('Restart app') : t('Preparing update…')}
-              </Button>
-            ) : (
-              <a href={state.release.assetUrl} target="_blank" rel="noreferrer">
-                {t('Download installer ↗')}
-              </a>
-            )
-          ) : (
-            <Button
-              variant="secondary"
-              className="bg-fill hover:bg-fill-hover"
-              disabled={working}
-              onClick={() => void act('updates.download')}
-            >
-              <Download size={14} />
-              {t('Download update')}
-            </Button>
-          )}
-        </SettingsRow>
-      )}
-      {!state?.release && !state?.waiting && state?.checkedAt && (
-        <p className="muted text-muted-foreground small text-caption">
-          {t('No newer release is available for this platform.')}
-        </p>
       )}
       {(!APP_AUTO_UPDATE || state?.supported === false) && (
         <p className="muted text-muted-foreground small text-caption">
@@ -245,12 +174,99 @@ export function AppUpdates({ value, onChange }: { value: AppPreferences; onChang
           </Button>
         )}
       </SettingsRow>
-      {(error || state?.error) && (
-        <p className="error text-bad small text-caption" role="alert">
-          {error ?? state?.error}
-        </p>
-      )}
     </div>
+  )
+}
+
+type UpdateMethod = 'updates.check' | 'updates.download' | 'updates.restart'
+
+const TONE_ICON = {
+  current: <CheckCircle2 size={16} className="text-(--ok)" aria-hidden="true" />,
+  busy: (
+    <LoaderCircle
+      size={16}
+      className="text-muted-foreground [animation:spin_0.9s_linear_infinite]"
+      aria-hidden="true"
+    />
+  ),
+  offer: <Download size={16} className="text-primary" aria-hidden="true" />,
+  ready: <RefreshCw size={16} className="text-primary" aria-hidden="true" />,
+  problem: <CircleAlert size={16} className="text-bad" aria-hidden="true" />,
+} as const
+
+/**
+ * Ramu's update in one row that changes in place: up to date, checking, available, downloading, ready to restart, or
+ * what went wrong, each with the one thing to do next. Replaces a version row, a release row and an error line that
+ * each said part of it.
+ */
+function UpdateStatusRow({
+  state,
+  working,
+  error,
+  onAct,
+}: {
+  state: AppUpdateStatus
+  working: boolean
+  /** A failure of the last button press, shown in place of the state's own detail. */
+  error: string | null
+  onAct: (method: UpdateMethod) => void
+}) {
+  const view = appUpdateView(state)
+  const problem = error ? 'problem' : view.tone
+  const detail = error
+    ? t(updateErrorText(error))
+    : t(view.detail, { ...view.values, 1: view.checkedAt ? timeAgo(view.checkedAt) : (view.values[1] ?? '') })
+  const primary = view.action === 'download' || view.action === 'restart'
+  const action = error ? 'retry' : view.action
+  return (
+    <SettingsRow className="" aria-live="polite">
+      <span className="flex min-w-0 items-start gap-2.5">
+        <span className="mt-0.5 flex-none">{TONE_ICON[problem]}</span>
+        <span className="min-w-0">
+          <strong className="block">{t(view.title, view.values)}</strong>
+          <span
+            className={`block text-caption ${problem === 'problem' ? 'text-bad' : 'text-muted-foreground'}`}
+            role={problem === 'problem' ? 'alert' : undefined}
+          >
+            {detail}
+          </span>
+          {state.release && (
+            <a className="text-caption" href={state.release.notesUrl} target="_blank" rel="noreferrer">
+              {t('Release notes ↗')}
+            </a>
+          )}
+        </span>
+      </span>
+      {action === 'installer' && state.release ? (
+        <a href={state.release.assetUrl} target="_blank" rel="noreferrer">
+          {t('Download installer ↗')}
+        </a>
+      ) : action ? (
+        <Button
+          variant={primary && !error ? 'default' : 'secondary'}
+          className={primary && !error ? undefined : 'bg-fill hover:bg-fill-hover'}
+          disabled={working}
+          onClick={() =>
+            onAct(
+              action === 'restart'
+                ? 'updates.restart'
+                : action === 'download' || (action === 'retry' && state.release)
+                  ? 'updates.download'
+                  : 'updates.check',
+            )
+          }
+        >
+          {action === 'download' ? <Download size={14} /> : <RefreshCw size={14} />}
+          {action === 'restart'
+            ? t('Restart to update')
+            : action === 'download'
+              ? t('Download update')
+              : action === 'retry'
+                ? t('Try again')
+                : t('Check for updates')}
+        </Button>
+      ) : null}
+    </SettingsRow>
   )
 }
 

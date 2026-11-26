@@ -11,7 +11,7 @@ import { isOver, peakFor } from '@ramu/shared/providers/routing'
 import { STALL_REASON } from '@ramu/shared/chat/goalHistory'
 import { goalContinues, isLimitHold } from '@ramu/shared/chat/goalHold'
 import { goalContinuation } from './goals'
-import { changedSince, evidenceProblem, fingerprintOf, turnActivity } from './goalEvidence'
+import { changedSince, evidenceProblem, fingerprintOf, turnActivity, unlistedChanges } from './goalEvidence'
 import type { GoalProbes, WorkspaceSnapshot } from './goalProbes'
 import { redactSecrets } from '../memory/secrets'
 import { WRITING_STATES } from './constants'
@@ -231,11 +231,13 @@ export class GoalManager {
     const session = this.host.get(id)
     const snapshot = await this.host.goalProbes().snapshot(session.cwd)
     const baseline = snapshot ? this.baseline(goal.id) : null
-    const problem = evidenceProblem(
-      evidence,
+    const problem = evidenceProblem(evidence)
+    if (problem) throw new Error(problem)
+    const unlisted = unlistedChanges(
+      evidence!,
       snapshot && baseline ? { snapshot, changed: changedSince(baseline, snapshot), cwd: session.cwd } : null,
     )
-    if (problem) throw new Error(problem)
+    if (unlisted.length) evidence = { ...evidence!, unlisted }
     const current = this.getGoal(id)
     if (
       !current ||

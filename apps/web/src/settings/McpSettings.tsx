@@ -4,7 +4,7 @@ import type { AgentProvider, Project } from '@ramu/shared/types'
 import type { SharedMcpConnection, SharedMcpInspection, SharedMcpSelection } from '@ramu/shared/mcp'
 import { namesPrivateHost, serverNameFromUrl } from '@ramu/shared/mcp'
 import { Globe, KeyRound, Plus, RefreshCw, SquareTerminal } from 'lucide-react'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { ChoiceChip, ChoiceChips } from '@/components/choice-group'
 import { ExpandRow } from '@/components/expand-row'
 import { AGENT_PROVIDERS, providerName, providerAccountRows } from '@ramu/shared/providers/providers'
 import { ProviderIcon } from '../models/ProviderIcon'
@@ -248,24 +248,22 @@ export function ConnectionEditor({
         {/* A fieldset is as wide as its widest content by default, so a long path would push the dialog sideways. */}
         <fieldset disabled={busy} className="m-0 flex min-w-0 flex-col gap-4 border-0 p-0">
           {!initial && (
-            <ToggleGroup
+            <ChoiceChips
               size="sm"
-              variant="outline"
-              spacing={2}
               className="grid w-full grid-cols-2 gap-1.5"
               aria-label={t('Type')}
               value={[kind]}
               onValueChange={(values) => values[0] && setKind(values[0] as 'http' | 'stdio')}
             >
-              <ToggleGroupItem value="http" className={`h-8 justify-center gap-1.5 px-2.5 ${SEGMENT}`}>
+              <ChoiceChip value="http" className={`h-8 justify-center gap-1.5 px-2.5 ${SEGMENT}`}>
                 <Globe size={13} aria-hidden />
                 {t('Remote server')}
-              </ToggleGroupItem>
-              <ToggleGroupItem value="stdio" className={`h-8 justify-center gap-1.5 px-2.5 ${SEGMENT}`}>
+              </ChoiceChip>
+              <ChoiceChip value="stdio" className={`h-8 justify-center gap-1.5 px-2.5 ${SEGMENT}`}>
                 <SquareTerminal size={13} aria-hidden />
                 {t('Local command')}
-              </ToggleGroupItem>
-            </ToggleGroup>
+              </ChoiceChip>
+            </ChoiceChips>
           )}
           {kind === 'http' ? (
             <Field>
@@ -359,10 +357,8 @@ export function ConnectionEditor({
           </fieldset>
           <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
             <legend className={LEGEND}>{t('Projects')}</legend>
-            <ToggleGroup
+            <ChoiceChips
               size="sm"
-              variant="outline"
-              spacing={2}
               className="gap-1.5"
               aria-label={t('Projects')}
               value={[scope.hostWide ? 'all' : 'chosen']}
@@ -370,13 +366,13 @@ export function ConnectionEditor({
                 values[0] && setScope((current) => ({ ...current, hostWide: values[0] === 'all' }))
               }
             >
-              <ToggleGroupItem value="all" className={`px-2.5 ${SEGMENT}`}>
+              <ChoiceChip value="all" className={`px-2.5 ${SEGMENT}`}>
                 {t('All projects')}
-              </ToggleGroupItem>
-              <ToggleGroupItem value="chosen" className={`px-2.5 ${SEGMENT}`} disabled={!projects.length}>
+              </ChoiceChip>
+              <ChoiceChip value="chosen" className={`px-2.5 ${SEGMENT}`} disabled={!projects.length}>
                 {t('Chosen projects')}
-              </ToggleGroupItem>
-            </ToggleGroup>
+              </ChoiceChip>
+            </ChoiceChips>
             {!scope.hostWide && (
               <div className="flex flex-wrap gap-x-4 gap-y-2">
                 {projects.map((project) => (

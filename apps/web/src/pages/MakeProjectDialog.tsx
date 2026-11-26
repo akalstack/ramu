@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { ArtifactInfo } from '@ramu/shared/artifacts'
 import { PROJECT_NAME } from '@ramu/shared/stacks'
 import { isProjectFolder, titleFolderName } from '@ramu/shared/workspace/hostFolders'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { ChoiceChip, ChoiceChips } from '@/components/choice-group'
 import { Checkbox } from '@/components/desktop-checkbox'
 import { Input } from '../components/desktop-input'
 import { Dialog } from '../Menu'
@@ -79,22 +79,20 @@ export function MakeProjectDialog({
             )
           : t('A project can have a backend, more files, sign-in and its own domain.')}
       </p>
-      <ToggleGroup
+      <ChoiceChips
         size="sm"
-        variant="outline"
-        spacing={2}
         className="my-3"
         aria-label={t('Where it goes')}
         value={[mode]}
         onValueChange={(values) => values[0] && setMode(values[0] as 'project' | 'new')}
       >
-        <ToggleGroupItem value="project" className="px-2.5" disabled={!projects.length}>
+        <ChoiceChip value="project" className="px-2.5" disabled={!projects.length}>
           {t('Into a project')}
-        </ToggleGroupItem>
-        <ToggleGroupItem value="new" className="px-2.5">
+        </ChoiceChip>
+        <ChoiceChip value="new" className="px-2.5">
           {t('New project')}
-        </ToggleGroupItem>
-      </ToggleGroup>
+        </ChoiceChip>
+      </ChoiceChips>
       <div className="flex flex-col gap-2">
         {mode === 'project' && (
           <Combobox

@@ -8,6 +8,10 @@ import { terminalHtml } from '../assets/terminal'
 import type { TerminalViewProps } from './TerminalView'
 import { terminalLinkMessage } from '../runtime/terminalLinkMessage'
 import { terminalCopyMessage } from '../runtime/terminalCopy'
+import { terminalSelectionMessage, type TerminalSelectionState } from '../runtime/terminalSelection'
+import { showError, showToast } from '../runtime/toast'
+import { TerminalSelection } from './TerminalSelection'
+import * as Clipboard from 'expo-clipboard'
 import { useSay } from '../i18n'
 
 export default function TerminalView({
@@ -40,6 +44,13 @@ export default function TerminalView({
   const [gesture, setGesture] = useState<GestureDisplay | null>(null)
   const gestureActive = useRef(false)
   const [size, setSize] = useState({ width: 0, height: 0 })
+  const [selection, setSelection] = useState<TerminalSelectionState | null>(null)
+  const send = (value: object) => {
+    const message = JSON.stringify(value)
+    view.current?.injectJavaScript(
+      `window.dispatchEvent(new MessageEvent('message',{data:${JSON.stringify(message)}}));true;`,
+    )
+  }
   useEffect(() => {
     if (!ready) return
     const next = { session, output, cursor }
@@ -58,6 +69,8 @@ export default function TerminalView({
     if (!enabled || !appActive) {
       gestureActive.current = false
       setGesture(null)
+      setSelection(null)
+      send({ kind: 'selection-clear' })
     }
   }, [ready, enabled, appActive])
   useEffect(() => {
@@ -105,7 +118,7 @@ export default function TerminalView({
       <WebView<object>
         accessibilityLabel={say('Host terminal')}
         accessibilityHint={say(
-          'Hold, then drag to move the cursor. Drag farther to repeat faster. Pinch to change the text size.',
+          'Hold, then drag to move the cursor, or lift to select text. Drag farther to repeat faster. Pinch to change the text size.',
         )}
         ref={view}
         source={{ html: terminalHtml }}
@@ -125,6 +138,12 @@ export default function TerminalView({
               gestureActive.current = !!state
               setGesture(state)
             }
+            const selected = terminalSelectionMessage(value)
+            if (selected !== undefined) {
+              // A tick when a long press picks a word, as selecting text in chat does.
+              if (selected && !selection) tap()
+              setSelection(enabled && appActive ? selected : null)
+            }
             if (value.kind === 'ready') setReady(true)
             if (value.kind === 'font' && Number.isInteger(value.size)) onFontSize?.(value.size)
             if (enabled && appActive && value.kind === 'input' && typeof value.data === 'string') onInput(value.data)
@@ -138,6 +157,21 @@ export default function TerminalView({
         }}
       />
       <TerminalGestureOverlay state={gesture} {...size} />
+      <TerminalSelection
+        state={gesture ? null : selection}
+        {...size}
+        onGrab={(handle) => send({ kind: 'selection-grab', handle })}
+        onMove={(handle, x, y) => send({ kind: 'selection-move', handle, x, y })}
+        onCopy={(text) => {
+          send({ kind: 'selection-clear' })
+          Clipboard.setStringAsync(text).then(
+            () => showToast(say('Copied')),
+            (error: unknown) => showError(error instanceof Error ? error.message : String(error)),
+          )
+        }}
+        onSelectAll={() => send({ kind: 'selection-all' })}
+        onSelectBlock={() => send({ kind: 'selection-block' })}
+      />
     </View>
   )
 }

@@ -4,7 +4,7 @@ import { networkName, VIRTUAL_INTERFACE } from '@ramu/shared/networkLabel'
 import { SettingsAdvanced, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { SegmentedControl, SegmentedItem } from '@/components/choice-group'
 import { Dialog as ConfirmDialog, Dropdown } from '../../Menu'
 import { ramu } from '../../ipc'
 import { errorText } from '../../lib/errors'
@@ -192,10 +192,8 @@ export function ReachableFrom({
       title={t('Reachable from')}
       help={help}
       actions={
-        <ToggleGroup
+        <SegmentedControl
           size="sm"
-          variant="outline"
-          spacing={0}
           aria-label={t('Reachable from')}
           value={[reach]}
           disabled={managed || busy}
@@ -205,16 +203,16 @@ export function ReachableFrom({
           }}
         >
           {REACHES.map((entry) => (
-            <ToggleGroupItem
+            <SegmentedItem
               key={entry}
               value={entry}
               className="px-2.5"
               disabled={entry === 'anywhere' && !status.publicAddress}
             >
               {t(REACH_LABEL[entry])}
-            </ToggleGroupItem>
+            </SegmentedItem>
           ))}
-        </ToggleGroup>
+        </SegmentedControl>
       }
     >
       {status.enabled && (

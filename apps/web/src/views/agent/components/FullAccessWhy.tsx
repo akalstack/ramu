@@ -23,10 +23,10 @@ export function FullAccessWhy({ reason }: { reason?: string }) {
           {reason && <p className="m-0 text-soft">{reason}</p>}
           <p className="m-0">
             {translate(
-              'Full access skips most approvals, but a short list of actions always asks: ones that can destroy work for good, change the computer itself, act in your name or deploy to production.',
+              'Always asks: deleting work for good, changing the computer, acting as you, deploying to production.',
             )}
           </p>
-          <p className="m-0">{translate('Allow once covers only this request; the next one asks again.')}</p>
+          <p className="m-0">{translate('Allow once approves just this one.')}</p>
         </div>
       )}
     </div>

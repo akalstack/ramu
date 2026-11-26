@@ -27,7 +27,7 @@ import { RECORDED_ACCOUNT_PROVIDERS } from './settings'
 import { classifyLimit } from '../providers/limitClassifier'
 import { ProviderLimitError } from './usageLimit'
 import type { CatalogService } from './catalogService'
-import type { FallbackRouter } from './fallbackRouter'
+import type { FallbackRouter, FallbackRouterHost } from './fallbackRouter'
 import type { SessionStore } from './sessionStore'
 import type { AgentService } from '../agent'
 
@@ -37,6 +37,7 @@ export interface BackgroundAnalysisHost
     Pick<BackgroundAnalysis, 'analyze'>,
     Pick<CatalogService, 'validateSettings'>,
     Pick<FallbackRouter, 'orderOf' | 'route' | 'routing' | 'withStep' | 'otherAccount' | 'freshAccountUsage'>,
+    Pick<FallbackRouterHost, 'apiKeyLogins'>,
     Pick<SessionStore, 'events' | 'get' | 'list' | 'titleContext'> {
   catalog(refresh?: boolean): Promise<ProviderCatalog[]>
   providerQuery: QueryFn
@@ -330,6 +331,8 @@ export class BackgroundAnalysis {
                 catalogs,
                 switchAt: routing ? routing.prefs.fallback.switchAt : DEFAULT_FALLBACK_PREFERENCES.switchAt,
                 attempted: tried,
+                apiKeyLogins: this.host.apiKeyLogins(),
+                from: chosen,
               })
             : null
           if (step) {

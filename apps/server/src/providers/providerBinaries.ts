@@ -1,5 +1,15 @@
-import { accessSync, constants, existsSync, mkdirSync, statSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { execFile } from 'node:child_process'
+import {
+  accessSync,
+  constants,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+} from 'node:fs'
+import { homedir, userInfo } from 'node:os'
 import { delimiter, dirname, isAbsolute, join } from 'node:path'
 import type { AgentProvider } from '@ramu/shared/types'
 import type { ProviderConfiguration } from '@ramu/shared/providers/providers'
@@ -118,13 +128,8 @@ const usualToolDirs = () =>
   process.platform === 'win32'
     ? []
     : [
-        '/opt/homebrew/bin',
-        '/usr/local/bin',
-        join(homedir(), '.local/bin'),
-        join(homedir(), 'bin'),
-        '/home/linuxbrew/.linuxbrew/bin',
-        '/snap/bin',
-        // Node version managers keep npm and node here; their per-shell folders never reach an app.
+        // Version managers first: they put their folder ahead of Homebrew's in a shell, so a Node from one is the
+        // Node the person's terminal runs. Their per-shell folders never reach an app.
         ...[
           process.env.FNM_DIR,
           join(homedir(), '.local/share/fnm'),
@@ -133,10 +138,61 @@ const usualToolDirs = () =>
         ]
           .filter((dir): dir is string => !!dir)
           .map((dir) => join(dir, 'aliases/default/bin')),
+        ...nvmDefaultBin(),
         join(homedir(), '.volta/bin'),
         join(homedir(), '.local/share/mise/shims'),
         join(homedir(), '.asdf/shims'),
+        join(homedir(), '.nodenv/shims'),
+        join(homedir(), '.nodebrew/current/bin'),
+        ...(process.env.N_PREFIX ? [join(process.env.N_PREFIX, 'bin')] : []),
+        // `pnpm env use --global` keeps Node in pnpm's own home.
+        ...[process.env.PNPM_HOME, join(homedir(), 'Library/pnpm'), join(homedir(), '.local/share/pnpm')].filter(
+          (dir): dir is string => !!dir,
+        ),
+        '/opt/homebrew/bin',
+        '/usr/local/bin',
+        join(homedir(), '.local/bin'),
+        join(homedir(), 'bin'),
+        '/home/linuxbrew/.linuxbrew/bin',
+        '/snap/bin',
       ]
+
+const versionParts = (version: string) => version.slice(1).split('.').map(Number)
+const newerFirst = (a: string, b: string) => {
+  const [x, y] = [versionParts(a), versionParts(b)]
+  return y[0]! - x[0]! || y[1]! - x[1]! || y[2]! - x[2]!
+}
+/**
+ * nvm has no fixed folder for its default Node: each version has its own, and `alias/default` names one as `22`,
+ * `v22.11.0`, `node` or `lts/*` (which points at further alias files). An alias that names no installed version falls
+ * back to the newest installed one, as a shell with that version uninstalled would have nothing better.
+ */
+function nvmDefaultBin(): string[] {
+  const root = process.env.NVM_DIR || join(homedir(), '.nvm')
+  let versions: string[]
+  try {
+    versions = readdirSync(join(root, 'versions/node'))
+      .filter((version) => /^v\d+\.\d+\.\d+$/.test(version))
+      .sort(newerFirst)
+  } catch {
+    return []
+  }
+  if (!versions.length) return []
+  const readAlias = (name: string) => {
+    try {
+      return readFileSync(join(root, 'alias', name), 'utf8').trim()
+    } catch {
+      return null
+    }
+  }
+  let alias = readAlias('default') ?? 'node'
+  for (let hops = 0; hops < 3 && alias.startsWith('lts/'); hops++) alias = readAlias(alias) ?? alias
+  const wanted = alias.replace(/^v/, '')
+  const match = /^\d+(\.\d+){0,2}$/.test(wanted)
+    ? versions.find((version) => version === `v${wanted}` || version.startsWith(`v${wanted}.`))
+    : undefined
+  return [join(root, 'versions/node', match ?? versions[0]!, 'bin')]
+}
 
 export function findExecutable(command: string): string | null {
   const candidates = isAbsolute(command)
@@ -157,18 +213,61 @@ export function findExecutable(command: string): string | null {
     }) ?? null
   )
 }
+const PATH_MARKER = '__RAMU_PATH__'
+/** The person's shell. A service started by the system may have no `SHELL`, so their account's shell stands in. */
+const userShell = () => {
+  if (process.env.SHELL) return process.env.SHELL
+  try {
+    if (userInfo().shell) return userInfo().shell!
+  } catch {}
+  return process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash'
+}
 /**
- * Makes `node` reachable for the tools Ramu starts. A tool installed with npm (and npm itself) begins with
- * `#!/usr/bin/env node`; a service started by the system, not from a shell, has no version manager's folder on its
- * PATH, so those tools failed with "env: node: No such file or directory" even though `findExecutable` had found them.
- * The folder goes last, so a `node` already on PATH keeps winning. Safe to call again once Node is installed.
+ * The PATH the person's own terminal has, for tools in folders Ramu does not know: their shell's startup files build
+ * it (`fnm env`, sourcing nvm, an `export PATH=…` line in a profile or rc file), so only a login, interactive shell
+ * reads them all. It can take seconds. Each folder is resolved to where it really is: fnm's lasts only as long as that
+ * one shell, and links to the install that outlives it.
  */
-export function ensureNodeOnPath(): void {
+export function loginShellPath(shell = userShell(), timeoutMs = 5000): Promise<string[]> {
+  if (process.platform === 'win32') return Promise.resolve([])
+  return new Promise((resolve) =>
+    execFile(
+      shell,
+      // Startup files may print a greeting, so the answer follows a marker on its own line.
+      ['-ilc', `printf '\\n${PATH_MARKER}%s\\n' "$PATH"`],
+      // An interactive shell ignores SIGTERM, so a startup file that hangs is only ended by SIGKILL.
+      { env: userEnvironment(), timeout: timeoutMs, killSignal: 'SIGKILL', encoding: 'utf8' },
+      (_error, stdout) => {
+        const line = String(stdout)
+          .split('\n')
+          .find((entry) => entry.startsWith(PATH_MARKER))
+        const dirs = (line?.slice(PATH_MARKER.length).trim() ?? '').split(delimiter).flatMap((dir) => {
+          if (!isAbsolute(dir)) return []
+          try {
+            return [realpathSync(dir)]
+          } catch {
+            return []
+          }
+        })
+        resolve([...new Set(dirs)])
+      },
+    ),
+  )
+}
+
+/**
+ * Makes the person's tools reachable for everything Ramu starts. A service started by the system, not from a shell, gets
+ * the bare system PATH: npm, npx, `gh` and provider CLIs looked missing, and a tool that begins with
+ * `#!/usr/bin/env node` (npm itself, most CLIs installed with it) failed with "env: node: No such file or directory".
+ * The login shell's folders go first, so a command finds the same tool it does in their terminal; a Node from a known
+ * folder goes last, for when the shell gives no answer. Asks the shell each time, so a tool installed since is found.
+ */
+export async function ensureToolsOnPath(readShellPath: () => Promise<string[]> = loginShellPath): Promise<void> {
   if (process.platform === 'win32') return
-  const dirs = (process.env.PATH ?? '').split(delimiter).filter(Boolean)
+  const shellDirs = await readShellPath()
+  const current = (process.env.PATH ?? '').split(delimiter).filter(Boolean)
   const node = findExecutable('node')
-  if (!node || dirs.includes(dirname(node))) return
-  process.env.PATH = [...dirs, dirname(node)].join(delimiter)
+  process.env.PATH = [...new Set([...shellDirs, ...current, ...(node ? [dirname(node)] : [])])].join(delimiter)
 }
 
 export function providerBinary(provider: AgentProvider, overrides = configuration): string {

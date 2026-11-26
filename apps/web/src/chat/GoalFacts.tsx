@@ -15,6 +15,7 @@ export function GoalFacts({ goal }: { goal: ChatGoal }) {
   const { verify, check, evidence } = goalFacts(goal)
   if (!verify && !check && !evidence) return null
   const files = evidence?.changedFiles ?? []
+  const unlisted = evidence?.unlisted ?? []
   return (
     <div className="goal-facts flex flex-col gap-1.5 text-caption text-soft">
       {verify && (
@@ -57,6 +58,16 @@ export function GoalFacts({ goal }: { goal: ChatGoal }) {
           <code className={code}>{files.slice(0, FILES_SHOWN).join(', ')}</code>
           {files.length > FILES_SHOWN && (
             <span className="text-muted-foreground">{t('+{0} more', { '0': files.length - FILES_SHOWN })}</span>
+          )}
+        </div>
+      )}
+      {unlisted.length > 0 && (
+        // Changes in the same checkout the agent did not name, often another thread's: said, never a reason to refuse.
+        <div className="goal-evidence-unlisted flex flex-col gap-0.5">
+          <span className="text-muted-foreground">{t('Also changed in this checkout, not listed by the agent')}</span>
+          <code className={code}>{unlisted.slice(0, FILES_SHOWN).join(', ')}</code>
+          {unlisted.length > FILES_SHOWN && (
+            <span className="text-muted-foreground">{t('+{0} more', { '0': unlisted.length - FILES_SHOWN })}</span>
           )}
         </div>
       )}

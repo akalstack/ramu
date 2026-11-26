@@ -19,7 +19,7 @@ export function ProviderWaitIcon({ retryAt }: { retryAt: number }) {
       aria-label={label}
       role="img"
     >
-      <Clock3 size={12} className="text-muted-foreground" aria-hidden="true" />
+      <Clock3 size={12} className="text-warn" aria-hidden="true" />
     </span>
   )
 }

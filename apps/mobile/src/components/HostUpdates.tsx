@@ -4,6 +4,7 @@ import type { AgentProvider, HostUpdateResult } from '@ramu/shared/types'
 import { hostUpdateSummary, hoursUntil, type HostUpdateSummary, type WaitingUpdate } from '@ramu/shared/updates'
 import { providerName } from '@ramu/shared/providers/providers'
 import { useStore } from '../runtime/store'
+import { showError } from '../runtime/toast'
 import { useSay } from '../i18n'
 import { font, radius, space, useTheme } from '../theme'
 import { T } from './ui'
@@ -73,13 +74,17 @@ export function HostUpdates({ hostId, name, running }: { hostId: string; name: s
     setBusy(only ?? 'providers')
     const failed: string[] = []
     for (const entry of summary.providers.filter((item) => !only || item.provider === only))
-      await store
-        .invoke(hostId, 'providers.update', entry.provider)
-        .catch((error) =>
-          failed.push(`${providerName(entry.provider)}: ${error instanceof Error ? error.message : String(error)}`),
-        )
+      await store.invoke(hostId, 'providers.update', entry.provider).catch((error) =>
+        failed.push(
+          say('{0} could not be updated: {1}', {
+            0: providerName(entry.provider),
+            1: (error instanceof Error ? error.message : String(error)).replace(/^CLI update failed:?\s*/, ''),
+          }),
+        ),
+      )
     setBusy(null)
-    if (failed.length) Alert.alert(name, failed.join('\n'))
+    // Where the other results of an action show: an error toast near the bottom, not a dialog to dismiss.
+    if (failed.length) showError(failed.join('\n'))
     load()
   }
   const line = [

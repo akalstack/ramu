@@ -6,6 +6,7 @@ import type { Computer, ComputerStatus, Computers, DeviceOs } from '@ramu/shared
 import type { PushArgs } from '@ramu/shared/pushChannels'
 import type { ComputerUpdate, RemoteServers, SavedServer } from './remoteServers'
 import type { SshComputers } from './sshComputers'
+import { routeEncrypted, routeSpeed, upgradeRoutes } from '@ramu/shared/networkLabel'
 
 export const LOCAL = 'local'
 const COUNT_DELAY_MS = 800
@@ -78,6 +79,7 @@ export class ComputerRegistry {
 
   stop() {
     this.stopped = true
+    clearInterval(this.upgradeTimer)
     for (const timer of this.timers.values()) clearTimeout(timer)
     for (const count of this.counts.values()) count.abort()
     this.counts.clear()
@@ -175,6 +177,8 @@ export class ComputerRegistry {
             const os = this.deps.thisDevice?.()
             if (os) void this.deps.invoke(current, 'device.describe', [os]).catch(() => {})
             this.routeWork('learn', id, 3_600_000, (host) => this.learnRoutes(host))
+            this.routeWork('upgrade', id, 60_000, (host) => this.upgradeRoute(host))
+            this.upgradeTimer ??= setInterval(() => this.upgradeConnected(), 60_000)
             this.countSoon(id)
             void this.renewIfDue(id)
           } else if (!payload.connected) {
@@ -320,6 +324,8 @@ export class ComputerRegistry {
           local: false,
           url: server.url,
           routes: this.deps.servers.routesOf(server.id),
+          ...(server.routeMode === 'manual' ? { routeMode: 'manual' as const } : {}),
+          ...(server.plainLan ? { plainLan: true } : {}),
           ...(server.hostId ? { hostId: server.hostId } : {}),
           status: live?.status ?? 'offline',
           enabled: server.enabled,
@@ -535,6 +541,8 @@ export class ComputerRegistry {
   async reviewAddress(
     id: string,
     address: string,
+    /** `manual`: the person chose it, so it is kept; `allowPlain`: they allowed this host's unencrypted local network. */
+    choice: { manual?: boolean; allowPlain?: boolean } = {},
   ): Promise<'moved' | 'unchanged' | 'mismatch' | 'unsupported' | 'unreachable' | 'insecure'> {
     if (id === LOCAL) throw new Error('This host has no address to review')
     const saved = this.deps.servers.get(id)
@@ -543,25 +551,34 @@ export class ComputerRegistry {
     if (!saved || !endpoint || saved.ssh) throw new Error('That host is no longer saved')
     const { parseRemoteUrl } = await import('@ramu/contracts')
     const url = parseRemoteUrl(address)
-    if (url === saved.url) return 'unchanged'
+    if (url === saved.url) {
+      if (choice.manual) this.deps.servers.setRouting(id, { routeMode: 'manual' })
+      return 'unchanged'
+    }
     if (!saved.hostId || !deviceId) return 'unsupported'
-    // A credential issued over HTTPS never moves to plain HTTP on its own: the person pairs that address explicitly.
-    if (saved.url.startsWith('https:') && url.startsWith('http:')) return 'insecure'
+    // Leaving an encrypted route for one others on the network could read needs the person's consent for this host; a
+    // VPN encrypts on its own.
+    if (routeEncrypted(saved.url) && !routeEncrypted(url) && !(saved.plainLan || choice.allowPlain)) return 'insecure'
     const result = await this.verify(url, deviceId, endpoint.token, saved.hostId)
     // A host that does not have this device paired cannot prove it is the saved one.
     if (result.state !== 'verified') return result.state === 'forgotten' ? 'mismatch' : result.state
     this.deps.servers.setRoutes(id, result.routes)
     this.deps.servers.setUrl(id, url)
+    if (choice.manual || choice.allowPlain)
+      this.deps.servers.setRouting(id, {
+        ...(choice.manual ? { routeMode: 'manual' as const } : {}),
+        ...(choice.allowPlain ? { plainLan: true } : {}),
+      })
     this.connect(id)
     this.deps.changed()
     return 'moved'
   }
 
-  private async verify(url: string, deviceId: string, token: string, hostId: string) {
+  private async verify(url: string, deviceId: string, token: string, hostId: string, timeout = 8000) {
     const { verifyHost } = await import('@ramu/shared/hostProof')
     const { randomBytes } = await import('node:crypto')
     return verifyHost({
-      fetch: (target, init) => fetch(target, { ...init, redirect: 'error', signal: AbortSignal.timeout(8000) }),
+      fetch: (target, init) => fetch(target, { ...init, redirect: 'error', signal: AbortSignal.timeout(timeout) }),
       baseUrl: url,
       deviceId,
       token,
@@ -581,9 +598,40 @@ export class ComputerRegistry {
     this.deps.servers.setRoutes(id, result.routes)
   }
 
-  /** When the saved address stops answering, try the learned ones; each must prove it is this host before it is used. */
+  /**
+   * Moves a connected host to a faster route when one proves it is the same host: the local network over a VPN over
+   * the internet. Not while the person keeps a route they chose; off an encrypted route only to another encrypted one,
+   * or to the local network once they allowed it for this host. Short checks, so an absent LAN costs little.
+   */
+  private async upgradeRoute(id: string) {
+    const saved = this.deps.servers.get(id)
+    const endpoint = this.deps.servers.endpoint(id)
+    const deviceId = this.deps.servers.deviceIdOf(id)
+    if (!saved?.hostId || !endpoint || !deviceId || saved.ssh || saved.routeMode === 'manual') return
+    if (this.live.get(id)?.status !== 'connected') return
+    for (const route of upgradeRoutes(saved.url, this.deps.servers.routesOf(id), saved.plainLan)) {
+      if (this.stopped || this.deps.servers.get(id)?.url !== saved.url) return
+      const result = await this.verify(route, deviceId, endpoint.token, saved.hostId, 2500).catch(() => null)
+      if (result?.state !== 'verified') continue
+      if (this.deps.servers.get(id)?.url !== saved.url || this.deps.servers.get(id)?.routeMode === 'manual') return
+      this.deps.servers.setRoutes(id, result.routes)
+      this.deps.servers.setUrl(id, route)
+      this.connect(id)
+      this.deps.changed()
+      return
+    }
+  }
+
+  private upgradeTimer: ReturnType<typeof setInterval> | undefined
+  private upgradeConnected() {
+    for (const [id, live] of this.live)
+      if (live.status === 'connected') this.routeWork('upgrade', id, 60_000, (host) => this.upgradeRoute(host))
+  }
+
+  /** When the saved address stops answering, try the learned ones, fastest first; each must prove it is this host. */
   private async tryRoutes(id: string) {
-    for (const route of this.deps.servers.routesOf(id)) {
+    const routes = [...this.deps.servers.routesOf(id)].sort((a, b) => routeSpeed(a) - routeSpeed(b))
+    for (const route of routes) {
       if (this.stopped || !this.deps.servers.get(id)) return
       if ((await this.reviewAddress(id, route).catch(() => 'unreachable')) === 'moved') return
     }
@@ -591,7 +639,7 @@ export class ComputerRegistry {
 
   private routeTimes = new Map<string, number>()
   /** Runs `work` for a host at most once per `every` ms. */
-  private routeWork(kind: 'learn' | 'try', id: string, every: number, work: (id: string) => Promise<void>) {
+  private routeWork(kind: 'learn' | 'try' | 'upgrade', id: string, every: number, work: (id: string) => Promise<void>) {
     const now = Date.now()
     const key = `${kind}:${id}`
     if (now - (this.routeTimes.get(key) ?? -Infinity) < every) return
@@ -624,6 +672,11 @@ export class ComputerRegistry {
     const before = this.deps.servers.get(id)
     const saved = this.deps.servers.update(id, changes)
     if (saved.enabled !== before?.enabled || saved.retryMode !== before?.retryMode) this.connect(id)
+    // Handing the route back looks for a faster one now rather than within the minute.
+    if (changes.routeMode === 'auto' && before?.routeMode === 'manual') {
+      this.routeTimes.delete(`upgrade:${id}`)
+      this.routeWork('upgrade', id, 60_000, (host) => this.upgradeRoute(host))
+    }
     this.deps.changed()
   }
 }

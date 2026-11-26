@@ -76,7 +76,8 @@ function surface() {
     frame = null
   const events = new Map(),
     windowEvents = new Map(),
-    messages = []
+    messages = [],
+    selected = []
   const document = {
     body: { style: { userSelect: 'text' } },
     hidden: false,
@@ -106,13 +107,23 @@ function surface() {
       this.blurred++
     },
   }
-  context.installTerminalGesture(terminal, (value) => messages.push(value), TerminalGesture, arrowSequence)
+  context.installTerminalGesture(
+    terminal,
+    (value) => messages.push(value),
+    TerminalGesture,
+    arrowSequence,
+    undefined,
+    undefined,
+    (x, y) => selected.push([x, y]),
+  )
   return {
     terminal,
     messages,
+    selected,
     event(name, x = 100, id = 1) {
       let prevented = false
       events.get(name)?.({
+        type: name,
         pointerId: id,
         pointerType: 'touch',
         button: 0,
@@ -193,6 +204,33 @@ test('touch scrolling is prevented only after the hold has activated', () => {
   assert.equal(view.event('touchmove'), true)
   view.event('pointerup')
   assert.equal(view.event('touchmove'), false)
+})
+
+test('a hold lifted without dragging selects where it was, as a long press in chat does', () => {
+  const view = surface()
+  view.event('pointerdown', 140)
+  view.advance(HOLD_MS)
+  view.event('pointerup', 140)
+  assert.deepEqual(view.selected, [[140, 100]])
+  // A tap is too short, and a hold that moved the cursor already did what it was for.
+  view.event('pointerdown', 140)
+  view.advance(HOLD_MS + 50)
+  view.event('pointerup', 140)
+  view.event('pointerdown', 140)
+  view.advance(HOLD_MS * 2 + 100)
+  view.event('pointermove', 212)
+  view.advance(HOLD_MS * 2 + 200)
+  view.event('pointerup', 212)
+  assert.equal(view.selected.length, 1)
+  assert.equal(view.messages.filter((message) => message.kind === 'input').length > 0, true)
+})
+
+test('a hold cancelled by the system selects nothing', () => {
+  const view = surface()
+  view.event('pointerdown', 140)
+  view.advance(HOLD_MS)
+  view.event('pointercancel', 140)
+  assert.deepEqual(view.selected, [])
 })
 
 test('cursor pad sits fixed on the right edge, moving off the finger only when it holds over the pad', () => {

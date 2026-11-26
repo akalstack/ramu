@@ -60,3 +60,40 @@ export function routeName(url: string | null, ssh?: string): 'LAN' | 'VPN' | 'SS
   if (PRIVATE_ADDRESS.test(host) || host.endsWith('.local') || /^fe80:/i.test(host)) return 'LAN'
   return 'Internet'
 }
+
+/**
+ * How directly an address reaches its host, fastest first: the local network, then a VPN, then anything over the
+ * internet (Ramu Link, a tunnel, a public address). A device prefers the lowest that answers.
+ */
+export function routeSpeed(url: string): 0 | 1 | 2 {
+  const route = routeName(url)
+  return route === 'LAN' ? 0 : route === 'VPN' ? 1 : 2
+}
+
+/** The routes faster than `current`, fastest first; the order among equals is kept. */
+export function fasterRoutes(current: string, routes: string[]): string[] {
+  const speed = routeSpeed(current)
+  return routes
+    .filter((route) => route !== current && routeSpeed(route) < speed)
+    .map((route, index) => ({ route, index }))
+    .sort((a, b) => routeSpeed(a.route) - routeSpeed(b.route) || a.index - b.index)
+    .map(({ route }) => route)
+}
+
+/**
+ * Whether what travels over an address is encrypted on the way: https, or a VPN, which encrypts everything it carries.
+ * A plain-http address on the local network is the one case where others on that network could read it.
+ */
+export function routeEncrypted(url: string): boolean {
+  return url.startsWith('https:') || routeName(url) === 'VPN'
+}
+
+/**
+ * The faster routes a device may move to on its own, fastest first. From an encrypted address it moves only to another
+ * encrypted one (a VPN), unless the person allowed this host's unencrypted local network (`allowPlain`).
+ */
+export function upgradeRoutes(current: string, routes: string[], allowPlain = false): string[] {
+  return fasterRoutes(current, routes).filter(
+    (route) => allowPlain || !routeEncrypted(current) || routeEncrypted(route),
+  )
+}

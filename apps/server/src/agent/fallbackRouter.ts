@@ -727,6 +727,8 @@ export class FallbackRouter {
           switchAt: policy.switchAt,
           attempted,
           blocked,
+          apiKeyLogins: this.host.apiKeyLogins(),
+          from: s.settings,
         })
       // A conversation that does not fit another provider's handoff budget is never sent truncated: skip that model, and
       // if nothing else is left, hold the thread at the limit with the reason.

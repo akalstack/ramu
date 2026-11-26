@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { Pressable, TextInput, View } from 'react-native'
+import { Alert, Pressable, TextInput, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import { learnedRoutes } from '@ramu/shared/hostProof'
-import { hostOfUrl, networkName } from '@ramu/shared/networkLabel'
+import { hostOfUrl, networkName, routeEncrypted, routeSpeed } from '@ramu/shared/networkLabel'
 import type { ReviewAddressResult } from '@ramu/shared/api'
 import type { Computer } from '../runtime/types'
 import { useStore } from '../runtime/store'
@@ -15,7 +15,7 @@ export function HostAddressSheet({ computer, onClose }: { computer: Computer; on
   const { c } = useTheme()
   const t = useT()
   const say = useSay()
-  const { reviewAddress, retry } = useStore()
+  const { reviewAddress, retry, automaticRoute } = useStore()
   const [address, setAddress] = useState(computer.address)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -34,14 +34,14 @@ export function HostAddressSheet({ computer, onClose }: { computer: Computer; on
     unsupported: fill(t.nearbyUnsupported, computer.name),
     insecure: fill(t.nearbyInsecure, computer.name),
   }
-  const apply = async (target = address) => {
+  const apply = async (target = address, allowPlain = false) => {
     if (pending.current || !target.trim()) return
     const controller = new AbortController()
     pending.current = controller
     setBusy(true)
     setError(null)
     try {
-      const result = await reviewAddress(computer.id, target.trim(), controller.signal)
+      const result = await reviewAddress(computer.id, target.trim(), controller.signal, { allowPlain })
       if (!mounted.current || controller.signal.aborted) return
       if (result === 'moved' || result === 'unchanged') {
         if (result === 'unchanged' && computer.status !== 'online') retry(computer.id)
@@ -55,6 +55,26 @@ export function HostAddressSheet({ computer, onClose }: { computer: Computer; on
       if (mounted.current) setBusy(false)
     }
   }
+  /**
+   * Leaving an encrypted route for the plain local network asks once per host; after that, Automatic may use it too.
+   */
+  const choose = (target: string) => {
+    if (!routeEncrypted(computer.address) || routeEncrypted(target) || computer.plainLan) return void apply(target)
+    Alert.alert(
+      say('Use the local network for {0}?', { 0: computer.name }),
+      say(
+        'It is the fastest route, but Ramu does not encrypt it: others on this Wi-Fi could read what is sent. Ramu will then use it on its own whenever it answers.',
+      ),
+      [
+        { text: say('Cancel'), style: 'cancel' },
+        { text: say('Use local network'), onPress: () => void apply(target, true) },
+      ],
+    )
+  }
+  const automatic = computer.routeMode !== 'manual'
+  const routes = learnedRoutes([computer.address, ...(computer.routes ?? [])]).sort(
+    (a, b) => routeSpeed(a) - routeSpeed(b),
+  )
   return (
     <Sheet
       open
@@ -68,16 +88,42 @@ export function HostAddressSheet({ computer, onClose }: { computer: Computer; on
         <T tone="muted" size={font.caption}>
           {say('Both devices must be on the network you pick. Ramu checks it is the same host before switching.')}
         </T>
-        {learnedRoutes([computer.address, ...(computer.routes ?? [])]).map((route) => (
+        <Pressable
+          accessibilityRole="radio"
+          accessibilityState={{ selected: automatic, disabled: busy }}
+          disabled={busy}
+          onPress={() => {
+            automaticRoute(computer.id)
+            onClose()
+          }}
+          style={{
+            minHeight: 52,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: space.s,
+            paddingHorizontal: space.m,
+            backgroundColor: c.fill,
+            borderRadius: radius.s,
+          }}
+        >
+          <View style={{ flex: 1 }}>
+            <T>{say('Automatic')}</T>
+            <T size={font.caption} tone="muted" numberOfLines={2}>
+              {say('The fastest that answers: local network, then VPN, then Ramu Link.')}
+            </T>
+          </View>
+          {automatic ? <Check size={18} color={c.accent} /> : null}
+        </Pressable>
+        {routes.map((route) => (
           <Pressable
             key={route}
             accessibilityRole="radio"
-            accessibilityState={{ selected: computer.address === route, disabled: busy }}
+            accessibilityState={{ selected: !automatic && computer.address === route, disabled: busy }}
             disabled={busy}
             onPress={() => {
               setAddress(route)
               setError(null)
-              void apply(route)
+              choose(route)
             }}
             style={{
               minHeight: 52,
@@ -95,7 +141,15 @@ export function HostAddressSheet({ computer, onClose }: { computer: Computer; on
                 {hostOfUrl(route)}
               </T>
             </View>
-            {computer.address === route ? <Check size={18} color={c.accent} /> : null}
+            {computer.address === route ? (
+              automatic ? (
+                <T size={font.caption} tone="muted">
+                  {say('In use')}
+                </T>
+              ) : (
+                <Check size={18} color={c.accent} />
+              )
+            ) : null}
           </Pressable>
         ))}
         <T size={font.caption} tone="muted">

@@ -10,7 +10,7 @@ With **Auto-update Ramu** on (**Settings → About**), a downloaded update insta
 
 ## Messages while an agent works
 
-Enter uses your Steer or Queue choice, and Cmd/Ctrl+Enter uses the other. **Steer** adds your message to the running turn. **Queue** waits for the turn to end. A steered message waits for running tools to finish. To redirect the agent sooner, choose **Stop turn and send now** from a queued message's menu, or tap its send button on the phone. The turn stops, that message starts the next one, and the rest of the queue follows. Agents can ask questions and keep working on independent parts while they wait for your answer.
+Enter uses your Steer or Queue choice, and Cmd/Ctrl+Enter uses the other. **Steer** adds your message to the running turn. **Queue** waits for the turn to end. A steered message waits for running tools to finish. To redirect the agent sooner, choose **Stop turn and send now** from a queued message's menu, or tap its send button on the phone. The turn stops, that message starts the next one, and the rest of the queue follows. **Edit** on a queued or steered message opens it in the message box, and whatever you were typing comes back after. The host holds the message in its place meanwhile. **Save** replaces it, and Escape or the chip's **×** cancels. Agents can ask questions and keep working on independent parts while they wait for your answer.
 
 A steered message stays part of the turn it joined: the turn keeps one timer and folds under one **Worked for** with its whole time, and the work after each steer folds under **Continued for** below that message. A turn folds only once it has finished. A stopped turn says **Stopped after**.
 

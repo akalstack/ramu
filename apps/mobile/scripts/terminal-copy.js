@@ -1,6 +1,6 @@
 // Runs inside the bundled terminal surface; no host credentials or network calls.
-// A finger cannot drag a selection across xterm's canvas, so the phone asks for the text it offers to copy (commands
-// with their output, the screen, recent output) and reads it here from the terminal's own buffer.
+// The Copy button's choices, beside selecting with handles (terminal-select.js): the phone asks for the text it offers
+// to copy (commands with their output, the screen, recent output) and reads it here from the terminal's own buffer.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- injected into the terminal bundle as source text by gen-terminal.mjs
 function installTerminalCopy(term, post, terminalRowsText, blocks) {
   const LIMIT = 200000

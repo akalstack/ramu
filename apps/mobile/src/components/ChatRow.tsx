@@ -11,7 +11,6 @@ import {
   GitBranch,
   GitFork,
   ListChecks,
-  Loader,
   Pin,
   RotateCcw,
   Sparkles,
@@ -24,6 +23,7 @@ import { providerStack } from '@ramu/shared/chat/threadProviders'
 import { ProviderIcon } from './Logos'
 import { ago, useT, type Strings, useSay } from '../i18n'
 import { threadStatus } from '@ramu/shared/chat/threadStatus'
+import { Breathe } from './Motion'
 import { inboxBlocker } from '@ramu/shared/hostInbox'
 import { inboxBlockerText } from '../runtime/inboxBlockerText'
 import { Divider, Pill, ROW_INSET, Row, T, tap } from './ui'
@@ -377,7 +377,7 @@ function Fact({
 }
 
 /**
- * The thread's trailing mark, the desktop sidebar's: a spinner while it works, amber when it needs you, red when it
+ * The thread's trailing mark, the desktop sidebar's: a breathing accent dot while it works, amber when it needs you, red when it
  * failed, grey when it stopped or paused, a clock at a usage limit, violet while a finished run is unread.
  */
 function StateMark({
@@ -394,7 +394,9 @@ function StateMark({
   return (
     <View accessible accessibilityLabel={label} style={{ width: 14, alignItems: 'center' }}>
       {kind === 'working' || kind === 'goal' || kind === 'verifying' ? (
-        <Loader size={13} color={c.accent} />
+        <Breathe active>
+          <Dot color={c.accent} />
+        </Breathe>
       ) : kind === 'limit' && retrying ? (
         <Clock size={13} color={c.warn} />
       ) : (

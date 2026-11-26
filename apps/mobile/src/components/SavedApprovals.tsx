@@ -4,7 +4,7 @@ import type { SavedPermissionRule } from '@ramu/shared/types'
 import { font, space } from '../theme'
 import { useStore } from '../runtime/store'
 import { useSay } from '../i18n'
-import { showToast } from '../runtime/toast'
+import { showError } from '../runtime/toast'
 import { providerNames } from '../runtime/types'
 import { Button, Card, Divider, SectionLabel, T, tap } from './ui'
 
@@ -36,7 +36,7 @@ export function SavedApprovals({ hostId, locked }: { hostId: string; locked: boo
     setBusy(true)
     void work()
       .then(load)
-      .catch((error: unknown) => showToast(error instanceof Error ? error.message : String(error)))
+      .catch((error: unknown) => showError(error instanceof Error ? error.message : String(error)))
       .finally(() => setBusy(false))
   }
   return (

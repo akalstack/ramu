@@ -67,7 +67,7 @@ export function checkTail(check: GoalCheck, lines = 12, chars = 1200): string {
 export interface GoalFacts {
   verify?: string
   check?: { ok: boolean; command: string; how: string; outcome: CheckOutcome; tail: string }
-  evidence?: { checks: { name: string; passed: boolean }[]; changedFiles: string[] }
+  evidence?: { checks: { name: string; passed: boolean }[]; changedFiles: string[]; unlisted: string[] }
 }
 
 /** What a goal knows beyond its objective and reason: the verification command and its latest result, and the completion evidence. */
@@ -86,6 +86,7 @@ export function goalFacts(goal: ChatGoal): GoalFacts {
     facts.evidence = {
       checks: goal.evidence.checks.map(({ name, passed }) => ({ name, passed })),
       changedFiles: goal.evidence.changedFiles,
+      unlisted: goal.evidence.unlisted ?? [],
     }
   return facts
 }
@@ -100,6 +101,7 @@ export function goalFactLines(goal: ChatGoal): string[] {
     if (evidence.checks.length)
       lines.push(`Checks: ${evidence.checks.map((c) => `${c.name} (${c.passed ? 'passed' : 'failed'})`).join(', ')}`)
     if (evidence.changedFiles.length) lines.push(`Changed: ${evidence.changedFiles.join(', ')}`)
+    if (evidence.unlisted.length) lines.push(`Also changed in this checkout: ${evidence.unlisted.join(', ')}`)
   }
   return lines
 }

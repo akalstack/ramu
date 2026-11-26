@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AppWindow, Pin } from 'lucide-react'
+import { AppWindow, CircleAlert, Pin } from 'lucide-react'
 import type { ArtifactInfo, ArtifactKind } from '@ramu/shared/artifacts'
 import { ARTIFACT_KINDS, declaredCapabilities } from '@ramu/shared/artifacts'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { ChoiceChip, ChoiceChips } from '@/components/choice-group'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { RowButton } from '../components/row-button'
 import { SearchInput } from '../SearchInput'
@@ -170,25 +170,23 @@ export function PagesPage() {
           />
         )}
         {kinds.length > 1 && (
-          <ToggleGroup
+          <ChoiceChips
             size="sm"
-            variant="outline"
-            spacing={2}
             className="flex-wrap gap-1.5"
             aria-label={t('Kind')}
             value={[kind]}
             onValueChange={(values) => values[0] && setKind(values[0] as ArtifactKind | 'all')}
           >
-            <ToggleGroupItem value="all" className="px-2.5">
+            <ChoiceChip value="all" className="px-2.5">
               {t('All')}
-            </ToggleGroupItem>
+            </ChoiceChip>
             {kinds.map((entry) => (
-              <ToggleGroupItem key={entry} value={entry} className="gap-1.5 px-2.5">
+              <ChoiceChip key={entry} value={entry} className="gap-1.5 px-2.5">
                 <ArtifactKindMark kind={entry} size={13} named={false} />
                 {artifactKindLabel(entry)}
-              </ToggleGroupItem>
+              </ChoiceChip>
             ))}
-          </ToggleGroup>
+          </ChoiceChips>
         )}
         {loading && !pages.length && <ContentSkeleton />}
         {!loading && pages.length === 0 && (
@@ -211,12 +209,24 @@ export function PagesPage() {
             <ImportPageDialog onClose={() => setImporting(false)} />
           </HostProvider>
         )}
-        <ul className="m-0 flex list-none flex-col gap-0.5 p-0">
+        {pages.length > 0 && !shown.length && (
+          <p role="status" className="m-0 py-8 text-center text-control text-muted-foreground">
+            {t('No matches')}
+          </p>
+        )}
+        {/* One card divided by lines, as the Inbox's lists are. */}
+        <ul
+          className={`m-0 flex list-none flex-col divide-y divide-(--line) overflow-hidden rounded-(--radius-m) bg-card p-0 ${shown.length ? '' : 'hidden'}`}
+        >
           {shown.map(({ page, host }) => {
             const uses = declaredCapabilities(page.capabilities)
             return (
               <li key={`${host}\n${page.id}`}>
-                <RowButton className="w-full" onClick={() => setOpen({ id: page.id, host })}>
+                <RowButton
+                  size="lg"
+                  className="w-full rounded-none px-3 hover:bg-hover"
+                  onClick={() => setOpen({ id: page.id, host })}
+                >
                   <span aria-hidden className="w-6 flex-none text-center text-[17px] leading-none">
                     {page.icon}
                   </span>
@@ -231,11 +241,16 @@ export function PagesPage() {
                           `v${page.version}`,
                           uses.includes('records') ? t('Records') : null,
                           uses.includes('ai') ? t('AI') : null,
-                          page.lastError ? t('Has an error') : null,
                         ]
                           .filter(Boolean)
                           .join(' · ')}
                       </span>
+                      {page.lastError && (
+                        <span className="flex flex-none items-center gap-1 text-bad">
+                          · <CircleAlert size={11} aria-hidden="true" />
+                          {t('Has an error')}
+                        </span>
+                      )}
                     </span>
                   </span>
                   {manyHosts && (

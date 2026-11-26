@@ -4,6 +4,7 @@ import { t as translate, useLanguage } from '../../../i18n'
 import { Button } from '@/components/desktop-button'
 import {
   AppWindow,
+  ArrowUp,
   Bot,
   Check,
   ChevronDown,
@@ -188,6 +189,25 @@ export function UserMessage({
     )
   // Late answers are yours, so they stay on the right, without the delivery note the agent reads.
   const answers = parseAnswerMessage(e.text)
+  // The question's own card already shows what was answered; a second bubble said it again. While that card is in the
+  // thread this is one line that leads back to it, and the full answer shows only when the card is not there.
+  if (answers && askedQuestions?.has(answers.requestId)) {
+    const count = answerPairs(answers.body).length
+    return (
+      <ChatActivityButton
+        type="button"
+        className="self-end"
+        title={translate('Show the question')}
+        onClick={() => showQuestion(answers.requestId)}
+      >
+        <ShieldQuestion size={13} />
+        <span>
+          {count === 1 ? translate('Answered 1 question') : translate('Answered {0} questions', { 0: count })}
+        </span>
+        <ArrowUp size={13} className={CARET_CLASS} />
+      </ChatActivityButton>
+    )
+  }
   if (answers)
     return (
       <UserShell
@@ -393,4 +413,15 @@ function TaskReport({
       </div>
     </div>
   )
+}
+
+/** Brings a question's card into view and marks it for a moment, so the eye lands on it. */
+function showQuestion(requestId: string) {
+  const card = document.querySelector<HTMLElement>(`[data-question-request="${CSS.escape(requestId)}"]`)
+  if (!card) return
+  card.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  card.animate([{ boxShadow: '0 0 0 2px var(--primary)' }, { boxShadow: '0 0 0 2px transparent' }], {
+    duration: 1400,
+    easing: 'ease-out',
+  })
 }

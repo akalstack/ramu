@@ -34,7 +34,6 @@ import {
   Undo2,
 } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../../../theme'
-import { belowHeader } from '../../../components/UndoToast'
 import { useChat, useStore } from '../../../runtime/store'
 import type { ChangedFile } from '../../../runtime/types'
 import {
@@ -52,9 +51,9 @@ interface GitCommitInfo {
   subject: string
   author: string
   at: number
+  pushed: boolean
   /** On the upstream and not pulled here yet. */
   incoming: boolean
-  pushed: boolean
 }
 type GitStashInfo = GitStash
 import { draftCommit, ownPaths } from '../../../runtime/gitQuick'
@@ -1507,7 +1506,8 @@ export default function SourceControl() {
             position: 'absolute',
             left: space.m,
             right: space.m,
-            ...(toast.failed ? { top: belowHeader(insets.top) } : { bottom: Math.max(insets.bottom, space.m) }),
+            // Every outcome reads where the action was taken, as the app's other toasts do.
+            bottom: Math.max(insets.bottom, space.m),
           }}
         >
           <Glass

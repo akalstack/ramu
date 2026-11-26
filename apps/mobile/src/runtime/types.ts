@@ -24,6 +24,13 @@ export interface Computer {
   hostId?: string
   /** Other addresses the host named in a proven identity answer; tried only when the saved one stops answering. */
   routes?: string[]
+  /**
+   * How the phone picks among the routes: `auto` (absent) moves to the fastest that answers (LAN, then VPN, then the
+   * internet); `manual` keeps the one the person chose, falling back only when it stops answering.
+   */
+  routeMode?: 'auto' | 'manual'
+  /** The person allowed this host's unencrypted local network, so the phone may leave an encrypted route for it. */
+  plainLan?: boolean
 }
 
 export type ToolKind = 'read' | 'edit' | 'search' | 'execute' | 'think' | 'fetch' | 'other'

@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input'
 import type { ChatGoal } from '@ramu/shared/types'
 import { type GoalChange, type GoalChangeType } from '@ramu/shared/chat/goalHistory'
 import { t, useLanguage } from '../i18n'
+import { Dialog } from '../Menu'
 import { useAppSettings } from '../settings/AppSettings'
 import { resumeTime } from '../models/limitCopy'
 import { goalContinues, goalState, isLimitHold } from '@ramu/shared/chat/goalHold'
@@ -141,6 +142,8 @@ export function GoalBar({
 }) {
   useLanguage()
   const [editing, setEditing] = useState(false)
+  // Clearing ends what may be hours of automatic work and cannot be undone, so it is confirmed.
+  const [clearing, setClearing] = useState(false)
   const [expanded, setExpanded] = useTraySection()
   const { preferences } = useAppSettings()
   const active = goalContinues(goal)
@@ -214,13 +217,31 @@ export function GoalBar({
             className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact) goal-action [&:hover:not(:disabled)]:text-foreground flex-none text-muted-foreground rounded-(--radius-s)"
             aria-label={t('Clear goal')}
             title={t('Clear goal')}
-            onClick={() => onControl('clear')}
+            onClick={() => setClearing(true)}
           >
             <X size={14} />
           </Button>
         </>
       }
     >
+      {clearing && (
+        <Dialog
+          title={t('Clear this goal?')}
+          confirmLabel={t('Clear goal')}
+          danger
+          onConfirm={() => {
+            setClearing(false)
+            onControl('clear')
+          }}
+          onCancel={() => setClearing(false)}
+        >
+          <p className="m-0">
+            {t(
+              'The thread stops working toward it on its own. Its messages and changes stay; start another with /goal.',
+            )}
+          </p>
+        </Dialog>
+      )}
       {editing && onVerify && (
         <GoalVerifyEditor
           readOnly={readOnly}

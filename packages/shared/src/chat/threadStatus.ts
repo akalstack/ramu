@@ -105,6 +105,23 @@ export function threadStatus(
 }
 
 /**
+ * How much a status asks of the person, for marks that carry a tinted background (the Inbox's round marks): amber while
+ * it waits on them or on a usage limit, red when it failed, quiet otherwise. The same scale as the sidebar's dots.
+ */
+export function statusTone(status: ThreadStatus): 'warn' | 'bad' | 'neutral' {
+  if (status.kind === 'failed') return 'bad'
+  if (
+    status.kind === 'approval' ||
+    status.kind === 'input' ||
+    status.kind === 'blocked' ||
+    status.kind === 'turn-limit' ||
+    status.kind === 'limit'
+  )
+    return 'warn'
+  return 'neutral'
+}
+
+/**
  * The newer of two reads of the same task from one host. A read without a `snapshotAt` always replaces,
  * since nothing can order it; a late, older read never brings back work that has since stopped or finished.
  */

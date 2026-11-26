@@ -242,6 +242,10 @@ export interface Computer {
   url: string | null
   /** Other addresses this host proved it answers on, to switch networks. Saved on this device. */
   routes?: string[]
+  /** `manual` while the person keeps a route they chose; absent means this device picks the fastest that answers. */
+  routeMode?: 'auto' | 'manual'
+  /** The person allowed this host's unencrypted local network. */
+  plainLan?: boolean
   /** The SSH target when this computer is reached through a tunnel. */
   ssh?: string
   /** The host's own id, which its listing on a Ramu account names; unknown for one paired before hosts said it. */
