@@ -991,6 +991,11 @@ export interface RamuMethods extends ArtifactMethods {
   'notices.clear'(): void
   'notifications.register'(token: string, computerId: string, categories?: string[]): void
   'notifications.unregister'(): void
+  /**
+   * The threads this device shows the person right now, repeated every minute while they stay in front and sent empty
+   * when none is; the host sends no push about a thread someone is looking at.
+   */
+  'notifications.viewing'(sessionIds: string[]): void
   'liveActivity.status'(): { enabled: boolean }
   'liveActivity.register'(registration: MobileLiveActivityRegistration): { enabled: boolean }
   'liveActivity.unregister'(activityId: string): void

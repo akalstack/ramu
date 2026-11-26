@@ -25,8 +25,15 @@ interface Ticket {
   details?: { error?: string }
 }
 /** Opt-in Expo push registrations are owned by paired devices, never by shared bearer credentials. */
+/**
+ * How long a device's word that it shows a thread holds without being repeated. Devices repeat it every minute while
+ * the thread stays in front, so one that went away without saying so stops counting soon after.
+ */
+const VIEWING_MS = 90_000
+
 export class MobilePush {
   private registrations: Registration[] = []
+  private viewers = new Map<string, { sessions: Set<string>; at: number }>()
   private states = new Map<string, string>()
   private questions = new Set<string>()
   private finished = createFinishedGate()
@@ -117,7 +124,26 @@ export class MobilePush {
         : {}),
     }
   }
+  /**
+   * The threads a device (a phone, this host's desktop or another desktop) has in front of the person right now; an
+   * empty list when it has none, such as when it went to the background or lost focus.
+   */
+  viewing(viewer: string, sessionIds: readonly string[]) {
+    if (!sessionIds.length) this.viewers.delete(viewer)
+    else this.viewers.set(viewer, { sessions: new Set(sessionIds.slice(0, 20)), at: Date.now() })
+    if (this.viewers.size > 200) this.viewers.delete(this.viewers.keys().next().value!)
+  }
+  /** Whether the person is looking at this thread on some device, so a push about it would only repeat what they see. */
+  private watched(sessionId: string) {
+    const now = Date.now()
+    for (const [viewer, { sessions, at }] of this.viewers) {
+      if (now - at > VIEWING_MS) this.viewers.delete(viewer)
+      else if (sessions.has(sessionId)) return true
+    }
+    return false
+  }
   async deliver(session: AgentSessionInfo, kind: 'done' | 'input' | 'failed') {
+    if (this.watched(session.id)) return
     const category: PushCategory = kind !== 'input' && this.isScheduled(session.id) ? 'scheduled' : kind
     await this.send(
       category,

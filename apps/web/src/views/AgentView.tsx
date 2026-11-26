@@ -102,6 +102,7 @@ import {
   turnDatesOf,
 } from './agent/lib/derive'
 import { outboxFullError, quoteLines, visibleText } from './agent/lib/messages'
+import { useThreadViewing } from './agent/lib/threadViewing'
 import { withHiddenContext } from '@ramu/shared/chat/visibleMessage'
 import { interactiveAttachmentBlock, type InteractiveAttachment } from '@ramu/shared/interactive'
 import { interactiveRevisions, interactiveUpdates } from '@ramu/shared/interactiveRevisions'
@@ -185,6 +186,7 @@ export const AgentView = memo(function AgentView({
     error,
     setError,
   } = useAgentStream(view.sessionId, visible)
+  useThreadViewing(host.id, view.sessionId, visible)
   // Uploaded files wait with the text for the next send, across chat switches and restarts.
   const [attachments, setAttachments] = useJsonDraft<Attachment[]>(
     `files:${view.sessionId}`,

@@ -89,6 +89,7 @@ const viewerMethods = new Set([
   'reviews.modelViewer',
   'notifications.register',
   'notifications.unregister',
+  'notifications.viewing',
   'liveActivity.status',
   'liveActivity.register',
   'liveActivity.unregister',

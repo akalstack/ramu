@@ -1939,6 +1939,10 @@ async function performInvoke(
     if (!deviceId || typeof args?.[0] !== 'string' || typeof args?.[1] !== 'string')
       throw new Error('Push registration requires a paired phone')
     mobilePush.register(deviceId, args[0], args[1], args[2])
+  } else if (method === 'notifications.viewing') {
+    const sessionIds = z.array(z.string().min(1).max(200)).max(20).parse(args?.[0])
+    // This host's own desktop reaches it with no device; every other caller is a paired device.
+    mobilePush.viewing(deviceId ?? 'local', sessionIds)
   } else if (method === 'notifications.unregister') {
     if (!deviceId) throw new Error('Push registration requires a paired phone')
     mobilePush.remove(deviceId)

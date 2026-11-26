@@ -147,3 +147,32 @@ it('a finished turn pushes "done" unless its goal continues, which includes a go
   expect(await finish({ status: 'paused', pausedBy: 'provider-limit' })).toBe(0)
   expect(await finish({ status: 'active' })).toBe(0)
 })
+it('sends no push about a thread someone is looking at, on the phone or a desktop, until they look away', async () => {
+  dir = mkdtempSync(join(tmpdir(), 'ramu-phone-push-'))
+  const sent: { to: string }[] = []
+  const request = vi.fn(async (_url: string | URL | Request, options?: RequestInit) => {
+    sent.push(JSON.parse(String(options?.body)))
+    return new Response(JSON.stringify({ data: { status: 'ok', id: 'ticket' } }))
+  }) as unknown as typeof fetch
+  const push = new MobilePush(join(dir, 'push.json'), () => [{ id: 'a' }], request)
+  push.register('a', 'ExpoPushToken[abcdefghijk11111]', 'host')
+  const deliver = async (id: string) => {
+    sent.length = 0
+    await push.deliver({ id, taskId: 't' } as any, 'done')
+    return sent.length
+  }
+  push.viewing('a', ['open'])
+  expect(await deliver('open')).toBe(0)
+  // Another thread still reaches the phone.
+  expect(await deliver('other')).toBe(1)
+  // The phone went to the background; the desktop shows the thread now.
+  push.viewing('a', [])
+  push.viewing('local', ['open'])
+  expect(await deliver('open')).toBe(0)
+  push.viewing('local', [])
+  expect(await deliver('open')).toBe(1)
+  // A device that went away without saying so stops counting once it has not repeated itself.
+  push.viewing('a', ['open'])
+  vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 120_000)
+  expect(await deliver('open')).toBe(1)
+})

@@ -17,6 +17,7 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
+import { useThreadViewing } from '../../../runtime/threadViewing'
 import {
   Activity,
   Archive,
@@ -436,6 +437,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
   const hasNotice = Boolean(
     chat?.sessionId && (store.inbox[chat.computerId] ?? []).some((n) => n.sessionId === chat.sessionId),
   )
+  useThreadViewing(store.invoke, chat?.computerId, chat?.sessionId, focused)
   useEffect(() => {
     if (focused && hasNotice && chat) store.acknowledge(chat.id)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [focused, hasNotice, chat?.id] by design; the values it reads beyond these are current as of that run

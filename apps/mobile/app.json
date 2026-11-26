@@ -87,6 +87,7 @@
         "expo-widgets",
         {
           "enablePushNotifications": true,
+          "frequentUpdates": true,
           "groupIdentifier": "group.com.akalstack.ramu",
           "bundleIdentifier": "com.akalstack.ramu.activities",
           "widgets": [

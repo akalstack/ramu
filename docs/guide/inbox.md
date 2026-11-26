@@ -42,6 +42,8 @@ The Brief lists what needs you, most urgent first, without a model call:
 
 The usual next step is one tap: **Allow once** for an approval, an option for a single-choice question, **Retry** or **Mark done** for a failure, **Stop idle** for a host low on memory. Other questions expand in place. Each thread takes one row, its most urgent reason, with **+N more** for the rest. Opening a row goes where its next step is: an approval or question opens the session that asked (a helper's own included), scrolled to the request; a pull request opens its review; a recap's decision opens the thread at the turn it is about (on desktop); a failure opens its thread, which ends on the error. A thread still working, or already asking for something, holds its recaps until it settles. Five rows show, then **See all**. Viewer devices see rows without buttons. When what lets a thread continue is up to you, such as resuming a goal at its turn limit, its hover card says so.
 
+A paired phone gets a push when a thread finishes, stops with an error or needs you, except about a thread you are looking at: open on the phone with Ramu in front, or on screen in a focused desktop window. Opening a thread on the phone also clears its pushes from the notification list.
+
 Deployed apps reach you as notifications, not Brief rows. A live address that stops answering opens a **Down:** thread in the project and notifies your phone ([Live address and uptime](deploy.md#live-address-and-uptime)).
 
 ### Running and Resources
