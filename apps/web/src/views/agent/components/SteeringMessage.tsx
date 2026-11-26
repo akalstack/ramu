@@ -1,3 +1,4 @@
+import { useSentRise } from '../../../chat/ChatMotion'
 import { useEffect, useRef, useState } from 'react'
 import { Pencil, Trash2 } from 'lucide-react'
 import { Message, MessageContent } from '@/components/ui/message'
@@ -23,17 +24,23 @@ export function SteeringMessage({
   message,
   readOnly,
   act,
+  onRemoved,
 }: {
   sessionId: string
   message: QueuedMessage
   readOnly: boolean
   act: Act
+  /** The person removed it: it leaves at once instead of waiting for its message to show in the transcript. */
+  onRemoved?: () => void
 }) {
   const { invoke } = useHost()
   const text = visibleText(message.text)
   const [draft, setDraft] = useState<string | null>(null)
   const input = useRef<HTMLTextAreaElement>(null)
   const editing = draft !== null
+  // The copy shown while sending began rising from the message box; this row takes its place a moment later and
+  // carries the rise on, instead of snapping the bubble to rest.
+  const rise = useSentRise<HTMLDivElement>(false)
   useEffect(() => {
     if (!editing) return
     input.current?.focus()
@@ -54,10 +61,14 @@ export function SteeringMessage({
     setDraft(null)
     void act(() => invoke('agent.editQueued', sessionId, message.id, replaceVisibleMessage(message.text, next)))
   }
-  const remove = () => void act(() => invoke('agent.removeQueued', sessionId, message.id))
+  const remove = () => {
+    onRemoved?.()
+    void act(() => invoke('agent.removeQueued', sessionId, message.id))
+  }
   return (
-    <Message align="end" aria-busy="true">
-      <MessageContent className="group max-w-[78%] items-end gap-1">
+    // Spaced and sized as the sent message it becomes, so the bubble stays put when the turn takes it.
+    <Message align="end" className="mt-3.5" aria-busy="true">
+      <MessageContent ref={rise} className="group max-w-[86%] origin-bottom-right items-end gap-1">
         {message.attachments?.length ? <Attachments files={message.attachments} /> : null}
         {editing ? (
           <div className="flex w-full min-w-80 flex-col gap-2">

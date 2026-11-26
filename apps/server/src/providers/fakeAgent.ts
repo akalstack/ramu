@@ -350,6 +350,33 @@ async function* demoTurn(reply = DEMO_REPLY): AsyncGenerator<SDKMessage, void> {
 const msg = (value: unknown) => value as SDKMessage
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
+/**
+ * A turn paced like a real one, for watching the chat while it works: a first line, then calls that each take a while,
+ * a line of progress halfway, and a formatted reply.
+ */
+async function* pacedTurn(delay: number): AsyncGenerator<SDKMessage, void> {
+  const say = (text: string) =>
+    msg({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'text', text }] } })
+  yield say('Reading the auth code before changing it.')
+  for (const [i, [name, input, output]] of [...DEMO_TOOLS, ...DEMO_TOOLS].entries()) {
+    const id = `paced-tool-${Date.now()}-${i}`
+    if (i === DEMO_TOOLS.length) yield say('The reset path is clear now. Editing and running the tests.')
+    yield msg({
+      type: 'assistant',
+      parent_tool_use_id: null,
+      message: { content: [{ type: 'tool_use', id, name, input }] },
+    })
+    await sleep(delay)
+    yield msg({
+      type: 'user',
+      parent_tool_use_id: null,
+      message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content: output }] },
+    })
+  }
+  yield say(DEMO_REPLY)
+  yield msg({ type: 'result', subtype: 'success', is_error: false, result: 'done', total_cost_usd: 0 })
+}
+
 /** A turn that starts a background sub-agent which keeps working, and reports back, after the turn ends. */
 async function* agentsTurn(stopped: Set<string>, delayMs: number): AsyncGenerator<SDKMessage, void> {
   const call = `agent-call-${Date.now()}`,
@@ -705,6 +732,10 @@ export const fakeQuery: QueryFn = ({ prompt, options }) => {
           message: { content: [{ type: 'text', text: 'All commands finished.' }] },
         })
         yield msg({ type: 'result', subtype: 'success', is_error: false, result: 'done', total_cost_usd: 0 })
+        continue
+      }
+      if (text.includes('[paced]')) {
+        yield* pacedTurn(Number(process.env.RAMU_FAKE_AGENT_DELAY ?? 2500))
         continue
       }
       if (text.includes('[rich]')) {

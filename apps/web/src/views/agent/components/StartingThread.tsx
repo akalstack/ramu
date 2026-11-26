@@ -14,7 +14,7 @@ import { ComposerStack } from '../../../composer/ComposerStack'
 import { t as translate, useLanguage } from '../../../i18n'
 import type { StartingThread } from '../../../workspace/startingThreads'
 import { nextTurnDate } from '../lib/derive'
-import { COMPOSER_DOCK_CLASS, TRANSCRIPT_COLUMN_CLASS, TRANSCRIPT_VIEWPORT_CLASS } from '../styles'
+import { COMPOSER_DOCK_CLASS, LIVE_ITEM_CLASS, TRANSCRIPT_COLUMN_CLASS, TRANSCRIPT_VIEWPORT_CLASS } from '../styles'
 import { StartingAgentHeader } from './AgentHeader'
 import { SentMessage } from './PendingSubmission'
 import { TurnDate } from './TranscriptTurn'
@@ -39,7 +39,7 @@ export function OpeningTurn({
 }) {
   const date = nextTurnDate([], sentAt)
   return (
-    <MessageScrollerItem messageId="opening">
+    <MessageScrollerItem messageId="opening" className={LIVE_ITEM_CLASS}>
       <div className="turn flex flex-col gap-3.5 min-w-0">
         {date !== undefined && <TurnDate at={date} now={now} />}
         <SentMessage text={text} attachments={attachments} start={start} />

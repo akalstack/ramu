@@ -120,10 +120,10 @@ function HostGroup({ computer, current, grouped }: { computer: Computer; current
     >
       {grouped && (
         <div className="group/host sticky top-0 z-[6] flex min-h-8 items-center gap-0.5 bg-(--sidebar) px-1">
-          {/* The whole row highlights, under the actions too. */}
+          {/* The whole row highlights, under the actions too, edge to edge with the project and thread rows below. */}
           <span
             aria-hidden
-            className="pointer-events-none absolute inset-y-0 inset-x-1 rounded-(--radius-s) group-hover/host:bg-accent"
+            className="pointer-events-none absolute inset-0 rounded-(--radius-s) group-hover/host:bg-accent"
           />
           <SidebarDisclosureButton
             // Room for the actions that appear over the row's end, so the name truncates before them.

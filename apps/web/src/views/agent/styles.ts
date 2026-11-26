@@ -80,3 +80,9 @@ export const TRANSCRIPT_COLUMN_CLASS = 'transcript-col mx-auto max-w-[var(--chat
 /** The strip under the transcript that holds a chat's message box. */
 export const COMPOSER_DOCK_CLASS =
   'composer-dock [&_.error]:mb-1.5 [&_.error]:text-control flex-none p-[0_calc(16px_+_var(--chat-scrollbar-width,_0px))_10px_16px]'
+
+/**
+ * A transcript row is laid out at its real size from its first frame. The scroller's rows otherwise start at an
+ * estimated height until drawn, which showed a message just sent 160px tall for one frame before it snapped into place.
+ */
+export const LIVE_ITEM_CLASS = '[content-visibility:visible]'

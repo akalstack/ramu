@@ -66,8 +66,9 @@ export function SentMessage({
 }) {
   const rise = useSentRise<HTMLDivElement>(start)
   return (
-    <Message align="end" aria-busy={!failed}>
-      <MessageContent ref={rise} className="max-w-[78%] origin-bottom-right items-end">
+    // Spaced and sized as the host's copy is (UserShell), so the bubble neither moves nor re-wraps when it takes over.
+    <Message align="end" className="mt-3.5" aria-busy={!failed}>
+      <MessageContent ref={rise} className="max-w-[86%] origin-bottom-right items-end">
         <div className={`flex flex-col items-end gap-2 ${failed ? 'opacity-60' : ''}`}>
           {attachments.length > 0 && <Attachments files={attachments} />}
           {text && <UserBubble>{text}</UserBubble>}

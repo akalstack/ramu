@@ -131,7 +131,13 @@ import { QueuedOpening } from './agent/components/QueuedOpening'
 import { ErrorNote } from './agent/components/ErrorNote'
 import { TranscriptTurn, TurnDate } from './agent/components/TranscriptTurn'
 import { OpeningTurn } from './agent/components/StartingThread'
-import { COMPOSER_DOCK_CLASS, TRANSCRIPT_COLUMN_CLASS, TRANSCRIPT_VIEWPORT_CLASS } from './agent/styles'
+import { useHeldSteers } from './agent/hooks/useHeldSteers'
+import {
+  COMPOSER_DOCK_CLASS,
+  LIVE_ITEM_CLASS,
+  TRANSCRIPT_COLUMN_CLASS,
+  TRANSCRIPT_VIEWPORT_CLASS,
+} from './agent/styles'
 import type { StartingThread } from '../workspace/startingThreads'
 import { isLiveToolGroup } from './agent/lib/toolThinking'
 import { useTranscriptArrival } from './agent/hooks/useTranscriptArrival'
@@ -401,6 +407,20 @@ export const AgentView = memo(function AgentView({
       ? openingShown.status
       : activityLabel && translate(activityLabel)
   const turns = useMemo(() => toTurns(blocks, events), [blocks, events])
+  const heldSteers = useHeldSteers(steering, sourceEvents)
+  // The answer is in and nothing was sent since: the host reports the thread idle a moment later, and a status line
+  // drawn for that moment flashed under the answer. It shows only when the thread really stays busy (work picked up
+  // again, sub-agents still running).
+  const afterResult = !!turns.at(-1)?.ended && !shownSubmissions.length && !compacting
+  const [stayedBusy, setStayedBusy] = useState(false)
+  useEffect(() => {
+    if (!afterResult || !statusLabel) return
+    const timer = setTimeout(() => setStayedBusy(true), 400)
+    return () => {
+      clearTimeout(timer)
+      setStayedBusy(false)
+    }
+  }, [afterResult, statusLabel])
   const { hiddenTurns, pageTurns, showEarlierTurns } = useTurnPaging({
     view,
     visible,
@@ -1004,7 +1024,7 @@ export const AgentView = memo(function AgentView({
                             <MessageScrollerItem
                               key={turn.key}
                               messageId={String(turn.key)}
-                              className="[content-visibility:visible]"
+                              className={LIVE_ITEM_CLASS}
                             >
                               <TranscriptTurn
                                 turn={turn}
@@ -1022,7 +1042,7 @@ export const AgentView = memo(function AgentView({
                             </MessageScrollerItem>
                           ))}
                           {heldSettings && session && (
-                            <MessageScrollerItem messageId="held-settings">
+                            <MessageScrollerItem messageId="held-settings" className={LIVE_ITEM_CLASS}>
                               <PendingSettingsChange
                                 next={heldSettings}
                                 previous={session.settings}
@@ -1042,7 +1062,7 @@ export const AgentView = memo(function AgentView({
                             session &&
                             !busyAgent &&
                             !sameAgentSettings(pendingSettings, session.settings) && (
-                              <MessageScrollerItem messageId="pending-settings">
+                              <MessageScrollerItem messageId="pending-settings" className={LIVE_ITEM_CLASS}>
                                 <PendingSettingsChange
                                   next={pendingSettings}
                                   previous={session.settings}
@@ -1054,7 +1074,11 @@ export const AgentView = memo(function AgentView({
                           {!hydrating &&
                             !events.some((event) => event.kind === 'user') &&
                             trayQueued.map((message) => (
-                              <MessageScrollerItem key={message.id} messageId={`queued-opening-${message.id}`}>
+                              <MessageScrollerItem
+                                key={message.id}
+                                messageId={`queued-opening-${message.id}`}
+                                className={LIVE_ITEM_CLASS}
+                              >
                                 <QueuedOpening message={message} />
                               </MessageScrollerItem>
                             ))}
@@ -1066,13 +1090,19 @@ export const AgentView = memo(function AgentView({
                               now={dateNow}
                             />
                           )}
-                          {steering.map((message) => (
-                            <MessageScrollerItem key={message.id} messageId={`steering-${message.id}`}>
+                          {heldSteers.steers.map((message) => (
+                            <MessageScrollerItem
+                              key={message.id}
+                              messageId={`steering-${message.id}`}
+                              className={LIVE_ITEM_CLASS}
+                            >
                               <SteeringMessage
                                 sessionId={view.sessionId}
                                 message={message}
-                                readOnly={viewOnly}
+                                // One the queue already let go of is only waiting for its message to show.
+                                readOnly={viewOnly || !steering.includes(message)}
                                 act={act}
+                                onRemoved={() => heldSteers.forget(message.id)}
                               />
                             </MessageScrollerItem>
                           ))}
@@ -1081,7 +1111,11 @@ export const AgentView = memo(function AgentView({
                             // the same place instead of pushing it down.
                             const date = index === 0 ? nextTurnDate(turns, item.sentAt) : undefined
                             return (
-                              <MessageScrollerItem key={item.id} messageId={`pending-submission-${item.id}`}>
+                              <MessageScrollerItem
+                                key={item.id}
+                                messageId={`pending-submission-${item.id}`}
+                                className={LIVE_ITEM_CLASS}
+                              >
                                 <div className="turn flex flex-col gap-3.5 min-w-0">
                                   {date !== undefined && <TurnDate at={date} now={dateNow} />}
                                   <PendingSubmission
@@ -1094,7 +1128,7 @@ export const AgentView = memo(function AgentView({
                               </MessageScrollerItem>
                             )
                           })}
-                          {statusLabel && (compacting || !liveGroup) && (
+                          {statusLabel && (compacting || !liveGroup) && (!afterResult || stayedBusy) && (
                             <ChatStatus
                               label={statusLabel}
                               compacting={compacting}
