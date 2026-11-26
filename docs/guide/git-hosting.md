@@ -177,7 +177,7 @@ A file is staged once none of its conflicts are left, and the view moves on to t
 
 Source Control's **Commits** lists the branch's history. A commit not pushed yet has an up arrow. Commits the upstream has and this checkout does not, as of the last fetch, come first with a down arrow (on the phone, **not pulled**).
 
-**View full commit** (or a double-click) opens the commit as changed files under its message, and **Compare with** the upstream opens what the branch adds since the two parted, or what a pull would bring when the branch is only behind. Both show each file's diff as a pull request's **Files changed** does. Tick **Viewed** on a file to fold it and keep count of what you have read; the ticks stay on this device, and a file that changes afterwards is unticked. A change of more than 25 files or 3,000 lines opens with its files folded. **Open on the hosting service** shows a pushed commit on GitHub, GitLab or Bitbucket.
+**View full commit** (or a double-click) opens the commit as changed files under its message, and **Compare with** the upstream opens what the branch adds since the two parted, or what a pull would bring when the branch is only behind. Both show each file's diff as a pull request's **Files changed** does. Tick **Viewed** on a file to fold it and keep count of what you have read; the ticks stay on this device, and a file that changes afterwards is unticked. A pull request's **Files changed** has the same tick. A change of more than 25 files or 3,000 lines opens with its files folded. **Open on the hosting service** shows a pushed commit on GitHub, GitLab or Bitbucket.
 
 ## Branches and worktrees
 

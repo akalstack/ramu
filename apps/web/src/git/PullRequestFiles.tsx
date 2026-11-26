@@ -28,7 +28,10 @@ import { useColorizedLines } from '../editor/colorize'
 import { ReviewThread } from './ReviewThread'
 import { isLargeDiff } from '@ramu/shared/largeDiff'
 import { ReviewFileTree } from '../changes/ReviewFileTree'
+import { Checkbox } from '@/components/desktop-checkbox'
 import { useNearViewport } from '../lib/useNearViewport'
+import { useViewedFiles } from '../changes/useViewedFiles'
+import { viewedKey } from './viewedFiles'
 import { queryInvokerFor } from './hostQuery'
 
 /** Files that start open; a larger pull request starts folded so its list can be read first. */
@@ -460,6 +463,8 @@ export function PullRequestFiles({
   const [visited, setVisited] = useState<Set<string>>(() => new Set())
   const banner = useRef<HTMLDivElement>(null)
   const [query, setQuery] = useState('')
+  // Files ticked as read, kept on this device as the Changes tab keeps its own; a file that changed is unticked.
+  const { viewedFiles, markViewed } = useViewedFiles(`pull-request:${url}`)
   const data = files.data
   const wordless = reviewNeedsWords(service, verdict) && !body.trim() && !pending.length
   if (files.isPending) return <p className="m-0 text-caption text-muted-foreground">{t('Loading files…')}</p>
@@ -725,12 +730,19 @@ export function PullRequestFiles({
                 >
                   {/* Pinned under the tabs and the toolbar (36px + 48px), on the page's own colour so the diff never shows
                 through the header's tint. */}
-                  <div className={cn('sticky z-10 bg-canvas', large ? 'top-[136px]' : 'top-[84px]')}>
+                  <div
+                    className={cn(
+                      'sticky z-10 flex items-stretch border border-line bg-card',
+                      large ? 'top-[136px]' : 'top-[84px]',
+                      open ? 'rounded-t-(--radius-m)' : 'rounded-(--radius-m)',
+                    )}
+                  >
                     <Button
                       variant="ghost"
                       className={cn(
-                        'h-auto w-full justify-start gap-2 border border-line bg-card px-3 py-2 text-left font-normal hover:bg-hover',
-                        open ? 'rounded-t-(--radius-m) rounded-b-none' : 'rounded-(--radius-m)',
+                        'h-auto min-w-0 flex-1 justify-start gap-2 rounded-none border-0 bg-transparent px-3 py-2 text-left font-normal hover:bg-hover',
+                        open ? 'rounded-tl-(--radius-m)' : 'rounded-l-(--radius-m)',
+                        viewedFiles.has(viewedKey(file)) && 'opacity-70',
                       )}
                       aria-expanded={open}
                       onClick={() => toggle(file.path, index)}
@@ -750,6 +762,17 @@ export function PullRequestFiles({
                         <span className="text-bad">−{file.deletions}</span>
                       </span>
                     </Button>
+                    <label className="flex flex-none cursor-pointer items-center gap-1.5 border-l border-line px-3 text-caption text-muted-foreground hover:text-foreground">
+                      <Checkbox
+                        checked={viewedFiles.has(viewedKey(file))}
+                        onCheckedChange={(checked) => {
+                          markViewed(viewedKey(file), checked === true)
+                          // A file just read folds away, so the next one is at the top.
+                          if ((checked === true) === open) toggle(file.path, index)
+                        }}
+                      />
+                      {t('Viewed')}
+                    </label>
                   </div>
                   {open && (
                     <NearFileDiff lines={file.additions + file.deletions}>
