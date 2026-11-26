@@ -161,6 +161,37 @@ it('drops a connection whose host stops answering heartbeats', async () => {
   socket.close()
 })
 
+it('judges the host on the next beat after a pause of its own, when the answers that waited have been read', async () => {
+  const { socket, opened, host } = make({ heartbeatMs: 1000 })
+  socket.start()
+  host(0, { t: 'ready', epoch: 'e1' })
+  // This process was busy for several beats: nothing it was sent has been read yet.
+  vi.setSystemTime(Date.now() + 5000)
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(opened[0]!.closed).toBe(false)
+  host(0, { t: 'pong' })
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(opened[0]!.closed).toBe(false)
+  socket.close()
+})
+
+it('asks to catch up rather than be dropped when it can, and hears when it must', () => {
+  let caughtUp = 0
+  const { socket, opened, host, states } = make({ onCatchUp: () => caughtUp++ })
+  socket.start()
+  expect(new URL(opened[0]!.url).searchParams.get('catchup')).toBe('1')
+  host(0, { t: 'ready', epoch: 'e1' })
+  host(0, { t: 'resync' })
+  expect(caughtUp).toBe(1)
+  // The connection stays as it was: catching up is not a reconnect.
+  expect(states).toEqual(['connecting', 'ready'])
+  socket.close()
+  const plain = make()
+  plain.socket.start()
+  expect(new URL(plain.opened[0]!.url).searchParams.has('catchup')).toBe(false)
+  plain.socket.close()
+})
+
 it('sends its subscription once ready and restores it on every reconnect', () => {
   const { socket, opened, host } = make()
   const subscriptions = (index: number) =>

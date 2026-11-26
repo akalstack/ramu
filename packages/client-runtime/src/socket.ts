@@ -43,6 +43,11 @@ export interface RuntimeSocketOptions {
   onState?(state: SocketState, resumed?: boolean): void
   /** The host's run identity changed: it restarted and every cursor held is void. */
   onRestart?(): void
+  /**
+   * Events were held back while this client was behind, on a connection that stayed open: fetch current state again.
+   * Giving it asks the host to hold events back rather than disconnect a client that falls behind.
+   */
+  onCatchUp?(): void
   /** The run an earlier socket to this host last saw, when this one replaces it, so a restart in between is still told. */
   epoch?: string | null
   /**
@@ -140,11 +145,13 @@ export class RuntimeSocket {
     this.set('connecting')
     // A local service is reached over its unix socket (`ws+unix:///path.sock`); a remote host over ws(s).
     let target: string
-    if (this.options.url.startsWith('ws+unix:')) target = `${this.options.url}:${SOCKET_PATH}`
+    if (this.options.url.startsWith('ws+unix:'))
+      target = `${this.options.url}:${SOCKET_PATH}${this.options.onCatchUp ? '?catchup=1' : ''}`
     else {
       const url = new URL(SOCKET_PATH, this.options.url)
       url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
       if (this.options.events === false) url.searchParams.set('events', 'none')
+      if (this.options.onCatchUp) url.searchParams.set('catchup', '1')
       target = url.toString()
     }
     const prover = this.options.prover
@@ -187,7 +194,8 @@ export class RuntimeSocket {
           if (typeof frame.n === 'number') this.lastEvent = frame.n
           this.options.onEvent(frame.channel, frame.payload)
           if (this.options.flowControl && frame.channel === 'term:data') this.acknowledge(socket, frame.payload)
-        } else if (frame.t === 'result') this.settle(frame.id, (call) => call.resolve(frame.value))
+        } else if (frame.t === 'resync') this.options.onCatchUp?.()
+        else if (frame.t === 'result') this.settle(frame.id, (call) => call.resolve(frame.value))
         else if (frame.t === 'error')
           this.settle(frame.id, (call) =>
             call.reject(Object.assign(new Error(frame.error), frame.status ? { status: frame.status } : {})),
@@ -246,8 +254,12 @@ export class RuntimeSocket {
   private startHeartbeat(socket: SocketLike) {
     const every = this.options.heartbeatMs ?? 25_000
     clearInterval(this.beat)
+    let lastBeat = Date.now()
     this.beat = setInterval(() => {
-      if (Date.now() - this.lastHeard > every * 2.5) {
+      // After a pause of this process, frames that arrived meanwhile are still unread: judge the host on the next beat.
+      const late = Date.now() - lastBeat > every * 1.5
+      lastBeat = Date.now()
+      if (!late && Date.now() - this.lastHeard > every * 2.5) {
         socket.close()
         return
       }

@@ -45,8 +45,15 @@ export interface SocketOptions {
   heartbeatMs?: number
   /** Calls one connection may have running at once; more are refused rather than queued without bound. */
   maxInFlight?: number
-  /** Unsent bytes at which a slow reader is disconnected, as slow event streams are. */
+  /**
+   * Unsent event bytes at which a client is behind. One that can catch up stops receiving events until it has read what
+   * is queued, then is told to fetch what it missed; any other is disconnected, as slow event streams are.
+   */
   maxBuffered?: number
+  /** Notes a connection the host ended and why, for the service log. */
+  log?: (message: string) => void
+  /** Called as each call starts; the returned function as it ends. */
+  track?: (method: string) => () => void
   /** How long a dropped connection's events are kept for it to come back and take them. */
   resumeGraceMs?: number
   /** The most recent events kept per connection for a replay, in count and in bytes. */
@@ -96,6 +103,8 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
   const heartbeatMs = options.heartbeatMs ?? 30_000
   const maxInFlight = options.maxInFlight ?? 32
   const maxBuffered = options.maxBuffered ?? 8 * 1024 * 1024
+  const log = options.log ?? (() => {})
+  const track = options.track ?? (() => () => {})
   const resumeGraceMs = options.resumeGraceMs ?? 45_000
   const resumeEvents = options.resumeEvents ?? 1000
   const resumeBytes = options.resumeBytes ?? 512 * 1024
@@ -240,6 +249,28 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
     let current: WebSocket | null = first
     let queued = () => 0
     let gone = false
+    // A client that can fetch what it missed is never dropped for falling behind, as a thread subscription in T3 Code
+    // is reset rather than its socket: dropping it showed the window reconnecting while several threads streamed.
+    let canCatchUp = false
+    let catchingUp: ReturnType<typeof setInterval> | null = null
+    let tell: (frame: SocketServerFrame) => void = () => {}
+    /** An event this client should have had was left out: nothing before it can be replayed past it. */
+    const leftOut = () => {
+      if (!seat) return
+      seat.next++
+      seat.recent = []
+      seat.recentBytes = 0
+    }
+    const fellBehind = () => {
+      log(`A client fell ${Math.round(queued() / 1024)} KB behind on events; it catches up once it has read them.`)
+      catchingUp = setInterval(() => {
+        if (!current || current.readyState !== current.OPEN || queued() > maxBuffered / 4) return
+        clearInterval(catchingUp!)
+        catchingUp = null
+        tell({ t: 'resync' })
+      }, 250)
+      catchingUp.unref()
+    }
 
     /** Numbers an event and keeps it among the latest, for a client that returns and names the last one it has. */
     const keep = (json: string): number => {
@@ -280,14 +311,27 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
           else keep(json)
           return true
         }
-        if (current.readyState !== current.OPEN) return true
-        if (!wanted(json) || held(json)) return true
+        if (current.readyState !== current.OPEN || !wanted(json)) return true
+        // Held back while the client reads what is queued; it fetches what it missed once told to.
+        if (catchingUp) {
+          leftOut()
+          return true
+        }
+        if (held(json)) return true
+        if (json.length > (MAX_REQUEST_BYTES - 1024) / 3 && Buffer.byteLength(json) > MAX_REQUEST_BYTES - 1024) {
+          log(`An event on ${/^\{"channel":"([^"]*)"/.exec(json)?.[1] ?? 'a channel'} was too large to send.`)
+          leftOut()
+          return true
+        }
         if (seat && !TERMINAL_STREAM.test(json)) current.send(`{"t":"event","n":${keep(json)},${json.slice(1)}`)
         else current.send(`{"t":"event",${json.slice(1)}`)
-        return queued() < maxBuffered
+        if (queued() < maxBuffered) return true
+        if (!canCatchUp) return false
+        fellBehind()
+        return true
       },
       get writableLength() {
-        return current ? queued() : 0
+        return current && !catchingUp ? queued() : 0
       },
       get destroyed() {
         return gone || (!!current && (current.readyState === current.CLOSED || current.readyState === current.CLOSING))
@@ -323,13 +367,28 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
       // Answers are sent whatever is queued: the client asked for each, and calls in flight are capped. Only events,
       // which a client never asked for one by one, end a connection that falls too far behind (see `sink.write`).
       // Ending it here dropped a desktop that opened a long thread from several places at once, and it asked again.
-      const send = (frame: SocketServerFrame) => {
+      const send = (frame: SocketServerFrame, method?: string) => {
         if (ws.readyState !== ws.OPEN) return
-        const text = encodeSocketFrame(frame)
-        const bytes = Buffer.byteLength(text)
+        let text = encodeSocketFrame(frame)
+        let bytes = Buffer.byteLength(text)
+        // A client closes its whole connection on a message over its limit, and asks again once reconnected: one answer
+        // too large fails alone, named in the log so the method can be fixed.
+        if (bytes > MAX_REQUEST_BYTES && frame.t === 'result') {
+          const size = Math.round(bytes / 1_000_000)
+          log(`${method ?? 'A call'} answered ${size} MB, more than a client accepts; it was refused.`)
+          text = encodeSocketFrame({
+            t: 'error',
+            id: frame.id,
+            error: `The answer was too large to send (${size} MB).`,
+            status: 500,
+          })
+          bytes = Buffer.byteLength(text)
+        }
         answersQueued += bytes
         ws.send(text, () => (answersQueued -= bytes))
       }
+      tell = send
+      canCatchUp = new URL(req.url ?? '/', 'http://host').searchParams.get('catchup') === '1'
       send({
         t: 'ready',
         epoch: host.epoch,
@@ -348,9 +407,15 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
       }
       let inFlight = 0
       let alive = true
+      let lastProbe = Date.now()
       ws.on('pong', () => (alive = true))
       const probe = setInterval(() => {
-        if (!alive) {
+        // A probe that ran late means this service was busy, and the peer's answer may still be unread behind it: the
+        // peer gets another interval rather than being dropped for this service's own pause.
+        const late = Date.now() - lastProbe > heartbeatMs * 1.5
+        lastProbe = Date.now()
+        if (!alive && !late) {
+          log(`A client did not answer for ${Math.round((2 * heartbeatMs) / 1000)} s; its connection was closed.`)
           ws.terminate()
           return
         }
@@ -400,11 +465,12 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
           return
         }
         inFlight++
+        const done = track(frame.method)
         void host
           .invoke(taker, { method: frame.method, args: frame.args, operationKey: frame.operationKey }, req)
           .then((result) => {
             if (result.ok) {
-              send({ t: 'result', id: frame.id, value: result.value })
+              send({ t: 'result', id: frame.id, value: result.value }, frame.method)
               result.after?.()
             } else send({ t: 'error', id: frame.id, error: result.error, status: result.status })
           })
@@ -416,7 +482,10 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
               status: 400,
             }),
           )
-          .finally(() => inFlight--)
+          .finally(() => {
+            inFlight--
+            done()
+          })
       })
       ws.on('close', () => {
         clearInterval(probe)
@@ -424,6 +493,8 @@ export function serveSockets(server: Server, host: SocketHost, options: SocketOp
         // Taken over by the client's next connection: this one has nothing left to end.
         if (current !== ws) return
         current = null
+        if (catchingUp) clearInterval(catchingUp)
+        catchingUp = null
         if (!seat || seat.ended || closing) return leave()
         seat.ws = null
         seat.timer = setTimeout(leave, resumeGraceMs)

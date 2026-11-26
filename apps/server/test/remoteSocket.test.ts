@@ -108,6 +108,81 @@ it('does not count answers on their way as events a client fell behind on', asyn
   expect(ws.readyState).toBe(ws.OPEN)
 })
 
+it('holds events back from a client that can catch up, then tells it to, instead of dropping it', async () => {
+  const big = randomBytes(1_500_000).toString('base64')
+  const logged: string[] = []
+  const { connect, sinks } = await start(
+    {},
+    { maxBuffered: 1_000_000, heartbeatMs: 10_000, log: (m: string) => logged.push(m) },
+  )
+  const { ws, frames, until } = connect(`${SOCKET_PATH}?catchup=1`)
+  await until(() => frames.some((frame) => frame.t === 'ready') && sinks.size === 1)
+  const [sink] = [...sinks]
+  const socket = (ws as unknown as { _socket: { pause(): void; resume(): void } })._socket
+  socket.pause()
+  const event = (n: number) => `data: ${JSON.stringify({ channel: 'agent:event', payload: { n, text: big } })}\n\n`
+  for (let n = 0; n < 4; n++) expect(sink!.write(event(n))).toBe(true)
+  // The broadcast drops a client whose queue passes its limit; this one reports nothing queued while it is behind.
+  expect(sink!.writableLength).toBe(0)
+  expect(logged.some((line) => line.includes('fell'))).toBe(true)
+  socket.resume()
+  await until(() => frames.some((frame) => frame.t === 'resync'))
+  expect(ws.readyState).toBe(ws.OPEN)
+  // Events sent before it fell behind arrive; those after are left for the client to fetch.
+  const delivered = frames.filter((frame) => frame.t === 'event').length
+  expect(delivered).toBeGreaterThan(0)
+  expect(delivered).toBeLessThan(4)
+  sink!.write(event(9))
+  await until(() => frames.some((frame) => frame.t === 'event' && (frame.payload as { n: number }).n === 9))
+})
+
+it('still drops a client that fell behind and cannot catch up', async () => {
+  const big = randomBytes(1_500_000).toString('base64')
+  const { connect, sinks } = await start({}, { maxBuffered: 1_000_000, heartbeatMs: 10_000 })
+  const { ws, frames, until } = connect()
+  await until(() => frames.some((frame) => frame.t === 'ready') && sinks.size === 1)
+  const [sink] = [...sinks]
+  ;(ws as unknown as { _socket: { pause(): void } })._socket.pause()
+  const write = () => sink!.write(`data: ${JSON.stringify({ channel: 'agent:event', payload: { text: big } })}\n\n`)
+  expect([write(), write()]).toContain(false)
+})
+
+it('does not drop a client for a pause of the service itself', async () => {
+  const { connect, sinks } = await start({}, { heartbeatMs: 100 })
+  const { ws, frames, until } = connect()
+  await until(() => frames.some((frame) => frame.t === 'ready') && sinks.size === 1)
+  // The client answers a probe, then the service (this same process) is busy for several heartbeats, so the answer
+  // waits unread behind the pause when the next probe is due.
+  let paused = false
+  ws.once('ping', () => {
+    const end = Date.now() + 450
+    while (Date.now() < end);
+    paused = true
+  })
+  await until(() => paused)
+  await new Promise((resolve) => setTimeout(resolve, 150))
+  expect(ws.readyState).toBe(ws.OPEN)
+})
+
+it('refuses one answer too large for a client instead of losing the connection to it', async () => {
+  const logged: string[] = []
+  const huge = 'x'.repeat(17_000_000)
+  const { connect } = await start(
+    { invoke: async (_device, request) => ({ ok: true, value: request.method === 'huge' ? huge : 'small' }) },
+    { heartbeatMs: 10_000, log: (m: string) => logged.push(m) },
+  )
+  const { ws, frames, until } = connect()
+  await until(() => frames.some((frame) => frame.t === 'ready'))
+  ws.send(encodeSocketFrame({ t: 'invoke', id: 1, method: 'huge', args: [] }))
+  ws.send(encodeSocketFrame({ t: 'invoke', id: 2, method: 'small', args: [] }))
+  await until(() => frames.some((frame) => frame.t === 'result' && frame.id === 2))
+  expect(frames.find((frame) => frame.t === 'error' && frame.id === 1)).toMatchObject({
+    error: expect.stringContaining('too large'),
+  })
+  expect(logged.some((line) => line.startsWith('huge answered 17 MB'))).toBe(true)
+  expect(ws.readyState).toBe(ws.OPEN)
+})
+
 it('refuses an unauthenticated upgrade before any socket exists', async () => {
   const { connect, sockets } = await start()
   const { ws } = connect(SOCKET_PATH, 'bad')

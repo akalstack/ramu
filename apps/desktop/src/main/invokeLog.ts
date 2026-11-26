@@ -10,6 +10,8 @@ const STACK_LINES = 4
 
 export interface InvokeLog {
   record(method: unknown, host: unknown, error: unknown): void
+  /** A line about the app itself, such as a pause long enough for its connections to notice. */
+  note(message: string): void
 }
 
 /**
@@ -18,7 +20,23 @@ export interface InvokeLog {
  */
 export function createInvokeLog(path: string, now: () => number = Date.now, maxBytes = MAX_BYTES): InvokeLog {
   const recent = new Map<string, { at: number; skipped: number }>()
+  const write = (text: string) => {
+    try {
+      mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
+      try {
+        if (statSync(path).size > maxBytes) renameSync(path, `${path}.1`)
+      } catch {
+        // No file yet.
+      }
+      appendFileSync(path, `${text}\n`, { mode: 0o600 })
+    } catch {
+      // Logging must never turn a failed call into a different failure.
+    }
+  }
   return {
+    note(message) {
+      write(`${new Date(now()).toISOString()} ${message}`)
+    },
     record(method, host, error) {
       const name = typeof method === 'string' ? method.slice(0, 200) : 'unknown'
       const on = typeof host === 'string' && host ? host.slice(0, 200) : 'this host'
@@ -45,17 +63,7 @@ export function createInvokeLog(path: string, now: () => number = Date.now, maxB
         `${new Date(at).toISOString()} ${name} on ${on} failed${typeof code === 'string' ? ` [${code}]` : ''}: ${message}${repeats}`,
         ...stack,
       ].join('\n')
-      try {
-        mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
-        try {
-          if (statSync(path).size > maxBytes) renameSync(path, `${path}.1`)
-        } catch {
-          // No file yet.
-        }
-        appendFileSync(path, `${line}\n`, { mode: 0o600 })
-      } catch {
-        // Logging must never turn a failed call into a different failure.
-      }
+      write(line)
     },
   }
 }

@@ -15,6 +15,11 @@ const commentInput = z.object({
 })
 const commentText = z.string().trim().min(1).max(10000)
 const idList = z.array(id).min(1).max(100)
+const withoutContent = <F extends { oldContent: string; newContent: string }>(file: F): F => ({
+  ...file,
+  oldContent: '',
+  newContent: '',
+})
 
 /** Code reviews, their comments, and undo of reviewed or chat changes. */
 export const registerReviewHandlers: RegisterHandlers = (ctx) => {
@@ -22,10 +27,16 @@ export const registerReviewHandlers: RegisterHandlers = (ctx) => {
   return {
     'reviews.list': {
       args: z.tuple([id.optional()]),
+      // File contents come with `reviews.get`; the list names files only. Changes another writer made carry contents
+      // too, and left in they made the list tens of MB, more than a window accepts in one message.
       run: (sessionId?: string) =>
-        reviews
-          .list(sessionId)
-          .map((r) => ({ ...r, files: r.files.map((f) => ({ ...f, oldContent: '', newContent: '' })) })),
+        reviews.list(sessionId).map((r) => ({
+          ...r,
+          files: r.files.map(withoutContent),
+          ...(r.elsewhere
+            ? { elsewhere: r.elsewhere.map((group) => ({ ...group, files: group.files.map(withoutContent) })) }
+            : {}),
+        })),
     },
     'reviews.get': { args: z.tuple([id]), run: (reviewId: string) => reviews.details(reviewId) },
     'reviews.branches': { args: z.tuple([id]), run: (reviewId: string) => reviews.branches(reviewId) },

@@ -10,6 +10,8 @@ export interface HostListener {
   state?(state: SocketState, resumed?: boolean): void
   /** The host restarted: every cursor held against it is void. */
   restart?(): void
+  /** Events were held back while this process was behind: what it shows may be stale. */
+  catchUp?(): void
 }
 interface Entry {
   socket: RuntimeSocket
@@ -92,6 +94,10 @@ function open(
       },
       onRestart: () => {
         for (const l of [...listeners]) l.restart?.()
+      },
+      // A host holds events back from a consumer that falls behind instead of dropping it; listeners refetch on `catchUp`.
+      onCatchUp: () => {
+        for (const l of [...listeners]) l.catchUp?.()
       },
     }),
   }

@@ -73,8 +73,10 @@ it('reports a live pre-WebSocket service without replacing it or leaking an unsu
   const socketPath = runtimeSocket(directory)
   const requests: string[] = []
   const server = createServer((req, res) => {
-    requests.push(req.url ?? '')
-    res.writeHead(req.url === '/socket' ? 404 : 200).end()
+    // Routed by path, as every service is: the query only carries options.
+    const path = (req.url ?? '').split('?')[0]!
+    requests.push(path)
+    res.writeHead(path === '/socket' ? 404 : 200).end()
   })
   await new Promise<void>((resolve) => server.listen(socketPath, resolve))
   try {
