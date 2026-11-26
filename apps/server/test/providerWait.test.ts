@@ -14,7 +14,7 @@ import {
 } from '@ramu/shared/types'
 import { AgentService, type QueryFn } from '../src/agent'
 import type { AgentRunnerFactory } from '../src/agent/agentRunner'
-import { LIMIT_CONTINUATION } from '../src/agent/providerWait'
+import { LIMIT_CONTINUATION, earlyTryBackoff } from '../src/agent/providerWait'
 import { ProviderLimitError } from '../src/agent/usageLimit'
 import { openDb, type Db } from '../src/db'
 import { MobilePush } from '../src/remote/mobilePush'
@@ -825,5 +825,11 @@ describe('notifying that a limit reset', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
+  })
+})
+
+describe('early tries at a limit', () => {
+  it('back off from five minutes to an hour, so a reading that shows room the provider denies cannot loop', () => {
+    expect([1, 2, 3, 4, 5, 9].map((count) => earlyTryBackoff(count) / 60_000)).toEqual([5, 10, 20, 40, 60, 60])
   })
 })

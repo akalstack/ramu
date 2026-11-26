@@ -3,6 +3,7 @@ import { ServiceGrants } from './interactive/serviceGrants'
 import { DASHBOARD_ROWS_MAX } from '@ramu/shared/artifactSource'
 import { LastingAddresses } from './workspace/deploy/namedTunnel'
 import { ShellPushes } from './agent/shellPushes'
+import { ToolTokens } from './agent/toolTokens'
 import { followPush } from './workspace/followPush'
 import {
   createRepoHook,
@@ -115,7 +116,7 @@ import { chmodSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileS
 import { homedir } from 'node:os'
 import { NoticeInbox } from './background/notices'
 import { join } from 'node:path'
-import { randomBytes, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
@@ -2130,7 +2131,7 @@ let remote: ReturnType<typeof createServer> | null = null
 let remoteError: string | null = null
 let remoteRetry: NodeJS.Timeout | undefined
 // Per-agent bearer credentials bind tool calls to their originating chat, including no-project chats.
-const browserTokens = new Map<string, string>()
+const toolTokens = new ToolTokens()
 const sessions = new Map<
   string,
   { session: AgentSessionInfo; toolSearch: boolean; browser?: import('@ramu/shared/browser').AgentBrowserPreferences }
@@ -2208,7 +2209,7 @@ const mcpHttp = createServer(async (req, res) => {
       source,
       () => agents.get(source.id),
       connection!.browser,
-      () => browserTokens.get(source.id) === token,
+      () => toolTokens.active(source.id, token),
       (detail, signal) => agents.requestPermission(source.id, 'Ramu integrated browser', detail, signal),
       () => browserAccessEpochs.get(source.id) ?? 0,
     )
@@ -2218,7 +2219,7 @@ const mcpHttp = createServer(async (req, res) => {
       computer,
       source,
       () => agents.get(source.id),
-      () => browserTokens.get(source.id) === token,
+      () => toolTokens.active(source.id, token),
       {
         enabled: () => workspace.getAppState<boolean>('computer:enabled', false) === true,
         request: (detail, signal) => agents.requestPermission(source.id, 'Computer use', detail, signal),
@@ -2585,8 +2586,7 @@ await new Promise<void>((resolve, reject) => {
 })
 const address = mcpHttp.address() as import('node:net').AddressInfo
 agents.toolConnection = (session) => {
-  const token = randomBytes(32).toString('hex')
-  browserTokens.set(session.id, token)
+  const token = toolTokens.issue(session.id)
   const browserPreferences = structuredClone(
     workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}).agentBrowser ??
       DEFAULT_AGENT_BROWSER_PREFERENCES,

@@ -74,6 +74,17 @@ export function nativeShell(
 }
 
 /** One ACP boundary for external runtimes and Ramu-owned hosts. Updates are snapshots; chunks are deltas. */
+/**
+ * Antigravity's own /goal loop asks the model to end with `<!-- GOAL_COMPLETE -->` or `<!-- GOAL_CANCELLED -->`. They
+ * are signals for that runtime, not words for the person, so they never reach the transcript; a marker still arriving
+ * at the end of a streaming message is held back until it completes.
+ */
+export function withoutRuntimeMarkers(text: string): string {
+  return text
+    .replace(/\s*<!--\s*GOAL_(?:COMPLETE|CANCELLED)\s*-->[ \t]*\n?/g, '')
+    .replace(/\s*<!-{0,2}(?:\s*G?O?A?L?_?[A-Z]*)?$/, '')
+}
+
 export class AcpEvents {
   private context?: { used: number; max: number }
   private compactions = new Map<string, Extract<AgentEvent, { kind: 'compaction' }>>()
@@ -242,7 +253,8 @@ export class AcpEvents {
       if (u.content?.type === 'text') {
         if (!this.stream || this.stream.kind !== kind) this.stream = { kind, messageId: randomUUID(), text: '' }
         this.stream.text += String(u.content.text ?? '')
-        return [{ kind, text: this.stream.text, messageId: this.stream.messageId }]
+        const shown = kind === 'text' ? withoutRuntimeMarkers(this.stream.text) : this.stream.text
+        return [{ kind, text: shown, messageId: this.stream.messageId }]
       }
       this.stream = undefined
       return content.length ? [{ kind: 'content', content, messageId: randomUUID() }] : []

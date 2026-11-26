@@ -728,6 +728,8 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
         </TurnSummary>
       )
     case 'note':
+      // As on the desktop, the limit tray above the composer says when the thread resumes; a line here would repeat it.
+      if (item.wait && item.limit) return null
       return item.goalNote ? <GoalNote item={item} /> : <NoteRow item={item} chat={chat} />
     case 'learning':
       return <LearningTurnLine item={item} computerId={chat.computerId} />
@@ -1352,25 +1354,28 @@ function ToolGroup({ item, live }: { item: Extract<TranscriptItem, { kind: 'tool
           </Arrive>
         </View>
         {failed > 0 ? (
-          <T size={font.caption} tone="bad">
-            {say('Failed')} · {failed}
-          </T>
+          // A quiet mark, as in T3 Code: the tinted icon and this cross say it failed; the words stay the tool's own.
+          <View
+            accessibilityLabel={failed > 1 ? say('{0} failed', { 0: failed }) : say('Failed')}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}
+          >
+            <CircleX size={13} color={c.bad} />
+            {failed > 1 ? (
+              <T size={font.caption} tone="bad">
+                {failed}
+              </T>
+            ) : null}
+          </View>
         ) : null}
         <Disclosure open={open} color={c.muted} />
       </Pressable>
-      {!open && !running && lastFailed ? (
-        // A closed group names its latest failure and what it said, so a failed step is never hidden behind a count.
-        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.s }}>
-          <CircleX size={12} color={c.bad} style={{ marginTop: 3 }} />
-          <T size={font.caption} tone="soft" numberOfLines={2} style={{ flex: 1, minWidth: 0 }}>
-            {say('Failed')}: {`${lastFailedWords.verb} ${lastFailedWords.subject}`.trim()}
-            {lastFailedLine ? (
-              <T size={font.caption} mono tone="muted">
-                {` — ${lastFailedLine}`}
-              </T>
-            ) : null}
-          </T>
-        </View>
+      {!open && !running && lastFailed && lastFailedLine ? (
+        // A closed group still says why its latest step failed, in one plain line; the full output is a tap away.
+        <T size={font.caption} tone="muted" numberOfLines={1} style={{ marginLeft: 22 }}>
+          {lastFailed === shown
+            ? lastFailedLine
+            : `${`${lastFailedWords.verb} ${lastFailedWords.subject}`.trim()}: ${lastFailedLine}`}
+        </T>
       ) : null}
       {!open && lastThoughtLine ? (
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.s }}>
@@ -1457,12 +1462,21 @@ function PlanCard({ item }: { item: Extract<TranscriptItem, { kind: 'plan' }> })
   )
 }
 
-/** What a failed call said, under its closed row: the exit code and the output's last lines, so the reason reads at once. */
-function ToolFailureLines({ output }: { output: string | undefined }) {
+/**
+ * What a failed call said, under its closed row. A command keeps its exit code and last output lines in monospace; any
+ * other tool says its error once, in plain words, and opening the row shows the rest.
+ */
+function ToolFailureLines({ output, shell }: { output: string | undefined; shell: boolean }) {
   const { c } = useTheme()
   const say = useSay()
   const { exit, lines } = toolFailure(output)
   if (!lines.length && exit === undefined) return null
+  if (!shell)
+    return (
+      <T size={font.caption} tone="muted" numberOfLines={1} style={{ marginLeft: 22, marginBottom: 4 }}>
+        {lines.at(-1)}
+      </T>
+    )
   return (
     <View
       style={{ marginLeft: 22, marginBottom: 4, paddingLeft: space.s, borderLeftWidth: 2, borderLeftColor: c.badWash }}
@@ -1539,11 +1553,7 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
             {item.file.removed ? <T size={font.caption} mono tone="bad">{`−${item.file.removed}`}</T> : null}
           </T>
         ) : null}
-        {failed ? (
-          <T size={font.caption} tone="bad">
-            {say('Failed')}
-          </T>
-        ) : null}
+        {failed ? <CircleX size={13} color={c.bad} accessibilityLabel={say('Failed')} /> : null}
         {movable ? (
           <Pressable
             accessibilityRole="button"
@@ -1561,7 +1571,7 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
         ) : null}
         {openable ? <Disclosure open={open} color={c.muted} /> : null}
       </Pressable>
-      {failed && !open ? <ToolFailureLines output={item.detail} /> : null}
+      {failed && !open ? <ToolFailureLines output={item.detail} shell={item.tool === 'execute'} /> : null}
       {open ? (
         <>
           {/* Opened, a file tool shows where the file lives and opens it; an edit shows its diff instead of raw input. */}

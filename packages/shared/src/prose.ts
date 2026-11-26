@@ -32,10 +32,10 @@ export const PROSE: Readonly<Record<ProseDensity, ProseScale>> = {
   reply: {
     size: 'body',
     leading: 1.62,
-    blockGap: 0.86,
+    blockGap: 0.75,
     itemGap: 0.3,
     headingGap: 1.45,
-    headings: [1.3, 1.15, 1.05, 1, 1, 1],
+    headings: [1.4, 1.28, 1.14, 1, 1, 1],
     headingLeading: 1.35,
     code: 0.86,
     codeLeading: 1.5,

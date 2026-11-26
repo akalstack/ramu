@@ -71,11 +71,14 @@ export function ModelPicker({
   onChange,
   onDone,
   onSet,
+  account,
 }: {
   settings: AgentSettings
   onChange: (settings: AgentSettings) => void
   onDone: () => void
   onSet: (id: string) => void
+  /** The thread's login row, the same one the model panel shows, so a limited login can be switched from the list. */
+  account?: ReactNode
 }) {
   const language = useLanguage()
   const { catalogs, preferences, reload } = useModelSets()
@@ -590,6 +593,7 @@ export function ModelPicker({
             document.body,
           )}
         </DndContext>
+        {account && <div className="flex-none border-t border-(--line) p-1">{account}</div>}
         <div className="flex flex-none items-center justify-between gap-2 border-t border-(--line) p-1">
           <Button
             variant="ghost"

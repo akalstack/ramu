@@ -14,7 +14,7 @@ import { Switch } from '@/components/ui/switch'
 import { AGENT_PROVIDERS, providerAccountRows, providerEnabled, providerName } from '@ramu/shared/providers/providers'
 import type { AgentProvider, AppPreferences } from '@ramu/shared/types'
 import type { ProviderStatus } from '@ramu/shared/providers/providers'
-import { runProviderCommand } from '../models/ProviderSetupTerminal'
+import { runProviderCommand, useSignInWatch } from '../models/ProviderSetupTerminal'
 import { useAccountUsage } from './Usage'
 import { accountKey } from '@ramu/shared/identities'
 import { useAccountIdentities } from './AccountIdentity'
@@ -284,6 +284,16 @@ export function ProviderSettings({
         return name ? { ...rest, name } : rest
       }),
     })
+  // A sign-in in the setup terminal shows here once the login holds, without returning to the window or refreshing.
+  const signing = useRef<{ provider: AgentProvider; accountId: string } | null>(null)
+  const watchSignIn = useSignInWatch(async () => {
+    const target = signing.current
+    if (!target) return true
+    const answer = await invoke('providers.statusOf', target.provider, config)
+    const signedIn = !!answer.signIn?.[target.accountId]?.signedIn
+    if (signedIn) void refresh(false, true, [target.provider])
+    return signedIn
+  })
   const login = async (provider: AgentProvider, accountId = config[provider]?.accountId || 'default') => {
     if (!allowed()) return
     const target =
@@ -296,7 +306,9 @@ export function ProviderSettings({
       if (!allowed()) return
       if (command) {
         loginPending.current = provider
+        signing.current = { provider, accountId }
         runProviderCommand(`${providerName(provider)} · ${t('Login')}`, command)
+        watchSignIn()
         return
       }
       if (provider === 'antigravity') {

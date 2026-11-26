@@ -230,6 +230,9 @@ export function ModelBar({
               }}
               onDone={() => setPicker('bar')}
               onSet={chooseSet}
+              account={
+                logins && <AccountRow choices={logins} disabled={disabled} onOpen={() => setPicker('account')} />
+              }
             />
           ) : picker === 'account' && logins ? (
             <AccountList

@@ -317,6 +317,12 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
     const end = m.content - m.viewport + m.cover
     return end > restTop.current + 1 ? end : null
   }
+  /**
+   * Until when a jump to the latest keeps aiming at the end. Rows below the screen are only estimated until they are
+   * drawn, so the first aim falls short and the content grows as the list lands; each growth re-aims, until the reader
+   * touches the list.
+   */
+  const landingUntil = useRef(0)
   const toEnd = (animated: boolean) => {
     animated = animated && !reducedMotion
     if (!ios) return scroll.current?.scrollToEnd({ animated })
@@ -1725,6 +1731,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                   scrollEventThrottle={16}
                   onScrollBeginDrag={() => {
                     userScrolling.current = true
+                    landingUntil.current = 0
                   }}
                   onScrollEndDrag={(event) => {
                     if (!event.nativeEvent.velocity?.y) userScrolling.current = false
@@ -1736,6 +1743,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                     metrics.current.content = height
                     settleReveal()
                     catchUp()
+                    if (Date.now() < landingUntil.current && following.current && !userScrolling.current) toEnd(true)
                   }}
                   keyboardDismissMode="on-drag"
                   keyboardShouldPersistTaps="handled"
@@ -2038,6 +2046,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                         following.current = true
                         userScrolling.current = false
                         setAway(false)
+                        landingUntil.current = Date.now() + 2000
                         toEnd(true)
                       }}
                     >

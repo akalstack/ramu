@@ -45,7 +45,7 @@ import { DesktopUpdater } from './desktopUpdater'
 import { whileStarting } from './startupWindow'
 import { serviceIsIdle } from './serviceIdle'
 import { ServiceRestart } from './serviceRestart'
-import { mayInstallUnattended } from './unattendedUpdate'
+import { installsAtLaunch, mayInstallUnattended } from './unattendedUpdate'
 import { rememberBounds, savedBounds } from './windowBounds'
 import { runtimeBuild } from '@ramu/server/build'
 import { unloadLoginService } from './runtimeLauncher'
@@ -353,6 +353,40 @@ async function main() {
         app.quit()
       })
   })
+
+  let updateStatus: AppUpdateStatus | undefined
+  // Windows learn of the native updater's progress once they exist; an update installed at launch has none to tell.
+  let showUpdaterChange = () => {}
+  const desktopUpdater = new DesktopUpdater(userData, () => showUpdaterChange())
+  // A release the service downloaded while Ramu was closed installs now, before any window holds work, rather than
+  // waiting until the person leaves the computer idle with the window open. Only the app restarts; threads keep running.
+  if (
+    app.isPackaged &&
+    !process.env.RAMU_USER_DATA &&
+    !e2eHeadless &&
+    !launchedForPairing &&
+    desktopUpdater.supported
+  ) {
+    const staged = await Promise.all([
+      runtimeInvoke(runtime, 'updates.status'),
+      runtimeInvoke(runtime, 'settings.app.get'),
+    ]).catch(() => null)
+    if (staged && installsAtLaunch(staged[0], staged[1].appAutoUpdate, app.getVersion())) {
+      const prepared = await whileStarting(
+        () =>
+          desktopUpdater.readyFor(staged[0], 90_000).then(
+            () => true,
+            () => false,
+          ),
+        { title: t('Updating Ramu…'), detail: t('Installing the update downloaded while Ramu was closed.') },
+      )
+      // A build that fails to prepare starts as it is; the update stays offered in the status bar and Settings.
+      if (prepared) {
+        desktopUpdater.install()
+        return
+      }
+    }
+  }
 
   // Dictation: main owns the microphone permission, the single recording lease and the local recognizer.
   const voice = new DesktopVoice({
@@ -744,10 +778,9 @@ async function main() {
   win.webContents.on('did-navigate', () => contentDocuments.clear())
   wire(win.webContents)
 
-  let updateStatus: AppUpdateStatus | undefined
-  const desktopUpdater = new DesktopUpdater(userData, () => {
+  showUpdaterChange = () => {
     if (updateStatus) sendAll('updates:changed', updateView(updateStatus))
-  })
+  }
   const updateView = (status: AppUpdateStatus): AppUpdateStatus => {
     const stale = !!status.release && !newerVersion(status.release.version, app.getVersion())
     return {

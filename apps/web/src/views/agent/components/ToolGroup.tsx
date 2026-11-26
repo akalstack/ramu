@@ -52,12 +52,21 @@ const failedResult = (tool: ToolUse, result: ToolResult | undefined) =>
   result ? result.isError || result.status === 'failed' : tool.status === 'failed'
 
 /**
- * What a failed call said, under its row while the row is closed: the exit code and the output's last lines, so the
- * reason reads without opening anything. Opening the row shows the whole output instead.
+ * What a failed call said, under its row while the row is closed. A command keeps its exit code and last output lines
+ * in monospace; any other tool says its error once, in plain words. Opening the row shows the whole output instead.
  */
-function ToolFailureLines({ output }: { output: string | undefined }) {
+function ToolFailureLines({ output, shell }: { output: string | undefined; shell: boolean }) {
   const { exit, lines } = toolFailure(output)
   if (!lines.length && exit === undefined) return null
+  if (!shell)
+    return (
+      <div
+        className="tool-failure mb-1 ml-[22px] min-w-0 truncate text-caption text-muted-foreground"
+        title={lines.at(-1)}
+      >
+        {lines.at(-1)}
+      </div>
+    )
   return (
     <div className="tool-failure mb-1 ml-[22px] min-w-0 border-l-2 border-bad/40 pl-2 font-mono text-caption leading-[1.5] text-soft">
       {exit !== undefined && <div className="text-bad">{translate('Exit code {0}', { 0: exit })}</div>}
@@ -156,8 +165,13 @@ export function ToolGroup({
               {headline}
             </ActivityText>
             {status.failed > 0 && (
-              <span className="text-bad text-caption flex-none">
-                {translate('Failed')} · {status.failed}
+              // A quiet mark, as in T3 Code: the tinted icon and this cross say it failed; the words stay the tool's own.
+              <span
+                className="flex flex-none items-center gap-0.5 text-caption text-bad"
+                aria-label={status.failed > 1 ? translate('{0} failed', { 0: status.failed }) : translate('Failed')}
+              >
+                <CircleX size={13} aria-hidden="true" />
+                {status.failed > 1 && status.failed}
               </span>
             )}
             <ChevronRight size={13} className={CARET_CLASS} />
@@ -165,12 +179,9 @@ export function ToolGroup({
         )}
         {entries.length > 1 && !open && !running && lastFailed && (
           // A closed group names its latest failure and what it said, so a failed step is never hidden behind "Ran 5 commands".
-          <div className="flex min-w-0 items-start gap-2 pb-1 text-caption">
-            <CircleX size={12} className="mt-[3px] flex-none text-bad" aria-hidden="true" />
-            <span className="min-w-0 truncate text-soft">
-              {translate('Failed')}: {describeTools([lastFailed], results, active)}
-              {lastFailedLine ? <span className="font-mono text-muted-foreground"> — {lastFailedLine}</span> : null}
-            </span>
+          <div className="ml-[22px] min-w-0 truncate pb-1 text-caption text-muted-foreground">
+            {describeTools([lastFailed], results, active)}
+            {lastFailedLine ? `: ${lastFailedLine}` : null}
           </div>
         )}
         {entries.length > 1 && !open && lastThought && thoughtLine(lastThought.text, true) && (
@@ -240,16 +251,17 @@ export function ToolGroup({
                         `${translate(toolVerb(TOOL_VERB[t.name] ?? KIND_VERB[category], toolRunning))} ${summary}`}
                     </ActivityText>
                     {file && <FileToolCounts added={file.added} removed={file.removed} />}
-                    {(state === 'Failed' || state === 'Pending' || state === 'Stopped') && (
-                      <span
-                        className={`tool-state text-caption flex-none ${state === 'Failed' ? 'text-bad' : 'text-muted-foreground'}`}
-                      >
+                    {state === 'Failed' && (
+                      <CircleX size={13} className="tool-state flex-none text-bad" aria-label={translate('Failed')} />
+                    )}
+                    {(state === 'Pending' || state === 'Stopped') && (
+                      <span className="tool-state text-caption flex-none text-muted-foreground">
                         {translate(state)}
                       </span>
                     )}
                     <ChevronRight size={12} className={CARET_CLASS} />
                   </CollapsibleTrigger>
-                  {failed && !toolRunning && !row && <ToolFailureLines output={r?.summary} />}
+                  {failed && !toolRunning && !row && <ToolFailureLines output={r?.summary} shell={bash} />}
                   <CollapsibleContent className={TOOL_DISCLOSURE_PANEL_CLASS}>
                     <div className={TOOL_CARD_CLASS}>
                       {!row && movable && (

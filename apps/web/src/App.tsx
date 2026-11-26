@@ -823,8 +823,9 @@ function Shell() {
                 />
               </nav>
               <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                {/* Inset like the rows below it, so New thread's edge, icon and words line up with the list. */}
                 <nav
-                  className="sidebar-nav flex flex-col gap-px p-[2px_8px_6px_2px] flex-none"
+                  className="sidebar-nav flex flex-col gap-px p-[2px_8px_6px_8px] flex-none"
                   aria-label={t('Activity')}
                 >
                   <ComputerSwitcher />

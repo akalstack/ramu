@@ -141,24 +141,16 @@ describe('onboarding default model', () => {
 describe('onboarding steps', () => {
   const kinds = (steps: ReturnType<typeof setupSteps>) => steps.map((step) => step.id)
 
-  it('repeats the model and effort steps for each provider, skipping an effort step with nothing to choose', () => {
-    const steps = setupSteps(['codex', 'claude-code'], (provider) => provider === 'codex')
-    expect(kinds(steps).slice(0, 6)).toEqual([
-      'agents',
-      'mode',
-      'model:codex',
-      'effort:codex',
-      'model:claude-code',
-      'tokens',
-    ])
-    expect(kinds(setupSteps([], () => true)).slice(0, 4)).toEqual(['agents', 'mode', 'model', 'tokens'])
+  it('asks model and effort together, on one step for each provider', () => {
+    const steps = setupSteps(['codex', 'claude-code'])
+    expect(kinds(steps).slice(0, 5)).toEqual(['agents', 'mode', 'model:codex', 'model:claude-code', 'tokens'])
+    expect(kinds(setupSteps([])).slice(0, 4)).toEqual(['agents', 'mode', 'model', 'tokens'])
   })
 
-  it('lands a step that is gone on the one after it', () => {
-    const steps = setupSteps(['codex', 'claude-code'], () => false)
+  it('lands a step that is gone on the one after it, and an old effort step on its provider', () => {
+    const steps = setupSteps(['codex', 'claude-code'])
     expect(steps[stepIndex(steps, 'model:claude-code')]!.id).toBe('model:claude-code')
-    expect(steps[stepIndex(steps, 'effort:codex')]!.id).toBe('model:claude-code')
-    expect(steps[stepIndex(steps, 'effort:claude-code')]!.id).toBe('tokens')
+    expect(steps[stepIndex(steps, 'effort:codex')]!.id).toBe('model:codex')
     expect(steps[stepIndex(steps, 'model:cursor')]!.id).toBe('tokens')
     expect(stepIndex(steps, 'unknown')).toBe(0)
   })

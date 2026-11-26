@@ -177,14 +177,32 @@ export interface BackgroundTerminalInfo {
   capabilities: { inspect: true; stop: boolean; forceStop: boolean; input: boolean }
 }
 
-/** Counts only: lock-screen content never includes prompts, paths, host names or credentials. */
+/** Where one thread of the current stretch of work stands, as the Live Activity names it. */
+export type LiveActivityThreadStatus = 'working' | 'approval' | 'question' | 'limit' | 'input' | 'failed' | 'done'
+/** What draws the eye: someone is needed, something failed, work goes on, or all of it is over. */
+export type LiveActivityTone = 'attention' | 'failed' | 'working' | 'done'
+
+/**
+ * What the phone's work Live Activity shows. Never prompts, paths, host names or credentials. `rows` holds thread
+ * titles, so only the phone writes it, from what it already shows; a host's pushes (sent through Ramu Link or Apple)
+ * carry counts only. Fields after `phase` are absent from older hosts and apps, so the widget reads each as
+ * optional and falls back on the counts and `phase`.
+ */
 export interface MobileLiveActivityContent {
   running: number
   waiting: number
   startedAt: number
   updatedAt: number
   locale: 'en' | 'id'
+  /** `paused` is only read: older apps wrote it to mark the activity out of date. */
   phase: 'working' | 'waiting' | 'finished' | 'paused'
+  tone?: LiveActivityTone
+  /** What the most urgent waiting thread needs, while `tone` is `attention`. */
+  need?: 'approval' | 'question' | 'limit' | 'input'
+  failed?: number
+  done?: number
+  /** Up to three threads of this stretch, the most urgent first. */
+  rows?: { title: string; status: LiveActivityThreadStatus }[]
 }
 export interface MobileLiveActivityStart {
   token: string

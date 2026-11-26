@@ -33,8 +33,8 @@ describe('prose scale', () => {
 
   it('turns the scale into whole points for the phone, following the body size', () => {
     const base = proseMetrics(15, 'reply')
-    expect(base).toMatchObject({ size: 15, lineHeight: 24, blockGap: 13, code: 13 })
-    expect(base.headings[0]).toEqual({ size: 20, lineHeight: 27 })
+    expect(base).toMatchObject({ size: 15, lineHeight: 24, blockGap: 11, code: 13 })
+    expect(base.headings[0]).toEqual({ size: 21, lineHeight: 28 })
     expect(base.headings[5]).toEqual({ size: 15, lineHeight: 20 })
 
     // A larger text size grows every part of the block, not only the paragraphs.

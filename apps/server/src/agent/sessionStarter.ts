@@ -10,7 +10,7 @@ import {
   type MessageOrigin,
 } from '@ramu/shared/types'
 import { stepKey } from '@ramu/shared/providers/routing'
-import { goalInstructions, goalState } from './goals'
+import { goalInstructions, goalState, openGoal } from './goals'
 import { WRITING_STATES } from './constants'
 import { userEvent } from './inputQueue'
 import { RECORDED_ACCOUNT_PROVIDERS } from './settings'
@@ -226,7 +226,7 @@ export class SessionStarter {
     if (recordUser) this.db.prepare('DELETE FROM agent_recovery WHERE session_id = ?').run(id)
     if (recordUser && this.host.getGoal(id)?.status === 'blocked') this.host.controlGoal(id, 'resume')
     // Follow-ups carry only the changing goal state, plus the policy once if the launch instructions left it out.
-    const goal = !s.parentId ? this.host.getGoal(id) : null
+    const goal = !s.parentId ? openGoal(this.host.getGoal(id)) : null
     const sendPolicy = !!goal && !this.host.goalPolicySent.has(id)
     if (sendPolicy) this.host.goalPolicySent.add(id)
     const goalText = goal && (sendPolicy ? goalInstructions(this.host.goalPreferences(), goal) : goalState(goal))

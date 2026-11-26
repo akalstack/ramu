@@ -96,18 +96,27 @@ it('sends only status, deduplicates unchanged work and ends completed activity',
     updatedAt: expect.any(Number),
     locale: 'en',
     phase: 'working',
+    tone: 'working',
   })
   expect(Buffer.byteLength(JSON.stringify(push))).toBeLessThan(4096)
   expect(JSON.stringify(push)).not.toContain('computer-a')
   f.counts.needsInput = 1
   await f.service.flush()
-  expect(JSON.parse(f.sender.mock.calls[1]![0].props).phase).toBe('waiting')
+  expect(JSON.parse(f.sender.mock.calls[1]![0].props)).toMatchObject({
+    phase: 'waiting',
+    tone: 'attention',
+    need: 'input',
+  })
   f.counts.running = 0
   f.counts.needsInput = 0
   await f.service.flush()
   push = f.sender.mock.calls[2]![0]
   expect(push.event).toBe('end')
-  expect(push.dismissalDate).toBeGreaterThanOrEqual(Math.floor(Date.now() / 1000) + 899)
+  // The finished activity leaves the Lock Screen after a few minutes, not hours later, and carries no counts.
+  expect(push.dismissalDate).toBeGreaterThanOrEqual(Math.floor(Date.now() / 1000) + 239)
+  expect(push.dismissalDate).toBeLessThanOrEqual(Math.floor(Date.now() / 1000) + 241)
+  expect(JSON.parse(push.props)).toMatchObject({ running: 0, waiting: 0, phase: 'finished', tone: 'done' })
+  expect(JSON.parse(push.props).rows).toBeUndefined()
   await f.service.flush()
   expect(f.sender).toHaveBeenCalledTimes(3)
 })

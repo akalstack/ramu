@@ -1,3 +1,6 @@
+import { APP_AUTO_UPDATE, type AppUpdateStatus } from '@ramu/shared/updates'
+import { newerVersion } from '@ramu/shared/version'
+
 /** How long nobody may have used this computer before a downloaded update installs on its own. */
 export const UNATTENDED_IDLE_SECONDS = 5 * 60
 
@@ -19,4 +22,22 @@ export async function mayInstallUnattended(read: {
     return false
   }
   return read.serviceIdle()
+}
+
+/**
+ * Whether to install a staged update as the app starts, before any window opens. Nothing in a window can be lost yet,
+ * and the service keeps its threads running while only the app restarts, so neither idleness nor running work matters.
+ */
+export function installsAtLaunch(
+  status: Pick<AppUpdateStatus, 'phase' | 'release'>,
+  autoUpdate: boolean,
+  installedVersion: string,
+): boolean {
+  return (
+    APP_AUTO_UPDATE &&
+    autoUpdate &&
+    status.phase === 'ready' &&
+    !!status.release &&
+    newerVersion(status.release.version, installedVersion)
+  )
 }

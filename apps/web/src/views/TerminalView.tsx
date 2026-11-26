@@ -48,6 +48,7 @@ export function TerminalView({
   initialCommand,
   backgroundId,
   run,
+  onOutput,
 }: {
   viewId?: string
   taskId: string
@@ -60,6 +61,8 @@ export function TerminalView({
   /** An inspect-only attachment target; losing it must never create a replacement shell. */
   backgroundId?: string
   /** Typed into the task's shell once it opens (project actions). */ run?: string
+  /** Live output as it arrives, for a caller that watches for something in it (a sign-in link). */
+  onOutput?: (data: string) => void
 }) {
   const { preferences } = useAppSettings()
   const ws = useWorkspace()
@@ -69,6 +72,9 @@ export function TerminalView({
   const runtime = useHostRuntime()
   const { allShells, beginOpening, forgetTerminal, shellOf, takeAdopted, trackTerminal } = runtime.terminals
   const terminal = useRef<Terminal | null>(null)
+  // Read through a ref: the stream subscribes once per terminal, while the caller's listener changes with its renders.
+  const outputListener = useRef(onOutput)
+  outputListener.current = onOutput
   const renderer = useRef<WebglAddon | null>(null)
   const rendererLoss = useRef<{ dispose(): void } | null>(null)
   const host = useRef<HTMLDivElement>(null)
@@ -377,6 +383,7 @@ export function TerminalView({
                     `\x1bc\x1b[2m[${t('Showing the most recent terminal output. Older output was truncated.')}]\x1b[0m\r\n`,
                   )
                 term.write(unseen.data)
+                outputListener.current?.(unseen.data)
                 replayed = chunk.cursor ?? replayed + unseen.data.length
                 if (gate.output()) runtime.activity.markTerminalOutput(ws.workspaceOf(taskId))
               }),

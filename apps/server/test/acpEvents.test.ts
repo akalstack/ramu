@@ -1,5 +1,5 @@
-import { expect, it } from 'vitest'
-import { AcpEvents, nativeShell } from '../src/providers/acpEvents'
+import { describe, expect, it } from 'vitest'
+import { AcpEvents, nativeShell, withoutRuntimeMarkers } from '../src/providers/acpEvents'
 import { agentContent, inlineMedia } from '@ramu/shared/chat/agentContent'
 import { toolKind } from '@ramu/shared/chat/agentTools'
 const chunk = (text: string, thinking = false) => ({
@@ -499,4 +499,15 @@ it('turns ACP session metadata titles into title events and ignores empty or nul
   expect(decoder.consume({ sessionUpdate: 'session_info_update', title: null })).toEqual([])
   expect(decoder.consume({ sessionUpdate: 'session_info_update', title: '  ' })).toEqual([])
   expect(decoder.consume({ sessionUpdate: 'session_info_update', updatedAt: 'x' })).toEqual([])
+})
+
+describe("Antigravity's goal markers", () => {
+  it('never show in a reply, whole or still streaming', () => {
+    expect(withoutRuntimeMarkers('Understood. Completing this test now.\n<!-- GOAL_COMPLETE -->')).toBe(
+      'Understood. Completing this test now.',
+    )
+    expect(withoutRuntimeMarkers('Stopping.\n<!-- GOAL_CANCELLED -->\n')).toBe('Stopping.')
+    expect(withoutRuntimeMarkers('Done.\n<!-- GOAL_COM')).toBe('Done.')
+    expect(withoutRuntimeMarkers('Use `<!-- note -->` in HTML.')).toBe('Use `<!-- note -->` in HTML.')
+  })
 })

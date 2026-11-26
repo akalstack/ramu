@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   Check,
   ExternalLink,
@@ -30,7 +30,7 @@ import { t } from '../i18n'
 import { errorText } from '../lib/errors'
 import { effortDisplayName, modelDisplayName, modelStepName, useModelSets } from '../models/ModelSets'
 import { ProviderIcon } from '../models/ProviderIcon'
-import { runProviderCommand } from '../models/ProviderSetupTerminal'
+import { runProviderCommand, useSignInWatch } from '../models/ProviderSetupTerminal'
 import { useAppSettings } from '../settings/AppSettings'
 import { choosableEfforts, onboardingModels, withModel, type DefaultModelChoice } from './defaultModel'
 import { FEWEST_TOKENS, TOKEN_FEATURES, sameChoices, type TokenChoices } from './tokenChoices'
@@ -50,7 +50,7 @@ export function AgentsStep({
   enabled,
   onEnabled,
   lead,
-  canLead,
+  leads,
   onLead,
   onRefresh,
   onError,
@@ -58,9 +58,10 @@ export function AgentsStep({
   statuses: ProviderStatus[] | null
   enabled(provider: AgentProvider): boolean
   onEnabled(provider: AgentProvider, on: boolean): void
-  /** The agent new threads start on, marked when more than one can run. */
+  /** The agent new threads start on. */
   lead?: AgentProvider
-  canLead(provider: AgentProvider): boolean
+  /** The agents that can be the default: on, installed, with models to start on. */
+  leads: AgentProvider[]
   onLead(provider: AgentProvider): void
   onRefresh(): Promise<void>
   onError(message: string): void
@@ -68,12 +69,24 @@ export function AgentsStep({
   const [checking, setChecking] = useState(false)
   /** Key variables the host already has, while Antigravity's sign-in dialog is open. */
   const [antigravityKeys, setAntigravityKeys] = useState<string[] | null>(null)
+  // The row turns to Signed in once the login holds, and the terminal closes, without pressing Check again.
+  const signingIn = useRef<AgentProvider | null>(null)
+  const watchSignIn = useSignInWatch(async () => {
+    const provider = signingIn.current
+    if (!provider) return true
+    const signedIn = !!(await invoke('providers.statusOf', provider)).signIn?.default?.signedIn
+    if (signedIn) await onRefresh()
+    return signedIn
+  })
   const signIn = async (status: ProviderStatus) => {
     onError('')
     try {
       const command = await invoke('providers.loginCommand', status.provider)
-      if (command) runProviderCommand(`${providerName(status.provider)} · ${t('Sign in')}`, command)
-      else if (status.provider === 'antigravity') {
+      if (command) {
+        signingIn.current = status.provider
+        runProviderCommand(`${providerName(status.provider)} · ${t('Sign in')}`, command)
+        watchSignIn()
+      } else if (status.provider === 'antigravity') {
         const environment = await Promise.resolve(invoke('providers.environment')).catch(() => null)
         setAntigravityKeys(environment?.keys.antigravity ?? [])
       } else await invoke('providers.signIn', status.provider)
@@ -98,6 +111,33 @@ export function AgentsStep({
           }}
         />
       )}
+      {/* The choice comes first; the list below is where an agent is signed in or turned on to join it. */}
+      {leads.length > 0 && (
+        <div
+          role="radiogroup"
+          aria-label={t('Default agent')}
+          className="overflow-hidden rounded-(--radius-m) bg-fill [&>*+*]:border-t [&>*+*]:border-(--line)"
+        >
+          {leads.map((provider) => (
+            <Choice
+              key={provider}
+              selected={provider === lead}
+              title={
+                <>
+                  <ProviderIcon provider={provider} size={15} />
+                  {providerName(provider)}
+                </>
+              }
+              onSelect={() => onLead(provider)}
+            />
+          ))}
+        </div>
+      )}
+      {statuses !== null && (
+        <h3 className="m-0 mt-2 text-caption font-medium text-muted-foreground">
+          {leads.length ? t('Agents on this host') : t('Sign in to an agent to choose your default')}
+        </h3>
+      )}
       {statuses === null ? (
         <p className="m-0 text-caption text-muted-foreground" role="status">
           {t('Looking for installed agents…')}
@@ -115,11 +155,6 @@ export function AgentsStep({
                   <>
                     <ProviderIcon provider={status.provider} size={15} className={on ? '' : 'opacity-40'} />
                     <span className={on ? '' : 'text-muted-foreground'}>{providerName(status.provider)}</span>
-                    {lead === status.provider && (
-                      <Badge variant="secondary" className="font-normal">
-                        {t('Default')}
-                      </Badge>
-                    )}
                   </>
                 }
                 help={
@@ -132,16 +167,6 @@ export function AgentsStep({
                       : t('Not installed')
                 }
               >
-                {lead && lead !== status.provider && on && canLead(status.provider) && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    title={t('Start new threads on {0}', { 0: providerName(status.provider) })}
-                    onClick={() => onLead(status.provider)}
-                  >
-                    {t('Make default')}
-                  </Button>
-                )}
                 {!on ? null : status.installed ? (
                   status.signIn?.default?.signedIn ? (
                     <Check size={16} className="text-brand" aria-label={t('Signed in')} />

@@ -5,6 +5,16 @@ import Constants from 'expo-constants'
 /** How often the host hears again that a thread is still in front; it stops counting one it has not heard about. */
 const REPEAT_MS = 60_000
 
+const viewed = new Set<string>()
+const viewers = new Set<() => void>()
+/** Whether the person has this thread in front of them in Ramu right now. */
+export const isThreadViewed = (computerId: string, sessionId: string) => viewed.has(`${computerId}:${sessionId}`)
+/** Hears when the person opens a thread, so the finished Live Activity about it can step aside. */
+export function onThreadViewed(listener: () => void) {
+  viewers.add(listener)
+  return () => void viewers.delete(listener)
+}
+
 /**
  * Tells the thread's host that the person is looking at it, while this screen is in front and Ramu is open, so the
  * host sends no push about it; and takes that thread's pushes already in the notification list away, as read.
@@ -28,6 +38,9 @@ export function useThreadViewing(
     if (!viewing || !computerId || !sessionId) return
     const tell = () => void call.current(computerId, 'notifications.viewing', [sessionId]).catch(() => {})
     tell()
+    const key = `${computerId}:${sessionId}`
+    viewed.add(key)
+    for (const listener of viewers) listener()
     const timer = setInterval(tell, REPEAT_MS)
     if (Platform.OS !== 'web' && Constants.appOwnership !== 'expo')
       void import('expo-notifications')
@@ -39,6 +52,7 @@ export function useThreadViewing(
         .catch(() => {})
     return () => {
       clearInterval(timer)
+      viewed.delete(key)
       void call.current(computerId, 'notifications.viewing', []).catch(() => {})
     }
   }, [viewing, computerId, sessionId])

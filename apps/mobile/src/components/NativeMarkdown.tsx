@@ -132,7 +132,17 @@ export function NativeMarkdown({
       },
       // A quote steps back in colour, not so far that it stops reading as text, as on the desktop.
       blockquote: { ...body, color: c.soft, borderColor: c.lineStrong, borderWidth: 2, gapWidth: 12 },
-      list: { ...body, bulletColor: c.muted, markerColor: c.muted, gapWidth: 12 },
+      // As on the desktop: numbers line up in their own column, read a little stronger than bullets, and keep room
+      // before the text; items get a little air between them.
+      list: {
+        ...body,
+        bulletColor: c.muted,
+        markerColor: c.soft,
+        markerFontWeight: '500',
+        markerMinWidth: Math.round(prose.size * 1.2),
+        gapWidth: 12,
+        itemSpacing: prose.itemGap,
+      },
       thematicBreak: { color: c.line, height: 1, marginTop: 6, marginBottom: prose.blockGap },
       table: {
         ...body,

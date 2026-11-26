@@ -1,8 +1,9 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { createPrivateKey, sign } from 'node:crypto'
 import { connect, constants } from 'node:http2'
-import type { MobileLiveActivityContent, MobileLiveActivityRegistration } from '@ramu/shared/api'
+import type { MobileLiveActivityRegistration } from '@ramu/shared/api'
 import { translate } from '@ramu/shared/i18n'
+import { LIVE_ACTIVITY_DONE_MS, LIVE_ACTIVITY_STALE_MS, liveActivityCountsContent } from '@ramu/shared/liveActivity'
 import {
   LINK_URL,
   LIVE_ACTIVITY_PATH,
@@ -329,15 +330,7 @@ export class MobileLiveActivities {
     counts: { running: number; needsInput: number },
     ended: boolean,
   ) {
-    const props: MobileLiveActivityContent = {
-      running: ended ? 0 : counts.running,
-      waiting: ended ? 0 : counts.needsInput,
-      startedAt,
-      updatedAt: Date.now(),
-      locale,
-      phase: ended ? 'finished' : counts.needsInput ? 'waiting' : 'working',
-    }
-    return JSON.stringify(props)
+    return JSON.stringify(liveActivityCountsContent(counts, { startedAt, updatedAt: Date.now(), locale }, ended))
   }
   private push(
     r: Registration,
@@ -351,7 +344,9 @@ export class MobileLiveActivities {
       environment: r.environment,
       event: ended ? 'end' : 'update',
       props: this.props(r.startedAt, r.locale, counts, ended),
-      ...(ended ? { dismissalDate: immediate ? 0 : now + 15 * 60 } : { staleDate: now + 10 * 60 }),
+      ...(ended
+        ? { dismissalDate: immediate ? 0 : now + LIVE_ACTIVITY_DONE_MS / 1000 }
+        : { staleDate: now + LIVE_ACTIVITY_STALE_MS / 1000 }),
     }
   }
   /** Notes a route that cannot send (Link with no Apple key), so the phone keeps its own updates meanwhile. */
@@ -426,7 +421,7 @@ export class MobileLiveActivities {
           environment: s.environment,
           event: 'start',
           props: this.props(Date.now(), s.locale, counts, false),
-          staleDate: now + 10 * 60,
+          staleDate: now + LIVE_ACTIVITY_STALE_MS / 1000,
           computerId: s.computerId,
           alert: startAlert(s.locale, counts),
         })

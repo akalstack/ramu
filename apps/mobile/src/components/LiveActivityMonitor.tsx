@@ -3,7 +3,15 @@ import { AppState, Platform } from 'react-native'
 import { requireOptionalNativeModule } from 'expo'
 import type { LiveActivity } from 'expo-widgets'
 import type { MobileLiveActivityContent } from '@ramu/shared/api'
+import {
+  LIVE_ACTIVITY_DONE_MS,
+  LIVE_ACTIVITY_STALE_MS,
+  liveActivityContent,
+  liveActivityOrder,
+} from '@ramu/shared/liveActivity'
 import { useStore } from '../runtime/store'
+import { liveActivityStep, liveActivityThreads } from '../runtime/liveActivity'
+import { isThreadViewed, onThreadViewed } from '../runtime/threadViewing'
 
 type Activity = LiveActivity<MobileLiveActivityContent>
 type Current = {
@@ -19,13 +27,25 @@ type Current = {
   content?: MobileLiveActivityContent
 }
 
-/** One user-controllable ActivityKit activity for the selected computer's ongoing work. */
+/** The activity that showed finished work and stays on the Lock Screen a few minutes, with the threads it named. */
+type Ending = { instance: Activity; computerId: string; sessions: Set<string> }
+
+/**
+ * One user-controllable ActivityKit activity for the selected computer's ongoing work. It starts when a thread there
+ * starts working or needs the person, follows every thread of that stretch, shows them finished when nothing runs or
+ * waits, and leaves a few minutes later, or at once when the person opens the thread that finished.
+ */
 export function LiveActivityMonitor() {
   const store = useStore()
   const latest = useRef(store)
   latest.current = store
   const current = useRef<Current | null>(null)
   const foreground = useRef(AppState.currentState === 'active')
+  /** Set for the one update made as Ramu leaves the foreground, so the activity keeps its latest state. */
+  const leaving = useRef(false)
+  /** The threads of the current stretch of work, so finished ones are still shown as done. */
+  const followed = useRef(new Set<string>())
+  const ending = useRef<Ending | null>(null)
   const factory = useRef<Promise<typeof import('../activities/WorkActivity')> | null>(null)
   const busy = useRef(false),
     pending = useRef(false),
@@ -36,8 +56,10 @@ export function LiveActivityMonitor() {
   const enabled = store.drafts['live-activities-enabled'] !== 'no'
   const pc = store.computers.find((c) => c.id === store.selected)
   const chats = store.chats.filter((c) => c.computerId === store.selected && c.status !== 'archived')
-  const running = chats.filter((c) => c.status === 'running').length
-  const waiting = chats.filter((c) => c.status === 'needs-input').length
+  // Changes whenever a thread of the stretch changes state or title, which is when the activity has something new.
+  const shown = liveActivityThreads(chats, followed.current)
+    .map((t) => `${t.id}:${t.status}:${t.title}`)
+    .join('\n')
   // iOS reports point releases like "17.5.1", which Number() reads as NaN, so only major.minor is compared.
   const available =
     Platform.OS === 'ios' &&
@@ -89,26 +111,35 @@ export function LiveActivityMonitor() {
       value.registering = false
     }
   }
-  const stop = async (immediate: boolean) => {
+  /** Ends the activity at once: its host is no longer followed, Live Activities are off, or there is nothing to show. */
+  const stop = async () => {
     const value = current.current
     current.current = null
+    followed.current = new Set()
     if (!value) return
     value.subscription?.remove()
     void latest.current.invoke(value.computerId, 'liveActivity.unregister', value.instance.getId()).catch(() => {})
-    const final = {
-      ...value.content,
-      running: 0,
-      waiting: 0,
-      startedAt: value.startedAt,
-      updatedAt: Date.now(),
-      locale: latest.current.language,
-      phase: 'finished' as const,
-    }
-    const module = await import('expo-widgets')
-    await value.instance
-      .end(immediate ? 'immediate' : module.after(new Date(Date.now() + 15 * 60_000)), final)
-      .catch(() => {})
+    await value.instance.end('immediate').catch(() => {})
     persist(null)
+  }
+  /** Shows the stretch's work as finished, then lets iOS take it away a few minutes later. */
+  const finish = async (content: MobileLiveActivityContent, sessions: Set<string>) => {
+    const value = current.current
+    current.current = null
+    followed.current = new Set()
+    if (!value) return
+    value.subscription?.remove()
+    void latest.current.invoke(value.computerId, 'liveActivity.unregister', value.instance.getId()).catch(() => {})
+    const module = await import('expo-widgets')
+    await value.instance.end(module.after(new Date(Date.now() + LIVE_ACTIVITY_DONE_MS)), content).catch(() => {})
+    ending.current = { instance: value.instance, computerId: value.computerId, sessions }
+    persist(null)
+  }
+  /** Takes the finished activity away once the person has seen what it reported, or new work starts another. */
+  const dismissEnding = () => {
+    const value = ending.current
+    ending.current = null
+    void value?.instance.end('immediate').catch(() => {})
   }
   /**
    * Hands the phone's push-to-start token to the host it follows, so work there starts the activity while Ramu is
@@ -184,49 +215,64 @@ export function LiveActivityMonitor() {
       (current.current && current.current.computerId !== state.selected) ||
       (!state.computers.some((c) => c.id === current.current?.computerId) && current.current)
     ) {
-      await stop(true)
+      await stop()
+      dismissEnding()
       suppress(null)
     }
     if (state.drafts['live-activities-enabled'] === 'no') return
     if (suppressed.current && suppressed.current !== state.selected) suppress(null)
     const computer = state.computers.find((c) => c.id === state.selected)
-    const work = state.chats.filter((c) => c.computerId === state.selected && c.status !== 'archived')
-    const active = work.filter((c) => c.status === 'running').length,
-      needsInput = work.filter((c) => c.status === 'needs-input').length
-    if (computer?.status === 'online' && active + needsInput === 0) {
-      await stop(false)
+    if (computer?.status === 'revoked') {
+      await stop()
+      return
+    }
+    const work = state.chats.filter((c) => c.computerId === state.selected)
+    const threads = liveActivityThreads(work, followed.current)
+    const ongoing = threads.filter((t) => t.status !== 'done' && t.status !== 'failed')
+    if (current.current) for (const thread of ongoing) followed.current.add(thread.id)
+    const finished = threads.filter((t) => t.status === 'done' || t.status === 'failed')
+    const step = liveActivityStep({
+      active: !!current.current,
+      ongoing: ongoing.length,
+      followed: followed.current.size,
+      online: computer?.status === 'online',
+      foreground: foreground.current && suppressed.current !== state.selected,
+      viewingFinished:
+        foreground.current && finished.some((t) => !!t.sessionId && isThreadViewed(state.selected, t.sessionId)),
+    })
+    const content = (startedAt: number) =>
+      liveActivityContent(threads, { startedAt, updatedAt: Date.now(), locale: state.language })
+    // Tapping the activity opens the thread it puts first: the one that needs the person, failed or finished.
+    const target = liveActivityOrder(threads)[0]?.id ?? ''
+    if ((state.drafts['live-activity-target'] ?? '') !== target) state.setDraft('live-activity-target', target)
+    if (step === 'dismiss') {
+      await stop()
       suppress(null)
       return
     }
-    if (computer?.status === 'revoked') {
-      await stop(true)
+    if (step === 'finish') {
+      const value = current.current!
+      await finish(content(value.startedAt), new Set(finished.flatMap((t) => (t.sessionId ? [t.sessionId] : []))))
+      suppress(null)
       return
     }
-    if (
-      !current.current &&
-      computer?.status === 'online' &&
-      active + needsInput > 0 &&
-      foreground.current &&
-      suppressed.current !== state.selected
-    ) {
+    if (step === 'start') {
+      dismissEnding()
+      // One activity at a time: any other this app left running is ended before a new one starts.
+      for (const instance of WorkActivityFactory.getInstances()) await instance.end('immediate').catch(() => {})
       const startedAt = Date.now()
-      const content: MobileLiveActivityContent = {
-        running: active,
-        waiting: needsInput,
-        startedAt,
-        updatedAt: startedAt,
-        locale: state.language,
-        phase: needsInput ? 'waiting' : 'working',
-      }
+      followed.current = new Set(ongoing.map((t) => t.id))
+      const first = content(startedAt)
       try {
         const instance = WorkActivityFactory.start(
-          content,
+          first,
           `ramu://activity?computerId=${encodeURIComponent(state.selected)}`,
-          new Date(startedAt + 10 * 60_000),
+          new Date(startedAt + LIVE_ACTIVITY_STALE_MS),
         )
-        current.current = { instance, computerId: state.selected, startedAt, remote: false, content }
+        current.current = { instance, computerId: state.selected, startedAt, remote: false, content: first }
         persist(current.current)
       } catch {
+        followed.current = new Set()
         suppress(state.selected)
         return
       }
@@ -244,23 +290,22 @@ export function LiveActivityMonitor() {
         })
         .catch(() => {})
     }
-    if (!foreground.current && value.remote) return // APNs remains authoritative while JS is suspended.
     if (value.token && computer?.status === 'online') void registerToken(value, value.token)
-    const fresh = foreground.current && computer?.status === 'online'
-    const content: MobileLiveActivityContent = {
-      running: active,
-      waiting: needsInput,
-      startedAt: value.startedAt,
-      updatedAt: Date.now(),
-      locale: state.language,
-      phase: fresh ? (needsInput ? 'waiting' : 'working') : 'paused',
-    }
-    value.content = content
+    // While Ramu is in the background a push-backed activity follows the host's pushes. Without pushes, or with the
+    // host out of reach, the last real state stays until its stale date, when iOS shows it as out of date.
+    const leavingNow = leaving.current
+    leaving.current = false
+    if (step !== 'update' && step !== 'start') return
+    if (!foreground.current && !leavingNow && value.remote) return
+    if (step === 'start') return
+    const next = content(value.startedAt)
+    value.content = next
     try {
-      await value.instance.update(content, new Date(fresh ? Date.now() + 10 * 60_000 : Date.now()))
+      await value.instance.update(next, new Date(Date.now() + LIVE_ACTIVITY_STALE_MS))
     } catch {
       value.subscription?.remove()
       current.current = null
+      followed.current = new Set()
       suppress(state.selected)
       persist(null)
     }
@@ -284,7 +329,7 @@ export function LiveActivityMonitor() {
   }
   useEffect(() => {
     syncRef.current()
-  }, [store.ready, store.selected, pc?.status, running, waiting, enabled, store.language, available])
+  }, [store.ready, store.selected, pc?.status, shown, enabled, store.language, available])
   useEffect(() => {
     if (!available) return
     let tokens: { remove(): void } | undefined
@@ -307,14 +352,20 @@ export function LiveActivityMonitor() {
   useEffect(() => {
     if (!available) return
     const subscription = AppState.addEventListener('change', (state) => {
+      if (foreground.current && state !== 'active') leaving.current = true
       foreground.current = state === 'active'
       syncRef.current()
+    })
+    const viewing = onThreadViewed(() => {
+      const value = ending.current
+      if (value && [...value.sessions].some((session) => isThreadViewed(value.computerId, session))) dismissEnding()
     })
     const timer = setInterval(() => {
       if (foreground.current) syncRef.current()
     }, 30_000)
     return () => {
       subscription.remove()
+      viewing()
       clearInterval(timer)
       current.current?.subscription?.remove()
     }

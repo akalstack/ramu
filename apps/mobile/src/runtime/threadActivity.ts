@@ -61,7 +61,9 @@ export function mobileThreadActivity(chat: Chat, connected: boolean) {
         id: item.id,
         kind: item.kind === 'secret' ? 'question' : (item.kind as 'permission' | 'question' | 'elicitation'),
       })),
-      providerWait: Boolean(wait) && !afterWait,
+      // The limit tray above the composer covers a thread waiting at its limit; the pill marks only a try in progress,
+      // when the tray steps aside.
+      providerWait: Boolean(wait) && !afterWait && !chat.doneAt && chat.status === 'running',
       queue: chat.queue.length,
       goal,
     }),

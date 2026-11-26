@@ -47,7 +47,6 @@
   --font-hero: calc(var(--ui-font-size) + 12px);
   --chat-column-width: 760px;
   /* The longest line of reading text before it wraps; code and tables run wider. */
-  --prose-measure: 72ch;
   --primary-ink: #ffffff;
   /* Text on the darkened error fill of destructive buttons; a theme does not change it, so it always reads. */
   --bad-ink: #ffffff;
