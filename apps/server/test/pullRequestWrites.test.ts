@@ -115,6 +115,15 @@ it('lets a shipping thread turn on the Git host’s auto-merge without the perso
   expect([merge.state, approval.state]).toEqual(['waiting', 'waiting'])
 })
 
+it('keeps something Ramu drafted waiting for Post, even in Full access', async () => {
+  session.settings.access = 'full'
+  const cardId = await writes.propose('session', URL, { kind: 'comment', body: '@ana ready for review.' })
+  expect(forge.commentOnPullRequest).not.toHaveBeenCalled()
+  expect(writes.get(cardId)!.items).toMatchObject([{ state: 'waiting', write: { body: '@ana ready for review.' } }])
+  await writes.post(cardId)
+  expect(forge.commentOnPullRequest).toHaveBeenCalledOnce()
+})
+
 it('posts nothing when the identity check stops it', async () => {
   const { cardId } = await writes.request('session', URL, { kind: 'comment', body: 'Hello' })
   guard.mockRejectedValueOnce(new Error('Posting would act as Personal'))

@@ -970,6 +970,10 @@ const ship = new ShipService(
     viewer: (repoId) => pullRequestIndex.viewer(repoId),
     sendFixedReplies: (sessionId) => pullRequestDrafts.sendFixed(sessionId),
     deleteReplies: (sessionId, url, commentIds) => pullRequestDrafts.deleteReplies(sessionId, url, commentIds),
+    waiting: (taskId, url) => pullRequestIndex.waitingOf(taskId, url),
+    proposeComment: async (sessionId, url, body) => {
+      await pullRequestWrites.propose(sessionId, url, { kind: 'comment', body })
+    },
   },
   () => send('workspace:changed', {}),
 )

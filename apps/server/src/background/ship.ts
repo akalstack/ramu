@@ -4,7 +4,7 @@
 import { randomUUID } from 'node:crypto'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import type { PullRequestFeedbackKind } from '@ramu/shared/types'
+import type { PullRequestFeedbackKind, PullRequestWaiting } from '@ramu/shared/types'
 import { parseForgeRemote } from '@ramu/shared/forgeRemote'
 import {
   DEFAULT_SHIP_LIMITS,
@@ -61,6 +61,10 @@ interface ShipRun {
   told: Record<string, ShipStep>
   /** When each pull request was first seen open, so checks that have not registered yet are waited for. */
   seen?: Record<string, number>
+  /** When each pull request began waiting on reviewers, so a reminder is drafted only after a working day. */
+  waitingSince?: Record<string, number>
+  /** Pull requests whose wait was already acted on once: reviewers offered, or a reminder drafted. */
+  nudged?: Record<string, 'asked' | 'reminded'>
   /** A check-fixing round handed over and not pushed yet: the commit the fix starts from. */
   pendingFix?: { url: string; cwd: string; branch: string; from: string; at: number }
 }
@@ -96,6 +100,10 @@ export interface ShipHost {
   sendFixedReplies?(sessionId: string): Promise<SentReplies[]>
   /** Takes replies back off a pull request. */
   deleteReplies?(sessionId: string, url: string, commentIds: string[]): Promise<void>
+  /** What a thread's pull request waits on people for, as its Git host last said. */
+  waiting?(taskId: string, url: string): PullRequestWaiting | undefined
+  /** Drafts a comment on a thread's pull request that waits for the person to post. */
+  proposeComment?(sessionId: string, url: string, body: string): Promise<void>
 }
 
 /** Replies Ship posted on one pull request. */
@@ -520,6 +528,47 @@ export class ShipService implements ShipRounds {
     }
   }
 
+  /**
+   * A pull request that only waits on reviewers. With nobody asked yet, the agent is told once to offer the people
+   * the repository's code owners or history suggest, a request the person confirms. With people asked and a working
+   * day gone, a short reminder is drafted for the person to post; it is never sent for them.
+   */
+  private async whileWaiting(run: ShipRun, url: string, cwd: string): Promise<void> {
+    const since = run.waitingSince?.[url]
+    if (since === undefined) {
+      this.update(run.id, (entry) => ({ ...entry, waitingSince: { ...entry.waitingSince, [url]: Date.now() } }))
+      return
+    }
+    const waiting = this.host.waiting?.(run.taskId, url)
+    if (!waiting || waiting.changesBy.length || waiting.approvals === 0) return
+    const nudged = run.nudged?.[url]
+    const mark = (kind: 'asked' | 'reminded') =>
+      this.update(run.id, (entry) => ({ ...entry, nudged: { ...entry.nudged, [url]: kind } }))
+    if (!waiting.from.length) {
+      if (nudged) return
+      mark('asked')
+      const branch = (await currentBranch(cwd)) ?? ''
+      this.agents.enqueueBackground(
+        run.sessionId,
+        [
+          `${url} is ready for review and nobody has been asked to review it.`,
+          'Find who should: the repository’s CODEOWNERS for the files it changes, otherwise the people who last changed those files. Ask up to three of them in one pull_request_reviewers call, which the person confirms. If you cannot tell who, say so in one line and ask nobody.',
+        ].join('\n'),
+        { cwd, branch },
+      )
+      return
+    }
+    if (nudged === 'reminded' || Date.now() < workingDayAfter(since) || !this.host.proposeComment) return
+    mark('reminded')
+    await this.host
+      .proposeComment(
+        run.sessionId,
+        url,
+        `${waiting.from.map((name) => `@${name}`).join(' ')} this is ready for review when you have a moment. Thanks!`,
+      )
+      .catch((error) => console.error('Ship reminder:', error))
+  }
+
   /** Posts the replies that only report a fix and lists them, so the reviewer hears at once and the person can undo. */
   private async sendReplies(run: ShipRun): Promise<void> {
     const sent = (await this.host.sendFixedReplies?.(run.sessionId)) ?? []
@@ -556,6 +605,14 @@ export class ShipService implements ShipRounds {
       this.update(run.id, (entry) => ({ ...entry, watched: [...new Set([...entry.watched, pr.url])] }))
     }
     const step = shipStep(pr, run.finishLine)
+    if (step === 'waiting') await this.whileWaiting(run, pr.url, cwd)
+    else if (run.waitingSince?.[pr.url] !== undefined)
+      // The wait ended (a review came, checks ran again): the next one starts its own clock.
+      this.update(run.id, (entry) => ({
+        ...entry,
+        waitingSince: without(entry.waitingSince, pr.url),
+        nudged: without(entry.nudged, pr.url),
+      }))
     // Nothing to tell while the agent works or reviewers have the turn: the watch brings their comments back.
     if (step === 'working' || step === 'waiting' || run.told[pr.url] === step) return
     if (pr.state === 'open' && !pr.checks.length && Date.now() - (firstSeen ?? Date.now()) < CHECKS_GRACE) return
@@ -572,6 +629,16 @@ export class ShipService implements ShipRounds {
       this.finish(latest)
     else this.unwatch(latest, pr.url)
   }
+}
+
+const without = <T>(record: Record<string, T> | undefined, key: string): Record<string, T> =>
+  Object.fromEntries(Object.entries(record ?? {}).filter(([name]) => name !== key))
+
+/** One working day after `since`: a wait that began on a Friday is not late on Saturday. */
+export function workingDayAfter(since: number): number {
+  const due = new Date(since + 24 * 60 * 60_000)
+  while (due.getDay() === 0 || due.getDay() === 6) due.setDate(due.getDate() + 1)
+  return due.getTime()
 }
 
 /** The options some repository's committed `ramu.json` keeps with a person. */

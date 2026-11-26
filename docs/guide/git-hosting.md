@@ -81,6 +81,11 @@ Under the finish line, the sheet shows what Ship may do without stopping for you
 - **Merge when approved** (off): the agent turns on the Git host's own auto-merge, so the pull request merges when its checks pass and branch protection allows. A plain merge still asks you.
 - **Deploy to production without asking again** (on): a project's first production deploy asks. After you allow it, later ones from a thread shipping to **Live in production** run on their own, migrations first, and check the live address.
 
+While a shipped pull request waits on reviewers, the thread does nothing and spends no turns; a review, an approval or new comments wake it. Two things happen once per wait:
+
+- **Nobody was asked:** the agent finds who should review, from `CODEOWNERS` or the people who last changed those files, and asks up to three of them in one request that waits for you in its card.
+- **Still waiting after a working day** (weekends don't count): Ramu drafts a short reminder to the people asked. It waits in the thread's card for you to post or dismiss, in every access mode, and is never sent for you.
+
 A choice the repository's `ramu.json` keeps with a person is off and says so. Approving always asks you, as it does anywhere else. Ship runs up to 3 rounds of fixing checks and 5 review rounds by default; when one runs out, the agent asks whether to run more rounds or stop, and the question waits in Inbox's Brief. **Fix failing checks** and **Address review comments** still work by hand and don't count as rounds.
 
 Prepared work waits in Inbox's Brief with the answer first, such as "#42 · 3 replies drafted" or "Review drafted", and **Review and send** opens the pull request where you check and send it. Each check fix Ship pushed and each set of replies it posted without asking is listed under **Done for you** in Inbox's **Done**, with **Undo** (a revert commit for a fix, deleting the replies for replies) ([Learned and Done](inbox.md#learned-and-done)).

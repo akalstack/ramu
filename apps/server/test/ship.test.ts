@@ -3,7 +3,7 @@ import type { AgentSessionInfo, PullRequestInfo } from '@ramu/shared/types'
 import { openDb, type Db } from '../src/db'
 import { Workspace } from '../src/workspace/workspace'
 import type { AgentService } from '../src/agent'
-import { ShipService } from '../src/background/ship'
+import { ShipService, workingDayAfter } from '../src/background/ship'
 import { currentBranch, git, headOid } from '../src/workspace/git'
 import { pullRequestStatus } from '../src/workspace/forge'
 import { committedShipConfig } from '../src/workspace/projectConfig'
@@ -177,6 +177,81 @@ describe('what Ship may do without asking', () => {
     await ship.undo(entry!.id)
     expect(deleteReplies).toHaveBeenCalledWith('session', checkout.url, ['c1', 'c2'])
     expect(ship.activity()[0]?.undoneAt).toBeTypeOf('number')
+  })
+})
+
+describe('waiting on reviewers', () => {
+  const green = () => {
+    pr.checks = [{ name: 'Build', state: 'success', url: null }]
+  }
+  const shipWith = (waiting: () => unknown, proposeComment = vi.fn(async () => {})) => {
+    const agents = { get: () => session, enqueueBackground: enqueue } as unknown as AgentService
+    ship = new ShipService(
+      ws,
+      agents,
+      { watch, status: (_cwd, url) => ({ sessionId: watched.get(url) ?? null, threads: [] }) },
+      { liveAddress: () => live, viewer: () => viewer, waiting: waiting as never, proposeComment },
+      () => {},
+    )
+    return proposeComment
+  }
+  const waitingOn = (from: string[]) => ({
+    approvals: 1,
+    from,
+    codeOwner: false,
+    conversations: 0,
+    changesBy: [],
+    queue: false,
+  })
+
+  it('has the agent offer reviewers once when nobody was asked, and spends no more turns after', async () => {
+    green()
+    shipWith(() => waitingOn([]))
+    await ship.start('session', 'review')
+    await poll()
+    // The first look only notes that the wait began.
+    expect(enqueue).not.toHaveBeenCalled()
+    await poll()
+    expect(texts()).toHaveLength(1)
+    expect(texts()[0]).toMatch(/nobody has been asked to review/)
+    expect(texts()[0]).toMatch(/pull_request_reviewers/)
+    await poll()
+    await poll()
+    expect(texts()).toHaveLength(1)
+  })
+
+  it('drafts one reminder for the person after a working day, and never when reviewers answered', async () => {
+    green()
+    const propose = shipWith(() => waitingOn(['ana', 'payments-team']))
+    await ship.start('session', 'review')
+    const clock = vi.spyOn(Date, 'now')
+    const monday = new Date('2026-11-23T09:00:00').getTime()
+    clock.mockReturnValue(monday)
+    await poll()
+    clock.mockReturnValue(monday + 6 * 60 * 60_000)
+    await poll()
+    expect(propose).not.toHaveBeenCalled()
+    clock.mockReturnValue(monday + 25 * 60 * 60_000)
+    await poll()
+    expect(propose).toHaveBeenCalledExactlyOnceWith(
+      'session',
+      checkout.url,
+      '@ana @payments-team this is ready for review when you have a moment. Thanks!',
+    )
+    clock.mockReturnValue(monday + 80 * 60 * 60_000)
+    await poll()
+    expect(propose).toHaveBeenCalledOnce()
+    // The agent was never woken for it.
+    expect(enqueue).not.toHaveBeenCalled()
+    clock.mockRestore()
+  })
+
+  it('does not count a weekend as a working day', () => {
+    const friday = new Date('2026-11-27T16:00:00')
+    const due = new Date(workingDayAfter(friday.getTime()))
+    expect(due.getDay()).toBe(1)
+    const tuesday = new Date('2026-11-24T10:00:00')
+    expect(new Date(workingDayAfter(tuesday.getTime())).getDay()).toBe(3)
   })
 })
 

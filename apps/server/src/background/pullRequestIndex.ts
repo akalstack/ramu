@@ -2,6 +2,7 @@ import type {
   PullRequestDraftBatch,
   PullRequestList,
   PullRequestSummary,
+  PullRequestWaiting,
   RepositoryBinding,
   RepositoryPullRequests,
   Task,
@@ -121,6 +122,11 @@ export class PullRequestIndex {
     return Object.entries(this.links())
       .filter(([, links]) => links.some((entry) => entry.url === url))
       .map(([taskId]) => taskId)
+  }
+
+  /** What a thread's pull request waits on people for, as its Git host last said. */
+  waitingOf(taskId: string, url: string): PullRequestWaiting | undefined {
+    return this.links()[taskId]?.find((entry) => entry.url === url)?.snapshot.waiting
   }
 
   /** What a thread row shows: the open pull request first, otherwise the latest one. */

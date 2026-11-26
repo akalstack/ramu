@@ -340,6 +340,26 @@ export class PullRequestWrites {
   }
 
   /**
+   * Something Ramu drafted for the person on a thread's pull request, such as a reminder to reviewers: it lands in
+   * the thread's card and waits for Post in every access mode, since nobody asked for it to be sent.
+   */
+  async propose(sessionId: string, reference: string, write: PullRequestWrite): Promise<string> {
+    const place = await this.place(sessionId, reference)
+    const refusal = unsupportedWrite(place.service, write)
+    if (refusal) throw new Error(refusal)
+    const account = (await forge.repositoryAccount(place.cwd).catch(() => null))?.login ?? null
+    const card = this.cardFor(sessionId, place, account)
+    this.save({
+      ...card,
+      items: [
+        ...card.items,
+        { id: randomUUID(), write, decision: isDecision(write), state: 'waiting', at: Date.now() },
+      ],
+    })
+    return card.id
+  }
+
+  /**
    * An agent's write: refused when the service lacks it, posted at once in Full access unless it is a decision, and
    * otherwise left waiting in the card. Never throws for a failed post: the card keeps the error, and so does the result.
    */
