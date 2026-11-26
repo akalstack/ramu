@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { finishThreads } from '../chat/FinishThreadDialog'
-import { pullRequestRowDetail } from '@ramu/shared/pullRequests'
+import { pullRequestNeedsReviewer, pullRequestRowDetail } from '@ramu/shared/pullRequests'
 import { ChevronRight, CircleCheck } from 'lucide-react'
 import {
   blockerTally,
@@ -62,7 +62,7 @@ interface RowContent {
   /** The place in `sessionId`'s transcript Open scrolls to, such as the turn a recap is about. */
   sourceSeq?: number
   /** A pull request whose next step is yours opens in its own review, not in the thread. */
-  pullRequest?: { url: string; closed: boolean }
+  pullRequest?: { url: string; closed: boolean; askReviewers: boolean }
   title: string
   detail: string
   /** When it last changed, for the row's age. */
@@ -99,7 +99,7 @@ function BriefRowView({
   // opens its thread, which ends on the error with Retry beside it.
   const open = () =>
     content.pullRequest && hostId === activeHost
-      ? showPullRequest(ws, content.pullRequest.url, content.pullRequest.closed)
+      ? showPullRequest(ws, content.pullRequest.url, content.pullRequest.closed, content.pullRequest.askReviewers)
       : content.taskId
         ? select(hostId, {
             kind: 'task',
@@ -157,6 +157,10 @@ function BriefRowView({
     // Drafts are checked where they are, never sent from here unseen.
     <Button size="xs" disabled={!online} onClick={open}>
       {t('Review and send')}
+    </Button>
+  ) : row.kind === 'pull-request' && row.chat.pullRequest && pullRequestNeedsReviewer(row.chat.pullRequest) ? (
+    <Button size="xs" disabled={!online} onClick={open}>
+      {t('Request review')}
     </Button>
   ) : request?.kind === 'approval' ? (
     <Button
@@ -258,7 +262,7 @@ export function Brief() {
       return {
         ...base,
         detail: pullRequestRowDetail(pr, t),
-        pullRequest: { url: pr.url, closed: pr.state !== 'open' },
+        pullRequest: { url: pr.url, closed: pr.state !== 'open', askReviewers: pullRequestNeedsReviewer(pr) },
       }
     }
     const request = row.chat.inputSummary?.requests[0]

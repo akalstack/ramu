@@ -98,7 +98,16 @@ function storedMethod(repoId: string): MergeMethod | null {
  * One pull request in full: where it stands, what was drafted for it, its open review threads, and every action from
  * opening it in a thread to merging it.
  */
-export function PullRequestView({ taskId, view }: { taskId: string; view: View }) {
+export function PullRequestView({
+  taskId,
+  view,
+  askReviewers = false,
+}: {
+  taskId: string
+  view: View
+  /** Opened to ask someone to review it, so the reviewers come up first. */
+  askReviewers?: boolean
+}) {
   useLanguage()
   const ws = useWorkspace()
   const host = useHost()
@@ -109,7 +118,7 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
   const [error, setError] = useState<string | null>(null)
   const [merging, setMerging] = useState(false)
   const [closing, setClosing] = useState(false)
-  const [people, setPeople] = useState<'reviewers' | 'labels' | 'assignees' | null>(null)
+  const [people, setPeople] = useState<'reviewers' | 'labels' | 'assignees' | null>(askReviewers ? 'reviewers' : null)
   const [tab, setTab] = useState<'overview' | 'files'>('overview')
   const [threadFilter, setThreadFilter] = useState<'open' | 'resolved' | 'all'>('open')
   const [threadOrder, setThreadOrder] = useState<'newest' | 'oldest'>('newest')

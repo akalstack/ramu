@@ -4208,6 +4208,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   Fixed: 'Diperbaiki',
   'No change': 'Tanpa perubahan',
   Skip: 'Lewati',
+  'Request review': 'Minta review',
   Approve: 'Setujui',
   'Request changes': 'Minta perubahan',
   'Squash and merge': 'Squash dan merge',

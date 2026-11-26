@@ -8,7 +8,7 @@ import type {
   ThreadInputSummary,
 } from './types'
 import { waitingReviews } from '@ramu/shared/learningReviews'
-import { stageNeedsYou } from '@ramu/shared/pullRequests'
+import { pullRequestNeedsReviewer, stageNeedsYou } from '@ramu/shared/pullRequests'
 import { goalContinues } from '@ramu/shared/chat/goalHold'
 import type { LowMemory } from './resources'
 
@@ -257,7 +257,12 @@ export function buildInbox(input: {
     .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
   // A pull request whose next step is the person's, on a thread that is not already asking for something else.
   const pullRequests = live
-    .filter((chat) => !!chat.pullRequest && stageNeedsYou(chat.pullRequest.stage) && !needsInput(chat))
+    .filter(
+      (chat) =>
+        !!chat.pullRequest &&
+        (stageNeedsYou(chat.pullRequest.stage) || pullRequestNeedsReviewer(chat.pullRequest)) &&
+        !needsInput(chat),
+    )
     .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
   const lowMemory = (input.lowMemory ?? []).filter((entry) => inScope(entry.computerId))
   const enabled = input.recapsEnabled ?? (() => true)

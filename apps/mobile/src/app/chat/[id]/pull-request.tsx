@@ -141,6 +141,8 @@ export default function PullRequestScreen() {
     project?: string
     repoId: string
     url: string
+    /** Opened to ask someone to review it, so the reviewers come up first. */
+    ask?: string
   }>()
   const { repoId, url } = params
   const chat = useChat(params.id)
@@ -211,7 +213,9 @@ export default function PullRequestScreen() {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [merging, setMerging] = useState(false)
-  const [people, setPeople] = useState<'reviewers' | 'labels' | 'assignees' | null>(null)
+  const [people, setPeople] = useState<'reviewers' | 'labels' | 'assignees' | null>(
+    params.ask === 'reviewers' ? 'reviewers' : null,
+  )
   const [revision, setRevision] = useState(0)
   const [notice, setNotice] = useState<string | null>(null)
   const [more, setMore] = useState(false)

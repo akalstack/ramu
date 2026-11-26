@@ -70,11 +70,18 @@ let pendingRepo: RepoTarget | null = null
 
 const SELECT_EVENT = 'ramu:pull-requests-select'
 /** A pull request asked for by its address before the page mounted, such as from a link in a thread. */
-let pendingPull: { url: string; closed: boolean } | null = null
+/** A pull request to open, and whether its reviewers are asked for straight away. */
+type WantedPull = { url: string; closed: boolean; askReviewers?: boolean }
+let pendingPull: WantedPull | null = null
 
 /** Opens the Pull requests page on one pull request the page lists, found by its address. */
-export function showPullRequest(ws: ReturnType<typeof useWorkspace>, url: string, closed: boolean) {
-  pendingPull = { url, closed }
+export function showPullRequest(
+  ws: ReturnType<typeof useWorkspace>,
+  url: string,
+  closed: boolean,
+  askReviewers = false,
+) {
+  pendingPull = { url, closed, askReviewers }
   window.dispatchEvent(new CustomEvent(SELECT_EVENT, { detail: pendingPull }))
   ws.setSidebar('pulls')
 }
@@ -149,7 +156,9 @@ export function PullRequestsPage() {
   const [pending, setPending] = useState<RepoTarget | null>(() => pendingRepo)
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<MergedPullRequestRow | null>(null)
-  const [wanted, setWanted] = useState<{ url: string; closed: boolean } | null>(() => pendingPull)
+  const [wanted, setWanted] = useState<WantedPull | null>(() => pendingPull)
+  // The pull request whose view opens on its reviewers, once.
+  const [asking, setAsking] = useState<string | null>(null)
   const [sort, setSort] = useState<PullRequestSort>(savedSort)
   const [refreshing, setRefreshing] = useState(false)
   const open = useHostsPullRequests(false)
@@ -172,7 +181,7 @@ export function PullRequestsPage() {
     window.addEventListener(FILTER_EVENT, onFilter)
     pendingPull = null
     const onSelect = (event: Event) => {
-      setWanted((event as CustomEvent<{ url: string; closed: boolean }>).detail)
+      setWanted((event as CustomEvent<WantedPull>).detail)
       pendingPull = null
     }
     window.addEventListener(SELECT_EVENT, onSelect)
@@ -210,6 +219,7 @@ export function PullRequestsPage() {
     if (!wantedRow) return listsArrived ? setWanted(null) : undefined
     setRepoKey(ALL)
     setSelected(wantedRow)
+    setAsking(wanted.askReviewers ? wantedRow.pr.url : null)
     setWanted(null)
   }, [wanted, wantedRow, filter, listsArrived])
 
@@ -277,7 +287,10 @@ export function PullRequestsPage() {
         className="py-1.5"
         aria-selected={active}
         title={pr.title}
-        onClick={() => setSelected(entry)}
+        onClick={() => {
+          setAsking(null)
+          setSelected(entry)
+        }}
       >
         <span className="flex w-full min-w-0 items-center gap-2">
           <PullRequestIcon pr={pr} stage={entry.stage} />
@@ -544,6 +557,7 @@ export function PullRequestsPage() {
                 }
               >
                 <PullRequestView
+                  askReviewers={asking === selected.pr.url}
                   taskId={projectCtx(selected.projectId)}
                   view={{
                     kind: 'pull-request',

@@ -406,6 +406,26 @@ it('asks for pull requests whose next step is the person’s, after requests and
   expect(model.needsYou).toBe(3)
 })
 
+it('asks for a pull request that waits on review with nobody asked, and not for one with reviewers', () => {
+  const waiting = { approvals: 1, codeOwner: false, conversations: 0, changesBy: [], queue: false }
+  const pr = (taskId: string, from: string[]): InboxChat => ({
+    ...chat('host', taskId),
+    status: 'idle',
+    pullRequest: {
+      repoId: 'r',
+      number: 3,
+      title: 'Fix',
+      url: `u/${taskId}`,
+      state: 'open',
+      draft: false,
+      stage: 'review-required',
+      waiting: { ...waiting, from },
+    },
+  })
+  const model = buildInbox({ chats: [pr('nobody', []), pr('asked', ['ana'])], recaps: [], summaries: [], now })
+  expect(model.pullRequests.map((entry) => entry.taskId)).toEqual(['nobody'])
+})
+
 it('marks each Brief row by how serious it is, the same on every device', () => {
   const pr = (stage: 'conflicts' | 'ready'): InboxChat => ({
     ...chat('host', stage),

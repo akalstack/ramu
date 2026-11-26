@@ -217,6 +217,11 @@ export function stageNeedsYou(stage: PullRequestStage): boolean {
   return stage === 'replies-ready' || stage === 'ready' || stage === 'conflicts'
 }
 
+/** Ready for review with nobody asked to review it: the wait cannot end until the person asks someone. */
+export function pullRequestNeedsReviewer(pr: Pick<TaskPullRequest, 'stage' | 'waiting'>): boolean {
+  return pr.stage === 'review-required' && !!pr.waiting && pr.waiting.approvals !== 0 && pr.waiting.from.length === 0
+}
+
 /** Which icon a pull request uses: the hosting services' shapes for open, draft, merged and closed. */
 export function pullRequestGlyph(pr: { state: PullRequestSummary['state']; draft: boolean }) {
   if (pr.state === 'merged') return 'merged' as const

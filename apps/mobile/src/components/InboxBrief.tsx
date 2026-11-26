@@ -1,4 +1,4 @@
-import { pullRequestRowDetail } from '@ramu/shared/pullRequests'
+import { pullRequestNeedsReviewer, pullRequestRowDetail } from '@ramu/shared/pullRequests'
 import { shortHostName } from '@ramu/shared/hostLabel'
 import { useRouter } from 'expo-router'
 import { useState } from 'react'
@@ -86,7 +86,12 @@ function BriefRowView({ row, divider, where }: { row: BriefRow; divider: boolean
     if (row.kind === 'pull-request' && row.chat.pullRequest)
       router.push({
         pathname: '/chat/[id]/pull-request',
-        params: { id: chat.id, repoId: row.chat.pullRequest.repoId, url: row.chat.pullRequest.url },
+        params: {
+          id: chat.id,
+          repoId: row.chat.pullRequest.repoId,
+          url: row.chat.pullRequest.url,
+          ...(pullRequestNeedsReviewer(row.chat.pullRequest) ? { ask: 'reviewers' } : {}),
+        },
       })
     else openThread(chat.id)
   }
@@ -148,6 +153,8 @@ function BriefRowView({ row, divider, where }: { row: BriefRow; divider: boolean
   ) : row.kind === 'pull-request' && row.chat.pullRequest?.prepared ? (
     // Drafts are checked where they are, never sent from here unseen.
     <Button title={say('Review and send')} disabled={!online} onPress={go} />
+  ) : row.kind === 'pull-request' && row.chat.pullRequest && pullRequestNeedsReviewer(row.chat.pullRequest) ? (
+    <Button title={say('Request review')} disabled={!online} onPress={go} />
   ) : row.kind === 'recap' ? (
     <Button
       kind="secondary"
