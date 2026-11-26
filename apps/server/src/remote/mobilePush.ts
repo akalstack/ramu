@@ -33,7 +33,7 @@ const VIEWING_MS = 90_000
 
 export class MobilePush {
   private registrations: Registration[] = []
-  private viewers = new Map<string, { sessions: Set<string>; at: number }>()
+  private viewers = new Map<string, { sessions: Set<string>; present: boolean; at: number }>()
   private states = new Map<string, string>()
   private questions = new Set<string>()
   private finished = createFinishedGate()
@@ -126,19 +126,21 @@ export class MobilePush {
   }
   /**
    * The threads a device (a phone, this host's desktop or another desktop) has in front of the person right now; an
-   * empty list when it has none, such as when it went to the background or lost focus.
+   * empty list when it has none, such as when it went to the background or lost focus. `present` says the person is
+   * using a desktop app, whatever it shows.
    */
-  viewing(viewer: string, sessionIds: readonly string[]) {
-    if (!sessionIds.length) this.viewers.delete(viewer)
-    else this.viewers.set(viewer, { sessions: new Set(sessionIds.slice(0, 20)), at: Date.now() })
+  viewing(viewer: string, sessionIds: readonly string[], present = false) {
+    if (!sessionIds.length && !present) this.viewers.delete(viewer)
+    else this.viewers.set(viewer, { sessions: new Set(sessionIds.slice(0, 20)), present, at: Date.now() })
     if (this.viewers.size > 200) this.viewers.delete(this.viewers.keys().next().value!)
   }
   /** Whether the person is looking at this thread on some device, so a push about it would only repeat what they see. */
   private watched(sessionId: string) {
     const now = Date.now()
-    for (const [viewer, { sessions, at }] of this.viewers) {
+    for (const [viewer, { sessions, present, at }] of this.viewers) {
       if (now - at > VIEWING_MS) this.viewers.delete(viewer)
-      else if (sessions.has(sessionId)) return true
+      // Someone using a desktop app sees every thread's news there, in the app's own notifications.
+      else if (present || sessions.has(sessionId)) return true
     }
     return false
   }

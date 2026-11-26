@@ -1,3 +1,4 @@
+import { useDesktopPresence } from './views/agent/lib/threadViewing'
 import { ResourcesStatus } from './chat/ResourcesStatus'
 import { SwitchBranchDialog, switchBranch } from './git/SwitchBranchDialog'
 import { FinishThreadDialog } from './chat/FinishThreadDialog'
@@ -176,6 +177,10 @@ function Shell() {
 
   const ws = useWorkspace()
   const computers = useComputers()
+  // A host hears while this app is in use, so it sends the phone nothing the app is already showing.
+  useDesktopPresence(
+    (computers?.computers ?? []).filter((computer) => computer.status === 'connected').map((computer) => computer.id),
+  )
   const hostEvents = useHostRuntime()
   const { activeHost, select } = useHostSelection()
   const { id: shownHost, invoke: hostInvoke } = useHost()

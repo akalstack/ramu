@@ -171,6 +171,11 @@ it('sends no push about a thread someone is looking at, on the phone or a deskto
   expect(await deliver('open')).toBe(0)
   push.viewing('local', [])
   expect(await deliver('open')).toBe(1)
+  // Someone using a desktop app sees every thread's news there: nothing reaches the phone until they stop.
+  push.viewing('local', [], true)
+  expect(await deliver('other')).toBe(0)
+  push.viewing('local', [], false)
+  expect(await deliver('other')).toBe(1)
   // A device that went away without saying so stops counting once it has not repeated itself.
   push.viewing('a', ['open'])
   vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 120_000)
