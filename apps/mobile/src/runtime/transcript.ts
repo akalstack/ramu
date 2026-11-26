@@ -16,7 +16,13 @@ import {
   parseTaskReport,
   parseTaskStop,
 } from '@ramu/shared/chat/agentTasks'
-import { requestOutcomes, parseAnswerMessage, questionState } from '@ramu/shared/chat/questions'
+import {
+  answerChoices,
+  answerPairs,
+  requestOutcomes,
+  parseAnswerMessage,
+  questionState,
+} from '@ramu/shared/chat/questions'
 import { latestSurfaces, parseInlineUiActionMessage } from '@ramu/shared/chat/inlineUi'
 import { GOAL_NOTE_LABELS, goalChanges, goalFactLines } from '@ramu/shared/chat/goalHistory'
 import { compactionCounts } from '@ramu/shared/chat/compaction'
@@ -77,6 +83,30 @@ function pendingTextBlocks(events: AgentEvent[]): Set<number> {
     }
   })
   return new Set(pending.values())
+}
+
+/**
+ * Sent answers as the note shows them: each question, then every choice it offered with the picked ones marked, so the
+ * answer reads in context. A question without choices shows the answer as typed.
+ */
+function answersDetail(events: AgentEvent[], answers: { requestId: string; body: string }): string {
+  const asked = events.find((e) => e.kind === 'question' && e.requestId === answers.requestId)
+  const questions = asked?.kind === 'question' ? asked.questions : []
+  return answerPairs(answers.body)
+    .map((pair) => {
+      const choices = answerChoices(
+        questions.find((q) => q.question === pair.question),
+        pair.answer,
+      )
+      const lines = choices
+        ? [
+            ...choices.options.map((option) => `${option.chosen ? '✓' : '·'} ${option.label}`),
+            ...(choices.typed ? [choices.typed] : []),
+          ]
+        : [pair.answer]
+      return [...(pair.question ? [pair.question] : []), ...lines].join('\n')
+    })
+    .join('\n\n')
 }
 
 export function transcript(events: AgentEvent[], seqs?: number[], completeBlocksOnly = false): TranscriptItem[] {
@@ -160,7 +190,7 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
                       kind: 'note',
                       id,
                       ...noteTitle("Answers to the agent's questions"),
-                      detail: answers!.body,
+                      detail: answersDetail(events, answers!),
                     } as TranscriptItem),
       )
     } else if (e.kind === 'goal' && goals.has(e)) {
