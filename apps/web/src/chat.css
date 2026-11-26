@@ -98,9 +98,10 @@
 }
 .composer-tray-live {
   flex: none;
-  width: 12px;
-  height: 12px;
-  color: var(--soft);
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--ok);
 }
 .composer-tray-card {
   position: absolute;
