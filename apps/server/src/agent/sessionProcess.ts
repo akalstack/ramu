@@ -21,7 +21,7 @@ import type {
   MessageOrigin,
 } from '@ramu/shared/types'
 import { DEFAULT_INTELLIGENCE_PREFERENCES, DEFAULT_MEMORY_PREFERENCES } from '@ramu/shared/types'
-import { goalInstructions } from './goals'
+import { goalInstructions, openGoal } from './goals'
 import type { QueryFn, PendingRequest } from './types'
 import { InputQueue, userEvent } from './inputQueue'
 import { errorMessage } from './util'
@@ -255,7 +255,7 @@ export class SessionProcess {
       model,
       contextTokens: window,
       checkpoint: this.host.sessionCheckpoint()?.(id) ?? null,
-      goal: !this.host.toolConnection() && !s.parentId ? (this.host.getGoal(id)?.objective ?? null) : null,
+      goal: !this.host.toolConnection() && !s.parentId ? (openGoal(this.host.getGoal(id))?.objective ?? null) : null,
       queued: this.host.queued(id),
     })
     return { resume: plan.resume, info: pendingHandoff(plan, cause, s.provider), fits: !plan.built.overBudget }
@@ -329,7 +329,7 @@ export class SessionProcess {
       from: undelivered ? info.from : s.provider,
       to: s.provider,
       // Providers that receive session guidance already get the goal there.
-      goal: !hasGuidance && !s.parentId ? (this.host.getGoal(id)?.objective ?? null) : null,
+      goal: !hasGuidance && !s.parentId ? (openGoal(this.host.getGoal(id))?.objective ?? null) : null,
       queued: this.host.queued(id),
       budgetBytes,
       ...(contextTokens ? { contextWindow: contextTokens } : {}),
@@ -525,7 +525,9 @@ export class SessionProcess {
               runner!.start(
                 s.provider === 'codex' || s.provider === 'claude-code' || !connection?.instructions
                   ? actualPrompt
-                  : `<ramu-session-guidance>\n${connection.instructions}\n</ramu-session-guidance>\n\n${actualPrompt}`,
+                  : // Without a system slot the guidance rides in the first message; it is labeled so a model does not
+                    // read Ramu's standing rules (goals, tools) as something the person asked for.
+                    `<ramu-session-guidance>\nRamu's standing instructions for this session, not the user's request:\n${connection.instructions}\n</ramu-session-guidance>\n\n${actualPrompt}`,
                 resume,
                 attachments,
               ),

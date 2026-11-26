@@ -34,7 +34,7 @@ Every block of Markdown or long-form text reads on one scale, `packages/shared/s
 
 - Desktop: render with `MarkdownText` (`apps/web/src/chat/MarkdownText.tsx`). It sets the text in `.ramu-prose` (`apps/web/src/prose.css`) and draws tables, code, rules and task boxes with `chatMarkdownComponents`. Override only what the surface needs (links, images, plugins). Text that `MarkdownText` does not draw, such as the Markdown editor or a hand-drawn diff, spreads `proseProps(density)`. Set a surface's size or colour with a utility on `className`. Don't restyle paragraphs, lists or headings per surface.
 - Phone: render with `Markdown` (`apps/mobile/src/components/Markdown.tsx`) and its `density` prop. The scale follows the in-app text size. The app's native Markdown view draws it with native selection and the Quote, New thread, Ask aside and More menu. A message's text goes through it, never through a selection UI of its own.
-- Type tokens: `text-micro` (counts and badges), `text-caption`, `text-control`, `text-body`, `text-chat`, `text-heading` and `text-hero` follow the font size setting. Don't hard-code pixel sizes. `--prose-measure` caps reading lines at about 72 characters, while code and tables keep the full column.
+- Type tokens: `text-micro` (counts and badges), `text-caption`, `text-control`, `text-body`, `text-chat`, `text-heading` and `text-hero` follow the font size setting. Don't hard-code pixel sizes. Replies use the full column, as cards, code and tables beside them do.
 
 ## Motion
 

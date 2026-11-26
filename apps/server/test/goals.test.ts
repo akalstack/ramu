@@ -223,6 +223,24 @@ describe('Ramu goals', () => {
     expect(prompts).toHaveLength(2)
   })
 
+  it('stops repeating a completed goal in later prompts, so a new message is not read as a goal request', async () => {
+    service.setGoal(id, 'Login works and tests pass')
+    await service.updateGoal(id, 'completed', 'Implemented login; authentication tests passed', evidence)
+    done()
+    await tick()
+    const before = prompts.length
+    await service.send(id, 'test')
+    await tick()
+    expect(prompts.slice(before).join('\n')).not.toContain('Login works and tests pass')
+    expect(goalState(service.getGoal(id))).toBe('Current goal: none')
+  })
+
+  it('counts only a request in words as an explicit goal request', () => {
+    const prompt = goalInstructions(prefs.goals, null)
+    expect(prompt).toContain('A greeting, a test message, a question or a single action')
+    expect(prompt).not.toContain('even for a small task')
+  })
+
   it('Stop cancels pending continuation and only the user can resume', async () => {
     service.setGoal(id, 'Implement login')
     done()

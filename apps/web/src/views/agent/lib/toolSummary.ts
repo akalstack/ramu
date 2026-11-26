@@ -1,3 +1,4 @@
+import { mcpToolWords } from '@ramu/shared/chat/mcpToolWords'
 import { isViewImageTool, toolImageName } from './toolImage'
 import { t as translate } from '../../../i18n'
 import { toolKind, KIND_LABEL, KIND_VERB } from '@ramu/shared/chat/agentTools'
@@ -5,9 +6,8 @@ import { describeRamuTool, ramuTool } from '@ramu/shared/chat/ramuTools'
 import { toolIsRunning, toolVerb } from '@ramu/shared/chat/toolStatus'
 import { type ToolResult, type ToolUse } from '../types'
 
-/** MCP tools arrive as mcp__server__tool; show the tool name. */
-export const toolLabel = (name: string) =>
-  name.startsWith('mcp__') ? name.split('__').slice(2).join('__') || name : name
+/** MCP tools arrive as mcp__server__tool (Antigravity: mcp_server_tool); show the tool's own words. */
+export const toolLabel = (name: string) => mcpToolWords(name, '').verb
 
 /**
  * The headline for a tool the provider gave no title: tool search says what it looked for, and a tool whose summary is just its

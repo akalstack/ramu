@@ -67,11 +67,6 @@
   .ramu-prose > :last-child {
     margin-bottom: 0;
   }
-  /* Text stops at a comfortable line length in a reply or a card; code and tables keep the full column. */
-  .ramu-prose:not([data-density='document']) > :is(p, ul, ol, h1, h2, h3, h4, h5, h6, blockquote) {
-    max-width: var(--prose-measure);
-  }
-
   .ramu-prose p {
     margin: 0 0 var(--prose-block-gap);
   }
@@ -118,14 +113,23 @@
   .ramu-prose ul {
     list-style: disc;
   }
+  /* Numbered steps get a wider gutter and room after the number, so "10." lines up with "9." and the text never
+     crowds its number; the numbers read a little stronger than bullets, since their order matters. */
   .ramu-prose ol {
     list-style: decimal;
+    padding-left: 1.85em;
+  }
+  .ramu-prose ol > li::marker {
+    color: var(--soft);
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
   }
   .ramu-prose :is(ul, ol) :is(ul, ol) {
     margin: calc(var(--prose-item-gap) / 2) 0 0;
   }
   .ramu-prose li {
     margin: calc(var(--prose-item-gap) / 2) 0;
+    padding-left: 0.3em;
   }
   .ramu-prose li::marker {
     color: var(--muted);
@@ -138,6 +142,7 @@
     padding-left: 0;
   }
   .ramu-prose :is(li.task-list-item, li[data-type='taskItem']) {
+    padding-left: 0;
     display: flex;
     align-items: baseline;
     gap: 0.6em;

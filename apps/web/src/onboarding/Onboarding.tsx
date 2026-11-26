@@ -42,9 +42,9 @@ import { applyTokenChoices, sameChoices, tokenChoicesOf, type TokenChoices } fro
 
 const TEXT: Record<StepKind, { name: string; title: string; lead: string }> = {
   agents: {
-    name: 'Agents',
-    title: 'Connect your agents',
-    lead: 'Ramu runs the coding agents you already use, signed in with your own accounts.',
+    name: 'Default agent',
+    title: 'Choose your default agent',
+    lead: 'New threads start on this agent. Ramu runs the agents you already use, signed in with your own accounts.',
   },
   mode: {
     name: 'Model control',
@@ -54,12 +54,7 @@ const TEXT: Record<StepKind, { name: string; title: string; lead: string }> = {
   model: {
     name: 'Model',
     title: 'Choose your default model',
-    lead: 'New threads start on this model. Change it in any thread, or later in Settings.',
-  },
-  effort: {
-    name: 'Effort',
-    title: 'Choose how hard it thinks',
-    lead: 'New threads start at this effort. The model bar changes it for one thread.',
+    lead: 'New threads start on this model and effort. Change them in any thread, or later in Settings.',
   },
   tokens: {
     name: 'Agent features',
@@ -98,8 +93,8 @@ const savedStep = (): string | null => deviceStorage.getItem(PROGRESS_KEY) || nu
 const OWN_ENTER = 'button, a, textarea, [role="combobox"], [role="listbox"], [role="option"], [role^="menu"]'
 
 /**
- * First-run setup, one step at a time: agents (which run here, and which new threads start on), model control, a model
- * and effort for each of those agents, token-heavy features, default
+ * First-run setup, one step at a time: the default agent (and which others run here), model control, a model and
+ * effort on one step for each of those agents, token-heavy features, default
  * access, who the host commits as and its GitHub sign-in, connecting a phone (or the optional Ramu account), and a project.
  * Every step is prefilled, so Continue alone finishes it; the language can change from the first step on.
  */
@@ -143,7 +138,7 @@ export function Onboarding() {
   const choiceFor = (provider: AgentProvider) => providerChoice(saved, provider, all, picks[provider])
   const modelOf = (choice: DefaultModelChoice) =>
     all.find((entry) => entry.provider === choice.provider && entry.id === choice.model)
-  const steps = setupSteps(providers, (provider) => choosableEfforts(modelOf(choiceFor(provider))).length > 0)
+  const steps = setupSteps(providers)
   // A step that no longer applies (a restored Effort step after the model changed) shows the one after it instead.
   const index = stepIndex(steps, step)
   const current = steps[index]!
@@ -200,14 +195,14 @@ export function Onboarding() {
   }
 
   // Each step saves what it changed when the person moves on, so leaving early keeps what they chose.
-  const saveStep = async (next: string | undefined) => {
+  const saveStep = async () => {
     if (key === 'agents' && !all.some((entry) => installed.includes(entry.provider)))
       void models.reload().catch(() => {})
     if (key === 'mode' && mode !== (models.preferences.defaultBarMode ?? 'model'))
       await models.save({ ...models.preferences, defaultBarMode: mode })
-    // A provider's model and effort save together, once, so a passing choice never leaves a step behind in the set.
-    // The first provider's is where new threads start; the others join the default set beside it.
-    if (provider && ((key === 'model' && next !== `effort:${provider}`) || key === 'effort')) {
+    // A provider's model and effort save together, from its one step. The first provider's is where new threads start;
+    // the others join the default set beside it.
+    if (provider && key === 'model') {
       const name = model ? `${modelDisplayName(model.name)} ${effortDisplayName(choice.effort, model.provider)}` : ''
       const updated = (provider === lead ? withDefaultModel : withModelStep)(models.preferences, choice, name.trim())
       if (updated !== models.preferences) await models.save(updated)
@@ -233,7 +228,7 @@ export function Onboarding() {
     setError('')
     try {
       const next = steps[target]?.id
-      if (target > index) await saveStep(next)
+      if (target > index) await saveStep()
       if (!next) return await finish()
       move(next)
     } catch (e) {
@@ -274,16 +269,10 @@ export function Onboarding() {
   const name = (entry: (typeof steps)[number]) =>
     entry.provider && many ? `${providerName(entry.provider)} · ${t(TEXT[entry.kind].name)}` : t(TEXT[entry.kind].name)
   const title =
-    key === 'model' && provider && many
-      ? t('Choose your {0} model', { 0: providerName(provider) })
-      : key === 'effort' && model && many
-        ? t('Choose how hard {0} thinks', { 0: modelDisplayName(model.name) })
-        : t(text.title)
+    key === 'model' && provider && many ? t('Choose your {0} model', { 0: providerName(provider) }) : t(text.title)
   const leadText =
     provider && provider !== lead
-      ? key === 'model'
-        ? t('Kept with your models, so any thread can switch to it. Change it later in Settings.')
-        : t('Kept with this model. The model bar changes it for one thread.')
+      ? t('Kept with your models, so any thread can switch to it. Change it later in Settings.')
       : t(text.lead)
   return (
     <Dialog
@@ -412,16 +401,27 @@ export function Onboarding() {
               statuses={statuses}
               enabled={enabled}
               onEnabled={setEnabled}
-              lead={many ? lead : undefined}
-              canLead={(entry) => providers.includes(entry)}
+              lead={providers.length ? lead : undefined}
+              leads={providers}
               onLead={setLeadPick}
               onRefresh={refresh}
               onError={setError}
             />
           )}
           {key === 'mode' && <ModelsStep mode={mode} onMode={setMode} provider={lead} />}
-          {key === 'model' && <ModelChoiceStep provider={provider} choice={choice} onChoice={setChoice} />}
-          {key === 'effort' && model && <EffortStep model={model} choice={choice} onChoice={setChoice} />}
+          {key === 'model' && (
+            // Model and effort on one page: the effort list follows the model picked above it.
+            <div className="flex flex-col gap-2">
+              <h3 className="m-0 text-caption font-medium text-muted-foreground">{t('Model')}</h3>
+              <ModelChoiceStep provider={provider} choice={choice} onChoice={setChoice} />
+              {model && choosableEfforts(model).length > 0 && (
+                <>
+                  <h3 className="m-0 mt-3 text-caption font-medium text-muted-foreground">{t('Effort')}</h3>
+                  <EffortStep model={model} choice={choice} onChoice={setChoice} />
+                </>
+              )}
+            </div>
+          )}
           {key === 'tokens' && <TokensStep choices={choices} onChoices={setChoices} />}
           {key === 'access' && <AccessStep access={access} onAccess={setAccess} />}
           {key === 'identities' && (

@@ -67,3 +67,13 @@ test('idle context compaction is a distinct working state, and blocked goals ret
   assert.equal(mobileThreadActivity(chat([], { compacting: true }), true).model.primary, 'working')
   assert.equal(mobileThreadActivity(chat([], { goal: { status: 'blocked' } }), true).model.goalState, 'blocked')
 })
+test('a thread waiting at its limit leaves the limit to the composer tray, and marks only a try in progress', () => {
+  const items = [
+    { kind: 'user', id: 'u' },
+    { kind: 'error', id: 'e', message: 'Claude usage limit reached.' },
+    { kind: 'note', id: 'wait-1', wait: true, limit: { retryAt: Date.now() + 60_000, guessed: false } },
+  ]
+  assert.equal(mobileThreadActivity(chat(items), true).model.primary, null)
+  assert.equal(mobileThreadActivity(chat(items, { status: 'running' }), true).model.primary, 'provider')
+  assert.equal(mobileThreadActivity(chat(items, { status: 'running', doneAt: 1 }), true).model.primary, 'working')
+})

@@ -476,13 +476,19 @@ export function Composer({
       >
         {suggestions.visible && <ComposerSuggestions suggestions={suggestions} onChoose={choose} />}
         {predicted.length > 1 && (
-          <div role="group" aria-label={t('Suggested next messages')} className="m-[0_0_4px] flex flex-wrap gap-1">
+          // One line: the suggestions share it and each shortens with an ellipsis, so the composer never grows a row for them.
+          <div
+            role="group"
+            aria-label={t('Suggested next messages')}
+            className="m-[0_0_4px] flex min-w-0 flex-nowrap gap-1 overflow-hidden"
+          >
             {predicted.slice(1).map((text) => (
               <Button
                 key={text}
                 variant="ghost"
                 size="sm"
-                className="h-6 max-w-full rounded-full px-2 text-caption text-muted-foreground"
+                className="h-6 min-w-0 max-w-full flex-[0_1_auto] rounded-full px-2 text-caption text-muted-foreground"
+                title={text}
                 onClick={() => {
                   onChange(text)
                   ref.current?.focus()

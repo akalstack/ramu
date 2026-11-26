@@ -1,5 +1,38 @@
+diff --git a/ios/renderer/CodeRenderer.m b/ios/renderer/CodeRenderer.m
+index d0a9b3aff298ec236c491cfcd59ad0a26e61c2c7..2663613ba6173434a6b36ecc3ca632de4bb8ab63 100644
+--- a/ios/renderer/CodeRenderer.m
++++ b/ios/renderer/CodeRenderer.m
+@@ -63,6 +63,14 @@ - (void)renderNodeContent:(MarkdownASTNode *)node
+     codeAttributes[@"BlockLineHeight"] = @(UIFontLineHeight(blockFont));
+ 
+     [output setAttributes:codeAttributes range:range];
++
++    // Ramu: room on both sides of inline code, as the desktop pads it. Kerning the character before the code and the
++    // code's last character moves the neighbours away; CodeBackground widens the chip into the room on the left, and
++    // the last character's kern already sits inside the chip on the right.
++    if (range.location > 0) {
++      [output addAttribute:NSKernAttributeName value:@(kInlineCodePadding) range:NSMakeRange(range.location - 1, 1)];
++    }
++    [output addAttribute:NSKernAttributeName value:@(kInlineCodePadding) range:NSMakeRange(NSMaxRange(range) - 1, 1)];
+   }
+ }
+ 
+diff --git a/ios/utils/CodeBackground.h b/ios/utils/CodeBackground.h
+index 17f198248d1de06b8417aa90ba3823a3ec6592b3..e2088cdd936efa615ebfb5dc2b42c8e7ca646276 100644
+--- a/ios/utils/CodeBackground.h
++++ b/ios/utils/CodeBackground.h
+@@ -6,6 +6,9 @@ NS_ASSUME_NONNULL_BEGIN
+ 
+ extern NSString *const CodeAttributeName;
+ 
++// Ramu: horizontal room around inline code, matching the desktop's 4px padding.
++static const CGFloat kInlineCodePadding = 4.0;
++
+ @interface CodeBackground : NSObject
+ 
+ - (instancetype)initWithConfig:(StyleConfig *)config;
 diff --git a/ios/utils/CodeBackground.m b/ios/utils/CodeBackground.m
-index 5e5d5bf06370c9a94ed5645ccba4436894fe2bdb..dd4d917cd9b2bff9b4d950ed6b3e1482808e0167 100644
+index 5e5d5bf06370c9a94ed5645ccba4436894fe2bdb..6125e148165980a19f4ac23551ca7e9a7e171068 100644
 --- a/ios/utils/CodeBackground.m
 +++ b/ios/utils/CodeBackground.m
 @@ -4,7 +4,7 @@
@@ -11,7 +44,7 @@ index 5e5d5bf06370c9a94ed5645ccba4436894fe2bdb..dd4d917cd9b2bff9b4d950ed6b3e1482
  static const CGFloat kCodeBackgroundBorderWidth = 0.5;
  
  @implementation CodeBackground {
-@@ -99,6 +99,12 @@ - (void)drawCodeBackgroundForRange:(NSRange)range
+@@ -99,6 +99,19 @@ - (void)drawCodeBackgroundForRange:(NSRange)range
                                   if (finalRect.size.height < referenceHeight) {
                                     finalRect.size.height = referenceHeight;
                                   }
@@ -20,6 +53,13 @@ index 5e5d5bf06370c9a94ed5645ccba4436894fe2bdb..dd4d917cd9b2bff9b4d950ed6b3e1482
 +                                 CGFloat chipHeight = ceil(self->_config.codeFontSize * 1.5);
 +                                 if (finalRect.size.height > chipHeight) {
 +                                   finalRect = CGRectInset(finalRect, 0, (finalRect.size.height - chipHeight) / 2.0);
++                                 }
++
++                                 // Ramu: the chip reaches into the room CodeRenderer kerns before the code, so the code
++                                 // sits inside padding as on the desktop instead of touching the chip's edges.
++                                 if (isFirst) {
++                                   finalRect.origin.x -= kInlineCodePadding;
++                                   finalRect.size.width += kInlineCodePadding;
 +                                 }
  
                                   [self drawBackgroundAndBorders:finalRect

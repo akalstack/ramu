@@ -24,8 +24,14 @@ export default function ActivityRoute() {
       store.select(computer.id)
     }
     if (computer.status === 'connecting') return
+    // The activity names the thread it put first; a thread that came to need the person since then goes ahead of it.
+    const named = store.chats.find(
+      (c) => c.id === store.drafts['live-activity-target'] && c.computerId === computer.id && c.status !== 'archived',
+    )
     const task =
+      (named?.status === 'needs-input' ? named : undefined) ??
       store.chats.find((c) => c.computerId === computer.id && c.status === 'needs-input') ??
+      named ??
       store.chats.find((c) => c.computerId === computer.id && c.status === 'running')
     if (task) router.replace({ pathname: '/chat/[id]', params: { id: task.id } })
     else router.replace('/')

@@ -1,3 +1,4 @@
+import { mcpToolWords } from '@ramu/shared/chat/mcpToolWords'
 import type { AgentEvent } from '@ramu/shared/types'
 import { interactiveRevisions, interactiveSuccessor, interactiveUpdates } from '@ramu/shared/interactiveRevisions'
 import { helperGroups } from '@ramu/shared/chat/helperPresentation'
@@ -280,12 +281,13 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
       // As on desktop, file tools say only the file's name (and an edit its +/- lines) until opened.
       const file = ramu ? null : fileToolLine(e, result)
       const kind = toolKind(e)
+      const plain = mcpToolWords(e.name, e.title || e.summary)
       items.push({
         kind: 'tool',
         id: e.toolUseId,
         tool: isToolKind(kind) ? kind : 'other',
-        verb: file?.verb ?? e.name,
-        subject: file ? `${file.name}${file.others ? ` +${file.others}` : ''}` : e.title || e.summary,
+        verb: file?.verb ?? plain.verb,
+        subject: file ? `${file.name}${file.others ? ` +${file.others}` : ''}` : plain.subject,
         ...(ramu ? { ramu: { done: ramu.done, running: ramu.running, subject: ramu.subject, facts: ramu.facts } } : {}),
         ...(file ? { file, diffs: fileToolDiffs(e, result) } : {}),
         status: result

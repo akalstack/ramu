@@ -1,4 +1,5 @@
 import { PermissionApprovals } from '../src/agent/permissionApprovals'
+import { ToolTokens } from '../src/agent/toolTokens'
 import { elicitationRequest, elicitationContent } from '../src/agent/elicitation'
 import { AcpResumeUnavailable } from '../src/providers/acp'
 import { configureProviderBinaries } from '../src/providers/providerBinaries'
@@ -1136,6 +1137,45 @@ describe('AgentService', () => {
     expect(svc.get(chat.id).providerSessionId).toBe('native-1')
     svc.stopAll()
   })
+
+  it.each(['antigravity', 'codex'] as const)(
+    'keeps the tool token a %s runner was launched with active on its next turn',
+    async (provider) => {
+      const launched: string[] = []
+      const factory: import('../src/agent/agentRunner').AgentRunnerFactory = (_scope, _settings, emit) => {
+        const complete = () => {
+          emit({ kind: 'init', providerSessionId: 'native-1', model: 'm', tools: [], mcpServers: [] } as never)
+          emit({ kind: 'result', text: 'done', isError: false, costUsd: null })
+        }
+        return {
+          setTools: (connection) => {
+            launched.push(connection.token)
+          },
+          start: async () => complete(),
+          send: async () => complete(),
+          steer: async () => {},
+          interrupt: async () => {},
+          stop: async () => {},
+          replyPermission: () => {},
+          replyQuestion: () => {},
+        }
+      }
+      const svc = new AgentService(db, () => {}, fakeQuery([]), factory)
+      vi.spyOn(svc, 'catalog').mockResolvedValue([])
+      svc.preferences = () => DEFAULT_APP_PREFERENCES
+      const tokens = new ToolTokens()
+      svc.toolConnection = (session) => ({ url: 'http://127.0.0.1:9/mcp', token: tokens.issue(session.id) })
+      const chat = svc.start('t', scopeOf(cwd), 'first', { ...full, provider })
+      await until(() => svc.get(chat.id).state === 'idle')
+      await svc.send(chat.id, 'second')
+      await until(() => svc.get(chat.id).state === 'idle')
+      // The runner was not relaunched, so the computer and browser tools must still accept the token it holds.
+      expect(new Set(launched).size).toBe(1)
+      expect(tokens.active(chat.id, launched[0])).toBe(true)
+      expect(tokens.active('another-thread', launched[0])).toBe(false)
+      svc.stopAll()
+    },
+  )
 
   it('keeps the checkout while a background agent works, without holding back the thread itself', async () => {
     vi.stubEnv('RAMU_FAKE_AGENT_DELAY', '500')

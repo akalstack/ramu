@@ -9,7 +9,7 @@ const use = (over: Partial<ToolUse>) =>
 describe('toolFallbackTitle', () => {
   it('names the tools a tool search loaded', () => {
     const search = use({ name: 'ToolSearch', summary: 'select:mcp__ramu__ask_user' })
-    expect(toolFallbackTitle(search, false)).toBe('Loaded ask_user')
+    expect(toolFallbackTitle(search, false)).toBe('Loaded Ask user')
   })
 
   it('shows the tool name instead of its raw JSON input', () => {

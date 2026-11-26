@@ -16,7 +16,7 @@ export const goalPreferencesSchema = z.object({
 
 const AUTO_GOAL_POLICY = `A goal schedules automatic follow-up agent turns after your response ends; it is not a task plan or progress tracker. Decide in this order:
 1. Respect an explicit request not to create a goal or automatically continue. Questions, explanations, brainstorming and plan-only discussion do not authorize implementation or an implicit goal.
-2. When the user explicitly requests a Ramu goal, call set_goal even for a small task. Quote that request in continuationReason.
+2. Only /goal, or a message that asks in words for a Ramu goal, is an explicit request; then call set_goal and quote that request in continuationReason. A greeting, a test message, a question or a single action (such as opening an app) is never a goal request: answer it or do it directly.
 3. Otherwise, default to doing the task directly. Inspect the task first before creating an implicit goal. Ask: what authorized work is likely to need another agent turn after this one, and what inspected evidence supports that? If you cannot name both, continue without a goal. Several tool calls, multiple steps or files, tests, a verifiable outcome, or elapsed time alone do not by themselves justify a goal. Routine fixes, features, edits, renames and commands normally need no goal.
 4. If inspected evidence makes multiple agent turns and automatic continuation likely, call set_goal before substantial implementation. Include the inspected facts AND the work likely to remain for a later turn in continuationReason. Do not require certainty that the current turn will run out. Examples include an app-wide migration with staged implementation and UI verification, a broad refactor across subsystems, or a batch service that only unlocks the next batch in another agent turn. Task size or slow validation alone is insufficient without a concrete continuation need.
 Reassess at the start or later when the scope grows or substantial work remains. A goal does not replace doing the work now or justify ending a turn early. Do all useful authorized work available in this turn; do not finish with only a progress report when that work is still possible. Keep a goal active for work requiring a later turn, completed only with verification evidence, or blocked when required input or an external obstacle leaves no useful independent work.`
@@ -27,9 +27,18 @@ function promptGoal(goal: ChatGoal) {
   return { id, objective, status, turns, reason, updatedAt, ...(verify ? { verify } : {}) }
 }
 
+/**
+ * The goal an agent still has to act on. A completed goal is history: repeating it in every prompt reads as an
+ * invitation to start the next one, so it counts as none.
+ */
+export function openGoal(goal: ChatGoal | null): ChatGoal | null {
+  return goal && goal.status !== 'completed' ? goal : null
+}
+
 /** Per-turn goal state for a session whose system instructions already carry the goal policy. */
 export function goalState(goal: ChatGoal | null): string {
-  return `Current goal: ${goal ? JSON.stringify(promptGoal(goal)) : 'none'}`
+  const open = openGoal(goal)
+  return `Current goal: ${open ? JSON.stringify(promptGoal(open)) : 'none'}`
 }
 
 export function goalInstructions(preferences: GoalPreferences, goal: ChatGoal | null): string {
@@ -39,7 +48,7 @@ ${preferences.mode === 'auto' ? AUTO_GOAL_POLICY : 'Only create a goal when the 
 Keep the goal within the user-authorized scope. Later instructions refine that scope; questions do not cancel unfinished work. If the user changes the task, update the objective accordingly.
 Before ending each turn with an active goal, audit ALL requirements against files, tests, tool results or produced artifacts. Call update_goal with active and the remaining work, completed only when everything requested is done, or blocked and the missing input or obstacle when no useful independent work remains. Completed needs structured evidence: the checks you ran with whether each passed (evidence.checks), and every file you changed (evidence.changedFiles). Ramu rejects completion with no checks, with a failed check, or while the workspace has uncommitted changes made during the goal that the evidence does not mention (list files you did not change in evidence.otherChanges). If the user set a verification command, Ramu runs it after your turn ends and only a pass completes the goal. A finished turn, a proposed plan, or an exhausted budget does not establish completion. Pending required approvals/answers prevent completion. Ramu blocks a goal whose continuations repeat the same tool calls and change nothing.
 The user controls pause, resume, clear and turn limits. Ramu starts follow-up turns only while the thread is idle. Do not keep working on a paused goal unless the user requests it.
-Current goal: ${goal ? JSON.stringify(promptGoal(goal)) : 'none'}`
+${goalState(goal)}`
 }
 
 export function goalContinuation(goal: ChatGoal, failedCheck?: GoalCheck): string {

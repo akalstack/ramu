@@ -221,13 +221,18 @@ const quote = (value: string | undefined) => (value ? `“${clip(value)}”` : u
  */
 export const openCodeRamuName = (name: string): string | undefined => /^ramu_(?:tools_)?(.+)$/.exec(name)?.[1]
 
-/** Which Ramu tool a call is, however the provider names it: Claude's `mcp__ramu__x`, Codex's `x` on the `ramu` server, OpenCode's `ramu_x`. */
+/**
+ * Which Ramu tool a call is, however the provider names it: Claude's `mcp__ramu__x`, Codex's `x` on the `ramu` server,
+ * OpenCode's `ramu_x`, Antigravity's `mcp_ramu_x`.
+ */
 export function ramuTool(tool: CallSource): RamuToolCall | null {
   const claude = /^mcp__ramu__(.+)$/.exec(tool.name)?.[1]
   const opencode = openCodeRamuName(tool.name)
+  const antigravity = /^mcp_ramu_(.+)$/.exec(tool.name)?.[1]
   const name =
     claude ??
     (opencode && KNOWN.has(opencode) ? opencode : undefined) ??
+    (antigravity && KNOWN.has(antigravity) ? antigravity : undefined) ??
     (tool.summary === 'ramu' ? tool.name : undefined)
   if (!name || !KNOWN.has(name)) return null
   const args = record(parse(tool.input) ?? (tool.summary.startsWith('{') ? parse(tool.summary) : undefined))

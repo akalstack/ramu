@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
-import { UNATTENDED_IDLE_SECONDS, mayInstallUnattended } from '../src/main/unattendedUpdate'
+import type { AppRelease } from '@ramu/shared/updates'
+import { UNATTENDED_IDLE_SECONDS, installsAtLaunch, mayInstallUnattended } from '../src/main/unattendedUpdate'
 
 const quiet = {
   ready: true,
@@ -21,4 +22,17 @@ it('waits while anything says otherwise', async () => {
     throw new Error('service restarting')
   }
   expect(await mayInstallUnattended({ ...quiet, autoUpdate: unreadable })).toBe(false)
+})
+
+const staged = { phase: 'ready' as const, release: { version: '1.2.0' } as AppRelease }
+
+it('installs a staged update at launch when Auto-update is on', () => {
+  expect(installsAtLaunch(staged, true, '1.1.0')).toBe(true)
+})
+
+it('starts normally when Auto-update is off, nothing is staged, or the staged release is already installed', () => {
+  expect(installsAtLaunch(staged, false, '1.1.0')).toBe(false)
+  expect(installsAtLaunch({ ...staged, phase: 'available' }, true, '1.1.0')).toBe(false)
+  expect(installsAtLaunch({ phase: 'ready', release: null }, true, '1.1.0')).toBe(false)
+  expect(installsAtLaunch(staged, true, '1.2.0')).toBe(false)
 })

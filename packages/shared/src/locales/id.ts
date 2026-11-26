@@ -817,6 +817,14 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Choose repository': 'Pilih repositori',
   'Set up later': 'Atur nanti',
   'Connect your agents': 'Hubungkan agent-mu',
+  'Default agent': 'Agent default',
+  'Choose your default agent': 'Pilih agent default-mu',
+  'Agents on this host': 'Agent di host ini',
+  'Sign in to an agent to choose your default': 'Login ke agent untuk memilih default-mu',
+  'New threads start on this agent. Ramu runs the agents you already use, signed in with your own accounts.':
+    'Thread baru dimulai dengan agent ini. Ramu menjalankan agent yang sudah kamu pakai, dengan login akunmu sendiri.',
+  'New threads start on this model and effort. Change them in any thread, or later in Settings.':
+    'Thread baru dimulai dengan model dan effort ini. Ubah di thread mana pun, atau nanti di Pengaturan.',
   'Ramu runs the coding agents you already use, signed in with your own accounts.':
     'Ramu menjalankan agent coding yang sudah kamu pakai, dengan login akunmu sendiri.',
   'Choose how you pick models': 'Pilih cara memilih model',
@@ -1250,6 +1258,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Updating Ramu…': 'Memperbarui Ramu…',
   'The background service is restarting with the new version.':
     'Layanan latar belakang dimulai ulang dengan versi baru.',
+  'Installing the update downloaded while Ramu was closed.':
+    'Memasang pembaruan yang diunduh saat Ramu ditutup.',
   'Keep host awake': 'Jaga host tetap aktif',
   'Prevent idle sleep on macOS while the service runs. Display sleep and manual sleep still work.':
     'Cegah macOS tidur saat idle selama layanan berjalan. Layar mati dan tidur manual tetap berfungsi.',
