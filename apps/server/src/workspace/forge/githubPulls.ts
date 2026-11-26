@@ -20,7 +20,7 @@ import type {
   PullRequestUpdate,
 } from '@ramu/shared/types'
 import { unsupportedPullRequestText } from '@ramu/shared/pullRequestSupport'
-import { pullRequestWaiting } from '@ramu/shared/pullRequests'
+import { withPullRequestWaiting } from '@ramu/shared/pullRequests'
 import { ForgeError, forgeRemoteOf, githubAvailability, githubGraphql, githubRest } from './github'
 import { FILES_PAGE, boundedPatch } from './adapter'
 
@@ -296,10 +296,7 @@ async function withWaiting(
   const rules = new Map(
     await Promise.all(bases.map(async (base) => [base, await branchRules(cwd, named, base)] as const)),
   )
-  return pullRequests.map((pr) => {
-    const waiting = pr.draft ? null : pullRequestWaiting(pr, rules.get(pr.baseBranch) ?? null)
-    return waiting ? { ...pr, waiting } : pr
-  })
+  return pullRequests.map((pr) => withPullRequestWaiting(pr, rules.get(pr.baseBranch) ?? null))
 }
 
 /** The server, repository and number a GitHub pull request link names; anything else is refused. */

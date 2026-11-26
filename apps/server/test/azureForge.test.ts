@@ -140,6 +140,25 @@ const listRow = {
   creationDate: '2026-01-02T00:00:00Z',
 }
 
+it('says which required reviewers a pull request still waits on', () => {
+  const waitingOn = parseListPullRequest(
+    {
+      ...listRow,
+      reviewers: [
+        { id: 'u-bo', displayName: 'Bo', vote: 10 },
+        { id: 'u-cy', displayName: 'Cy', vote: 0, isRequired: true },
+        { id: 'u-di', displayName: 'Di', vote: 0 },
+      ],
+    },
+    repo,
+    'u-ana',
+  )
+  // Only the reviewers the branch policy requires, and only those yet to vote.
+  expect(waitingOn.waiting).toMatchObject({ approvals: 1, from: ['Cy'], changesBy: [] })
+  // An approved pull request with nobody required waits on no one.
+  expect(parseListPullRequest(listRow, repo, 'u-ana').waiting).toBeUndefined()
+})
+
 it('lists pull requests grouped by the viewer’s part in them, with their merge status', () => {
   expect(parseListPullRequest(listRow, repo, 'u-ana')).toMatchObject({
     number: 7,

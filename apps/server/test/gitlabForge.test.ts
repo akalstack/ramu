@@ -26,6 +26,7 @@ import {
   jobState,
   parseDiscussions,
   parseJobs,
+  gitlabMergeRules,
   parseListMergeRequest,
   parseMergeRequest,
   parseProjects,
@@ -815,4 +816,12 @@ it('drafts by title, merges when the pipeline succeeds, updates fields and retri
   } finally {
     fake.done()
   }
+})
+
+it('reads what a merge request still needs from GitLab’s own approval rules and merge status', () => {
+  // Two approvals asked for in all: one given, one left.
+  expect(gitlabMergeRules(1, 1, 'not_approved')).toEqual({ approvals: 2 })
+  expect(gitlabMergeRules(0, 0, 'discussions_not_resolved')).toEqual({ approvals: 0, conversations: true })
+  // An older GitLab that does not say how many are left leaves the count unknown.
+  expect(gitlabMergeRules(undefined, 0, 'not_approved')).toEqual({})
 })

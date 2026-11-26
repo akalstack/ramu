@@ -18,6 +18,7 @@ import type {
   IssueSummary,
   MergeMethod,
   MergeOptions,
+  MergeRules,
   PublishRepositoryInput,
   PullRequestAction,
   PullRequestFile,
@@ -41,7 +42,7 @@ import { redactSecrets } from '@ramu/shared/forgeRemote'
 import { currentBranch, git, publishRemote } from '../git'
 import { FILES_PAGE, TIMELINE_LENGTH, boundedPatch, opening, registerForgeAdapter } from './adapter'
 import { enrichOpen } from './enrich'
-import { checksRollup } from '@ramu/shared/pullRequests'
+import { checksRollup, withPullRequestWaiting } from '@ramu/shared/pullRequests'
 import { findExecutable } from '../../providers/providerBinaries'
 import { ForgeError, failureExcerpt, pullRequestDraft, forgetForgeRemote } from './github'
 import { savedGitlabCredential } from './gitlabCredentials'
@@ -342,6 +343,8 @@ export function parseJobs(jobs: RawJob[]): ForgeCheck[] {
 interface RawApprovals {
   approved?: boolean
   approved_by?: unknown[]
+  /** Approvals the project's rules still need; absent on a GitLab too old to say. */
+  approvals_left?: number
 }
 
 /**
@@ -773,8 +776,28 @@ export function parseListMergeRequest(raw: RawListMergeRequest, viewer: string |
   }
 }
 
+/**
+ * What GitLab itself requires of a merge request, from its approval rules and merge status: the approvals its rules
+ * ask for in all (those given plus those left), and whether open threads hold the merge.
+ */
+export function gitlabMergeRules(
+  approvalsLeft: number | undefined,
+  approved: number,
+  status: string | undefined,
+): MergeRules {
+  return {
+    ...(typeof approvalsLeft === 'number' ? { approvals: approved + approvalsLeft } : {}),
+    ...(status === 'discussions_not_resolved' ? { conversations: true } : {}),
+  }
+}
+
 /** What a list row lacks: the head pipeline's state, whether it is approved, and its unresolved threads. */
-export async function mergeRequestDetails(a: Access, iid: number): Promise<Partial<PullRequestSummary>> {
+export async function mergeRequestDetails(
+  a: Access,
+  iid: number,
+  /** The list row, to say what it waits on people for from what this reads. */
+  row?: PullRequestSummary,
+): Promise<Partial<PullRequestSummary>> {
   const [one, approvals, discussions] = await Promise.all([
     projectApi<{ head_pipeline?: { status?: string } | null; detailed_merge_status?: string }>(
       a,
@@ -784,9 +807,13 @@ export async function mergeRequestDetails(a: Access, iid: number): Promise<Parti
     projectApi<RawDiscussion[]>(a, `/merge_requests/${iid}/discussions?per_page=100`).catch(() => null),
   ])
   const pipeline = one.head_pipeline?.status
-  return {
+  const approvedBy = (approvals?.approved_by ?? [])
+    .map((entry) => (entry as { user?: { username?: string } } | null)?.user?.username)
+    .filter((name): name is string => !!name)
+  const details: Partial<PullRequestSummary> = {
     checks: pipeline ? checksRollup([{ state: jobState({ status: pipeline, allow_failure: false }) }]) : null,
     reviewDecision: reviewDecision(one.detailed_merge_status, approvedBySomeone(approvals)),
+    ...(approvals ? { approvedBy } : {}),
     ...(discussions
       ? {
           openThreads: discussions.filter((discussion) => {
@@ -796,6 +823,14 @@ export async function mergeRequestDetails(a: Access, iid: number): Promise<Parti
         }
       : {}),
   }
+  if (!row) return details
+  // GitLab's own approval rules and merge status are the rules: how many approvals are left, and whether open
+  // threads hold the merge.
+  const waiting = withPullRequestWaiting(
+    { ...row, ...details },
+    gitlabMergeRules(approvals?.approvals_left, approvedBy.length, one.detailed_merge_status),
+  ).waiting
+  return { ...details, ...(waiting ? { waiting } : {}) }
 }
 
 const viewerOf = (a: Access) =>
@@ -828,7 +863,7 @@ export async function listPullRequests(cwd: string, options: { includeClosed: bo
       viewer,
       pullRequests: await enrichOpen(
         [...open, ...done].map((raw) => parseListMergeRequest(raw, viewer)),
-        (pr) => mergeRequestDetails(a, pr.number),
+        (pr) => mergeRequestDetails(a, pr.number, pr),
       ),
     }
   } catch (error) {

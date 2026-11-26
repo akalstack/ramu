@@ -37,7 +37,7 @@ import { currentBranch, git, publishRemote } from '../git'
 import { FILES_PAGE, TIMELINE_LENGTH, boundedPatch, opening, registerForgeAdapter } from './adapter'
 import { textPatch } from './textPatch'
 import { enrichOpen } from './enrich'
-import { checksRollup } from '@ramu/shared/pullRequests'
+import { checksRollup, withPullRequestWaiting } from '@ramu/shared/pullRequests'
 import { ForgeError, pullRequestDraft, forgetForgeRemote } from './github'
 import { azureCredential, type AzureCredential } from './azureCredentials'
 import { FAILED_STEPS, failedStepLog } from './buildLogs'
@@ -674,14 +674,21 @@ export function parseListPullRequest(
   viewerId: string | null,
 ): PullRequestSummary {
   const people = (raw.reviewers ?? []).filter((reviewer) => !reviewer.isContainer)
-  return {
+  const named = (reviewers: RawReviewer[]) => reviewers.map(nameOf).filter((name): name is string => !!name)
+  const all = raw.reviewers ?? []
+  const approvedBy = named(all.filter((reviewer) => reviewer.vote > 0))
+  // Azure DevOps marks the reviewers a branch policy requires; the ones yet to vote are who it waits on.
+  const required = all.filter((reviewer) => reviewer.isRequired && reviewer.vote <= 0)
+  const row: PullRequestSummary = {
     ...parsePullRequest(raw, [], repo),
     author: nameOf(raw.createdBy),
     fork: raw.forkSource != null,
     checks: null,
     mergeable: azureMergeability(raw.mergeStatus),
     openThreads: null,
-    requestedReviewers: (raw.reviewers ?? []).map(nameOf).filter((name): name is string => !!name),
+    requestedReviewers: named(all),
+    approvedBy,
+    changesRequestedBy: named(all.filter((reviewer) => reviewer.vote < 0)),
     group:
       viewerId && raw.createdBy?.id === viewerId
         ? 'mine'
@@ -690,6 +697,11 @@ export function parseListPullRequest(
           : 'other',
     updatedAt: Date.parse(raw.closedDate ?? raw.creationDate ?? '') || 0,
   }
+  const waiting = withPullRequestWaiting(
+    required.length ? { ...row, requestedReviewers: named(required) } : row,
+    required.length ? { approvals: approvedBy.length + required.length } : null,
+  ).waiting
+  return waiting ? { ...row, waiting } : row
 }
 
 const viewerOf = (a: Access) =>

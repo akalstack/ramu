@@ -91,6 +91,29 @@ const listRow = {
   updated_on: '2026-01-02T00:00:00Z',
 }
 
+it('says who a pull request still waits on, and who asked for changes', () => {
+  const reviewers = [
+    { uuid: '{bo}', nickname: 'bo' },
+    { uuid: '{cy}', nickname: 'cy' },
+  ]
+  const pending = parseListPullRequest(
+    { ...listRow, reviewers, participants: [{ role: 'REVIEWER', approved: false, user: reviewers[1] }] },
+    { uuid: '{ana}' },
+  )
+  // Bitbucket's list does not say how many approvals a branch needs, so it names who was asked.
+  expect(pending.waiting).toMatchObject({ approvals: null, from: ['bo', 'cy'] })
+  const changes = parseListPullRequest(
+    {
+      ...listRow,
+      reviewers,
+      participants: [{ role: 'REVIEWER', approved: false, state: 'changes_requested', user: reviewers[1] }],
+    },
+    { uuid: '{ana}' },
+  )
+  expect(changes.waiting).toMatchObject({ changesBy: ['cy'] })
+  expect(parseListPullRequest(listRow, { uuid: '{ana}' }).waiting).toBeUndefined()
+})
+
 it('lists pull requests grouped by the viewer’s part in them, leaving unknown facts unknown', () => {
   expect(parseListPullRequest(listRow, { uuid: '{ana}' })).toMatchObject({
     number: 3,

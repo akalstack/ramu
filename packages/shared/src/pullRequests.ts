@@ -64,14 +64,22 @@ export function pullRequestWaiting(
   // Every required approval is in and review is still required: the missing one is a code owner's.
   const codeOwner = !!rules?.codeOwners && pr.reviewDecision === 'review-required' && approvals === 0
   if (!needsReview && !conversations && pr.reviewDecision !== 'changes-requested') return null
+  // Some services keep a reviewer listed after they approved; only those still to answer are waited on.
+  const answered = new Set((pr.approvedBy ?? []).map((name) => name.toLowerCase()))
   return {
     approvals: codeOwner ? 1 : approvals,
-    from: needsReview || codeOwner ? pr.requestedReviewers : [],
+    from: needsReview || codeOwner ? pr.requestedReviewers.filter((name) => !answered.has(name.toLowerCase())) : [],
     codeOwner,
     conversations,
     changesBy,
     queue: !!rules?.queue,
   }
+}
+
+/** A list row with what it waits on people for, when it waits on anyone; drafts are not up for review yet. */
+export function withPullRequestWaiting(pr: PullRequestSummary, rules: MergeRules | null = null): PullRequestSummary {
+  const waiting = pr.draft ? null : pullRequestWaiting(pr, rules)
+  return waiting ? { ...pr, waiting } : pr
 }
 
 /**

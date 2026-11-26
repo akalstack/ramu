@@ -34,7 +34,7 @@ import { redactSecrets } from '@ramu/shared/forgeRemote'
 import { currentBranch, git, publishRemote } from '../git'
 import { FILES_PAGE, TIMELINE_LENGTH, boundedPatch, opening, registerForgeAdapter } from './adapter'
 import { enrichOpen } from './enrich'
-import { checksRollup } from '@ramu/shared/pullRequests'
+import { checksRollup, withPullRequestWaiting } from '@ramu/shared/pullRequests'
 import { ForgeError, pullRequestDraft, forgetForgeRemote } from './github'
 import { bitbucketCredential, type BitbucketCredential } from './bitbucketCredentials'
 import { FAILED_STEPS, failedStepLog } from './buildLogs'
@@ -565,7 +565,11 @@ const isFork = (raw: RawListPullRequest) =>
 export function parseListPullRequest(raw: RawListPullRequest, viewer: RawUser | null): PullRequestSummary {
   const reviewers = raw.reviewers ?? []
   const same = (user: RawUser | null | undefined) => !!viewer?.uuid && user?.uuid === viewer.uuid
-  return {
+  const verdicts = (raw.participants ?? []).filter((entry) => entry.role === 'REVIEWER')
+  const named = (entries: typeof verdicts) =>
+    entries.map((entry) => userName(entry.user)).filter((name): name is string => !!name)
+  // Bitbucket's list says who approved and who asked for changes, not how many approvals a branch needs.
+  return withPullRequestWaiting({
     ...parsePullRequest(raw, []),
     author: userName(raw.author),
     fork: isFork(raw),
@@ -573,9 +577,15 @@ export function parseListPullRequest(raw: RawListPullRequest, viewer: RawUser | 
     mergeable: 'unknown',
     openThreads: null,
     requestedReviewers: reviewers.map(userName).filter((name): name is string => !!name),
+    ...(raw.participants
+      ? {
+          approvedBy: named(verdicts.filter((entry) => entry.approved)),
+          changesRequestedBy: named(verdicts.filter((entry) => entry.state === 'changes_requested')),
+        }
+      : {}),
     group: same(raw.author) ? 'mine' : reviewers.some(same) ? 'review' : 'other',
     updatedAt: raw.updated_on ? Date.parse(raw.updated_on) || 0 : 0,
-  }
+  })
 }
 
 const viewerOf = (a: Access) => bitbucketApi<RawUser>(a.credential, '/user').catch(() => null)
