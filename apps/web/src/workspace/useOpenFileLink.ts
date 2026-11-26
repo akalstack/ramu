@@ -1,3 +1,4 @@
+import { HOST_FILES_REPO } from '@ramu/shared/workspace/fileLinks'
 import { useCallback } from 'react'
 import { localFileLink } from '@ramu/shared/workspace/fileLinks'
 import { t } from '../i18n'
@@ -28,6 +29,13 @@ export function useOpenFileLink(taskId: string | undefined) {
         .then((file) => {
           if (!file)
             throw new Error(t('This path was not found in this thread’s folders, or it matches more than one place.'))
+          // A folder outside this thread's folders, such as a repository the agent just cloned: its project opens
+          // when Ramu has it, and otherwise the host's file manager shows it.
+          if (file.kind === 'folder' && file.repoId === HOST_FILES_REPO) {
+            const project = ws.projects.find((entry) => entry.root?.replace(/\/+$/, '') === `/${file.path}`)
+            if (project) return ws.newTask(project.id)
+            return invoke('files.reveal', taskId, HOST_FILES_REPO, file.path)
+          }
           if (file.kind === 'folder') {
             ws.setSidebar('explorer')
             requestAnimationFrame(() =>

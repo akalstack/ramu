@@ -103,6 +103,14 @@ describe('local file links', () => {
       column: 1,
     })
     expect(await resolveFileLink(ws, taskId, join(outside, 'draft.md'), {}, [outside])).toBeNull()
+    // A folder outside, such as a repository cloned elsewhere, resolves when folders are asked for.
+    expect(await resolveFileLink(ws, taskId, outside, { folders: true })).toEqual({
+      repoId: HOST_FILES_REPO,
+      path: outside.slice(1),
+      kind: 'folder',
+    })
+    expect(await resolveFileLink(ws, taskId, outside)).toBeNull()
+    expect(await resolveFileLink(ws, taskId, outside, { folders: true }, [outside])).toBeNull()
     expect(withheldPath(join(outside, 'new.md'), [outside])).toBe(true)
     expect(withheldPath(join(outside, 'draft.md'), [join(root, 'elsewhere')])).toBe(false)
   })

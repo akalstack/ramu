@@ -49,21 +49,32 @@ export async function resolveFileLink(
     }
   if (matches.size) return matches.size === 1 ? [...matches.values()][0]! : null
   // A file beside the repositories, such as a draft in the project folder, or one the agent wrote elsewhere on the host.
-  const outside = await hostFile(isAbsolute(target.path) ? target.path : resolve(scope.cwd, target.path), target, [
-    ...workspace.managedFolders(),
-    ...withheld,
-  ])
+  const outside = await hostFile(
+    isAbsolute(target.path) ? target.path : resolve(scope.cwd, target.path),
+    target,
+    [...workspace.managedFolders(), ...withheld],
+    options.folders === true,
+  )
   if (outside) return outside
   return isAbsolute(target.path) || /^\.{1,2}[\\/]/.test(target.path)
     ? null
     : endingWith(bindings, target, options.folders === true)
 }
 
-async function hostFile(absolute: string, target: { line?: number; column?: number }, withheld: string[]) {
+async function hostFile(
+  absolute: string,
+  target: { line?: number; column?: number },
+  withheld: string[],
+  folders = false,
+) {
   // The host-files root is `/`; a Windows path on another drive has no relative form under it.
   if (sep !== '/' || withheldPath(absolute, withheld)) return null
   try {
-    if (!(await stat(absolute)).isFile()) return null
+    const info = await stat(absolute)
+    // A folder elsewhere on the host, such as a repository the agent just cloned, is still somewhere to go.
+    if (info.isDirectory() && folders)
+      return { repoId: HOST_FILES_REPO, path: relative('/', absolute), kind: 'folder' as const }
+    if (!info.isFile()) return null
   } catch {
     return null
   }
