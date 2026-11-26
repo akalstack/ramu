@@ -32,6 +32,39 @@ describe('RPC result shapes', () => {
     )
   })
 
+  it('accepts a kind of event a newer host added, and still refuses a known kind sent wrong', () => {
+    const table: RpcResultShapes = {
+      methods: { 'demo.events': 6 },
+      shapes: [
+        { k: 'string' },
+        { k: 'literal', v: 'text' },
+        { k: 'literal', v: 'stop' },
+        { k: 'object', p: { kind: [1, 0], text: [0, 0] } },
+        { k: 'object', p: { kind: [2, 0] } },
+        { k: 'union', of: [3, 4] },
+        { k: 'array', of: 5 },
+      ],
+    }
+    expect(() =>
+      checkRpcResult(table, 'demo.events', [
+        { kind: 'text', text: 'hi' },
+        { kind: 'settings-changed', by: 'x' },
+      ]),
+    ).not.toThrow()
+    expect(() => checkRpcResult(table, 'demo.events', [{ kind: 'text' }])).toThrow('result[0].text: missing')
+    expect(() => checkRpcResult(table, 'demo.events', ['not an event'])).toThrow(RpcResultError)
+    // The real transcript read: an event this app has never heard of does not fail the whole answer.
+    expect(() =>
+      checkRpcResult(RPC_RESULTS, 'agent.changes', {
+        reset: false,
+        cursor: 2,
+        lastSeq: 2,
+        revision: 2,
+        events: [{ seq: 2, event: { kind: 'a-kind-from-the-future', anything: true } }],
+      }),
+    ).not.toThrow()
+  })
+
   it('leaves preferences, which hosts and apps of other versions read with defaults, unchecked', () => {
     const method = RPC_RESULTS.methods['settings.app.snapshot']!
     const shape = RPC_RESULTS.shapes[method]

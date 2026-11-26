@@ -47,6 +47,13 @@ export function rpcMismatch(
     case 'union': {
       const misses = shape.of.map((member) => rpcMismatch(table, member, value, path, depth + 1))
       if (misses.includes(null)) return null
+      // A kind of thing a newer host added (a new event, a new card) is not a broken answer: the app ignores what it
+      // does not know. Only a variant this app does know, with a field it needs missing or wrong, is refused.
+      if (unknownVariant(table, shape.of, value)) return null
+      // The member the value names itself as is the one it departs from: say what is wrong with that one, not that
+      // it is not some other kind.
+      const own = shape.of.findIndex((member) => namesItself(table, member, value))
+      if (own >= 0) return misses[own]!
       // A value that is there departs from the member it was meant to be, not from "nothing": name that field.
       const present = value !== undefined && value !== null
       const telling = misses.filter(
@@ -93,6 +100,45 @@ export function rpcMismatch(
       return null
     }
   }
+}
+
+/** The literal strings a shape allows, when it allows nothing else. */
+function literalsOf(table: RpcResultShapes, index: number): string[] | null {
+  const shape = table.shapes[index]
+  if (shape?.k === 'literal') return typeof shape.v === 'string' ? [shape.v] : null
+  if (shape?.k !== 'union') return null
+  const all = shape.of.map((member) => literalsOf(table, member))
+  return all.every((list) => list) ? all.flatMap((list) => list!) : null
+}
+
+/**
+ * Whether `value` is a variant none of the union's members is: every object member names itself with a literal in the
+ * same field (`kind`, `type`), and the value carries another name there.
+ */
+function unknownVariant(table: RpcResultShapes, members: number[], value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const objects = members.flatMap((member) => {
+    const shape = table.shapes[member]
+    return shape?.k === 'object' ? [shape] : []
+  })
+  if (objects.length < 2) return false
+  const record = value as Record<string, unknown>
+  return Object.keys(objects[0]!.p).some((field) => {
+    const named = objects.map((shape) => (shape.p[field] ? literalsOf(table, shape.p[field]![0]) : null))
+    const name = record[field]
+    return named.every((list) => list) && typeof name === 'string' && !named.some((list) => list!.includes(name))
+  })
+}
+
+/** Whether an object member's naming field (`kind`, `type`) holds the name `value` carries there. */
+function namesItself(table: RpcResultShapes, member: number, value: unknown): boolean {
+  const shape = table.shapes[member]
+  if (shape?.k !== 'object' || !value || typeof value !== 'object' || Array.isArray(value)) return false
+  const record = value as Record<string, unknown>
+  return Object.entries(shape.p).some(([field, [index]]) => {
+    const name = record[field]
+    return typeof name === 'string' && (literalsOf(table, index)?.includes(name) ?? false)
+  })
 }
 
 /** Thrown for a host's answer whose shape this app does not know. */
