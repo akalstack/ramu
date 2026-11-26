@@ -15,9 +15,6 @@ Every change needs focused tests and typechecks for the packages it touches; des
 - **Transport:** what is left of recovery after a lost connection ([Architecture](contributing/architecture.md#transport)). Start from measurements on real networks.
   - **Replay:** a bounded event backlog on the host, so a short gap replays instead of every list being read again.
   - **Long gaps:** a bound on the transcript sent when a thread is more than 2000 changes behind.
-  - **Connection state:** one state shared by the desktop and the phone that tells synchronizing from current.
-  - **Failed sends:** a send that failed on the desktop outlives its view.
-  - **Host restarts:** the phone reads again after its host restarts.
 - **Windows:** a Windows build: the local service over a named pipe, finding provider CLIs, `gh` and ripgrep, keeping the host awake, and a Squirrel installer that hands `ramu://` links to the running app.
 
 ## Blocked

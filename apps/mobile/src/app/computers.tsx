@@ -6,6 +6,7 @@ import { Alert, Pressable, Switch, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Check, Plus } from 'lucide-react-native'
 import { osLine } from '@ramu/shared/deviceOs'
+import { connectionState } from '@ramu/shared/connection'
 import { DeviceIcon } from '../components/DeviceIcon'
 import { font, radius, space, useTheme } from '../theme'
 import { counts, useStore } from '../runtime/store'
@@ -45,7 +46,7 @@ export default function Computers() {
   const t = useT()
   const router = useRouter()
   const [editing, setEditing] = useState<string | null>(null)
-  const { computers, chats, selected, select, forget, retry, setConnected } = useStore()
+  const { computers, chats, selected, select, forget, retry, setConnected, threadReads } = useStore()
   return (
     <Screen bg="canvas">
       <Header modal title={t.computers} subtitle={say('Every paired host stays connected')} />
@@ -87,7 +88,10 @@ export default function Computers() {
                       <T size={font.caption} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
                         {[
                           pc.status === 'online'
-                            ? t.online
+                            ? // Connected is not yet up to date: until its threads are read again, rows may be old.
+                              connectionState('connected', threadReads[pc.id] !== undefined) === 'synchronizing'
+                              ? t.syncing
+                              : t.online
                             : pc.lastSeen
                               ? `${t[pc.status]} · ${ago(pc.lastSeen)}`
                               : t[pc.status],

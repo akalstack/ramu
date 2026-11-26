@@ -10,6 +10,8 @@ import { notifyError } from '../chat/Notifications'
 import { t, useLanguage } from '../i18n'
 import { ownHostId } from '../hosts'
 import { useRestartingHosts } from './restartingHosts'
+import { useSyncingHosts } from './hostSync'
+import { connectionState, type ConnectionState } from '@ramu/shared/connection'
 
 let computerState: Computers | null = null
 let started = false,
@@ -65,18 +67,18 @@ export function useScopedHosts(): ScopedHost[] {
   }, [state])
 }
 
-export const statusText = (status: ComputerStatus, restarting = false) =>
-  restarting && status !== 'connected'
-    ? t('Restarting…')
-    : status === 'connected'
-      ? t('Connected')
-      : status === 'connecting'
-        ? t('Connecting…')
-        : status === 'offline'
-          ? t('Offline')
-          : status === 'paused'
-            ? t('Paused')
-            : t('Pair again')
+const STATE_LABEL: Record<ConnectionState, string> = {
+  current: 'Connected',
+  synchronizing: 'Syncing…',
+  connecting: 'Connecting…',
+  disconnected: 'Offline',
+  paused: 'Paused',
+  rejected: 'Pair again',
+}
+
+/** `syncing`: the host is connected and this window is still reading what changed while it was away. */
+export const statusText = (status: ComputerStatus, restarting = false, syncing = false) =>
+  restarting && status !== 'connected' ? t('Restarting…') : t(STATE_LABEL[connectionState(status, !syncing)])
 
 export function StatusDot({ status, className = '' }: { status: ComputerStatus; className?: string }) {
   return (
@@ -91,12 +93,14 @@ export function StatusDot({ status, className = '' }: { status: ComputerStatus; 
 export function activityText(
   computer: Pick<Computer, 'status' | 'running' | 'needsInput' | 'waiting'>,
   restarting = false,
+  syncing = false,
 ): string {
   if (computer.status !== 'connected')
     return computer.status === 'offline' && computer.waiting === 'network'
       ? t('Waiting for network')
       : statusText(computer.status, restarting)
   const parts = [
+    syncing ? t('Syncing…') : '',
     computer.needsInput ? t('{0} waiting', { 0: computer.needsInput }) : '',
     computer.running ? t('{0} working', { 0: computer.running }) : '',
   ]
@@ -115,6 +119,7 @@ export function ComputerSwitcher() {
   useLanguage()
   const state = useComputers()
   const restarting = useRestartingHosts()
+  const syncing = useSyncingHosts()
   if (!state || state.computers.length < 2) return null
   const selected = state.computers.find((computer) => computer.id === state.scope)
   const select = (id: string | null) =>
@@ -158,7 +163,7 @@ export function ComputerSwitcher() {
           <StatusDot status={computer.status} />
           <span className="truncate">
             {[
-              activityText(computer, restarting.has(computer.id)) ||
+              activityText(computer, restarting.has(computer.id), syncing.has(computer.id)) ||
                 statusText(computer.status, restarting.has(computer.id)),
               hostRoute(computer),
             ]

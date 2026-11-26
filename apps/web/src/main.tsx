@@ -17,6 +17,7 @@ import { errorText, isOfflineError } from './lib/errors'
 import { useCallback, useEffect, useState } from 'react'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient, invalidateDataOn, recoverDataOn } from './dataQueries'
+import { hostSyncing } from './workspace/hostSync'
 import { bridge } from './ipc'
 import { ownHostId } from './hosts'
 import { pruneDrafts } from './composer/drafts'
@@ -75,7 +76,7 @@ function Startup() {
         void invalidateDataOn(host(from), 'agent')
       }),
       bridge.on('background:connection', ({ connected }, from) => {
-        if (connected) void recoverDataOn(host(from))
+        if (connected) hostSyncing(host(from), recoverDataOn(host(from)))
       }),
     ]
     return () => offs.forEach((off) => off())

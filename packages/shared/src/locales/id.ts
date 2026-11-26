@@ -2395,6 +2395,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'On. The agent can keep working while this Mac is locked.': 'Aktif. Agent bisa terus bekerja saat Mac ini terkunci.',
   Online: 'Online',
   'Open Computer Use update available': 'Pembaruan Open Computer Use tersedia',
+  'Syncing…': 'Menyinkronkan…',
   'Open Source Control': 'Buka Source Control',
   'Open a project to search inside its files': 'Buka proyek untuk mencari di file-nya',
   'Open file in editor': 'Buka file di editor',

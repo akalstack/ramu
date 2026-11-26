@@ -22,6 +22,7 @@ import { NO_PROJECT, type Computer, type Project, type Task } from '@ramu/shared
 import { Button } from '@/components/desktop-button'
 import { useComputers, StatusDot, activityText, statusText } from '../workspace/computers'
 import { useRestartingHosts } from '../workspace/restartingHosts'
+import { useSyncingHosts } from '../workspace/hostSync'
 import { rememberHostRows, useHostOverviews } from '../workspace/hostOverview'
 import { HostScope, useWorkspaceOf, useWorkspacesOf } from '../workspace/workspace'
 import { useHostSelection } from '../workspace/HostSelection'
@@ -70,26 +71,34 @@ export function HostProjects() {
     const timer = window.setInterval(() => setTimeTick((tick) => tick + 1), 30_000)
     return () => window.clearInterval(timer)
   }, [])
-  if (!state || state.computers.length < 2) return <ProjectsPanel />
+  if (!state) return <ProjectsPanel />
+  // One tree for any number of hosts: a lone host is a group without its header, so adding a second host or forgetting
+  // it adds or drops a group beside this one instead of rebuilding the list (which reset what was open and scrolled).
+  const solo = state.computers.length < 2
+  const grouped = !solo && !state.scope
   const scoped = state.scope ? state.computers.filter((computer) => computer.id === state.scope) : state.computers
   return (
     <div
-      className={`flex flex-col gap-2 pb-4 pt-1 ${state.scope ? '' : 'px-2 [&>section+section]:border-t [&>section+section]:border-border [&>section+section]:pt-2'}`}
+      className={
+        solo
+          ? 'contents'
+          : `flex flex-col gap-2 pb-4 pt-1 ${grouped ? 'px-2 [&>section+section]:border-t [&>section+section]:border-border [&>section+section]:pt-2' : ''}`
+      }
     >
-      {!state.scope && <NeedsYou computers={state.computers} />}
-      {!state.scope && preferences.recentChatMode ? (
+      {grouped && <NeedsYou computers={state.computers} />}
+      {grouped && preferences.recentChatMode ? (
         <MergedRecent computers={state.computers} />
       ) : (
         scoped.map((computer) => (
           <HostGroup
             key={computer.id}
             computer={computer}
-            current={computer.id === activeHost}
-            grouped={!state.scope}
+            current={solo || computer.id === activeHost}
+            grouped={grouped}
           />
         ))
       )}
-      {!state.scope && <MergedDone computers={state.computers} />}
+      {grouped && <MergedDone computers={state.computers} />}
     </div>
   )
 }
@@ -99,6 +108,7 @@ function HostGroup({ computer, current, grouped }: { computer: Computer; current
   const { select } = useHostSelection()
   const addProject = useAddProject(computer.id)
   const restarting = useRestartingHosts().has(computer.id)
+  const syncing = useSyncingHosts().has(computer.id)
   const open = !grouped || tree.isExpanded('host')
   const available = computer.status === 'connected'
   // Away, but kept here: its threads open from this device's copy, and new ones wait in the outbox.
@@ -128,7 +138,7 @@ function HostGroup({ computer, current, grouped }: { computer: Computer; current
             onClick={() => tree.setExpanded('host', !open)}
           >
             <ChevronDown size={12} className={`flex-none transition-transform ${open ? '' : '-rotate-90'}`} />
-            <span className="inline-flex flex-none items-center" title={activityText(computer, restarting)}>
+            <span className="inline-flex flex-none items-center" title={activityText(computer, restarting, syncing)}>
               <StatusDot status={computer.status} />
             </span>
             <span className="min-w-0 flex-1 truncate font-medium">{computer.name}</span>

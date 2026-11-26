@@ -159,6 +159,7 @@ import {
 } from './agent/lib/pendingSubmission'
 
 /** A chat with an agent: its transcript, the message box and the side panels for sub-agents and asides. */
+import { loadFailedSubmissions, saveFailedSubmissions } from './agent/lib/failedSubmissions'
 export const AgentView = memo(function AgentView({
   view,
   history,
@@ -218,7 +219,14 @@ export const AgentView = memo(function AgentView({
   /** The sent message being edited in place. The composer and its draft are left alone. */
   const [editing, setEditing] = useState<MessageEdit | null>(null)
   // Messages shown the moment they are sent, until the host echoes them; a failed one waits for Retry, Edit or Remove.
-  const [submissions, setSubmissions] = useState<Submission[]>([])
+  const [submissions, setSubmissions] = useState<Submission[]>(() =>
+    loadFailedSubmissions(draftStore(host.id), view.sessionId),
+  )
+  // A failed send holds the only copy of its text; it is kept so leaving the thread or restarting does not lose it.
+  useEffect(
+    () => saveFailedSubmissions(draftStore(host.id), view.sessionId, submissions),
+    [submissions, host.id, view.sessionId],
+  )
   const shownSubmissions = useMemo(
     () => unechoedSubmissions(submissions, sourceEvents, queued),
     [submissions, sourceEvents, queued],
