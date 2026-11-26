@@ -4,9 +4,13 @@ import {
   FINISH_LINE_LABEL,
   reachableFinishLines,
   shipExplanation,
+  shipOptionRow,
+  shipOptionsFor,
   type FinishLine,
+  type ShipOptions,
 } from '@ramu/shared/ship'
 import type { ShipProjectStatus } from '@ramu/shared/types/ship'
+import { Switch } from '@/components/ui/switch'
 import { Dropdown } from '../../Menu'
 import { t, useLanguage } from '../../i18n'
 import { errorText } from '../../lib/errors'
@@ -45,6 +49,17 @@ export function ShipSection({ projectId }: { projectId: string }) {
       setBusy(false)
     }
   }
+  const setOption = async (option: keyof ShipOptions, on: boolean) => {
+    setBusy(true)
+    setError(null)
+    try {
+      setStatus(await host.invoke('ship.setOptions', projectId, { [option]: on }))
+    } catch (reason) {
+      setError(errorText(reason))
+    } finally {
+      setBusy(false)
+    }
+  }
   if (!status && !error) return null
   const reachable = status ? reachableFinishLines(status) : []
   return (
@@ -77,6 +92,25 @@ export function ShipSection({ projectId }: { projectId: string }) {
               {line}
             </p>
           ))}
+          {/* A host from before these choices sends none; only the ones this finish line reaches are offered. */}
+          {status.options &&
+            shipOptionsFor(status.finishLine).map((option) => {
+              const row = shipOptionRow(status, option, t)
+              return (
+                <label key={option} className="flex items-start gap-3">
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="text-control">{row.title}</span>
+                    <span className="text-caption text-muted-foreground">{row.help}</span>
+                  </span>
+                  <Switch
+                    aria-label={row.title}
+                    checked={row.on}
+                    disabled={busy || row.locked}
+                    onCheckedChange={(on) => void setOption(option, on)}
+                  />
+                </label>
+              )
+            })}
         </>
       )}
       {error && (

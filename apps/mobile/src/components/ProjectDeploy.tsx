@@ -2,7 +2,15 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, Linking, View } from 'react-native'
 import { ExternalLink } from 'lucide-react-native'
 import { translate, type TranslationValues } from '@ramu/shared/i18n'
-import { FINISH_LINE_LABEL, reachableFinishLines, shipExplanation, type FinishLine } from '@ramu/shared/ship'
+import {
+  FINISH_LINE_LABEL,
+  reachableFinishLines,
+  shipExplanation,
+  shipOptionRow,
+  shipOptionsFor,
+  type FinishLine,
+  type ShipOptions,
+} from '@ramu/shared/ship'
 import type { DeployStatus, UptimeStatus } from '@ramu/shared/types/deploy'
 import type { ShipProjectStatus } from '@ramu/shared/types/ship'
 import { deployCheckRows, uptimeLines } from '../runtime/projectDeploy'
@@ -110,6 +118,20 @@ export function ProjectDeploy({
       )
       .finally(() => setBusy(false))
   }
+  const setShipOption = (option: keyof ShipOptions, on: boolean) => {
+    if (busy || active.current !== key || !runtime.current.isOnline(hostId) || viewOnly) return
+    setBusy(true)
+    void runtime.current
+      .invoke(hostId, 'ship.setOptions', projectId, { [option]: on })
+      .then(
+        (next) => {
+          if (active.current === key) setData((current) => ({ ...current, ship: next }))
+        },
+        (reason: unknown) =>
+          Alert.alert(t('That didn’t work'), reason instanceof Error ? reason.message : String(reason)),
+      )
+      .finally(() => setBusy(false))
+  }
   const ship = loaded.ship
 
   return (
@@ -152,6 +174,28 @@ export function ProjectDeploy({
                 {line}
               </T>
             ))}
+            {/* A host from before these choices sends none; only the ones this finish line reaches are offered. */}
+            {ship.options
+              ? shipOptionsFor(ship.finishLine).map((option) => {
+                  const row = shipOptionRow(ship, option, t)
+                  return (
+                    <View key={option} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.m }}>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <T size={font.control}>{row.title}</T>
+                        <T size={font.caption} tone="muted">
+                          {row.help}
+                        </T>
+                      </View>
+                      <Toggle
+                        accessibilityLabel={row.title}
+                        value={row.on}
+                        disabled={busy || !online || viewOnly || row.locked}
+                        onValueChange={(on) => setShipOption(option, on)}
+                      />
+                    </View>
+                  )
+                })
+              : null}
           </View>
         </>
       ) : null}

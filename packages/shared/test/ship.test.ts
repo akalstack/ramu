@@ -4,7 +4,9 @@ import { translate } from '../src/i18n'
 import {
   DEFAULT_SHIP_OPTIONS,
   shipActivityText,
+  shipOptionRow,
   shipOptions,
+  shipOptionsFor,
   shipUndoText,
   defaultFinishLine,
   earlierFinishLine,
@@ -126,6 +128,33 @@ describe('what Ship may do without asking', () => {
     })
     // Nothing a repository says turns on what the person left off.
     expect(shipOptions({ autoMerge: false }, {}).autoMerge).toBe(false)
+  })
+
+  it('offers only the choices the finish line reaches', () => {
+    expect(shipOptionsFor('pull-request')).toEqual([])
+    expect(shipOptionsFor('review')).toEqual(['sendReplies'])
+    expect(shipOptionsFor('merged')).toEqual(['sendReplies', 'autoMerge'])
+    expect(shipOptionsFor('live')).toEqual(['sendReplies', 'autoMerge', 'autoDeploy'])
+  })
+
+  it('shows a choice the repository keeps with a person as off and says why', () => {
+    const say = (key: string, values?: Record<string, string | number>) => translate('en', key, values)
+    const status = {
+      options: shipOptions({ autoMerge: true }, { autoMerge: true }),
+      forbidden: ['autoMerge' as const],
+      deployedOnce: false,
+    }
+    expect(shipOptionRow(status, 'autoMerge', say)).toMatchObject({
+      title: 'Merge when approved',
+      help: 'This repository’s ramu.json keeps this with a person.',
+      on: false,
+      locked: true,
+    })
+    // Until the first production deploy was allowed, the choice says it has not started applying.
+    expect(shipOptionRow(status, 'autoDeploy', say).help).toMatch(
+      /Applies after the first production deploy is allowed\.$/,
+    )
+    expect(shipOptionRow({ ...status, deployedOnce: true }, 'autoDeploy', say).help).not.toMatch(/Applies after/)
   })
 
   it('says what replies it posted and what undoing them does', () => {

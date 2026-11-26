@@ -66,6 +66,40 @@ export const SHIP_OPTION_LABEL: Record<keyof ShipOptions, { title: string; help:
 }
 
 /**
+ * The options a finish line gives a say in, in the order their steps happen: replies once people review, merging once
+ * the line reaches it, production only when it ends there.
+ */
+export function shipOptionsFor(finishLine: FinishLine): (keyof ShipOptions)[] {
+  const at = FINISH_LINES.indexOf(finishLine)
+  return SHIP_OPTIONS.filter(
+    (option) =>
+      at >= FINISH_LINES.indexOf(option === 'sendReplies' ? 'review' : option === 'autoMerge' ? 'merged' : 'live'),
+  )
+}
+
+/**
+ * One option as a project's Ship settings show it: whether it is on, whether the repository keeps it with a person,
+ * and the line under its title. The same on every device.
+ */
+export function shipOptionRow(
+  status: Pick<ShipProjectStatus, 'options' | 'forbidden' | 'deployedOnce'>,
+  option: keyof ShipOptions,
+  t: (key: string, values?: Record<string, string | number>) => string,
+): { title: string; help: string; on: boolean; locked: boolean } {
+  const locked = status.forbidden.includes(option)
+  return {
+    title: t(SHIP_OPTION_LABEL[option].title),
+    help: locked
+      ? t('This repository’s ramu.json keeps this with a person.')
+      : option === 'autoDeploy' && status.options.autoDeploy && !status.deployedOnce
+        ? `${t(SHIP_OPTION_LABEL[option].help)} ${t('Applies after the first production deploy is allowed.')}`
+        : t(SHIP_OPTION_LABEL[option].help),
+    on: status.options[option],
+    locked,
+  }
+}
+
+/**
  * The options in force: the person's choices over the defaults, with anything the repository's committed `ramu.json`
  * forbids turned off. A repository can only take a step back to the person, never give one away.
  */
