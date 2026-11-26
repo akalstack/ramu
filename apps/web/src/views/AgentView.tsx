@@ -231,11 +231,16 @@ export const AgentView = memo(function AgentView({
   // Reordering the host's queue waits while a send is on its way, so the new message lands where it was sent.
   const configuring = submissions.some((item) => item.state === 'sending')
   const { tray: trayQueued, steering } = splitSteering(queued)
-  const landed = openingLanded(sourceEvents, trayQueued)
+  // While the thread is still loading its queued copy is not drawn yet, so the copy Home sent stays until the message
+  // itself is here: handing over then left the new thread with no message at all for a few frames.
+  const landed = openingLanded(sourceEvents, hydrating ? [] : trayQueued)
   const openingShown = opening && !landed ? opening : undefined
+  // Only the view on screen lets the copy from Home go. A hidden view of the same thread can hear from the host first;
+  // letting go then took the message away from the visible one before its own copy arrived, and the new thread showed
+  // nothing for a few frames.
   useEffect(() => {
-    if (opening && landed) onOpeningLanded?.()
-  }, [opening, landed, onOpeningLanded])
+    if (opening && landed && visible) onOpeningLanded?.()
+  }, [opening, landed, visible, onOpeningLanded])
   const [dropping, setDropping] = useState(false)
   const root = useRef<HTMLDivElement>(null)
   const { scroller, stick, onScroll } = useTranscriptScroll({
