@@ -1,4 +1,3 @@
-import { LoaderCircle } from 'lucide-react'
 import type { Task } from '@ramu/shared/types'
 import { t, useLanguage } from '../../i18n'
 import { ProviderWaitIcon } from '../../models/ProviderWait'
@@ -13,13 +12,19 @@ export function StateDot({ kind, label }: { kind: string; label: string }) {
   return <span className={`${STATE_CLASS} ${kind}`} role="img" aria-label={label} title={label} />
 }
 
-/** The same thin arc the host's header counts working threads with, so the list reads as one set of icons. */
-function Spinner({ label }: { label: string }) {
+/**
+ * A thread at work: the accent dot, breathing. A spinner on every working row made the list busy; a dot that pulses
+ * reads as alive without pulling the eye. Kept on one shared clock so rows pulse together and a re-sorted row does not
+ * restart.
+ */
+export function WorkingDot({ label }: { label?: string }) {
   const ref = useSteadySpin<HTMLSpanElement>()
   return (
-    <span ref={ref} className={`${STATE_CLASS} text-soft`} role="img" aria-label={label} title={label}>
-      <LoaderCircle size={13} className="animate-spin" aria-hidden />
-    </span>
+    <span
+      ref={ref}
+      className={`${STATE_CLASS} dot unread [&.dot::before]:[animation:pulse_1.6s_ease-in-out_infinite] motion-reduce:[&.dot::before]:[animation:none]`}
+      {...(label ? { role: 'img', 'aria-label': label, title: label } : { 'aria-hidden': true })}
+    />
   )
 }
 
@@ -30,7 +35,7 @@ const isWorking = (status: ThreadStatus | null) =>
 export function StatusMark({ task, status }: { task: Task; status: ThreadStatus | null }) {
   useLanguage()
   if (!status) return null
-  if (isWorking(status)) return <Spinner label={t(status.full)} />
+  if (isWorking(status)) return <WorkingDot label={t(status.full)} />
   if (
     status.kind === 'approval' ||
     status.kind === 'input' ||
@@ -61,7 +66,7 @@ export function TaskStateIcon({ task, unread }: { task: Task; unread: boolean })
   return (
     <span className="task-trailing inline-flex min-w-5 flex-none items-center justify-center [&>.task-state]:mr-0">
       {held && (!status || status.kind === 'finished') ? (
-        <Spinner label={t('Agent working')} />
+        <WorkingDot label={t('Agent working')} />
       ) : status ? (
         <StatusMark task={task} status={status} />
       ) : (

@@ -1,7 +1,7 @@
 import { SidebarDisclosureButton } from '@/components/sidebar-disclosure-button'
 import { useIdentityView } from './identityView'
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
-import { useHeld, useSteadySpin } from '../lib/steadyActivity'
+import { useHeld } from '../lib/steadyActivity'
 import {
   CheckCheck,
   CircleAlert,
@@ -14,7 +14,6 @@ import {
   FolderPlus,
   Plus,
   type LucideIcon,
-  LoaderCircle,
   Rocket,
   CircleCheck,
   SquarePen,
@@ -32,6 +31,7 @@ import { t, useLanguage } from '../i18n'
 import { FadeText } from '../FadeText'
 import { ProjectsPanel } from './ProjectsPanel'
 import { TaskRow } from './projects/TaskRow'
+import { WorkingDot } from './projects/TaskStateIcon'
 import { LiveAppDialog } from './projects/LiveAppDialog'
 import { CiSetupDialog } from './projects/CiSetup'
 import { useContextMenu, type MenuEntry } from '../Menu'
@@ -94,11 +94,6 @@ export function HostProjects() {
   )
 }
 
-function SteadyLoader() {
-  const ref = useSteadySpin<SVGSVGElement>()
-  return <LoaderCircle ref={ref} size={12} className="animate-spin" aria-hidden />
-}
-
 function HostGroup({ computer, current, grouped }: { computer: Computer; current: boolean; grouped: boolean }) {
   const tree = useSidebarExpansion(computer.id)
   const { select } = useHostSelection()
@@ -151,7 +146,7 @@ function HostGroup({ computer, current, grouped }: { computer: Computer; current
                 className="inline-flex flex-none items-center gap-1 text-caption tabular-nums text-muted-foreground group-hover/host:opacity-0"
                 title={t('{0} working', { 0: working })}
               >
-                <SteadyLoader />
+                <WorkingDot />
                 {working}
               </span>
             )}
