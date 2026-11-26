@@ -746,7 +746,7 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
       return <GoalDone item={item} />
     case 'summary':
       return (
-        <TurnSummary label={item.label} running={item.running}>
+        <TurnSummary label={item.label} running={item.running} empty={!item.items.length}>
           {item.items.map((child) => (
             <TranscriptItemView key={child.id} item={child} chat={chat} />
           ))}
@@ -1098,10 +1098,13 @@ function NoteRow({ item, chat }: { item: Extract<TranscriptItem, { kind: 'note' 
 function TurnSummary({
   label,
   running,
+  empty = false,
   children,
 }: {
   label: string
   running?: Extract<TranscriptItem, { kind: 'summary' }>['running']
+  /** A turn still running: its steps show under this row instead of folding into it, so there is nothing to open. */
+  empty?: boolean
   children: ReactNode
 }) {
   const say = useSay()
@@ -1118,8 +1121,9 @@ function TurnSummary({
   return (
     <View style={{ gap: space.m }}>
       <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ expanded: open }}
+        accessibilityRole={empty ? 'text' : 'button'}
+        accessibilityState={empty ? undefined : { expanded: open }}
+        disabled={empty}
         onPress={() => {
           tap()
           toggled()
@@ -1139,9 +1143,9 @@ function TurnSummary({
         <T size={font.control} tone="muted" style={{ fontVariant: ['tabular-nums'] }}>
           {running ? say(running.text, { 0: formatDuration(Math.max(0, now - running.since)) }) : say(label)}
         </T>
-        <Disclosure open={open} color={c.muted} />
+        {empty ? null : <Disclosure open={open} color={c.muted} />}
       </Pressable>
-      <Collapse open={open}>
+      <Collapse open={open && !empty}>
         {/* Folded steps read as one list, as tool rows inside a group do. */}
         <View style={{ gap: space.xs }}>{children}</View>
       </Collapse>

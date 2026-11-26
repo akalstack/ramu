@@ -30,6 +30,7 @@ vi.mock('../src/views/agent/components/ToolGroup', () => ({ ToolGroup: () => cre
 vi.mock('../src/views/agent/components/TurnSummary', () => ({
   TurnSummary: ({ label, children }: PropsWithChildren<{ label: string }>) =>
     createElement('details', {}, createElement('summary', {}, label), children),
+  TurnRunning: ({ label }: { label: string }) => createElement('div', {}, label),
 }))
 vi.mock('../src/views/agent/components/EventRow', () => ({
   EventRow: ({ event, assistantActions }: { event: AgentEvent; assistantActions: boolean }) =>
@@ -197,4 +198,12 @@ it('keeps a changes card where its work ended, before a message steered in after
   )
   expect(html.indexOf('Changes card')).toBeGreaterThan(-1)
   expect(html.indexOf('Changes card')).toBeLessThan(html.indexOf('Also fix the tests'))
+})
+
+it('counts a running turn at its top, where its Worked-for line will be, with the steps under it', () => {
+  const html = render({ clock: { startedAt: Date.now() - 3000 } })
+  expect(html).toContain('Working for {0}')
+  expect(html.indexOf('Working for {0}')).toBeLessThan(html.indexOf('I will check the files.'))
+  // A turn that has ended folds under "Worked for" instead.
+  expect(render({ ended: true, working: false, clock: { startedAt: 1, endedAt: 3000 } })).not.toContain('Working for')
 })

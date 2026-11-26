@@ -13,7 +13,7 @@ import { AgentTaskCard } from './AgentTaskCard'
 import { EventRow } from './EventRow'
 import { ToolGroup } from './ToolGroup'
 import { Marker, MarkerContent } from '@/components/ui/marker'
-import { TurnSummary } from './TurnSummary'
+import { TurnRunning, TurnSummary } from './TurnSummary'
 import { turnThinking } from '../lib/turnThinking'
 import { useElapsed } from '../hooks/useElapsed'
 import { turnParts } from '../lib/turns'
@@ -228,7 +228,9 @@ export function TranscriptTurn({
   // picked the work up again and has shown nothing new. Its clock keeps running until the thread stops.
   const resumed =
     isLast && turn.ended && !turn.interrupted && !ctx.stopped && !needsInput && (working || ctx.helpersWorking)
-  const live = useElapsed(startedAt, resumed)
+  // A turn still running counts at its top, where its "Worked for" line will be.
+  const running = isLast && !finished && working && !needsInput
+  const live = useElapsed(startedAt ?? (turn.user ? blockAt(turn.user) : undefined), resumed || running)
   const endedAt =
     live !== null && startedAt !== undefined
       ? startedAt + live
@@ -252,8 +254,14 @@ export function TranscriptTurn({
     <div className="turn [&_>_[data-block-index]:has(.msg.user)]:flex [&_>_[data-block-index]:has(.msg.user)]:justify-end flex flex-col gap-3.5 min-w-0">
       {dateSeparator !== undefined && <TurnDate at={dateSeparator} now={dateNow} />}
       {turn.user && renderBlock(turn.user, isLast && !answer.length && !kept.length && !folded.length)}
-      {/* A running turn's status is the line above the composer; a stopped one keeps its duration here. */}
-      {finished && (!turn.ended || turn.interrupted) && !folded.length && (
+      {running && live !== null && (
+        <TurnRunning
+          label={translate(turn.continues ? 'Continuing for {0}' : 'Working for {0}', { '0': formatDuration(live) })}
+        />
+      )}
+      {/* A stopped turn keeps its duration here. */}
+      {/* Not for a turn that has only just been sent: the thread reports itself busy a moment after the message. */}
+      {finished && (!turn.ended || turn.interrupted) && !folded.length && (stopped || turn.items.length > 0) && (
         <div className="turn-working text-muted-foreground tabular-nums" role="status">
           <span>
             {duration !== undefined

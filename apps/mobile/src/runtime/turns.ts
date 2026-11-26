@@ -95,7 +95,29 @@ export function foldTurns(
       const finished = Boolean(result) || !isLast || (!live && !waiting)
       const startedAt = user?.at ?? body.find((item) => item.kind !== 'note' && item.at !== undefined)?.at
       // A running turn shows its steps as they come; the status line above the composer says it is working.
-      if (!finished) return [...(user ? [user] : []), ...body, ...notes]
+      // It counts at its top, on the row its "Worked for" summary will take, so nothing moves when the steps fold.
+      if (!finished) {
+        const counting =
+          live && !waiting && startedAt !== undefined
+            ? [
+                {
+                  kind: 'summary' as const,
+                  id: `summary-${user?.id ?? index}`,
+                  label: say('Working'),
+                  running: {
+                    since: startedAt,
+                    // Work the agent picked up by itself after a clean result is more of the turn above.
+                    text:
+                      !user && cleanEnd(turns[index - 1])
+                        ? ('Continuing for {0}' as const)
+                        : ('Working for {0}' as const),
+                  },
+                  items: [],
+                },
+              ]
+            : []
+        return [...(user ? [user] : []), ...counting, ...body, ...notes]
+      }
       const clean = !!result && !result.interrupted
       // A clean result's turn lasted until the sub-agents it started and the commands it waited on were done, since the
       // person watched them under it.

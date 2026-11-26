@@ -1132,7 +1132,12 @@ export const AgentView = memo(function AgentView({
                             <ChatStatus
                               label={statusLabel}
                               compacting={compacting}
-                              since={activityLabel === 'Working' ? turnStartedAt(events) : null}
+                              // A running turn counts at its own top; this line then only says the agent is at work.
+                              since={
+                                activityLabel === 'Working' && turns.at(-1)?.ended !== false
+                                  ? turnStartedAt(events)
+                                  : null
+                              }
                               // The starting thread's view drew this line already; it stays rather than fading in again.
                               enter={!openingShown}
                             />

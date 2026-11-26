@@ -46,10 +46,14 @@ test('a message on its way does not make the finished turn above read as resumed
 
 test('the running turn is not folded and shows its steps as they come', () => {
   const rows = foldTurns(transcript(finished.slice(0, 3)), true, false)
+  // It counts at its top, on the row its "Worked for" summary will take, with nothing folded into it yet.
   assert.deepEqual(
     rows.map((r) => r.kind),
-    ['user', 'text', 'tool'],
+    ['user', 'summary', 'text', 'tool'],
   )
+  assert.equal(rows[1].running.text, 'Working for {0}')
+  assert.deepEqual(rows[1].items, [])
+  assert.equal(rows[1].id, foldTurns(transcript(finished), false, false)[1].id)
 })
 
 test('failed tools stay visible outside the fold, and stopped turns say so', () => {
@@ -372,9 +376,10 @@ test('work after a finished turn opens a running turn instead of folding into th
   const rows = foldTurns(transcript(events), true, false)
   assert.deepEqual(
     rows.map((r) => r.kind),
-    ['user', 'summary', 'text', 'thinking', 'text'],
+    ['user', 'summary', 'text', 'summary', 'thinking', 'text'],
   )
   assert.equal(rows[1].label, 'Worked for 1m 5s')
+  assert.equal(rows[3].running.text, 'Continuing for {0}')
   assert.equal(rows.at(-1).text, 'Building the hero next.')
 })
 
@@ -385,7 +390,7 @@ test('a goal note stays where it happened instead of trailing every new step', (
   const at = items.findIndex((item) => item.kind === 'tool') + 1
   const withGoal = [...items.slice(0, at), goal, ...items.slice(at)]
   const kinds = (rows) => rows.map((row) => (row.kind === 'note' ? row.id : row.kind))
-  assert.deepEqual(kinds(foldTurns(withGoal, true, false)), ['user', 'text', 'tool', 'goal-set', 'tool'])
+  assert.deepEqual(kinds(foldTurns(withGoal, true, false)), ['user', 'summary', 'text', 'tool', 'goal-set', 'tool'])
   // Finished, it stays above the answer with what was not folded; a note after the last step still closes the turn.
   const stop = { kind: 'note', id: 'stopped', title: 'Stopped' }
   const done = [...withGoal, ...transcript([{ kind: 'text', text: 'done!', at: 65_000 }]), stop]
