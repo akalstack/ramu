@@ -143,6 +143,8 @@ export interface HandlerContext extends Services {
   hostUpdates: import('../background/hostUpdate').HostUpdater
   usage: UsageService
   accountUsage: AccountUsage
+  /** Reads every login's plan usage now, after logins, keys or enabled providers change. */
+  usageConfigurationChanged: () => void
   environment: ProviderEnvironmentStore
   apiKeys: import('../providers/apiKeyStore').ProviderApiKeyStore
   forgeAccounts: ForgeAccountStore

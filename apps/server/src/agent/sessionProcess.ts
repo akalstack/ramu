@@ -30,7 +30,7 @@ import { alwaysAskHooks, claudeHooks, commandTurnHooks, createCanUseTool, readOn
 import { ramuFileHooks } from './ramuFiles'
 import { claudeLaunchOptions } from './claudeOptions'
 import { sessionGuidance } from './guidance'
-import { nativeToolSearch, usesRamuQuestionTools, usesRamuToolSearch } from './nativeFeatures'
+import { nativeToolSearch, tracksBackgroundCommands, usesRamuQuestionTools, usesRamuToolSearch } from './nativeFeatures'
 import { buildHandoff, handoffBudgetBytes, DEFAULT_CONTEXT_TOKENS, type BuiltHandoff } from './handoff'
 import { ProviderSessions, pendingHandoff, planHandoff } from './providerSessions'
 import { classifyLimit } from '../providers/limitClassifier'
@@ -84,7 +84,7 @@ export interface SessionProcessHost
     Pick<FallbackRouter, 'fallback' | 'retryQuietly' | 'subagentSettings'>,
     Pick<SessionStore, 'emit' | 'events' | 'get' | 'hasRunningTasks' | 'isRecoveryPending' | 'queued' | 'task'>,
     Pick<SubagentRunner, 'children' | 'nativeSubagentsOff' | 'subagentHooks' | 'cancelPendingStarts'>,
-    Pick<AgentTasks, 'settleTasks' | 'updateTask'> {
+    Pick<AgentTasks, 'settleTasks' | 'stopAwaiting' | 'updateTask'> {
   learningInstructions(): AgentService['learningInstructions']
   memoryInstructions(): AgentService['memoryInstructions']
   rulesInstructions(): AgentService['rulesInstructions']
@@ -423,6 +423,7 @@ export class SessionProcess {
             ? 'async'
             : 'blocking',
         background: (this.host.preferences()?.autoBackgroundSeconds ?? 1) !== 0,
+        backgroundWait: tracksBackgroundCommands(s) && !connection.restricted,
         advisor: pins.advisor,
         secrets: !s.parentId,
         goal: goalPolicy,
@@ -687,6 +688,7 @@ export class SessionProcess {
     this.host.clearProviderWait(id)
     if (this.host.getGoal(id) && this.host.getGoal(id)?.status !== 'completed') this.host.controlGoal(id, 'pause')
     this.host.pauseQueue(id)
+    this.host.stopAwaiting(id)
     if (this.host.runners.has(id)) await this.host.runners.get(id)!.interrupt()
     else await this.host.live.get(id)?.query.interrupt()
   }

@@ -70,6 +70,16 @@ function PrimaryScroll({ children }: { children: NonNullable<ReactNode> }) {
     )
   return children
 }
+const noScrollEdges = { top: 'hidden', bottom: 'hidden', left: 'hidden', right: 'hidden' } as const
+/**
+ * A small scroll view inside floating chrome, such as the pills at the top of the composer. On iOS 26 UIKit softens the
+ * edge of any scroll view that sits by a glass surface or the keyboard, which blurs these pills as if they ran under a
+ * bar; this turns that effect off for the one scroll view it wraps.
+ */
+export function ChromeScroll({ children }: { children: NonNullable<ReactNode> }) {
+  return scrollViewMarker ? <ScrollViewMarker scrollEdgeEffects={noScrollEdges}>{children}</ScrollViewMarker> : children
+}
+
 /**
  * Page lists and scroll views keep their content in the readable column on a tablet unless they pass `fullWidth`: code and
  * diffs, and screens under a native large title, which stays at the leading edge, so their rows line up with it.

@@ -38,7 +38,7 @@ it('requires explicit browser access, and validates credential lifetimes', () =>
   const base = { RAMU_USER_DATA: '/tmp/ramu-profile' }
   expect(loadConfig(base)).toMatchObject({
     browserOrigins: [],
-    deviceLifetimeMs: 90 * 86400000,
+    deviceLifetimeMs: 30 * 86400000,
   })
   expect(loadConfig({ ...base, RAMU_DEVICE_TOKEN_DAYS: 'never' }).deviceLifetimeMs).toBeNull()
   expect(loadConfig({ ...base, RAMU_BROWSER_ORIGINS: 'https://app.example' })).toMatchObject({

@@ -98,10 +98,9 @@
 }
 .composer-tray-live {
   flex: none;
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--ok);
+  width: 12px;
+  height: 12px;
+  color: var(--soft);
 }
 .composer-tray-card {
   position: absolute;
@@ -132,6 +131,8 @@
   border-bottom: 1px solid var(--line);
 }
 .composer-tray-card > .composer-tray-details {
+  /* The card adds 2px under its content, so the rows sit the same distance from the header's line and the card's. */
+  padding-block: 6px 4px;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -269,6 +270,10 @@
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+/* Rows keep their height and the list scrolls; a flex column would squeeze them into each other instead. */
+.message-queue-list > * {
+  flex: none;
+}
 .question-dock.blocking .composer-tray-trigger > svg:first-child {
   color: var(--warn);
 }
@@ -282,29 +287,6 @@
 
 .transcript-arrival {
   animation: arrive var(--chat-enter-duration, 180ms) var(--chat-enter-ease, var(--ease)) both;
-}
-
-/* Following a working agent, each step to its new output glides instead of jumping, as on the phone. Only while the
-   scroller follows (TranscriptFollowState): a reader who scrolled up gets position restores, which must stay instant. */
-@media (prefers-reduced-motion: no-preference) {
-  .transcript [data-slot='message-scroller-viewport'][data-working][data-following] {
-    scroll-behavior: smooth;
-  }
-}
-
-/* Automatic following must not flash the native thumb between streamed updates.
-   Keep its gutter stable, and reveal it consistently when the reader interacts. */
-.transcript [data-slot='message-scroller-viewport'] {
-  scrollbar-color: transparent transparent;
-}
-.transcript [data-slot='message-scroller-viewport']::-webkit-scrollbar-thumb {
-  background-color: transparent;
-}
-.transcript [data-slot='message-scroller-viewport']:is(:hover, :focus-visible) {
-  scrollbar-color: color-mix(in srgb, var(--text) 28%, transparent) transparent;
-}
-.transcript [data-slot='message-scroller-viewport']:is(:hover, :focus-visible)::-webkit-scrollbar-thumb {
-  background-color: color-mix(in srgb, var(--text) 28%, transparent);
 }
 
 .composer {
@@ -574,7 +556,6 @@
 }
 .tool-group-label {
   min-width: 0;
-  white-space: normal;
   text-align: left;
 }
 .shimmer {

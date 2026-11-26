@@ -53,7 +53,12 @@ export function FadeText({ text, className = '' }: { text: string; className?: s
       el.scrollLeft = 0
       fades()
     }
+    // The first measurement lands with no transition: rows remount when another host comes on screen, and a name that
+    // is already truncated must show its fade at once, not fade it in again.
+    el.style.transition = 'none'
     fades()
+    void el.offsetWidth
+    el.style.transition = ''
     const observer = new ResizeObserver(fades)
     observer.observe(el)
     row?.addEventListener('mouseenter', enter)

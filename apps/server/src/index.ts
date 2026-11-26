@@ -82,6 +82,7 @@ import { SettingsChanges } from './settings/settingsChanges'
 import { registerSettingsTools } from './settings/settingsTools'
 import type { SettingsSnapshot } from '@ramu/shared/settingsCompatibility'
 import { registerBackgroundTerminalTools } from './agent/backgroundTerminalTools'
+import { registerBackgroundWaitTools } from './agent/backgroundWaitTools'
 import { registerUserTerminalTools } from './agent/userTerminalTools'
 import { UptimeWatches } from './workspace/deploy/uptime'
 import { ProjectWake } from './workspace/deploy/wake'
@@ -124,7 +125,12 @@ import { registerQuestionTools } from './agent/questionTools'
 import { registerInlineUiTools } from './agent/inlineUiTools'
 import { registerSecretTools } from './agent/secretTools'
 import { SecretFiles } from './agent/secretFiles'
-import { usesRamuQuestionTools, usesRamuToolScripts, usesRamuToolSearch } from './agent/nativeFeatures'
+import {
+  tracksBackgroundCommands,
+  usesRamuQuestionTools,
+  usesRamuToolScripts,
+  usesRamuToolSearch,
+} from './agent/nativeFeatures'
 import { registerAdvisorTools } from './agent/advisor'
 import { registerGoalTools } from './agent/goals'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
@@ -213,6 +219,7 @@ import { describeValidationError } from './validation'
 import { RemoteThreads } from './background/remoteThreads'
 import { AgentHostService } from './remote/agentHosts'
 import { runtimeBuild, runtimeVersion } from './build'
+import { claimSocketPath } from './socketClaim'
 import { ReviewService } from './review/reviews'
 import { RecapService } from './memory/recaps'
 import { MemoryService, registerMemoryTools } from './memory/memory'
@@ -415,8 +422,16 @@ process.once('exit', () => {
   } catch {}
 })
 try {
-  unlinkSync(socketPath)
-} catch {}
+  await claimSocketPath(
+    socketPath,
+    (path) => runtimeInvoke(path, 'background.status', [], { timeoutMs: 3000 }),
+    unlinkSync,
+    { tries: 10, pauseMs: 500 },
+  )
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error))
+  process.exit(1)
+}
 const clients = new Set<EventSink>()
 // Only clients on the local socket can answer native dialogs; a remote client's folder picker would open on the wrong machine.
 const hostClients = new Set<EventSink>()
@@ -2188,6 +2203,8 @@ const mcpHttp = createServer(async (req, res) => {
       () => agents.get(source.id),
       (detail, signal) => agents.requestPermission(source.id, 'Background command', detail, signal),
     )
+  if (!review && tracksBackgroundCommands(source))
+    registerBackgroundWaitTools(server, (taskIds, waiting) => agents.awaitCommands(source.id, taskIds, waiting))
   if (!review) registerUserTerminalTools(server, terminals, source, () => agents.get(source.id))
   if (!review) registerThemeTools(server, (theme) => agents.themeProposed(source.id, theme))
   if (!review) registerSettingsTools(server, source.id, settingsChanges)

@@ -1,5 +1,7 @@
 import { expect, it } from 'vitest'
 import type { AgentEvent } from '@ramu/shared/types'
+import { latestTasks } from '@ramu/shared/chat/agentTasks'
+import { holdsTurn } from '@ramu/shared/chat/helperPresentation'
 import { toTurns, turnParts } from '../src/views/agent/lib/turns'
 
 const turnsOf = (events: AgentEvent[]) =>
@@ -78,4 +80,128 @@ it('keeps a steered message inside its turn, with one start, and splits the turn
     ),
   ).toEqual([null, 'also add tests'])
   expect(parts.map((part) => part.items.length)).toEqual([1, 2])
+})
+
+it('puts a message steered in too late for its turn at the head of the work done for it', () => {
+  const events: AgentEvent[] = [
+    { kind: 'user', text: 'where do things stand?', at: 1000 },
+    { kind: 'user', text: 'fix the header', steered: true, at: 2000 },
+    { kind: 'text', text: 'Everything is in place.', at: 3000 },
+    result('Everything is in place.'),
+    { kind: 'text', text: 'Fixing the header.', at: 5000 },
+    result('Fixed.'),
+  ]
+  const turns = toTurns(
+    events.map((event) => ({ kind: 'event' as const, event })),
+    events,
+  )
+  const said = (block: (typeof turns)[number]['user']) =>
+    block?.kind === 'event' && block.event.kind === 'user' ? block.event.text : null
+  expect(turns.map((turn) => said(turn.user))).toEqual(['where do things stand?', 'fix the header'])
+  expect(turns[0]!.items.some((block) => said(block) !== null)).toBe(false)
+  expect(turns[1]!.startedAt).toBe(2000)
+})
+
+const agent = (agentId: string, patch: Partial<Extract<AgentEvent, { kind: 'agent' }>>): AgentEvent => ({
+  kind: 'agent',
+  agentId,
+  name: agentId,
+  status: 'completed',
+  ...patch,
+})
+
+it('marks work the agent picked up by itself as continuing the turn above, timed from its first step', () => {
+  const events: AgentEvent[] = [
+    { kind: 'user', text: 'run the checks in the background', at: 1000 },
+    { kind: 'text', text: 'Started them.', at: 2000 },
+    { ...result('Started them.'), at: 3000 },
+    { kind: 'init', provider: 'claude-code', model: 'm', cwd: '/', providerSessionId: 's', at: 9000 },
+    { kind: 'tool-use', toolUseId: 'read', name: 'Read', summary: 'log', at: 10_000 },
+    { kind: 'text', text: 'They passed.', at: 12_000 },
+    { ...result('They passed.'), at: 13_000 },
+  ]
+  const turns = toTurns(
+    [
+      { kind: 'event', event: events[0]! },
+      { kind: 'event', event: events[1]! },
+      { kind: 'event', event: events[2]! },
+      { kind: 'tools', tools: [events[4] as Extract<AgentEvent, { kind: 'tool-use' }>] },
+      { kind: 'event', event: events[5]! },
+      { kind: 'event', event: events[6]! },
+    ],
+    events,
+  )
+  expect(turns.map(({ continues, startedAt, endedAt }) => ({ continues: !!continues, startedAt, endedAt }))).toEqual([
+    { continues: false, startedAt: 1000, endedAt: 3000 },
+    { continues: true, startedAt: 10_000, endedAt: 13_000 },
+  ])
+})
+
+it('does not read a message steered in too late, or work after a stopped turn, as continuing the turn above', () => {
+  const steered: AgentEvent[] = [
+    { kind: 'user', text: 'where do things stand?', at: 1000 },
+    { kind: 'user', text: 'fix the header', steered: true, at: 2000 },
+    { ...result('Everything is in place.'), at: 3000 },
+    { kind: 'text', text: 'Fixing the header.', at: 5000 },
+  ]
+  const stopped: AgentEvent[] = [
+    { kind: 'user', text: 'go', at: 1000 },
+    { ...result('interrupted'), at: 2000 },
+    { kind: 'text', text: 'A sub-agent reported back.', at: 5000 },
+  ]
+  for (const events of [steered, stopped])
+    expect(
+      toTurns(
+        events.map((event) => ({ kind: 'event' as const, event })),
+        events,
+      )[1]!.continues,
+    ).toBeUndefined()
+})
+
+it('ends a turn when the sub-agents it started were done, never past the turn after it', () => {
+  const events: AgentEvent[] = [
+    { kind: 'user', text: 'review this', at: 1000 },
+    agent('reviewer', { startedAt: 2000, endedAt: 60_000 }),
+    agent('server', { taskType: 'local_bash', startedAt: 2000, endedAt: 900_000 }),
+    { kind: 'text', text: 'The reviewer is on it.', at: 3000 },
+    { ...result('The reviewer is on it.'), at: 4000 },
+  ]
+  const ended = (list: AgentEvent[]) =>
+    toTurns(
+      list.map((event) => ({ kind: 'event' as const, event })),
+      list,
+    )[0]!.endedAt
+  expect(ended(events)).toBe(60_000)
+  expect(ended([...events, { kind: 'user', text: 'never mind', at: 20_000 }])).toBe(20_000)
+  // One still running has no end yet: the turn row counts live instead.
+  expect(
+    ended(events.map((event) => (event.kind === 'agent' ? { ...event, status: 'running' as const } : event))),
+  ).toBe(4000)
+})
+
+it('keeps the last turn at work while a command the agent waits on runs, and ends it when the command does', () => {
+  const command = { taskType: 'local_bash', background: true, startedAt: 2000 }
+  const events = (patch: Partial<Extract<AgentEvent, { kind: 'agent' }>>): AgentEvent[] => [
+    { kind: 'user', text: 'run the tests', at: 1000 },
+    agent('tests', { ...command, ...patch }),
+    agent('server', { ...command, status: 'running' }),
+    { kind: 'text', text: 'They are running.', at: 3000 },
+    { ...result('They are running.'), at: 4000 },
+  ]
+  const turn = (list: AgentEvent[]) =>
+    toTurns(
+      list.flatMap((event) => (event.kind === 'agent' ? [] : [{ kind: 'event' as const, event }])),
+      list,
+    )[0]!
+  // The thread view counts the turn live while any task holds it.
+  const held = (list: AgentEvent[]) => latestTasks(list).some(holdsTurn)
+  const waiting = events({ status: 'running', awaited: true })
+  expect(held(waiting)).toBe(true)
+  expect(turn(waiting).endedAt).toBe(4000)
+  const done = events({ status: 'completed', awaited: true, endedAt: 60_000 })
+  expect(held(done)).toBe(false)
+  expect(turn(done).endedAt).toBe(60_000)
+  // A command the agent never said it was waiting on runs beside the turn.
+  expect(held(events({ status: 'running' }))).toBe(false)
+  expect(turn(events({ status: 'completed', endedAt: 60_000 })).endedAt).toBe(4000)
 })

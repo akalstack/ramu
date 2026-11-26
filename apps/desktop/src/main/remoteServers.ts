@@ -19,6 +19,8 @@ interface StoredServer {
   sealed: boolean
   /** When the token was last rotated; absent means never. */
   renewedAt?: number
+  /** The host bound the token to this computer's device key. */
+  keyBound?: boolean
   enabled?: boolean
   retryMode?: 'events' | 'periodic'
   ssh?: SshRoute
@@ -246,17 +248,25 @@ export class RemoteServers {
     return this.records.get(id)?.renewedAt ?? null
   }
 
+  /** Whether the host bound this computer's token to its device key at the last renewal. */
+  keyBound(id: string): boolean {
+    this.load()
+    return this.records.get(id)?.keyBound === true
+  }
+
   /**
    * Stores a renewed token. The write completes before the token is ever used, so a crash leaves the previous token
    * (which the host keeps until the new one's first use) working.
    */
-  rotate(id: string, token: string, now = Date.now()) {
+  rotate(id: string, token: string, now = Date.now(), keyBound = false) {
     const file = this.read(),
       server = file.servers.find((entry) => entry.id === id)
     if (!server) return
     server.sealed = this.sealer.available
     server.token = server.sealed ? this.sealer.seal(token) : token
     server.renewedAt = now
+    if (keyBound) server.keyBound = true
+    else delete server.keyBound
     this.write(file)
   }
 

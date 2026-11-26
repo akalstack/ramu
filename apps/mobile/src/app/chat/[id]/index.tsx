@@ -16,6 +16,7 @@ import {
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { Pressable as NativePressable } from 'react-native-gesture-handler'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { useThreadViewing } from '../../../runtime/threadViewing'
 import {
@@ -50,6 +51,7 @@ import { quoteNeedles } from '../../../runtime/textMark'
 import { MAKE_PAGE_PROMPT } from '@ramu/shared/artifacts'
 import { useAutomation } from '../../../runtime/automation'
 import { scoped, useChat, useStore, type OutboxItem } from '../../../runtime/store'
+import { scrollBusy } from '../../../runtime/scrollBusy'
 import { useDelayedStatus } from '../../../runtime/useDelayedStatus'
 import { MODEL_WARNING_DEVICE_KEY, resolveModelChangeWarning } from '../../../runtime/busyMode'
 import { sharedValue } from '@ramu/shared/sharedFields'
@@ -303,6 +305,8 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
   // Native scroll-edge chrome overlays the list; UIKit supplies its top inset. Beside the thread list the page draws its
   // own header above the list instead, as on Android.
   const inPane = useInDetailPane()
+  // A thread left mid-scroll must not leave updates held for the next one.
+  useEffect(() => () => scrollBusy.set(false), [])
   const topInset = ios && !inPane ? insets.top + (liquidGlass ? 54 : 44) : 0
   // Where UIKit rests a chat that fits on screen: read from the list while it is short, since the bar's real height can
   // differ from the guess above.
@@ -343,9 +347,18 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
     // Before the chat is shown it lands on its end at once; afterwards a reply or a sent message glides into view.
     if (!listFollows || !was) toEnd(revealed)
   }
-  /** Sending closes the keyboard; the list stays on the end if it was there, and stays put if the reader scrolled up. */
+  /**
+   * Sending closes the keyboard and brings the end into view, as T3 Code does, so the message just sent (a steer
+   * included) is seen at once even by a reader who had scrolled up; the list then follows the reply.
+   */
   const followSend = () => {
     if (keyboard.height > 0) SystemKeyboard.dismiss()
+    if (following.current && !userScrolling.current) return
+    following.current = true
+    userScrolling.current = false
+    setAway(false)
+    landingUntil.current = Date.now() + 2000
+    requestAnimationFrame(() => toEnd(true))
   }
   // The composer growing or shrinking moves the inset under the list; stay on the end.
   useEffect(() => {
@@ -595,8 +608,12 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
       previousRows.current,
       withLearningLines(
         withChangeCards(
-          foldTurns(chat?.items ?? [], chat?.status === 'running', chat?.status === 'needs-input', (text, values) =>
-            translate(store.language, text, values),
+          foldTurns(
+            chat?.items ?? [],
+            chat?.status === 'running',
+            chat?.status === 'needs-input',
+            (text, values) => translate(store.language, text, values),
+            chat?.awaited,
           ),
           reviews,
           chat?.sessionId,
@@ -607,7 +624,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
     )
     previousRows.current = next
     return next
-  }, [chat?.items, chat?.status, chat?.sessionId, reviews, learningJobs, store.language])
+  }, [chat?.items, chat?.status, chat?.awaited, chat?.sessionId, reviews, learningJobs, store.language])
   const arrivalReady = useRef(false)
   const arrivalChat = useRef(id)
   if (arrivalChat.current !== id) {
@@ -1731,13 +1748,18 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                   scrollEventThrottle={16}
                   onScrollBeginDrag={() => {
                     userScrolling.current = true
+                    scrollBusy.set(true)
                     landingUntil.current = 0
                   }}
                   onScrollEndDrag={(event) => {
-                    if (!event.nativeEvent.velocity?.y) userScrolling.current = false
+                    if (!event.nativeEvent.velocity?.y) {
+                      userScrolling.current = false
+                      scrollBusy.set(false)
+                    }
                   }}
                   onMomentumScrollEnd={() => {
                     userScrolling.current = false
+                    scrollBusy.set(false)
                   }}
                   onContentSizeChange={(_, height) => {
                     metrics.current.content = height
@@ -2036,7 +2058,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                       bottom: composerHeight + space.s,
                     }}
                   >
-                    <Pressable
+                    <NativePressable
                       accessibilityRole="button"
                       accessibilityLabel={tr('Scroll to latest')}
                       // The send button's size, so the two round controls match; the slop keeps the target at 44 points.
@@ -2066,7 +2088,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                           </Glass>
                         </PressGrow>
                       )}
-                    </Pressable>
+                    </NativePressable>
                   </Presence>
                 </KeyboardLift>
               </RowToggle.Provider>

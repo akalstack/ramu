@@ -82,3 +82,13 @@ it('reads and tags the only enabled Antigravity account without reading the defa
   await usage.refresh(undefined, 1_000_001)
   expect(read).toHaveBeenCalledTimes(1)
 })
+
+it('reads every login again at once after the logins, keys or enabled providers change', async () => {
+  const read = vi.fn(async () => [reading(20)])
+  const usage = new AccountUsage(vi.fn(), () => config, { codex: read }, ['codex'])
+  await usage.refresh(undefined, 1_000_000)
+  expect(read).toHaveBeenCalledTimes(2)
+  usage.forgetAll()
+  await usage.refresh(undefined, 1_000_001)
+  expect(read).toHaveBeenCalledTimes(4)
+})

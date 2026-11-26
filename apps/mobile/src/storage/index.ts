@@ -160,6 +160,16 @@ export async function saveRenewedAt(id: string, at: number) {
   if (Platform.OS === 'web') localStorage.setItem(renewedKey(id), String(at))
   else await SecureStore.setItemAsync(renewedKey(id), String(at))
 }
+const boundKey = (id: string) => `ramu.keyBound.${id}`
+/** Whether a host bound this phone's token to its device key at the last renewal. */
+export async function readKeyBound(id: string): Promise<boolean> {
+  return Platform.OS === 'web' ? false : (await SecureStore.getItemAsync(boundKey(id))) === '1'
+}
+export async function saveKeyBound(id: string, bound: boolean) {
+  if (Platform.OS === 'web') return
+  if (bound) await SecureStore.setItemAsync(boundKey(id), '1')
+  else await SecureStore.deleteItemAsync(boundKey(id))
+}
 export async function deleteToken(id: string) {
   if (Platform.OS === 'web') {
     localStorage.removeItem(tokenKey(id))
@@ -167,6 +177,7 @@ export async function deleteToken(id: string) {
   } else {
     await SecureStore.deleteItemAsync(tokenKey(id))
     await SecureStore.deleteItemAsync(renewedKey(id))
+    await SecureStore.deleteItemAsync(boundKey(id))
   }
 }
 const visitKey = 'ramu.mobile.last-visit'

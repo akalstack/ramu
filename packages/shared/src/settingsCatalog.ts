@@ -222,11 +222,11 @@ export const SETTINGS_CATALOG: SettingsCatalogEntry[] = [
     words: 'self improve skills consolidate review maintenance ask first',
   },
   {
-    section: 'memory',
-    title: 'Model for background maintenance',
+    section: 'models',
+    title: 'Background model',
     path: 'intelligence.maintenanceModel',
-    help: 'Used for learning reviews and memory cleanup. A cheaper model keeps token use low.',
-    words: 'maintenance model cheaper background',
+    help: 'Writes daily recaps, learning reviews and memory cleanup. A cheaper model keeps token use low.',
+    words: 'maintenance model cheaper background recap',
   },
   {
     section: 'memory',
@@ -459,7 +459,6 @@ export const SETTINGS_CATALOG: SettingsCatalogEntry[] = [
     help: 'Calls to a provider other than the thread’s wait for your approval, which shows the provider and what is sent.',
     words: 'ability approval image search provider',
   },
-  { section: 'workflows', title: 'Where sub-agents run', words: 'subagent native provider cross delegate' },
   { section: 'workflows', title: 'Custom agents', words: 'custom agent reusable reviewer recipe' },
   {
     section: 'chats',
@@ -468,9 +467,6 @@ export const SETTINGS_CATALOG: SettingsCatalogEntry[] = [
     help: 'A few words such as GPU box or office network. Continue on another host suggests it when a request mentions them.',
     words: 'host description gpu office network suggest continue',
   },
-  { section: 'workflows', title: 'Automatic selection', words: 'subagent model effort automatic cap maximum' },
-  { section: 'workflows', title: 'By type', words: 'explore plan subagent type route' },
-  { section: 'workflows', title: 'When a sub-agent is limited', words: 'subagent fallback order limit separate same' },
   {
     section: 'workflows',
     title: 'Decide before Codex starts its own sub-agents',
@@ -547,11 +543,18 @@ export const SETTINGS_CATALOG: SettingsCatalogEntry[] = [
     words: 'commit message pull request title conventional repository custom generated',
   },
   {
-    section: 'git',
+    section: 'models',
     title: 'Writing model',
     path: 'commitModel',
     help: 'Writes commit messages and pull request titles and descriptions. Default uses your default model.',
     words: 'ai draft commit message pull request description default model effort',
+  },
+  {
+    section: 'models',
+    title: 'Aside model',
+    path: 'asideModel',
+    help: 'Answers side questions about a thread. Same as thread uses the model chosen in that thread.',
+    words: 'aside side question btw model thread follow fixed',
   },
   {
     section: 'git',
@@ -673,7 +676,7 @@ export const SETTINGS_CATALOG: SettingsCatalogEntry[] = [
   {
     section: 'workflows',
     title: 'Helpers use',
-    words: 'subagent helper model routing cheaper automatic',
+    words: 'subagent helper model routing cheaper automatic effort type explore plan provider delegate fallback limit',
     path: 'subagents.model',
   },
   {

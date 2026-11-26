@@ -4,13 +4,13 @@ import { branchForTitle, validBranchPrefix } from '@ramu/shared/workspaceDefault
 import { Textarea } from '@/components/ui/textarea'
 import { t } from '../i18n'
 import { Dropdown } from '../Menu'
-import { ModelChoice } from './ModelChoice'
+import { WorkModelNote } from './WorkModels'
 import { SETTINGS_FORM_CLASS } from './constants'
 import { ToggleRow, type DraftProps } from './ToggleRow'
 import { HostingAccounts } from './HostingAccounts'
 import { LivePullRequestsSetting } from './LivePullRequests'
 
-export function GitSettings({ draft, onChange, busy }: DraftProps) {
+export function GitSettings({ draft, onChange, busy, onOpenModels }: DraftProps & { onOpenModels: () => void }) {
   const toggleProps = { draft, onChange, busy }
   return (
     <div className={SETTINGS_FORM_CLASS}>
@@ -130,18 +130,7 @@ export function GitSettings({ draft, onChange, busy }: DraftProps) {
         title="Remove agent credits"
         description="Keep AI agent Co-authored-by trailers and Generated with lines out of commits and pull requests. Agents are told not to add them, and Ramu strips any that remain. Credits for people stay."
       />
-      <SettingsRow setting="commitModel">
-        <SettingsLabel
-          title={t('Writing model')}
-          help={t('Writes commit messages and pull request titles and descriptions. Default uses your default model.')}
-        />
-        <ModelChoice
-          label={t('Writing model')}
-          value={draft.commitModel}
-          emptyLabel={t('Default model')}
-          onChange={(commitModel) => onChange({ ...draft, commitModel })}
-        />
-      </SettingsRow>
+      <WorkModelNote title="Writing model" value={draft.commitModel} onOpen={onOpenModels} />
       <SettingsRow setting="commitStyle">
         <SettingsLabel title={t('Style')} help={t('How commit messages and pull request titles are worded.')} />
         <Dropdown

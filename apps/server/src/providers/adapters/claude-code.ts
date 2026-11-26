@@ -78,6 +78,7 @@ export const claudeCodeAdapter = defineAdapter({
     advisor: true,
     toolSearch: true,
     blockingQuestions: true,
+    backgroundCommands: true,
     abilities: [
       { ability: 'web_search', via: { tool: 'WebSearch' } },
       { ability: 'long_context', via: { contextWindow: LONG_CONTEXT_TOKENS } },

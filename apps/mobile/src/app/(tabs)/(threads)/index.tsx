@@ -11,6 +11,7 @@ import {
 } from '../../../runtime/threadGroups'
 import { resolveLayered } from '../../../runtime/busyMode'
 import { sharedValue } from '@ramu/shared/sharedFields'
+import { shortHostName } from '@ramu/shared/hostLabel'
 import { collapseScheduleRuns } from '@ramu/shared/chat/scheduleRuns'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { BackHandler, Platform, Pressable, ScrollView as HScroll, StyleSheet, View } from 'react-native'
@@ -18,6 +19,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import {
   Folder,
   FolderGit2,
+  GitBranch,
   MessagesSquare,
   Search,
   Gauge,
@@ -44,20 +46,23 @@ import { FloatingActionButton } from '../../../components/FloatingActionButton'
 import { ChatRow } from '../../../components/ChatRow'
 import { ProjectActionsSheet } from '../../../components/ChatActions'
 import { Disclosure, animateLayout } from '../../../components/Motion'
-import { Chip, IconButton, Row, SectionLabel, Sheet, T, tap } from '../../../components/ui'
+import { Chip, IconButton, ROW_INSET, Row, SectionLabel, Sheet, T, tap } from '../../../components/ui'
 import { confirmCancel } from '../../../components/Outbox'
 import { TopFade } from '../../../components/Glass'
 import { useTabActions } from '../../../components/Overlays'
 import { HostChip } from '../../../components/HostChip'
 import { useBulkThreadActions } from '../../../components/BulkThreadActions'
 import { threadSelection, useThreadSelection } from '../../../runtime/threadSelection'
+import { threadsSync } from '../../../runtime/threadsSync'
+import { useDelayedStatus } from '../../../runtime/useDelayedStatus'
+import { SyncLine } from '../../../components/WorkingLine'
 
 type Position = { first?: boolean; last?: boolean; gap?: number }
 type HomeRow = { key: string } & Position &
   (
     | { kind: 'label'; text: string; right?: string }
     | { kind: 'outbox'; o: OutboxItem }
-    | { kind: 'chat'; chat: Chat; project?: string; divider?: boolean; earlierRuns?: number }
+    | { kind: 'chat'; chat: Chat; project?: string; divider?: boolean; earlierRuns?: number; inProject?: boolean }
     | { kind: 'project'; group: ThreadGroup<Chat, MobileProject>; closed: boolean }
     | { kind: 'done'; count: number; closed: boolean }
     // `group` set: show the rest of one project (or fewer again); unset: more of the flat filtered list.
@@ -130,13 +135,17 @@ export default function Threads() {
   }
   const projectList = projects.filter((p) => merged || p.computerId === selected)
   const nameOf = (id: string) => projectList.find((p) => p.id === id)?.name
+  const hostName = (id: string) => {
+    const name = computers.find((x) => x.id === id)?.name
+    return name ? shortHostName(name) : undefined
+  }
   // `project · host`, the same label every list uses; the host only appears once there is more than one.
   const labelOf = (chat: Chat) =>
     [
       chat.projectId === STANDALONE
         ? undefined
         : projects.find((p) => p.computerId === chat.computerId && p.id === chat.projectId)?.name,
-      multi ? computers.find((x) => x.id === chat.computerId)?.name : undefined,
+      multi ? hostName(chat.computerId) : undefined,
     ]
       .filter(Boolean)
       .join(' · ') || undefined
@@ -151,6 +160,14 @@ export default function Threads() {
       .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
   }, [scoped, filter])
   const filtering = filter !== 'all'
+  const sync = threadsSync(
+    computers
+      .filter((host) => merged || host.id === selected)
+      .map((host) => ({ status: host.status, read: store.threadReads?.[host.id] })),
+    mine.length > 0 || projectList.length > 0,
+  )
+  // A re-read that finishes at once stays silent, so returning to the app does not flash a line above the list.
+  const refreshing = useDelayedStatus('threads', sync === 'refreshing' ? sync : null)
   // Settings → Threads picks it as on the desktop: this phone's choice, then all your phones, then the host's own setting.
   const recentMode =
     resolveLayered(
@@ -289,6 +306,7 @@ export default function Threads() {
                 kind: 'chat',
                 chat,
                 divider: i > 0,
+                inProject: true,
                 earlierRuns: expanded.has(g.key) ? undefined : runs.earlierRuns[chat.id],
               }) as HomeRow,
           ),
@@ -395,7 +413,14 @@ export default function Threads() {
           )
         })()
       ) : row.kind === 'chat' ? (
-        <ChatRow chat={row.chat} project={row.project} divider={row.divider} earlierRuns={row.earlierRuns} selectable />
+        <ChatRow
+          chat={row.chat}
+          project={row.project}
+          divider={row.divider}
+          earlierRuns={row.earlierRuns}
+          inProject={row.inProject}
+          selectable
+        />
       ) : row.kind === 'done' ? (
         <Pressable
           accessibilityRole="button"
@@ -405,9 +430,9 @@ export default function Threads() {
           style={({ pressed }) => ({
             flexDirection: 'row',
             alignItems: 'center',
-            gap: space.s,
+            gap: space.m,
             paddingHorizontal: space.l,
-            minHeight: 50,
+            minHeight: 52,
             backgroundColor: pressed ? c.pressed : 'transparent',
           })}
         >
@@ -427,7 +452,7 @@ export default function Threads() {
       ) : row.kind === 'more' ? (
         <Row
           onPress={() => (row.group ? toggle(setExpanded, row.group) : setHistoryLimit((limit) => limit + 20))}
-          style={{ paddingVertical: 11 }}
+          style={{ paddingVertical: 11, paddingLeft: ROW_INSET }}
         >
           <T size={font.control} tone="muted">
             {row.group
@@ -443,9 +468,19 @@ export default function Threads() {
           const p = g.project
           const name =
             p?.name ?? (g.projectId === STANDALONE ? t.standalone : translate(store.language, 'Unknown project'))
-          const host = merged ? computers.find((x) => x.id === g.computerId)?.name : undefined
+          const host = merged ? hostName(g.computerId) : undefined
           const identity = p ? projectIdentity(identities, p.id) : null
+          // The branch the project's own checkout has out, said once here instead of on each thread working in it.
+          const branch = scoped.find(
+            (chat) =>
+              chat.computerId === g.computerId &&
+              chat.projectId === g.projectId &&
+              chat.mode !== 'worktree' &&
+              chat.status !== 'archived' &&
+              !!chat.branch,
+          )?.branch
           const detail = [
+            branch,
             host,
             identity?.name,
             p?.kind === 'workspace' ? translate(store.language, '{count} repos', { count: p.repos.length }) : undefined,
@@ -470,10 +505,10 @@ export default function Threads() {
               style={({ pressed }) => ({
                 flexDirection: 'row',
                 alignItems: 'center',
-                gap: space.s,
+                gap: space.m,
                 paddingLeft: space.l,
                 paddingRight: space.s,
-                minHeight: 50,
+                minHeight: 52,
                 backgroundColor: pressed ? c.pressed : 'transparent',
               })}
             >
@@ -493,19 +528,22 @@ export default function Threads() {
                   <Disclosure open={!closed} size={13} color={c.muted} />
                 </View>
                 {detail || closed ? (
-                  <T size={font.caption} tone="muted" numberOfLines={1}>
-                    {/* Folded, the subtitle says what is hidden and whether something inside needs you or is working. */}
-                    {[
-                      detail,
-                      closed && g.attention ? `${g.attention} ${t.homeWaiting}` : undefined,
-                      closed && g.running ? `${g.running} ${t.homeRunning}` : undefined,
-                      closed && !g.attention && !g.running && g.total
-                        ? translate(store.language, '{count} threads', { count: g.total })
-                        : undefined,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ') || translate(store.language, 'No threads yet')}
-                  </T>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    {branch ? <GitBranch size={11} color={c.muted} /> : null}
+                    <T size={font.caption} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
+                      {/* Folded, the subtitle says what is hidden and whether something inside needs you or is working. */}
+                      {[
+                        detail,
+                        closed && g.attention ? `${g.attention} ${t.homeWaiting}` : undefined,
+                        closed && g.running ? `${g.running} ${t.homeRunning}` : undefined,
+                        closed && !g.attention && !g.running && g.total
+                          ? translate(store.language, '{count} threads', { count: g.total })
+                          : undefined,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ') || translate(store.language, 'No threads yet')}
+                    </T>
+                  </View>
                 ) : null}
               </View>
               {p ? (
@@ -746,6 +784,11 @@ export default function Threads() {
                   />
                 ))}
             </HScroll>
+            {refreshing ? (
+              <View style={{ paddingHorizontal: space.l, paddingTop: space.s }}>
+                <SyncLine what="threads" />
+              </View>
+            ) : null}
           </>
         }
         ListFooterComponent={
@@ -766,12 +809,20 @@ export default function Threads() {
                 </Pressable>
               </View>
             ) : null}
-            {!filtering && !mine.length && !projectList.length ? (
-              <View style={{ alignItems: 'center', padding: space.xl * 2, gap: space.m }}>
-                <MessagesSquare size={28} color={c.placeholder} />
-                <T tone="muted">{t.empty}</T>
+            {filtering || mine.length || projectList.length ? null : sync === 'loading' ? (
+              <View style={{ alignItems: 'center', padding: space.xl * 2 }}>
+                <SyncLine what="threads" />
               </View>
-            ) : null}
+            ) : (
+              <View style={{ alignItems: 'center', padding: space.xl * 2, gap: space.m }}>
+                {sync === 'offline' ? (
+                  <WifiOff size={28} color={c.placeholder} />
+                ) : (
+                  <MessagesSquare size={28} color={c.placeholder} />
+                )}
+                <T tone="muted">{sync === 'offline' ? say('Host is offline') : t.empty}</T>
+              </View>
+            )}
           </>
         }
       />

@@ -44,6 +44,7 @@ export class AgentTasks {
       defined.resumedAt = Math.max(defined.resumedAt, (current?.endedAt ?? 0) + 1)
     if (isStaleProgress(current, defined)) return
     const next: AgentTask = { name: 'Agent', status: 'running', ...current, ...defined, agentId }
+    if (next.awaited === false) delete next.awaited
     if (defined.status === 'running' && defined.resumedAt) {
       delete next.endedAt
       delete next.durationMs
@@ -89,9 +90,42 @@ export class AgentTasks {
         (this.host.live.has(agentId) || this.host.runners.has(agentId) || this.host.providerWait(agentId))
       )
         continue
-      this.updateTask(id, agentId, { status: 'stopped', endedAt: Date.now() })
+      this.updateTask(id, agentId, { status: 'stopped', awaited: false, endedAt: Date.now() })
     }
     this.host.agentCalls.delete(id)
+  }
+
+  /** The session's own background commands still running, as its provider reported them. */
+  private runningCommands(id: string): AgentTask[] {
+    const rows = this.db
+      .prepare(
+        "SELECT event FROM agent_events WHERE session_id = ? AND json_extract(event, '$.kind') = 'agent' AND json_extract(event, '$.status') = 'running' AND json_extract(event, '$.taskType') = 'local_bash'",
+      )
+      .all(id) as { event: string }[]
+    return rows.map((row) => JSON.parse(row.event) as AgentTask).filter((task) => !task.recovered)
+  }
+
+  /**
+   * background_wait: marks the session's own running background commands as waited on, or clears the mark. An id is
+   * the command's task id, the name the agent addresses it by, or the tool call that started it. Nothing is started
+   * or stopped, and an id that names no running command of this session comes back unmatched.
+   */
+  awaitCommands(id: string, taskIds: readonly string[], waiting: boolean): { matched: string[]; unmatched: string[] } {
+    const commands = this.runningCommands(id)
+    const matched: string[] = []
+    const unmatched: string[] = []
+    for (const taskId of new Set(taskIds)) {
+      const found = commands.filter((task) => [task.agentId, task.address, task.toolUseId].includes(taskId))
+      ;(found.length ? matched : unmatched).push(taskId)
+      for (const task of found)
+        if ((task.awaited === true) !== waiting) this.updateTask(id, task.agentId, { awaited: waiting })
+    }
+    return { matched, unmatched }
+  }
+
+  /** The person interrupted the turn, so the agent no longer continues when its commands end: none holds the thread. */
+  stopAwaiting(id: string): void {
+    for (const task of this.runningCommands(id)) if (task.awaited) this.updateTask(id, task.agentId, { awaited: false })
   }
 
   async stopTask(id: string, agentId: string): Promise<void> {

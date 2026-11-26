@@ -1,5 +1,6 @@
 import { toolActivity } from '@ramu/shared/chat/toolActivity'
 import { ActivityText } from '../../../chat/ActivityText'
+import { useChatFade } from '../../../chat/ChatMotion'
 import { useState } from 'react'
 import { t as translate, useLanguage } from '../../../i18n'
 import { isViewImageTool, readImageContent, toolImageName } from '../lib/toolImage'
@@ -12,7 +13,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Button } from '@/components/desktop-button'
 import { Brain, ChevronRight, CircleX } from 'lucide-react'
 import { toolFailure } from '@ramu/shared/chat/toolFailure'
-import { thoughtLine } from '@ramu/shared/chat/thoughtLine'
+import { thoughtBlock, thoughtEnding, thoughtLine } from '@ramu/shared/chat/thoughtLine'
 import { describeRamuTool, ramuTool } from '@ramu/shared/chat/ramuTools'
 import { toolIsRunning, toolVerb } from '@ramu/shared/chat/toolStatus'
 import { type ToolResult, type ToolUse } from '../types'
@@ -50,6 +51,33 @@ const TOOL_VERB: Record<string, string> = {
 
 const failedResult = (tool: ToolUse, result: ToolResult | undefined) =>
   result ? result.isError || result.status === 'failed' : tool.status === 'failed'
+
+/**
+ * The words of one call's row, which the live group's headline also shows: Ramu's own tools what they did, file tools
+ * the verb and file name, a titled call its title, and any other call its verb and what it acted on.
+ */
+function toolRow(t: ToolUse, r: ToolResult | undefined, cwd: string, active: boolean) {
+  const toolRunning = toolIsRunning(r, active)
+  const summary = t.summary.split(`${cwd}/`).join('')
+  const call = ramuTool(t)
+  const row = call ? describeRamuTool(call, r?.summary) : undefined
+  const { images: sent, details } = splitToolContent(r?.content ?? t.content)
+  const imageTitle = sent.length || isViewImageTool(t.name) ? toolImageName(t) : undefined
+  // Reads, edits and writes name just the file (and an edit its +/- lines) until the row is opened.
+  const file = row || imageTitle ? null : fileToolLine(t, r)
+  const fileTitle = file
+    ? `${translate(toolVerb(file.verb, toolRunning))} ${file.name}${file.others ? ` ${translate('+{count} more', { count: file.others })}` : ''}`
+    : undefined
+  const humanTitle =
+    fileTitle ??
+    imageTitle ??
+    (row
+      ? `${translate(toolRunning ? row.running : row.done)}${row.subject ? ` ${row.subject}` : ''}`
+      : ((t.title?.trim() || toolFallbackTitle(t, toolRunning)) ?? undefined))
+  const line =
+    humanTitle ?? `${translate(toolVerb(TOOL_VERB[t.name] ?? KIND_VERB[toolKind(t)], toolRunning))} ${summary}`
+  return { toolRunning, summary, row, sent, details, file, humanTitle, line }
+}
 
 /**
  * What a failed call said, under its row while the row is closed. A command keeps its exit code and last output lines
@@ -129,10 +157,18 @@ export function ToolGroup({
   const headline = thought
     ? thoughtLine(thought.text, true) || translate('Thinking')
     : running || live
-      ? primaryTool.title?.trim() ||
-        toolFallbackTitle(primaryTool, running) ||
-        describeTools([primaryTool], results, active)
-      : describeTools(tools, results, active)
+      ? // The call itself, as its row reads ("Running pnpm test"), never a count of one.
+        toolRow(primaryTool, results.get(primaryTool.toolUseId), cwd, active).line
+      : describeTools(tools, results, active, cwd)
+  // Each step and each paragraph of a thought fades in once; the words of the paragraph being written do not flicker.
+  const headlineFade = useChatFade<HTMLSpanElement>(
+    thought
+      ? `thought:${entries.length}:${thoughtBlock(thought.text)}`
+      : running || live
+        ? `tool:${primaryTool.toolUseId}`
+        : 'summary',
+  )
+  const thoughtFade = useChatFade<HTMLSpanElement>(lastThought ? String(thoughtBlock(lastThought.text)) : '')
   return (
     // Any click inside is the person opening or folding something, which the hold must let show.
     <div ref={held.ref} onClickCapture={held.release}>
@@ -161,9 +197,11 @@ export function ToolGroup({
                 className={TOOL_ICON_CLASS}
               />
             )}
-            <ActivityText active={running || live} className="tool-group-label truncate text-left">
-              {headline}
-            </ActivityText>
+            <span ref={headlineFade} className="flex min-w-0">
+              <ActivityText active={running || live} className="tool-group-label truncate text-left">
+                {headline}
+              </ActivityText>
+            </span>
             {status.failed > 0 && (
               // A quiet mark, as in T3 Code: the tinted icon and this cross say it failed; the words stay the tool's own.
               <span
@@ -180,14 +218,16 @@ export function ToolGroup({
         {entries.length > 1 && !open && !running && lastFailed && (
           // A closed group names its latest failure and what it said, so a failed step is never hidden behind "Ran 5 commands".
           <div className="ml-[22px] min-w-0 truncate pb-1 text-caption text-muted-foreground">
-            {describeTools([lastFailed], results, active)}
+            {toolRow(lastFailed, results.get(lastFailed.toolUseId), cwd, active).line}
             {lastFailedLine ? `: ${lastFailedLine}` : null}
           </div>
         )}
-        {entries.length > 1 && !open && lastThought && thoughtLine(lastThought.text, true) && (
+        {entries.length > 1 && !open && lastThought && thoughtEnding(lastThought.text) && (
           <div className="flex min-w-0 items-start gap-2 pb-1 text-caption text-muted-foreground">
             <Brain size={12} className="mt-[3px] flex-none opacity-70" />
-            <span className="line-clamp-3 min-w-0">{thoughtLine(lastThought.text, true)}</span>
+            <span ref={thoughtFade} className="line-clamp-3 min-w-0">
+              {thoughtEnding(lastThought.text)}
+            </span>
           </div>
         )}
         <CollapsibleContent className={TOOL_DISCLOSURE_PANEL_CLASS}>
@@ -199,27 +239,10 @@ export function ToolGroup({
               if (t.kind === 'thinking')
                 return <ThinkingRow key={`thinking-${index}`} text={t.text} active={t === thought} />
               const r = results.get(t.toolUseId)
-              const toolRunning = toolIsRunning(r, active)
-              const summary = t.summary.split(`${cwd}/`).join('')
-              const category = toolKind(t)
-              const bash = category === 'execute'
-              const call = ramuTool(t)
-              const row = call ? describeRamuTool(call, r?.summary) : undefined
-              const { images: sent, details } = splitToolContent(r?.content ?? t.content)
-              const imageTitle = sent.length || isViewImageTool(t.name) ? toolImageName(t) : undefined
-              // Reads, edits and writes name just the file (and an edit its +/- lines) until the row is opened.
-              const file = row || imageTitle ? null : fileToolLine(t, r)
+              const { toolRunning, summary, row, sent, details, file, humanTitle, line } = toolRow(t, r, cwd, active)
+              const bash = toolKind(t) === 'execute'
               const readImage = file?.verb === 'Read' && !sent.length ? readImageContent(file.path) : undefined
               const images = readImage ? [readImage] : sent
-              const fileTitle = file
-                ? `${translate(toolVerb(file.verb, toolRunning))} ${file.name}${file.others ? ` ${translate('+{count} more', { count: file.others })}` : ''}`
-                : undefined
-              const humanTitle =
-                fileTitle ??
-                imageTitle ??
-                (row
-                  ? `${translate(toolRunning ? row.running : row.done)}${row.subject ? ` ${row.subject}` : ''}`
-                  : (t.title?.trim() ?? toolFallbackTitle(t, toolRunning) ?? undefined))
               const inputText = t.input ?? (humanTitle === summary ? undefined : summary)
               // An opened edit shows its change as a diff, built from the input when the provider sent none.
               const builtDiffs = file && !shownHasDiff(r?.content ?? t.content) ? fileToolDiffs(t, r) : []
@@ -247,8 +270,7 @@ export function ToolGroup({
                       className={`tool-icon flex-none ${failed ? 'text-bad' : 'text-muted-foreground'}`}
                     />
                     <ActivityText active={toolRunning} className={TOOL_SUMMARY_CLASS}>
-                      {humanTitle ??
-                        `${translate(toolVerb(TOOL_VERB[t.name] ?? KIND_VERB[category], toolRunning))} ${summary}`}
+                      {line}
                     </ActivityText>
                     {file && <FileToolCounts added={file.added} removed={file.removed} />}
                     {state === 'Failed' && (

@@ -227,3 +227,17 @@ it('shows RAMU_FAKE_USAGE readings in place of saved ones, before logins can be 
     delete process.env.RAMU_FAKE_USAGE
   }
 })
+
+it('stops showing the gauges of a removed login before any new reading arrives', () => {
+  const accounts = new Set(['default'])
+  const base = { provider: 'codex' as const, window: 'five_hour' as const, status: 'ok' as const, updatedAt: 1 }
+  const service = new UsageService(
+    () => [{ ...base, usedPercent: 40 }],
+    () => {},
+    () => {},
+    (_provider, accountId) => accounts.has(accountId),
+  )
+  expect(service.list().map((reading) => reading.usedPercent)).toEqual([40])
+  accounts.delete('default')
+  expect(service.list()).toEqual([])
+})

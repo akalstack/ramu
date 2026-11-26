@@ -17,7 +17,7 @@ it('tells the main agent which helper an @mention asks for, inside the context R
     sources(),
   )
   expect(sent).toBe(
-    '@opus-5.5 review the diff\n\n<ramu-context>\nFiles\nThe person addressed this message to a helper. Start one with ramu_agent, model "opus-5.5" and role "review" unless the request asks for changes, give it the request with the context it needs, then relay its report.\n</ramu-context>',
+    '@opus-5.5 review the diff\n\n<ramu-context>\nFiles\nThe person addressed this message to a helper. Start one with ramu_agent, model "opus-5.5" and role "review", give it the request with the context it needs, then relay its report.\n</ramu-context>',
   )
   expect(await withMentionInstruction('@security-reviewer look', sources())).toContain('type "security-reviewer"')
   expect(await withMentionInstruction('@images a hero', sources())).toContain('needs ["image_generation"]')

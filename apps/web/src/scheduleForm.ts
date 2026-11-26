@@ -125,3 +125,40 @@ export function byNextRun(schedules: Schedule[]): Schedule[] {
 }
 
 export const isProblemRun = (status: string) => status === 'failed' || status === 'interrupted'
+
+type Say = (text: string, values?: Record<string, string | number>) => string
+
+/**
+ * When a schedule runs, in a line: "Weekdays at 08:30", "Every 4 hours", "Day 1 of each month at 09:00". A one-time
+ * schedule says only "Once", since its card already shows the moment as its next run. `say` translates, and `dayName`
+ * names an ISO weekday (1 is Monday) in the reader's language.
+ */
+export function describeRule(rule: ScheduleRule, say: Say, dayName: (day: number) => string): string {
+  switch (rule.kind) {
+    case 'once':
+      return say('Once')
+    case 'webhook':
+      return rule.source === 'generic'
+        ? say('When a request arrives')
+        : say('When {0} sends a request', { 0: SOURCE_DEFAULTS[rule.source].label })
+    case 'daily':
+      return say('Every day at {time}', { time: rule.time })
+    case 'monthly':
+      return say('Day {day} of each month at {time}', { day: rule.day, time: rule.time })
+    case 'weekly': {
+      const days = [...new Set(rule.weekdays)].sort((a, b) => a - b)
+      if (days.length === 7) return say('Every day at {time}', { time: rule.time })
+      if (days.join() === '1,2,3,4,5') return say('Weekdays at {time}', { time: rule.time })
+      if (days.join() === '6,7') return say('Weekends at {time}', { time: rule.time })
+      return say('{days} at {time}', { days: days.map(dayName).join(', '), time: rule.time })
+    }
+    case 'interval': {
+      const every = (unit: number, one: string, many: string) =>
+        rule.minutes === unit ? say(one) : say(many, { count: rule.minutes / unit })
+      if (rule.minutes % 10080 === 0) return every(10080, 'Every week', 'Every {count} weeks')
+      if (rule.minutes % 1440 === 0) return every(1440, 'Every day', 'Every {count} days')
+      if (rule.minutes % 60 === 0) return every(60, 'Every hour', 'Every {count} hours')
+      return say('Every {count} minutes', { count: rule.minutes })
+    }
+  }
+}

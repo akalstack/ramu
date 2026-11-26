@@ -40,7 +40,7 @@ import { SectionHead } from './projects/SectionHead'
 import { Collapse } from './projects/Collapse'
 import { ICON_BUTTON_CLASS, ROW_ACTIONS_CLASS, pinnedFirst, STICKY_PROJECT_CLASS } from './projects/constants'
 import { mergedThreads, sidebarThreads, threadNeedsYou, threadProjectName } from './projects/threadLists'
-import { useSidebarExpansion } from './projects/sidebarExpansion'
+import { useSharedSidebarSection, useSidebarExpansion } from './projects/sidebarExpansion'
 import { EMBEDDED_THREAD_LIMIT, ThreadPreviewList, useThreadPreview } from './projects/ThreadPreviewList'
 import { hostRows } from './hostRows'
 import { hasOfflineCopy } from '../workspace/offlineCopy'
@@ -212,6 +212,7 @@ function OtherHostProjects({ computer, embedded }: { computer: Computer; embedde
   )
   const projectsDomId = `host:${computer.id}:projects`
   const projectsOpen = embedded || tree.isExpanded('section:projects')
+  const doneSection = useSharedSidebarSection('section:done')
   const section = (
     name: string,
     id: string,
@@ -220,7 +221,8 @@ function OtherHostProjects({ computer, embedded }: { computer: Computer; embedde
   ) => {
     if (!tasks.length) return null
     const key = `host:${computer.id}:${id}`
-    const open = tree.isExpanded(id)
+    const shared = name === 'Done'
+    const open = shared ? doneSection.open : tree.isExpanded(id)
     return (
       <>
         <SectionHead
@@ -228,7 +230,7 @@ function OtherHostProjects({ computer, embedded }: { computer: Computer; embedde
           icon={name === 'Done' ? CheckCheck : name === 'Pinned' ? Pin : MessageCircle}
           count={name === 'Done' ? tasks.length : undefined}
           open={open}
-          onToggle={() => tree.setExpanded(id, !open)}
+          onToggle={() => (shared ? doneSection.setOpen(!open) : tree.setExpanded(id, !open))}
           controls={key}
         >
           {action}
@@ -524,10 +526,9 @@ function MergedSection({
   threads: (source: HostThreads) => Task[]
   order: (a: Task, b: Task) => number
 }) {
-  const tree = useSidebarExpansion()
+  const { open, setOpen } = useSharedSidebarSection(`section:${id}`)
   const rows = mergedThreads(useHostThreads(computers), threads).sort((a, b) => order(a.task, b.task))
   if (!rows.length) return null
-  const open = tree.isExpanded(`section:${id}`)
   return (
     <section className="min-w-0">
       <SectionHead
@@ -535,7 +536,7 @@ function MergedSection({
         icon={icon}
         count={rows.length}
         open={open}
-        onToggle={() => tree.setExpanded(`section:${id}`, !open)}
+        onToggle={() => setOpen(!open)}
         controls={`all-hosts-${id}`}
       />
       <Collapse open={open} id={`all-hosts-${id}`} className="flex flex-col gap-0.5">

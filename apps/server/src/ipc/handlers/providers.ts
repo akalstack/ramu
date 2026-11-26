@@ -41,6 +41,7 @@ export const registerProviderHandlers: RegisterHandlers = ({
   usage,
   agents,
   accountUsage,
+  usageConfigurationChanged,
   abilities,
   activity,
   mediaAccounts,
@@ -181,10 +182,13 @@ export const registerProviderHandlers: RegisterHandlers = ({
     },
     'providers.setEnvironment': {
       args: z.tuple([environmentValues]),
-      run: (values: ProviderEnvironmentValues) => {
+      run: async (values: ProviderEnvironmentValues) => {
         if (host.canAdministerIntegrations?.() !== true)
           throw new Error('Change environment variables on the host running Ramu')
-        return environment.save(values)
+        const saved = await environment.save(values)
+        // An API key or endpoint typed here changes whose plan the gauges show.
+        usageConfigurationChanged()
+        return saved
       },
     },
     'providers.pickBinary': { args: z.tuple([]), run: () => host.native('pickExecutable') },
@@ -202,7 +206,7 @@ export const registerProviderHandlers: RegisterHandlers = ({
     'usage.refresh': {
       args: z.tuple([]),
       run: async () => {
-        await Promise.all([agents.readClaudeUsage(), accountUsage.refresh()])
+        await accountUsage.refresh()
         return usage.list()
       },
     },

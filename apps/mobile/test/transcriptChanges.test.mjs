@@ -79,9 +79,8 @@ test('startup and work labels follow execution changes immediately without publi
   assert.equal(starting.activityLabel, 'Starting…')
   const working = updateThreadMetadata(starting, { kind: 'state', state: 'running' })
   assert.equal(working.activityLabel, 'Working')
-  const writing = { ...working, activityLabel: 'Writing…' }
-  assert.equal(updateThreadMetadata(writing, text('More words')), writing)
-  assert.equal(updateThreadMetadata(writing, { kind: 'state', state: 'done' }).activityLabel, null)
+  assert.equal(updateThreadMetadata(working, text('More words')), working)
+  assert.equal(updateThreadMetadata(working, { kind: 'state', state: 'done' }).activityLabel, null)
 })
 
 test('pausing between the transcript read and companion reads cannot advance the resume cursor', async () => {

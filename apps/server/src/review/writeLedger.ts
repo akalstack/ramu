@@ -4,6 +4,7 @@ import { stat } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
 import type { AgentEvent } from '@ramu/shared/types'
+import { readsOnly } from '../agent/autoCommandRules'
 
 const exec = promisify(execFile)
 
@@ -89,6 +90,16 @@ export function writtenPaths(event: ToolUse, cwd: string): string[] {
 }
 
 const isShell = (event: ToolUse) => event.toolKind === 'execute' || SHELL_TOOLS.has(event.name)
+
+/** A command that only reads writes nothing: it takes no turn, and no other thread waits for it. */
+function readsShell(event: ToolUse): boolean {
+  try {
+    const command = (JSON.parse(event.input ?? 'null') as { command?: unknown } | null)?.command
+    return typeof command === 'string' && readsOnly(command)
+  } catch {
+    return false
+  }
+}
 
 /**
  * Tells apart the threads writing in one checkout at once. Edits name their files. A shell command's writes are seen
@@ -189,7 +200,8 @@ export class WriteLedger {
       }
       const key = `${sessionId}\0${event.toolUseId}`
       // A command holding for its turn starts when it gets it.
-      if (isShell(event) && !this.shells.has(key) && !this.holding.has(key)) this.start(key, sessionId, recording, at)
+      if (isShell(event) && !readsShell(event) && !this.shells.has(key) && !this.holding.has(key))
+        this.start(key, sessionId, recording, at)
     } else if (event.kind === 'tool-result') this.finish(sessionId, event, at)
   }
 

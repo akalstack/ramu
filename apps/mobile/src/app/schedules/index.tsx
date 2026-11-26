@@ -3,6 +3,7 @@ import { Platform, RefreshControl, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { CalendarClock, Plus } from 'lucide-react-native'
 import type { Schedule } from '@ramu/shared/types'
+import { shortHostName } from '@ramu/shared/hostLabel'
 import { font, space, useTheme } from '../../theme'
 import { useStore } from '../../runtime/store'
 import { useAutomation } from '../../runtime/automation'
@@ -116,7 +117,7 @@ export default function SchedulesScreen() {
                 key={`${computerId}:${schedule.id}`}
                 computerId={computerId}
                 schedule={schedule}
-                host={merged ? store.computers.find((x) => x.id === computerId)?.name : undefined}
+                host={merged ? shortHostName(store.computers.find((x) => x.id === computerId)?.name ?? '') : undefined}
                 lastRun={runsOf(auto.of(computerId).runs, schedule.id)[0]}
                 divider={i > 0}
               />

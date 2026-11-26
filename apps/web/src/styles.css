@@ -354,30 +354,42 @@ kbd {
 
 /* Source control */
 
-/* Native scroll areas (text fields, menus, code blocks) match the custom list thumbs.
-   OverlayScrollArea hides these on its viewport and supplies its own floating scrollbar. */
-@supports not selector(::-webkit-scrollbar) {
+/* Every scroll area shows the app's one scrollbar: native bars are hidden everywhere, and a thin thumb floats over the
+   container being scrolled or pointed at (lib/floatingScrollbars.ts), taking no layout width so content never shifts.
+   The base layer lets a utility that sets its own scrollbar rule win. Monaco and xterm draw their own bars as elements,
+   which this leaves alone, and OverlayScrollArea draws the same thumb for its viewport. */
+@layer base {
   * {
-    scrollbar-width: thin;
-    scrollbar-color: color-mix(in srgb, var(--text) 28%, transparent) transparent;
+    scrollbar-width: none;
+  }
+  *::-webkit-scrollbar {
+    display: none;
   }
 }
-::-webkit-scrollbar {
-  width: 9px;
-  height: 9px;
+/* Above every dialog, menu, toast and tooltip, since any of them can scroll. */
+.floating-scrollbars {
+  @apply fixed top-0 left-0 size-0 z-1400 pointer-events-none;
 }
-::-webkit-scrollbar-track,
-::-webkit-scrollbar-corner {
-  background: transparent;
+.floating-scrollbar {
+  @apply fixed top-0 left-0 box-border opacity-0 pointer-events-none touch-none select-none;
+  @apply [transition:opacity_160ms_ease];
 }
-::-webkit-scrollbar-thumb {
+.floating-scrollbar[data-axis='y'] {
+  @apply px-0.5;
+}
+.floating-scrollbar[data-axis='x'] {
+  @apply py-0.5;
+}
+.floating-scrollbar::before {
+  content: '';
+  @apply block size-full rounded-full;
   background: color-mix(in srgb, var(--text) 28%, transparent);
-  border: 2px solid transparent;
-  border-radius: 999px;
-  background-clip: padding-box;
 }
-::-webkit-scrollbar-thumb:hover {
-  background-color: color-mix(in srgb, var(--text) 42%, transparent);
+.floating-scrollbar:is([data-visible], [data-dragging]) {
+  @apply opacity-100 pointer-events-auto;
+}
+.floating-scrollbar:is(:hover, [data-dragging])::before {
+  background: color-mix(in srgb, var(--text) 42%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {

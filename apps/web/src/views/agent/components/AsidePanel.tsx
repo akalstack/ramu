@@ -1,18 +1,23 @@
 import { VIEW_ONLY_WRITE_NOTICE } from '../../../composer/viewerAccess'
 import { t as translate, useLanguage } from '../../../i18n'
 import { Button } from '@/components/desktop-button'
-import { ArrowLeft, MessageCircle, Quote, X, Trash2 } from 'lucide-react'
+import { MessageCircle, MessageSquarePlus, Quote, X, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import type { Aside } from '@ramu/shared/types'
-import { PanelComposer } from '@/components/panel-composer'
+import type { AgentSettings, Aside } from '@ramu/shared/types'
+import { asideDraft } from '@ramu/shared/chat/asideDraft'
+import { quotedQuestion, sideChat } from '@ramu/shared/chat/sideChat'
+import { modelDisplayName } from '@ramu/shared/providers/modelLabel'
+import { Composer } from '../../../composer/Composer'
+import { focusComposer } from '../../../composer/ComposerInput'
+import { useModelSets } from '../../../models/ModelSets'
+import { useAppSettings } from '../../../settings/AppSettings'
+import { errorText } from '../../../lib/errors'
 import { useHost } from '../../../workspace/HostProvider'
-import { errorText } from '../../../workspace/TaskPane'
 import { type AsideTarget } from '../types'
 import { ChatStatus } from '../../../chat/ChatMotion'
 import { AssistantText } from './AssistantText'
 import { CopyButton } from './CopyButton'
 import {
-  ASIDE_ROW_QUOTE_CLASS,
   GHOST_TEXT_BUTTON_CLASS,
   ICON_BUTTON_CLASS,
   PANEL_BODY_CLASS,
@@ -23,47 +28,59 @@ import {
 import { Message, MessageContent } from '@/components/ui/message'
 import { UserBubble } from './UserMessage'
 
+const QUOTE_CLASS =
+  'aside-quote m-0 p-[8px_12px] [border-left:2px_solid_var(--line-strong)] text-soft text-control leading-[1.5] whitespace-pre-wrap [overflow-wrap:anywhere] max-h-[160px] overflow-auto'
+
 /**
- * Side questions about the chat. Answers come from the chat's model, read-only, and never join the conversation. An
- * aside starts from the thread (Ask aside on a passage, or the toolbar's first one on the whole thread); here one is
- * only continued or deleted, so the side chat stays one place to clean up, as on the phone.
+ * The thread's one side chat, like Claude's /btw: questions about the work that the agent never sees, answered
+ * read-only, kept in one conversation as on the phone. A passage picked in the thread rides with the next question;
+ * the whole chat is cleared with the trash button or carried into a new thread.
  */
 export function AsidePanel({
   sessionId,
   asides,
   open,
   taskId,
-  onOpen,
+  settings,
   onClose,
   onQuote,
+  onPromote,
   readOnly = false,
 }: {
   readOnly?: boolean
   sessionId: string
+  /** The model chosen in the thread's composer, which answers the aside too. */
+  settings?: AgentSettings
   asides: Aside[]
-  open: AsideTarget | '*'
+  open: AsideTarget
   taskId?: string
-  onOpen: (value: AsideTarget | '*' | null) => void
   onClose: () => void
   onQuote: (text: string) => void
+  /** Opens a new thread whose message box holds the aside, so it can carry on as work of its own. */
+  onPromote: (draft: string) => void
 }) {
   useLanguage()
   const { invoke } = useHost()
-  const aside = open === '*' ? undefined : open.id ? asides.find((entry) => entry.id === open.id) : undefined
-  const quote = aside?.quote ?? (open === '*' ? '' : open.quote)
-  const from = aside?.quoteFrom ?? (open === '*' ? 'assistant' : open.from)
+  const { messages, continueId, waiting } = sideChat(asides)
+  const latest = asides.find((entry) => entry.id === continueId)
   const [draft, setDraft] = useState('')
+  // The passage the next question is about; it leaves with that question.
+  const [passage, setPassage] = useState(open.quote)
   const [error, setError] = useState<string | null>(null)
-  const [sending, setSending] = useState(false)
-  const input = useRef<HTMLTextAreaElement>(null),
+  const composer = useRef<HTMLDivElement>(null),
     body = useRef<HTMLDivElement>(null)
-  const openKey = open === '*' ? '*' : (open.id ?? `new:${open.quote}`)
+  const { catalogs } = useModelSets()
+  // The model that answers: the one Settings names for asides, else the thread's.
+  const answering = useAppSettings().preferences.asideModel ?? settings
+  const model =
+    answering &&
+    catalogs.find((catalog) => catalog.provider === answering.provider)?.models.find((m) => m.id === answering.model)
   useEffect(() => {
-    setDraft('')
+    setPassage(open.quote)
     setError(null)
-    if (open === '*' || !open.keepFocus) requestAnimationFrame(() => input.current?.focus())
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [openKey] by design; the values it reads beyond these are current as of that run
-  }, [openKey])
+    if (!open.keepFocus) requestAnimationFrame(() => focusComposer(composer.current))
+    // Each Ask aside is a new target, even on the same passage.
+  }, [open])
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && !event.defaultPrevented) onClose()
@@ -74,67 +91,55 @@ export function AsidePanel({
   useEffect(() => {
     const el = body.current
     if (el) el.scrollTop = el.scrollHeight
-  }, [aside?.messages.length])
-  const waiting = aside?.messages.at(-1)?.role === 'user'
+  }, [messages.length, passage])
+  // The composer shows a failed send itself and keeps the text, as the thread's does.
   const send = async () => {
     const question = draft.trim()
-    if (readOnly || !question || sending || waiting) return
-    setSending(true)
+    if (readOnly || !question || waiting) return
     setError(null)
-    try {
-      const next = await invoke('aside.ask', sessionId, aside?.id ?? null, quote, from, question)
-      setDraft('')
-      if (!aside) onOpen({ id: next.id, quote: next.quote, from: next.quoteFrom })
-    } catch (e) {
-      setError(errorText(e))
-    } finally {
-      setSending(false)
-    }
+    // The first question carries its passage natively; later ones continue the same aside with the passage inline.
+    await invoke(
+      'aside.ask',
+      sessionId,
+      latest?.id ?? null,
+      latest ? latest.quote : passage,
+      latest ? latest.quoteFrom : open.from,
+      latest ? quotedQuestion(question, passage) : question,
+      settings,
+    )
+    setDraft('')
+    setPassage('')
   }
-  const remove = (id: string) => {
+  const clear = () => {
     if (readOnly) return
-    void invoke('aside.delete', sessionId, id).then(
-      () => {
-        if (aside?.id === id) onOpen(asides.length > 1 ? '*' : null)
-      },
-      (e) => setError(errorText(e)),
+    void Promise.all(asides.map((entry) => invoke('aside.delete', sessionId, entry.id))).catch((e) =>
+      setError(errorText(e)),
     )
   }
-  const firstLine = (text: string) =>
-    text
-      .split('\n')
-      .find((line) => line.trim())
-      ?.trim() ?? ''
+  const carried = asideDraft(messages)
   return (
     <aside
       className="agent-panel absolute inset-[0_0_0_auto] z-6 w-[min(440px,_100%)] flex flex-col bg-canvas [box-shadow:-16px_0_32px_rgba(0,_0,_0,_0.28)] [animation:fade_0.12s_var(--ease)] [box-sizing:border-box] min-w-0 max-w-full overflow-hidden [border-left:var(--pane-border-width)_solid_var(--pane-border-color)] aside-panel"
       aria-label={translate('Aside')}
     >
       <header className={PANEL_HEADER_CLASS}>
-        {open !== '*' && asides.length > 1 && (
+        <MessageCircle size={14} />
+        <span className={PANEL_TITLE_CLASS}>{translate('Aside')}</span>
+        <span className="grow flex-1 min-w-0 text-left" />
+        {carried && (
           <Button
             variant="ghost"
             size="icon-xs"
             className={ICON_BUTTON_CLASS}
-            aria-label={translate('All asides')}
-            title={translate('All asides')}
-            onClick={() => onOpen('*')}
+            disabled={readOnly}
+            aria-label={translate('Continue in a new thread')}
+            title={translate('Continue in a new thread. The aside stays here, and nothing is sent until you send it.')}
+            onClick={() => onPromote(carried)}
           >
-            <ArrowLeft size={14} />
+            <MessageSquarePlus size={14} />
           </Button>
         )}
-        <MessageCircle size={14} />
-        <span className={PANEL_TITLE_CLASS}>{open === '*' ? translate('Asides') : translate('Aside')}</span>
-        {open !== '*' && quote && (
-          <span
-            className="aside-title-quote min-w-0 flex-initial overflow-hidden text-ellipsis whitespace-nowrap text-caption muted text-muted-foreground"
-            title={quote}
-          >
-            {firstLine(quote)}
-          </span>
-        )}
-        <span className="grow flex-1 min-w-0 text-left" />
-        {aside && (
+        {asides.length > 0 && (
           <Button
             variant="ghost"
             size="icon-xs"
@@ -142,7 +147,7 @@ export function AsidePanel({
             disabled={readOnly}
             aria-label={translate('Delete aside')}
             title={translate('Delete aside')}
-            onClick={() => remove(aside.id)}
+            onClick={clear}
           >
             <Trash2 size={13} />
           </Button>
@@ -158,112 +163,107 @@ export function AsidePanel({
           <X size={14} />
         </Button>
       </header>
-      {open === '*' ? (
-        <div className={`${PANEL_BODY_CLASS} agent-panel-list gap-2 pt-3`}>
-          {asides.map((entry) => (
-            <Button
-              variant="secondary"
-              key={entry.id}
-              type="button"
-              className="bg-fill hover:bg-fill-hover aside-row [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border-color:var(--line)] flex flex-col items-start justify-start gap-0.5 h-auto p-[8px_10px] [border:1px_solid_transparent] rounded-(--radius-m) bg-raised text-left whitespace-normal"
-              onClick={() => onOpen({ id: entry.id, quote: entry.quote, from: entry.quoteFrom })}
+      <div ref={body} className={PANEL_BODY_CLASS}>
+        {messages.map((message, index) =>
+          message.role === 'user' ? (
+            <div key={message.id} className="flex flex-col gap-2">
+              {message.quote && <blockquote className={QUOTE_CLASS}>{message.quote}</blockquote>}
+              <Message align="end">
+                <MessageContent className="items-end">
+                  <UserBubble>{message.text}</UserBubble>
+                </MessageContent>
+              </Message>
+            </div>
+          ) : (
+            <div
+              key={message.id}
+              className={`aside-answer flex flex-col gap-0.5${message.error ? ' error text-bad' : ''}`}
             >
-              <span className={ASIDE_ROW_QUOTE_CLASS}>{firstLine(entry.quote) || translate('Whole thread')}</span>
-              <span className="muted text-muted-foreground small text-caption">
-                {firstLine(entry.messages[0]?.text ?? '')}
-              </span>
-            </Button>
-          ))}
-        </div>
-      ) : (
-        <>
-          <div ref={body} className={PANEL_BODY_CLASS}>
-            {quote && (
-              <blockquote className="aside-quote m-0 p-[8px_12px] [border-left:2px_solid_var(--line-strong)] text-soft text-control leading-[1.5] whitespace-pre-wrap [overflow-wrap:anywhere] max-h-[160px] overflow-auto">
-                <span className={PANEL_LABEL_CLASS}>
-                  {from === 'user' ? translate('You wrote') : translate('From the thread')}
-                </span>
-                {quote}
-              </blockquote>
-            )}
-            {aside?.messages.map((message) =>
-              message.role === 'user' ? (
-                <Message key={message.id} align="end">
-                  <MessageContent className="items-end">
-                    <UserBubble>{message.text}</UserBubble>
-                  </MessageContent>
-                </Message>
+              {message.error ? (
+                <p className="error text-bad small text-caption">{message.text}</p>
               ) : (
-                <div
-                  key={message.id}
-                  className={`aside-answer flex flex-col gap-0.5${message.error ? ' error text-bad' : ''}`}
-                >
-                  {message.error ? (
-                    <p className="error text-bad small text-caption">{message.text}</p>
-                  ) : (
-                    <AssistantText
-                      event={{ kind: 'text', text: message.text, at: message.at }}
-                      generating={false}
-                      actions={false}
-                      taskId={taskId}
-                    />
-                  )}
-                  {!message.error && (
-                    <div className="aside-answer-actions [&_.ghost.small]:text-muted-foreground [&_.ghost.small]:gap-[5px] flex items-center gap-0.5 ml-[-8px]">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className={GHOST_TEXT_BUTTON_CLASS}
-                        onClick={() => onQuote(message.text)}
-                      >
-                        <Quote size={12} />
-                        {translate('Quote in message')}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className={GHOST_TEXT_BUTTON_CLASS}
-                        onClick={() =>
-                          onQuote(
-                            `${aside.messages[aside.messages.indexOf(message) - 1]?.text ?? ''}\n\n${message.text}`,
-                          )
-                        }
-                      >
-                        {translate('Add Q&A to message')}
-                      </Button>
-                      <CopyButton text={message.text} />
-                    </div>
-                  )}
+                <AssistantText
+                  event={{ kind: 'text', text: message.text, at: message.at }}
+                  generating={false}
+                  actions={false}
+                  taskId={taskId}
+                />
+              )}
+              {!message.error && (
+                <div className="aside-answer-actions [&_.ghost.small]:text-muted-foreground [&_.ghost.small]:gap-[5px] flex items-center gap-0.5 ml-[-8px]">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={GHOST_TEXT_BUTTON_CLASS}
+                    onClick={() => onQuote(message.text)}
+                  >
+                    <Quote size={12} />
+                    {translate('Quote in message')}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={GHOST_TEXT_BUTTON_CLASS}
+                    onClick={() => onQuote(`${messages[index - 1]?.text ?? ''}\n\n${message.text}`)}
+                  >
+                    {translate('Add Q&A to message')}
+                  </Button>
+                  <CopyButton text={message.text} />
                 </div>
-              ),
-            )}
-            {waiting && <ChatStatus label={translate('Thinking aside')} />}
-            {!aside && (
-              <p className="muted text-muted-foreground small text-caption">
-                {translate('Ask without interrupting the thread. Replies stay in this aside.')}
-              </p>
-            )}
-          </div>
-          {readOnly && (
-            <p role="status" className="px-3 text-caption text-muted-foreground">
-              {translate(VIEW_ONLY_WRITE_NOTICE)}
-            </p>
-          )}
-          {error && <p className="error text-bad small text-caption aside-error m-[0_14px_6px]">{error}</p>}
-          <PanelComposer
-            inputRef={input}
-            label={translate('Ask aside')}
-            placeholder={aside ? translate('Follow up…') : translate('Ask about this…')}
-            sendLabel={translate('Ask')}
-            sendTitle={translate('Ask aside')}
-            disabled={readOnly}
-            value={draft}
-            onChange={setDraft}
-            canSend={!!draft.trim() && !sending && !waiting}
-            onSend={() => void send()}
-          />
-        </>
+              )}
+            </div>
+          ),
+        )}
+        {waiting && <ChatStatus label={translate('Thinking aside')} />}
+        {!messages.length && !passage && (
+          <p className="muted text-muted-foreground small text-caption">
+            {translate('Ask without interrupting the thread. Replies stay in this aside.')}
+          </p>
+        )}
+        {passage && (
+          <blockquote className={`${QUOTE_CLASS} relative pr-8`}>
+            <span className={PANEL_LABEL_CLASS}>
+              {open.from === 'user' ? translate('You wrote') : translate('From the thread')}
+            </span>
+            {passage}
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className={`${ICON_BUTTON_CLASS} absolute top-1 right-1`}
+              aria-label={translate('Remove quote')}
+              title={translate('Remove quote')}
+              onClick={() => setPassage('')}
+            >
+              <X size={12} />
+            </Button>
+          </blockquote>
+        )}
+      </div>
+      {readOnly && (
+        <p role="status" className="px-3 text-caption text-muted-foreground">
+          {translate(VIEW_ONLY_WRITE_NOTICE)}
+        </p>
       )}
+      {error && <p className="error text-bad small text-caption aside-error m-[0_14px_6px]">{error}</p>}
+      {/* The thread's own composer, without what an aside cannot carry (files, model choice, the queue). */}
+      <div ref={composer} className="aside-composer flex-none min-w-0 p-[0_10px_10px]">
+        <Composer
+          value={draft}
+          scopeId={taskId}
+          onChange={setDraft}
+          onSubmit={send}
+          placeholder={messages.length ? translate('Follow up…') : translate('Ask about this…')}
+          submitLabel={translate('Ask aside')}
+          disabled={readOnly || waiting}
+          controls={
+            answering && (
+              <span className="min-w-0 truncate px-1 text-caption text-muted-foreground">
+                {modelDisplayName(model?.name ?? answering.model)}
+              </span>
+            )
+          }
+        />
+      </div>
     </aside>
   )
 }

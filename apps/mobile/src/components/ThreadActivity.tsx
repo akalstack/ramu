@@ -9,6 +9,7 @@ import { useSay } from '../i18n'
 import { space } from '../theme'
 import { Sheet, T, type Icon } from './ui'
 import { ActivityPill } from './ActivityPill'
+import { ChromeScroll } from './Screen'
 import { ActivityList, ActivityRow, OfflineCard, WorkingSheet } from './ActivitySheets'
 import { WorkingLine } from './WorkingLine'
 import { Ellipsis, Hand, Hourglass, ListOrdered, Loader, Sparkles, Target, Users, WifiOff } from 'lucide-react-native'
@@ -27,6 +28,7 @@ const KIND_ICON: Record<ActivityKind | 'more', Icon> = {
 import { Helpers } from './Helpers'
 import { InputRequests } from './InputRequests'
 import { GoalQueueTray, type QueuedEdit } from './Composer'
+import { GoalSheet } from './GoalSheet'
 import { moveQueued } from '../runtime/queueOrder'
 import { showError } from '../runtime/toast'
 import { LimitTray } from './LimitTray'
@@ -123,34 +125,43 @@ export function ThreadActivity({
   ]
   return (
     <>
-      <ScrollView
-        horizontal
-        // A tap on a pill acts at once, even while the keyboard is up, instead of only closing the keyboard.
-        keyboardShouldPersistTaps="handled"
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ alignItems: 'center', paddingHorizontal: space.s }}
-        accessibilityLabel={say('Thread activity')}
-        style={{ flexGrow: 0, marginTop: space.xs }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
-          {inlineStatus ? null : <WorkingLine chat={chat} onPress={() => setOpened('working')} />}
-          {leading}
-          {actions.map(({ label, icon, onPress }) => (
-            <ActivityPill key={label} icon={icon} label={label} accessibilityLabel={label} iconOnly onPress={onPress} />
-          ))}
-          {children}
-          {kinds.map((kind) => (
-            <ActivityPill
-              key={kind}
-              icon={KIND_ICON[kind]}
-              label={label(kind)}
-              tone={kind === 'connection' ? 'off' : kind === 'input' || kind === 'provider' ? 'attention' : 'quiet'}
-              emphasis={kind === primaryKind}
-              onPress={() => setOpened(kind)}
-            />
-          ))}
-        </View>
-      </ScrollView>
+      <ChromeScroll>
+        <ScrollView
+          horizontal
+          // A tap on a pill acts at once, even while the keyboard is up, instead of only closing the keyboard.
+          keyboardShouldPersistTaps="handled"
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ alignItems: 'center', paddingHorizontal: space.s }}
+          accessibilityLabel={say('Thread activity')}
+          style={{ flexGrow: 0, marginTop: space.xs }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+            {inlineStatus ? null : <WorkingLine chat={chat} onPress={() => setOpened('working')} />}
+            {leading}
+            {actions.map(({ label, icon, onPress }) => (
+              <ActivityPill
+                key={label}
+                icon={icon}
+                label={label}
+                accessibilityLabel={label}
+                iconOnly
+                onPress={onPress}
+              />
+            ))}
+            {children}
+            {kinds.map((kind) => (
+              <ActivityPill
+                key={kind}
+                icon={KIND_ICON[kind]}
+                label={label(kind)}
+                tone={kind === 'connection' ? 'off' : kind === 'input' || kind === 'provider' ? 'attention' : 'quiet'}
+                emphasis={kind === primaryKind}
+                onPress={() => setOpened(kind)}
+              />
+            ))}
+          </View>
+        </ScrollView>
+      </ChromeScroll>
       <Sheet
         // Short summaries open as a sheet over the thread; long lists and answers get the full screen.
         presentation={opened === 'helpers' || opened === 'advisor' || opened === 'input' ? 'screen' : 'sheet'}
@@ -232,14 +243,19 @@ export function ThreadActivity({
             <T>{opened === 'goal' ? chat.goal?.objective : chat.queue.map((q) => q.text).join('\n\n')}</T>
           </View>
         ) : null}
-        {online && (opened === 'goal' || opened === 'queue') ? (
+        {online && opened === 'goal' && chat.goal ? (
+          <GoalSheet
+            goal={chat.goal}
+            onToggle={() => store.toggleGoal(chat.id)}
+            onClear={() => store.clearGoal(chat.id)}
+            onVerify={(command) => store.setGoalVerify(chat.id, command)}
+          />
+        ) : null}
+        {online && opened === 'queue' ? (
           <GoalQueueTray
-            goal={opened === 'goal' ? chat.goal : null}
-            queue={opened === 'queue' ? chat.queue : []}
+            goal={null}
+            queue={chat.queue}
             paused={chat.queuePaused}
-            onToggleGoal={online ? () => store.toggleGoal(chat.id) : undefined}
-            onClearGoal={online ? () => store.clearGoal(chat.id) : undefined}
-            onVerifyGoal={online ? (command) => store.setGoalVerify(chat.id, command) : undefined}
             onRemove={online ? (message) => store.removeQueued(chat.id, message) : undefined}
             onSendNow={online ? (message) => store.sendQueuedNow(chat.id, message) : undefined}
             onSteer={online ? (message) => store.steerQueued(chat.id, message) : undefined}

@@ -1,11 +1,19 @@
-import { attemptStatus, failureStatus, mayConnect, restoredStatus } from './hostConnection'
+import {
+  attemptStatus,
+  connectionGate,
+  connectionPending,
+  failureStatus,
+  mayConnect,
+  restoredStatus,
+} from './hostConnection'
+import type { ThreadListRead } from './threadsSync'
 import { relay as relayToHost } from './account'
 import { appForeground } from './chatViewport'
 import { requestPairing } from '@ramu/shared/pairRequest'
 import { SecureRandomUnavailable } from './pairingModel'
 import { secureRandom } from './secureRandom'
 import { agentActivityLabel, currentStep, turnStartedAt, turnSteps } from '@ramu/shared/chat/agentActivity'
-import { runningCommands } from '@ramu/shared/chat/helperPresentation'
+import { awaitedCommands, runningCommands } from '@ramu/shared/chat/helperPresentation'
 import './socketTransport'
 import { viewerMayInvoke } from '@ramu/shared/viewerAccess'
 import { mayUse, type DevicePermission, type DevicePermissionsView } from '@ramu/shared/devicePermissions'
@@ -53,11 +61,13 @@ import type {
 import {
   deleteToken,
   readLocal,
+  readKeyBound,
   readRenewedAt,
   readDrafts,
   readSendJournal,
   writeDrafts,
   readToken,
+  saveKeyBound,
   saveRenewedAt,
   saveToken,
   writeLocal,
@@ -68,6 +78,8 @@ import { nextToSend } from '@ramu/shared/outbox'
 import { mapBounded } from '@ramu/shared/mapBounded'
 import { rebuildDelay, readsTranscript, type RefreshDepth } from './refreshDepth'
 import { renewalDue, renewCredential } from './tokenRenewal'
+import { SCROLL_HOLD_MS, SCROLL_RECHECK_MS, scrollBusy } from './scrollBusy'
+import { ensurePhoneProver } from './deviceKey'
 import {
   HostClient,
   HostError,
@@ -282,6 +294,8 @@ interface Store extends State {
   activity: Record<string, BackgroundActivity[]>
   /** Open threads, by `scoped(computerId, sessionId)`, whose host is catching up what this phone holds of them. */
   syncing: ReadonlySet<string>
+  /** How reading each host's thread list over its current connection ended; a host still being read has no entry. */
+  threadReads: Record<string, ThreadListRead>
   /** What a new chat starts with on each computer: its default model step and default access, as set in its Settings. */
   defaults: Record<string, AgentSettings>
   /** Shared preferences on each paired computer, refreshed when its settings change. */
@@ -367,6 +381,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const connections = useRef(
     new Map<string, { client: HostClient; controller: AbortController; generation: number; live?: boolean }>(),
   )
+  const gate = useRef(connectionGate())
   const generations = useRef(new Map<string, number>())
   const eventRows = useRef(new Map<string, Map<number, AgentEvent>>())
   // The host's change counter for each transcript held in `eventRows`, so a refresh reads only what changed.
@@ -383,6 +398,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<Store['notifications']>([])
   const [activity, setActivity] = useState<Record<string, BackgroundActivity[]>>({})
   const [syncing, setSyncing] = useState<ReadonlySet<string>>(() => new Set())
+  const [threadReads, setThreadReads] = useState<Record<string, ThreadListRead>>({})
+  const markThreadRead = (id: string, read?: ThreadListRead) =>
+    setThreadReads((reads) => {
+      if (reads[id] === read) return reads
+      const { [id]: _dropped, ...rest } = reads
+      return read ? { ...rest, [id]: read } : rest
+    })
   // Overlapping catch-up reads per thread; it reads as syncing until the last one settles.
   const syncReads = useRef(new Map<string, number>())
   const catchUp = <T,>(keys: readonly string[], work: Promise<T>): Promise<T> => {
@@ -484,7 +506,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (ref.current.error?.startsWith(translate(ref.current.language, 'Could not save phone data. {0}', { 0: '' })))
       change((state) => ({ ...state, error: null }))
   }
-  const status = (id: string, value: Computer['status'], error?: string) =>
+  const status = (id: string, value: Computer['status'], error?: string) => {
     change((s) => ({
       ...s,
       computers: s.computers.map((c) =>
@@ -499,6 +521,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           : c,
       ),
     }))
+    gate.current.settle(id)
+  }
   async function invoke<M extends keyof RamuMethods>(
     id: string,
     method: M,
@@ -506,8 +530,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   ): Promise<Awaited<ReturnType<RamuMethods[M]>>> {
     if (ref.current.computers.find((computer) => computer.id === id)?.access === 'viewer' && !viewerMayInvoke(method))
       throw new HostError(VIEW_ONLY_WRITE_NOTICE[ref.current.language], 403)
-    const connection = connections.current.get(id)
-    if (!connection || connection.controller.signal.aborted)
+    const usable = () => {
+      const held = connections.current.get(id)
+      return held && !held.controller.signal.aborted ? held : undefined
+    }
+    // A host shown online or connecting whose connection is being re-opened (the app came back to the foreground, or a
+    // live link dropped) takes the call once the connection is there; only a host that stays unreachable refuses it.
+    const connection =
+      usable() ??
+      (await gate.current.wait(id, usable, () =>
+        connectionPending(ref.current.computers.find((computer) => computer.id === id)?.status),
+      ))
+    if (!connection)
       throw new HostError(translate(ref.current.language, 'This host is offline. Reconnect before taking this action.'))
     try {
       return await connection.client.invoke(method, ...args)
@@ -540,58 +574,58 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const rebuild = (computerId: string, sessionId: string) => {
     const key = scoped(computerId, sessionId)
     if (rebuilds.current.has(key)) return
-    rebuilds.current.set(
-      key,
-      setTimeout(
-        () => {
-          rebuilds.current.delete(key)
-          const startedAt = Date.now()
-          const rows = eventRows.current.get(key)
-          if (!rows) return
-          const ordered = [...rows.entries()].sort((a, b) => a[0] - b[0])
-          const events = ordered.map((x) => x[1])
-          const items = transcript(
-            events,
-            ordered.map((x) => x[0]),
-            ref.current.chats.some(
-              (chat) =>
-                chat.computerId === computerId &&
-                chat.sessionId === sessionId &&
-                (chat.executionState === 'running' || chat.executionState === 'starting'),
-            ),
-          )
-          const preview = events.findLast((event) => event.kind === 'text' && !event.agentId)
-          change((s) => ({
-            ...s,
-            chats: s.chats.map((chat) =>
-              chat.computerId === computerId && chat.sessionId === sessionId
-                ? {
-                    ...chat,
-                    items: shareRows(chat.items, items),
-                    activityLabel: agentActivityLabel(chat.executionState, events),
-                    turnStartedAt: turnStartedAt(events),
-                    step: currentStep(chat.executionState, events),
-                    steps: turnSteps(events),
-                    preview: preview?.kind === 'text' ? preview.text.slice(-140) : chat.preview,
-                    lastReply: preview?.kind === 'text' ? replyPreview(preview.text) : chat.lastReply,
-                    inputSummary: ['stopped', 'failed'].includes(chat.executionState ?? '')
-                      ? null
-                      : inputSummary(events, sessionId),
-                    compacting:
-                      chat.executionState !== 'stopped' && chat.executionState !== 'failed' && isCompacting(events),
-                    commands: runningCommands(events),
-                  }
-                : chat,
-            ),
-          }))
-          rebuildCosts.current.set(key, Date.now() - startedAt)
-          // The message this host's outbox waited on may have just appeared.
-          if (ref.current.outbox.some((o) => o.computerId === computerId && o.state === 'waiting'))
-            void flush(computerId)
-        },
-        rebuildDelay(rebuildCosts.current.get(key) ?? 0),
-      ),
-    )
+    const run = () => {
+      // The reader is scrolling: wait for the scroll to rest (for a bounded time) so the rebuild does not hitch it.
+      if (scrollBusy.holds(SCROLL_HOLD_MS)) {
+        rebuilds.current.set(key, setTimeout(run, SCROLL_RECHECK_MS))
+        return
+      }
+      rebuilds.current.delete(key)
+      const startedAt = Date.now()
+      const rows = eventRows.current.get(key)
+      if (!rows) return
+      const ordered = [...rows.entries()].sort((a, b) => a[0] - b[0])
+      const events = ordered.map((x) => x[1])
+      const items = transcript(
+        events,
+        ordered.map((x) => x[0]),
+        ref.current.chats.some(
+          (chat) =>
+            chat.computerId === computerId &&
+            chat.sessionId === sessionId &&
+            (chat.executionState === 'running' || chat.executionState === 'starting'),
+        ),
+      )
+      const preview = events.findLast((event) => event.kind === 'text' && !event.agentId)
+      change((s) => ({
+        ...s,
+        chats: s.chats.map((chat) =>
+          chat.computerId === computerId && chat.sessionId === sessionId
+            ? {
+                ...chat,
+                items: shareRows(chat.items, items),
+                activityLabel: agentActivityLabel(chat.executionState),
+                turnStartedAt: turnStartedAt(events),
+                step: currentStep(chat.executionState, events),
+                steps: turnSteps(events),
+                preview: preview?.kind === 'text' ? preview.text.slice(-140) : chat.preview,
+                lastReply: preview?.kind === 'text' ? replyPreview(preview.text) : chat.lastReply,
+                inputSummary: ['stopped', 'failed'].includes(chat.executionState ?? '')
+                  ? null
+                  : inputSummary(events, sessionId),
+                compacting:
+                  chat.executionState !== 'stopped' && chat.executionState !== 'failed' && isCompacting(events),
+                commands: runningCommands(events),
+                awaited: awaitedCommands(events),
+              }
+            : chat,
+        ),
+      }))
+      rebuildCosts.current.set(key, Date.now() - startedAt)
+      // The message this host's outbox waited on may have just appeared.
+      if (ref.current.outbox.some((o) => o.computerId === computerId && o.state === 'waiting')) void flush(computerId)
+    }
+    rebuilds.current.set(key, setTimeout(run, rebuildDelay(rebuildCosts.current.get(key) ?? 0)))
   }
   const applyEvent = (computerId: string, payload: PushEvents['agent:event']) => {
     const key = scoped(computerId, payload.sessionId)
@@ -870,12 +904,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                   ? null
                   : inputSummary(events, session?.id ?? ''),
                 executionState: sessionState,
-                activityLabel: agentActivityLabel(sessionState, events),
+                activityLabel: agentActivityLabel(sessionState),
                 turnStartedAt: turnStartedAt(events),
                 step: currentStep(sessionState, events),
                 steps: turnSteps(events),
                 compacting: sessionState !== 'stopped' && sessionState !== 'failed' && isCompacting(events),
                 commands: runningCommands(events),
+                awaited: awaitedCommands(events),
                 items: transcript(
                   events,
                   snapshot.events.map((x) => x.seq),
@@ -921,6 +956,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         catalogs: { ...s.catalogs, [id]: catalogs },
         usage: { ...s.usage, [id]: usage },
       }))
+      markThreadRead(id, 'read')
       for (const payload of buffers.current.get(id) ?? [])
         if (payload.revision == null || payload.revision > (revisions.get(payload.sessionId) ?? 0))
           applyEvent(id, payload)
@@ -1299,6 +1335,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     old?.controller.abort()
     old?.client.close()
     connections.current.delete(computer.id)
+    markThreadRead(computer.id)
     const generation = (generations.current.get(computer.id) ?? 0) + 1
     generations.current.set(computer.id, generation)
     // A connection the person turned off stays off: no connecting and no retries.
@@ -1318,6 +1355,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       generation,
     }
     connections.current.set(computer.id, connection)
+    gate.current.settle(computer.id)
     const current = () =>
       active.current && !connection.controller.signal.aborted && connections.current.get(computer.id) === connection
     let backoff = retries
@@ -1379,10 +1417,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }))
       // The host shows this phone with its own icon and OS.
       void connection.client.invoke('device.describe', thisDeviceOs()).catch(() => {})
-      // Rotate the device token about monthly; a failure only retries next connect.
-      void readRenewedAt(computer.id)
-        .then((renewedAt) =>
-          renewalDue(Date.now(), renewedAt)
+      // Rotate the device token weekly, and at once when it is not bound to this phone's key yet; a failure only
+      // retries next connect.
+      void Promise.all([readRenewedAt(computer.id), readKeyBound(computer.id), ensurePhoneProver()])
+        .then(([renewedAt, bound, prover]) =>
+          renewalDue(Date.now(), renewedAt, !!prover && !bound)
             ? renewCredential(
                 {
                   address: connection.client.address,
@@ -1391,7 +1430,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 },
                 connection.client.fetch,
                 (next) => saveToken(computer.id, next),
-                (at) => saveRenewedAt(computer.id, at),
+                async (at, nowBound) => {
+                  await saveRenewedAt(computer.id, at)
+                  await saveKeyBound(computer.id, nowBound)
+                },
+                Date.now(),
+                prover,
               )
             : false,
         )
@@ -1417,7 +1461,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             await catchUp(shown, refresh(computer.id, true))
             if (current()) void flush(computer.id)
           } catch (error) {
-            if (current()) report(error)
+            if (!current()) return
+            markThreadRead(computer.id, 'failed')
+            report(error)
           }
         },
         connection.controller.signal,
@@ -1594,6 +1640,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     notifications,
     activity,
     syncing,
+    threadReads,
     inbox,
     defaults: startSettings,
     modelPrefs,
@@ -1846,6 +1893,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       listeners.current.delete(id)
       buffers.current.delete(id)
       setNotifications((n) => n.filter((x) => x.computerId !== id))
+      markThreadRead(id)
       setActivity((a) => Object.fromEntries(Object.entries(a).filter(([key]) => key !== id)))
       change((latest) => ({
         ...latest,

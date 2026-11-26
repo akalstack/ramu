@@ -8,7 +8,7 @@ import { BrowserActivity, useBrowserActivity } from '../chat/BrowserActivity'
 import { BackgroundTerminalsSection, useBackgroundTerminals } from '../chat/BackgroundTerminals'
 import { ThreadServersSection, useThreadServers } from '../chat/ThreadServers'
 import { ConfirmStopDialog } from '../chat/ConfirmStopDialog'
-import { helperActive, helperGroups } from '@ramu/shared/chat/helperPresentation'
+import { helperActive, helperGroups, holdsTurn } from '@ramu/shared/chat/helperPresentation'
 import { useDeferredRequests } from './agent/hooks/useDeferredRequests'
 import { HelperBreadcrumb } from '../HomeAgents'
 import { NO_PROJECT } from '@ramu/shared/types'
@@ -33,11 +33,11 @@ import {
   MessageScrollerProvider,
   MessageScrollerViewport,
 } from '@/components/ui/message-scroller'
-import { TranscriptFollowState, TranscriptScrollApi } from './agent/components/TranscriptScrollApi'
+import { TranscriptScrollApi } from './agent/components/TranscriptScrollApi'
 import type { FileContext } from '@ramu/shared/types'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Attachment, AgentEvent } from '@ramu/shared/types'
-import { agentActivityLabel } from '@ramu/shared/chat/agentActivity'
+import { agentActivityLabel, turnStartedAt } from '@ramu/shared/chat/agentActivity'
 import { GoalBar } from '../chat/GoalBar'
 import { goalChanges } from '@ramu/shared/chat/goalHistory'
 import { AgentControls } from '../chat/AgentControls'
@@ -61,6 +61,7 @@ import { errorText } from '../workspace/TaskPane'
 import { useWorkspace, useWorkspaceActions } from '../workspace/workspace'
 import { QuestionDock } from '../chat/QuestionCard'
 import { parseAnswerMessage } from '@ramu/shared/chat/questions'
+import { sideChat } from '@ramu/shared/chat/sideChat'
 import { notifyError } from '../chat/Notifications'
 import { draftKey, draftStore, loadDraft, saveDraft, useDraftPersistence } from '../composer/drafts'
 import { useHost } from '../workspace/HostProvider'
@@ -88,7 +89,6 @@ import { AgentsSection } from './agent/components/AgentsSection'
 import { useModelChange } from './agent/hooks/useModelChange'
 import { useJsonDraft } from '../composer/useJsonDraft'
 import { sameAgentSettings } from '@ramu/shared/chat/settingsChanges'
-import { useElapsed } from './agent/hooks/useElapsed'
 import { toBlocks } from './agent/lib/blocks'
 import { toTurns } from './agent/lib/turns'
 import {
@@ -340,6 +340,11 @@ export const AgentView = memo(function AgentView({
   const prepareLimitRetry = useCallback(() => prepareRetry.current(), [])
   const limitRetry = useLimitRetry(view.sessionId, providerWait, reportError, prepareLimitRetry)
   const runningTasks = helperSelection.selected.filter(helperActive)
+  // A model change the host holds until the provider's own sub-agents and background commands finish.
+  const heldSettings = useMemo(() => {
+    const held = events.findLast((event) => event.kind === 'settings-waiting')
+    return held?.kind === 'settings-waiting' ? held.settings : null
+  }, [events])
   // The agents working beside the main agent. Commands the agent moved to the background are processes, so they are
   // listed with the background terminals instead.
   const trayAgents = runningTasks
@@ -386,7 +391,7 @@ export const AgentView = memo(function AgentView({
   // From the moment a message is sent, so the end of the chat does not wait for the host to report the turn.
   const activityLabel = compacting
     ? 'Compacting context…'
-    : (agentActivityLabel(session?.state, events) ??
+    : (agentActivityLabel(session?.state) ??
       (shownSubmissions.some((item) => item.state !== 'failed') ? 'Sending…' : null))
   // Until the thread reports more than starting, the line keeps saying what the start is doing (setup, the agent).
   const statusLabel =
@@ -411,7 +416,7 @@ export const AgentView = memo(function AgentView({
   })
   const statusGroup =
     working && !turns.at(-1)?.ended ? turns.at(-1)?.items.findLast((block) => block.kind === 'tools') : undefined
-  // A live tool group's headline already says what the agent is doing, so the status line under it goes quiet.
+  // A live tool group's headline already says what the agent is doing, so it takes the status line's place.
   const liveGroup = !!statusGroup && isLiveToolGroup(statusGroup, statusGroup, turns.at(-1)!.items)
   const completedGoals = useMemo(() => completedGoalsByTurn(events), [events])
   const turnReviews = useMemo(
@@ -438,8 +443,6 @@ export const AgentView = memo(function AgentView({
     return () => clearInterval(timer)
   }, [])
   const turnDates = useMemo(() => turnDatesOf(turns), [turns])
-  const lastUserAt = turns.findLast((turn) => turn.user?.kind === 'event' && turn.user.event.kind === 'user')?.startedAt
-  const elapsed = useElapsed(lastUserAt, working)
 
   const busyAgent = working || session?.state === 'needs-input'
   // At a usage limit the thread is idle but not stopped: the composer queues messages and offers Try again.
@@ -546,18 +549,19 @@ export const AgentView = memo(function AgentView({
       focusComposer(root.current, Number.MAX_SAFE_INTEGER)
     })
   }
-  /** Opens New chat in this chat's project with the quote already in the box. Nothing is sent. */
-  const quoteIntoNewChat = (text: string) => {
+  /** Opens New chat in this chat's project with `draft` already in the box. Nothing is sent. */
+  const draftIntoNewChat = (draft: string) => {
     const project = ws.task(session?.taskId ?? '')?.projectId ?? NO_PROJECT
-    saveDraft(draftKey.newChat(project), `${quoteLines(text)}\n\n`, draftStore(host.id))
+    saveDraft(draftKey.newChat(project), draft, draftStore(host.id))
     ws.newTask(project)
   }
+  const quoteIntoNewChat = (text: string) => draftIntoNewChat(`${quoteLines(text)}\n\n`)
   // Quote, Ask aside and Quote in new chat from a message's action row (MessageQuoteActions).
   const messageAction = useRef<(detail: MessageActionDetail) => void>(() => {})
   messageAction.current = ({ action, text, from }) => {
     if (action === 'quote') quoteIntoDraft(text)
     else if (action === 'quote-new') quoteIntoNewChat(text)
-    else setOpenAside({ id: null, quote: text, from })
+    else setOpenAside({ quote: text, from })
   }
   useEffect(() => {
     const el = root.current
@@ -640,12 +644,22 @@ export const AgentView = memo(function AgentView({
   const askAside = (question: string) =>
     act(async () => {
       const submitted = draft
-      const aside = await invoke('aside.ask', view.sessionId, null, '', 'assistant', question)
+      // One side chat per thread: a typed /aside continues it.
+      const latest = asides.find((entry) => entry.id === sideChat(asides).continueId)
+      await invoke(
+        'aside.ask',
+        view.sessionId,
+        latest?.id ?? null,
+        latest?.quote ?? '',
+        latest?.quoteFrom ?? 'assistant',
+        question,
+        pendingSettings ?? session?.settings,
+      )
       const consumed = consumeDraft()
       if (!consumed.persisted)
         notifyError(translate('Message sent, but the local draft could not be cleared.'), 'Draft')
       if (consumed.unchanged) setDraft((current) => (current === submitted ? '' : current))
-      setOpenAside({ id: aside.id, quote: aside.quote, from: aside.quoteFrom, keepFocus: true })
+      setOpenAside({ quote: '', from: 'assistant', keepFocus: true })
     }, true)
   const send = (mode: 'queue' | 'steer' = action, context: FileContext[] = []) => {
     if (draft.trim() === '/mcp') {
@@ -805,7 +819,7 @@ export const AgentView = memo(function AgentView({
     busyAgent,
     statusGroup,
     stopped,
-    elapsed,
+    helpersWorking: allTasks.some(holdsTurn),
     latestAssistant,
     hasSourceSeq: !!view.sourceSeq,
     eventSequences,
@@ -867,7 +881,6 @@ export const AgentView = memo(function AgentView({
           showQuestions={showQuestions}
           onToggleQuestions={() => setShowQuestions((open) => !open)}
           asideOpen={openAside !== null}
-          asideCount={asides.length}
           onToggleAside={toggleAside}
           readOnly={viewOnly}
           agentCount={helperSelection.selected.length}
@@ -952,7 +965,6 @@ export const AgentView = memo(function AgentView({
               <ThreadAgents.Provider value={allTasks}>
                 <MessageScrollerProvider autoScroll defaultScrollPosition="end">
                   <TranscriptScrollApi apiRef={scrollToEnd} />
-                  <TranscriptFollowState viewport={scroller} />
                   <div className="transcript-frame [&_>_.agent-panel]:relative [&_>_.agent-panel]:inset-auto [&_>_.agent-panel]:flex-none [&_>_.agent-panel]:w-[min(440px,_45%)] [&_>_.agent-panel]:h-auto [&_>_.agent-panel]:[box-shadow:none] [&_>_.agent-panel]:[animation:none] [&_>_.agent-panel]:[border-left:var(--pane-border-width)_solid_var(--pane-border-color)] relative flex-1 min-h-0 min-w-0 flex [container:transcript-frame_/_inline-size] flex-col">
                     <MessageScroller
                       className={`transcript min-h-0 min-w-0 flex-1 ${hydrating && !turns.length && !openingShown ? 'chat-loading' : ''}`}
@@ -960,9 +972,8 @@ export const AgentView = memo(function AgentView({
                       <MessageScrollerViewport
                         ref={scroller}
                         onScroll={onScroll}
-                        data-working={working || undefined}
                         aria-label={translate('Conversation')}
-                        className={`${TRANSCRIPT_VIEWPORT_CLASS} ${shownSubmissions.length ? 'motion-safe:scroll-smooth' : ''}`}
+                        className={TRANSCRIPT_VIEWPORT_CLASS}
                       >
                         {hiddenTurns > 0 && (
                           <Button
@@ -1005,7 +1016,24 @@ export const AgentView = memo(function AgentView({
                               />
                             </MessageScrollerItem>
                           ))}
+                          {heldSettings && session && (
+                            <MessageScrollerItem messageId="held-settings">
+                              <PendingSettingsChange
+                                next={heldSettings}
+                                previous={session.settings}
+                                onCancel={() =>
+                                  void act(() => invoke('agent.configure', view.sessionId, session.settings))
+                                }
+                                onApplyNow={() =>
+                                  void act(async () =>
+                                    setSession(await invoke('agent.configure', view.sessionId, heldSettings, 'now')),
+                                  )
+                                }
+                              />
+                            </MessageScrollerItem>
+                          )}
                           {pendingSettings &&
+                            !heldSettings &&
                             session &&
                             !busyAgent &&
                             !sameAgentSettings(pendingSettings, session.settings) && (
@@ -1061,11 +1089,11 @@ export const AgentView = memo(function AgentView({
                               </MessageScrollerItem>
                             )
                           })}
-                          {statusLabel && (
+                          {statusLabel && (compacting || !liveGroup) && (
                             <ChatStatus
                               label={statusLabel}
                               compacting={compacting}
-                              quiet={!compacting && liveGroup}
+                              since={activityLabel === 'Working' ? turnStartedAt(events) : null}
                               // The starting thread's view drew this line already; it stays rather than fading in again.
                               enter={!openingShown}
                             />
@@ -1080,7 +1108,7 @@ export const AgentView = memo(function AgentView({
                       readOnly={viewOnly}
                       onQuote={quoteIntoDraft}
                       onQuoteNew={quoteIntoNewChat}
-                      onAside={(quote, from) => setOpenAside({ id: null, quote, from })}
+                      onAside={(quote, from) => setOpenAside({ quote, from })}
                     />
                   </div>
                 </MessageScrollerProvider>
@@ -1125,8 +1153,21 @@ export const AgentView = memo(function AgentView({
                     {providerWait && (
                       <ProviderWaitNote retry={limitRetry} autoResume={autoResume} readOnly={viewOnly} />
                     )}
-                    {/* Live work and the queue are chips in one row; what needs the person stays a full row above. */}
+                    {/* Live work and the queue are chips in one row; what needs the person stays a full row above. The goal
+                        leads: it lasts the whole thread, so it keeps its place while servers and terminals come and go. */}
                     <TrayStack>
+                      {liveGoal && (
+                        <GoalBar
+                          goal={liveGoal}
+                          readOnly={viewOnly}
+                          onControl={(action) => {
+                            void act(() => invoke('agent.goal.control', view.sessionId, action))
+                          }}
+                          onVerify={(command) => {
+                            void act(() => invoke('agent.goal.verify', view.sessionId, command))
+                          }}
+                        />
+                      )}
                       {session && trayAgents.length > 0 && (
                         <AgentsSection
                           agents={trayAgents}
@@ -1148,18 +1189,6 @@ export const AgentView = memo(function AgentView({
                           readOnly={viewOnly}
                           onOpenCommand={(task) => setOpenAgent(task.agentId)}
                           onStopCommand={stopTask}
-                        />
-                      )}
-                      {liveGoal && (
-                        <GoalBar
-                          goal={liveGoal}
-                          readOnly={viewOnly}
-                          onControl={(action) => {
-                            void act(() => invoke('agent.goal.control', view.sessionId, action))
-                          }}
-                          onVerify={(command) => {
-                            void act(() => invoke('agent.goal.verify', view.sessionId, command))
-                          }}
                         />
                       )}
                       {(trayQueued.length > 0 || pending.length > 0) && (
@@ -1374,9 +1403,10 @@ export const AgentView = memo(function AgentView({
                 readOnly={viewOnly}
                 open={openAside}
                 taskId={session?.taskId}
-                onOpen={setOpenAside}
+                settings={pendingSettings ?? session?.settings}
                 onClose={() => setOpenAside(null)}
                 onQuote={quoteIntoDraft}
+                onPromote={draftIntoNewChat}
               />
             )}
             {openAgent && (

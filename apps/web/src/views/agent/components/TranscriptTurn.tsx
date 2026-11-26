@@ -15,6 +15,7 @@ import { ToolGroup } from './ToolGroup'
 import { Marker, MarkerContent } from '@/components/ui/marker'
 import { TurnSummary } from './TurnSummary'
 import { turnThinking } from '../lib/turnThinking'
+import { useElapsed } from '../hooks/useElapsed'
 import { turnParts } from '../lib/turns'
 import { groupToolThinking, isLiveToolGroup, type ToolEntry } from '../lib/toolThinking'
 import { Fragment, useLayoutEffect, useRef } from 'react'
@@ -222,12 +223,21 @@ export function TranscriptTurn({
       ),
     )
   const startedAt = turn.startedAt ?? (folded[0] ? blockAt(folded[0]) : undefined)
+  // The result is in, yet the thread is still at work under this turn: sub-agents it started are running, or the agent
+  // picked the work up again and has shown nothing new. Its clock keeps running until the thread stops.
+  const resumed =
+    isLast && turn.ended && !turn.interrupted && !ctx.stopped && !needsInput && (working || ctx.helpersWorking)
+  const live = useElapsed(startedAt, resumed)
   const endedAt =
-    turn.endedAt ?? (finished || needsInput ? turn.items.map(blockAt).findLast((at) => at !== undefined) : undefined)
+    live !== null && startedAt !== undefined
+      ? startedAt + live
+      : (turn.endedAt ??
+        (finished || needsInput ? turn.items.map(blockAt).findLast((at) => at !== undefined) : undefined))
   const duration = startedAt !== undefined && endedAt !== undefined ? Math.max(0, endedAt - startedAt) : undefined
-  const { elapsed } = ctx
-  // The person stopped it, or it was interrupted: it says so with how long it ran, as on the phone.
-  const stopped = finished && (!!turn.interrupted || (isLast && !!ctx.stopped))
+  // The person stopped it, it was interrupted, or the session failed or stopped under it: it says so with how long it
+  // ran, as on the phone.
+  const stopped =
+    finished && (!!turn.interrupted || (isLast && !!ctx.stopped) || (!turn.ended && turn.endedAt !== undefined))
   return (
     <div className="turn [&_>_[data-block-index]:has(.msg.user)]:flex [&_>_[data-block-index]:has(.msg.user)]:justify-end flex flex-col gap-3.5 min-w-0">
       {dateSeparator !== undefined && <TurnDate at={dateSeparator} now={dateNow} />}
@@ -236,11 +246,9 @@ export function TranscriptTurn({
       {finished && (!turn.ended || turn.interrupted) && !folded.length && (
         <div className="turn-working text-muted-foreground tabular-nums" role="status">
           <span>
-            {(elapsed ?? duration) !== null && (elapsed ?? duration) !== undefined
-              ? translate(stopped ? 'Stopped after {0}' : 'Working for {0}', {
-                  '0': formatDuration((elapsed ?? duration)!),
-                })
-              : translate('Working')}
+            {duration !== undefined
+              ? translate(stopped ? 'Stopped after {0}' : 'Working for {0}', { '0': formatDuration(duration) })
+              : translate(stopped ? 'Stopped' : 'Working')}
           </span>
         </div>
       )}
@@ -252,15 +260,26 @@ export function TranscriptTurn({
         const partStart = part.steer ? blockAt(part.steer) : startedAt
         const partDuration =
           partStart !== undefined && partEnd !== undefined ? Math.max(0, partEnd - partStart) : undefined
-        const settled = finished && turn.ended && !turn.interrupted && !(isLast && ctx.stopped)
+        const settled = finished && turn.ended && !turn.interrupted && !(isLast && ctx.stopped) && !resumed
         const label = first
           ? duration !== undefined
-            ? translate(settled ? 'Worked for {0}' : stopped ? 'Stopped after {0}' : 'Working for {0}', {
-                '0': formatDuration(duration),
-              })
-            : translate(settled ? 'Worked' : 'Working')
+            ? translate(
+                settled
+                  ? turn.continues
+                    ? 'Continued for {0}'
+                    : 'Worked for {0}'
+                  : stopped
+                    ? 'Stopped after {0}'
+                    : turn.continues
+                      ? 'Continuing for {0}'
+                      : 'Working for {0}',
+                { '0': formatDuration(duration) },
+              )
+            : translate(settled ? (turn.continues ? 'Continued' : 'Worked') : stopped ? 'Stopped' : 'Working')
           : partDuration !== undefined
-            ? translate(settled ? 'Continued for {0}' : 'Continuing for {0}', { '0': formatDuration(partDuration) })
+            ? translate(settled || index < parts.length - 1 ? 'Continued for {0}' : 'Continuing for {0}', {
+                '0': formatDuration(partDuration),
+              })
             : translate('Continued')
         return (
           <Fragment key={part.steer ? blockIndex(part.steer, blocks) : 'start'}>

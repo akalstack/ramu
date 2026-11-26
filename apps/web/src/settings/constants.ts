@@ -21,7 +21,15 @@ export const RESET_KEYS: Partial<Record<SettingsSection, (keyof AppPreferences)[
   editor: ['defaultMarkdownView', 'previewTabs', 'editorFontSize', 'terminalFontSize', 'defaultTerminalDock'],
   access: ['defaultAccess'],
   browser: ['agentBrowser'],
-  models: ['defaultAutoFallback', 'fallback', 'abilities', 'modelCatalogLookups', 'newModelNotices'],
+  models: [
+    'defaultAutoFallback',
+    'fallback',
+    'abilities',
+    'modelCatalogLookups',
+    'newModelNotices',
+    'commitModel',
+    'asideModel',
+  ],
   workflows: ['goals', 'subagents', 'advisor'],
   memory: ['memory'],
   chats: [
@@ -56,16 +64,15 @@ export const RESET_KEYS: Partial<Record<SettingsSection, (keyof AppPreferences)[
     'commitInstructions',
     'defaultCommitAction',
     'defaultCommitBranch',
-    'commitModel',
   ],
 }
 
 // Chats and Memory each own part of `intelligence`; reset only their own fields.
 export const CHATS_INTELLIGENCE_KEYS = ['toolSearch'] as const
+export const MODELS_INTELLIGENCE_KEYS = ['maintenanceModel'] as const
 export const MEMORY_INTELLIGENCE_KEYS = [
   'crossThreadRecall',
   'learning',
-  'maintenanceModel',
   'dailyReviews',
   'archiveSkillDays',
   'summaryInterval',

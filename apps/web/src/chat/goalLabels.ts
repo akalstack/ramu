@@ -1,6 +1,6 @@
 import type { ChatGoal } from '@ramu/shared/types'
 import { goalState, type GoalState } from '@ramu/shared/chat/goalHold'
-import type { CheckOutcome, GoalChangeType } from '@ramu/shared/chat/goalHistory'
+import type { CheckOutcome } from '@ramu/shared/chat/goalHistory'
 
 /**
  * The goal bar's status names, as English translation keys. A provider's usage limit is "Limit reached" and a goal the
@@ -18,21 +18,7 @@ export const GOAL_LABELS: Record<GoalState, string> = {
 /** The status name for a goal: a limit hold and a user pause share the paused status but read differently. */
 export const goalLabel = (goal: Pick<ChatGoal, 'status' | 'pausedBy'>) => GOAL_LABELS[goalState(goal)]
 
-/**
- * The transcript line for each turning point in a goal, as English translation keys. A provider's usage limit has no row
- * here: it is "Limit reached" in the bar and never a failure of the goal.
- */
-export const GOAL_NOTE_LABELS: Record<GoalChangeType, string> = {
-  set: 'Goal set',
-  edited: 'Goal updated',
-  paused: 'Goal paused',
-  resumed: 'Goal resumed',
-  blocked: 'Goal needs input',
-  stalled: 'No progress',
-  'verify-failed': 'Verification failed',
-  'turn-limit': 'Goal turn limit reached',
-  cleared: 'Goal cleared',
-}
+export { GOAL_NOTE_LABELS } from '@ramu/shared/chat/goalHistory'
 
 /** How a verification run ended, as a translation key and its values. */
 export function checkOutcomeCopy(outcome: CheckOutcome): [key: string, values?: Record<string, string | number>] {

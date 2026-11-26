@@ -1,3 +1,4 @@
+import { keepReading, lastReading } from '../lib/lastReading'
 import {
   activityAcrossHosts,
   loginRows,
@@ -100,7 +101,7 @@ export function useUsage(): UsageReading[] {
   return useSyncExternalStore(store.subscribe, store.snapshot)
 }
 
-/** Readings for every login of every provider; the shared copy above only holds the selected one. Reloads when usage changes. */
+/** Readings for every login of every provider; the shared copy above only holds the selected one. Reloads when usage or logins change. */
 export function useAccountUsage(enabled = true): UsageReading[] {
   const { invoke } = useHost()
   const { on } = useHostRuntime()
@@ -117,10 +118,11 @@ export function useAccountUsage(enabled = true): UsageReading[] {
       )
     }
     load()
-    const off = on('usage:changed', load)
+    // A login added, removed or signed into another account changes which rows exist before any new reading arrives.
+    const offs = [on('usage:changed', load), on('logins:changed', load), on('settings:changed', load)]
     return () => {
       cancelled = true
-      off()
+      for (const off of offs) off()
     }
   }, [enabled, invoke, on])
   return all
@@ -347,10 +349,14 @@ function useHostLogins(open: boolean): HostLogins[] | null {
         }),
       ).then((next) => live && setHosts(next))
     load()
-    const off = bridge.on('usage:changed', load)
+    const offs = [
+      bridge.on('usage:changed', load),
+      bridge.on('logins:changed', load),
+      bridge.on('settings:changed', load),
+    ]
     return () => {
       live = false
-      off()
+      for (const off of offs) off()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the connected host ids
   }, [open, key])
@@ -765,26 +771,31 @@ export function UsageRings() {
 
 /** The chat's latest context reading, kept current as the host reports new ones. */
 export function useContextUsage(sessionId: string): ContextUsage | null {
-  const { invoke } = useHost()
+  const { invoke, id: hostId } = useHost()
   const { on } = useHostRuntime()
-  const [context, setContext] = useState<ContextUsage | null>(null)
+  const scope = `${hostId}:${sessionId}`
+  const [context, setContext] = useState<ContextUsage | null>(() => lastReading('context', scope) ?? null)
   useEffect(() => {
     let cancelled = false
-    setContext(null)
+    const show = (value: ContextUsage | null) => {
+      keepReading('context', scope, value)
+      setContext(value)
+    }
+    setContext(lastReading<ContextUsage | null>('context', scope) ?? null)
     void invoke('agent.context', sessionId).then(
       (value) => {
-        if (!cancelled) setContext(value)
+        if (!cancelled) show(value)
       },
       () => {},
     )
     const off = on('context:changed', (event) => {
-      if (event.sessionId === sessionId) setContext(event.context)
+      if (event.sessionId === sessionId) show(event.context)
     })
     return () => {
       cancelled = true
       off()
     }
-  }, [sessionId, invoke, on])
+  }, [sessionId, scope, invoke, on])
   return context
 }
 

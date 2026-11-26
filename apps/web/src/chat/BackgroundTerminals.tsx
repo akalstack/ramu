@@ -1,10 +1,11 @@
+import { keepReading, lastReading } from '../lib/lastReading'
 import { RowButton } from '@/components/row-button'
 import { useEffect, useRef, useState } from 'react'
 import type { BackgroundTerminalInfo } from '@ramu/shared/api'
 import type { AgentTask } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { SquareTerminal } from 'lucide-react'
-import { ComposerTraySection } from '../composer/ComposerTraySection'
+import { ComposerTraySection, TRAY_LIST_CLASS } from '../composer/ComposerTraySection'
 import { useHost } from '../workspace/HostProvider'
 import { useHostRuntime, useWorkspace } from '../workspace/workspace'
 import { errorText } from '../lib/errors'
@@ -23,7 +24,8 @@ export function useBackgroundTerminals(taskId: string | undefined) {
   const latest = useRef(reading)
   latest.current = reading
   const refresh = useRef<{ scope: string; run: () => Promise<void> } | null>(null)
-  const terminals = reading.scope === scope ? reading.terminals : []
+  const terminals =
+    reading.scope === scope ? reading.terminals : (lastReading<BackgroundTerminalInfo[]>('terminals', scope) ?? [])
   const stale = reading.scope !== scope || reading.stale || status !== 'connected'
   const [error, setError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState<{ terminal: BackgroundTerminalInfo; force: boolean } | null>(null)
@@ -39,6 +41,7 @@ export function useBackgroundTerminals(taskId: string | undefined) {
       const next = await readBackgroundTerminals(invoke as never, taskId, previous)
       if (!active || mine !== revision) return
       previous = next.terminals
+      keepReading('terminals', scope, next.terminals)
       setReading({ scope, ...next })
     }
     refresh.current = { scope, run: load }
@@ -127,7 +130,7 @@ export function BackgroundTerminalsSection({
             {error}
           </p>
         )}
-        <ul className="my-0 -mx-1.5 flex max-h-40 list-none flex-col overflow-y-auto overscroll-contain p-0">
+        <ul className={TRAY_LIST_CLASS}>
           {terminals.map((terminal) => (
             <li key={terminal.id} className="flex min-h-8 items-center gap-2 text-control">
               <RowButton
@@ -189,6 +192,7 @@ export function BackgroundTerminalsSection({
                   {task.name}
                 </code>
                 <span className="text-caption text-muted-foreground">
+                  {task.awaited && <span className="text-foreground">{t('Agent is waiting')} · </span>}
                   {t('Running')} · {t('Moved to the background')}
                 </span>
               </RowButton>

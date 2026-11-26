@@ -44,8 +44,10 @@ export function unechoedSubmissions(
   const usedEvents = new Set<number>()
   const usedQueue = new Set<string>()
   return pending.filter((item) => {
+    // Compared as shown: the host's copy reads without trailing space, so a send that ended in one is still the same.
+    const sent = visibleText(item.text)
     const matches = (text: string, attachments: Attachment[] = []) =>
-      visibleText(text) === item.text &&
+      visibleText(text) === sent &&
       attachments.length === item.attachments.length &&
       attachments.every((file, index) => file.id === item.attachments[index]?.id)
     for (let index = item.afterEvent; index < events.length; index++) {

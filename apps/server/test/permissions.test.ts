@@ -1,6 +1,12 @@
 import { expect, it } from 'vitest'
 import { DEFAULT_AGENT_SETTINGS, type AgentEvent, type AgentSettings, type AgentSessionState } from '@ramu/shared/types'
-import { alwaysAskHooks, claudeHooks, createCanUseTool, readOnlyBashHooks } from '../src/agent/permissions'
+import {
+  alwaysAskHooks,
+  claudeHooks,
+  commandTurnHooks,
+  createCanUseTool,
+  readOnlyBashHooks,
+} from '../src/agent/permissions'
 import type { PendingRequest } from '../src/agent/types'
 
 function fixture(access: AgentSettings['access'], restricted = false) {
@@ -176,6 +182,18 @@ it('asks before a production deploy at every access level, while a preview and r
     expect(await run('vercel deploy')).toEqual({})
     expect(await run('git push --force')).toEqual({})
   }
+})
+
+it('makes a command that can write take its turn, and lets one that only reads run at once', async () => {
+  const held: string[] = []
+  const hook = commandTurnHooks(async (id) => void held.push(id)).PreToolUse![0]!.hooks[0]!
+  const run = (id: string, command: string) =>
+    hook({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command } } as never, id, {
+      signal: new AbortController().signal,
+    })
+  await run('read', 'git status --short && ls src')
+  await run('write', 'pnpm format')
+  expect(held).toEqual(['write'])
 })
 
 it('lets a read-only reviewer run commands that only read, anywhere, and refuses the rest with the reason', async () => {

@@ -26,6 +26,13 @@ export const threadProjectName = (projects: Project[], projectId: string) =>
 /** The window's own host keeps its plain keys, so a person's saved tree survives; other hosts are namespaced. */
 export const sidebarTreeKey = (host: string, own: string, key: string) => (host === own ? key : `host:${host}:${key}`)
 
+/**
+ * Every stored key that closes a section whose open state is shared by all hosts. A section closed under one host's
+ * namespace counts too, so a choice made while that host was on screen still holds.
+ */
+export const sharedSectionKeys = (collapsed: readonly string[], key: string) =>
+  collapsed.filter((entry) => entry === key || (entry.startsWith('host:') && entry.endsWith(`:${key}`)))
+
 /** One list across hosts, each thread still carrying the source it came from. */
 export function mergedThreads<Source>(sources: Source[], threads: (source: Source) => Task[]) {
   return sources.flatMap((source) => threads(source).map((task) => ({ task, source })))

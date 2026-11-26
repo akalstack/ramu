@@ -46,8 +46,11 @@ export function parseCommand(command: string): Segment[] | null {
       const end = command.indexOf(c, i + 1)
       if (end < 0) return null
       const body = command.slice(i + 1, end)
-      if (/[`$\\\n\r]/.test(body)) return null
-      word += body
+      // Single quotes hold their text exactly. In double quotes the shell still expands `$` and backticks, and a
+      // backslash before the closing quote would escape it and move where the word ends; any other backslash stays
+      // as written (a search pattern such as "\.renew("), a doubled one being one backslash.
+      if (c === '"' && (/[`$]/.test(body) || /(?:^|[^\\])(?:\\\\)*\\$/.test(body))) return null
+      word += c === '"' ? body.replace(/\\\\/g, '\\') : body
       inWord = true
       i = end
     } else if (/\s/.test(c)) endWord()
@@ -756,6 +759,27 @@ export function judgeCommand(command: string): AutoVerdict {
 }
 
 /**
+ * `sed -n '10,40p' file`: the one use of sed that only prints lines of a file, which a reviewer reaches for to read a
+ * range. Any other option or script (`-i`, `w`, `e`, a substitution) stays what sed otherwise is: a program that can
+ * write and run things.
+ */
+function printsLines(words: string[]): boolean {
+  if (words[0] !== 'sed') return false
+  let script: string | undefined
+  let quiet = false
+  const files: string[] = []
+  for (let i = 1; i < words.length; i++) {
+    const word = words[i]!
+    if (word === '-n') quiet = true
+    else if (word === '-e' && script === undefined) script = words[++i]
+    else if (word.startsWith('-')) return false
+    else if (script === undefined) script = word
+    else files.push(word)
+  }
+  return quiet && !!script && /^\d+(?:,\d+)?p$/.test(script) && files.length > 0 && !files.some(sensitive)
+}
+
+/**
  * Whether a command line only reads, for a session that may never write (a read-only helper). Wider than Auto's
  * routine reads, since a refusal here cannot be approved: any path, and any Git read verb with options that cannot
  * write or run a program. Shell syntax this file cannot read, wrappers and risky options still count as writing.
@@ -765,6 +789,7 @@ export function readsOnly(command: string): boolean {
   return (
     !!segments &&
     segments.every((words) => {
+      if (printsLines(words)) return true
       if (riskOf(words).length) return false
       if (isRead(words, true) || isVersion(words) || isGitRead(words)) return true
       if (words[0] !== 'git') return false

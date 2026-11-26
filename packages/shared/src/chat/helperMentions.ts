@@ -72,6 +72,22 @@ function resolveHandle(
   return model ? { kind: 'model', model, body } : null
 }
 
+/** Words that ask a helper to do the work rather than look at it, in English and Indonesian. */
+const DOES_WORK =
+  /\b(?:take\s*over|takeover|fix(?:es|ed)?|implement|build|add|creat(?:e|ing)|writ(?:e|ing)|make|chang(?:e|ing)|updat(?:e|ing)|edit|refactor|renam(?:e|ing)|remov(?:e|ing)|delet(?:e|ing)|replac(?:e|ing)|migrat(?:e|ing)|appl(?:y|ies)|finish|continue|do\s+(?:it|this|that)|ambil\s*alih|perbaiki|kerjakan|buat(?:kan)?|tambah(?:kan)?|ubah|ganti|hapus|lanjut(?:kan)?|selesaikan|terapkan)\b/i
+/** A request that opens by asking for a look keeps the helper read-only whatever else it names. */
+const ONLY_LOOKS =
+  /^(?:please\s+)?(?:review|check|look|read|audit|inspect|explain|analy[sz]e|why|what|how|is|are|does|do\s+you|tinjau|cek|periksa|lihat|jelaskan|kenapa|mengapa|apa|bagaimana)\b/i
+
+/**
+ * Which helper a message to `@model` asks for: one that takes the work over and may edit, when the request asks for a
+ * change, or one that reads and reports. A request that starts as a question or a review stays a review.
+ */
+export function mentionRole(body: string): 'implementation' | 'review' {
+  const text = body.trim()
+  return !ONLY_LOOKS.test(text) && DOES_WORK.test(text) ? 'implementation' : 'review'
+}
+
 /**
  * What the main agent is told about a message addressed to a helper: which helper to start with ramu_agent, so the
  * person gets a second model, a custom agent or an ability without setting one up.
@@ -83,6 +99,8 @@ export function mentionInstruction(target: MentionTarget): string {
       : target.kind === 'ability'
         ? `needs ["${ABILITY_HANDLES[target.handle]}"]`
         : `model "${modelHandle(target.model)}"`
-  const role = target.kind === 'agent' ? '' : ' and role "review" unless the request asks for changes'
+  // A custom agent carries its own read-only switch. For a model or an ability the request itself says which helper
+  // it is, decided here rather than left to how the lead reads it.
+  const role = target.kind === 'agent' ? '' : ` and role "${mentionRole(target.body)}"`
   return `The person addressed this message to a helper. Start one with ramu_agent, ${call}${role}, give it the request with the context it needs, then relay its report.`
 }

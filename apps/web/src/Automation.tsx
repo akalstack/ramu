@@ -8,17 +8,17 @@ import { t, useLanguage, formatLocale } from './i18n'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { systemTimezone } from '@ramu/shared/workspace/timezone'
 import { Badge } from '@/components/ui/badge'
-import { Dropdown } from './Menu'
+import { Dropdown, timeAgo } from './Menu'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/desktop-button'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
-import { CalendarClock, ChevronRight, Clock, Pause, Pencil, Play, Plus, Trash2, Webhook, X } from 'lucide-react'
+import { CalendarClock, ChevronRight, Clock, Pause, Pencil, Play, Plus, Trash2, Webhook, X, Zap } from 'lucide-react'
 import { WebhookFields, WebhookPanel } from './WebhookSchedule'
 import { WEBHOOK_PRESETS } from '@ramu/shared/webhooks'
 import { useCallback, useEffect, useState } from 'react'
-import { DateTime } from 'luxon'
+import { DateTime, Info } from 'luxon'
 import {
   NO_PROJECT,
   type Schedule,
@@ -46,6 +46,7 @@ import { TerminalCommandButton, terminalCommandHelp, useTerminalCommand } from '
 import {
   RULE_KINDS,
   byNextRun,
+  describeRule,
   canSaveSchedule,
   defaultScheduleInput,
   isProblemRun,
@@ -147,7 +148,7 @@ export function SchedulesPage({
     if (run.sessionId) ws.openView(run.taskId, { kind: 'agent', sessionId: run.sessionId })
   }
   return (
-    <div className="automation-page h-full w-full overflow-auto">
+    <div className="automation-page h-full w-full overflow-auto [scrollbar-gutter:stable]">
       <div className="mx-auto flex w-full max-w-[760px] flex-col gap-4 px-6 pt-6 pb-10">
         <header className="automation-heading [&_h1]:text-heading [&_h1]:font-semibold [&_h1]:tracking-[-0.01em] [&_h1]:m-[0_0_4px] [&_p]:m-0 [&_p]:text-control flex items-center justify-between gap-5 mb-6">
           <div>
@@ -405,9 +406,12 @@ function ScheduleCard({
   const meta = [
     project,
     isolated,
-    s.rule.kind === 'once' ? t('Once') : webhook ? t('When a request arrives') : t(s.rule.kind),
-    webhook ? null : s.timezone,
+    describeRule(s.rule, t, (day) => Info.weekdays('short', { locale: formatLocale() })[day - 1] ?? String(day)),
+    // The zone matters only when it is not the one this computer keeps.
+    webhook || s.timezone === systemTimezone() ? null : s.timezone,
   ].filter(Boolean)
+  const lastRun = runs[0]
+  const idle = s.state !== 'active'
   return (
     <article
       className={`schedule-card flex flex-col gap-0.5 rounded-(--radius-m) bg-card px-3 py-2 [&:hover_.row-actions]:flex [&:focus-within_.row-actions]:flex [&:hover_.row-time]:hidden [&:focus-within_.row-time]:hidden ${selected ? 'ring-1 ring-(--line-strong)' : ''}`}
@@ -418,14 +422,19 @@ function ScheduleCard({
         ) : (
           <CalendarClock size={14} className="flex-none text-muted-foreground" />
         )}
-        <strong className="min-w-0 truncate text-control font-medium">{s.name}</strong>
-        <Badge variant="outline" className="flex-none rounded-full px-1.5 text-caption text-muted-foreground">
-          {t(s.state)}
-        </Badge>
+        <strong className={`min-w-0 truncate text-control font-medium ${idle ? 'text-muted-foreground' : ''}`}>
+          {s.name}
+        </strong>
+        {/* Running on time is the normal case and says nothing; a schedule that will not fire says why. */}
+        {idle && (
+          <Badge variant="outline" className="flex-none rounded-full px-1.5 text-caption text-muted-foreground">
+            {s.state === 'paused' ? t('Paused') : t('Completed')}
+          </Badge>
+        )}
         <span className="min-w-0 flex-1" />
         <span className="row-time flex flex-none items-center gap-1.5 text-caption text-muted-foreground">
-          <Clock size={12} />
-          {webhook ? t('On request') : formatScheduleTime(s.nextRunAt, s.timezone)}
+          {idle ? null : <Clock size={12} />}
+          {webhook ? t('On request') : idle ? null : formatScheduleTime(s.nextRunAt, s.timezone)}
         </span>
         <span className="row-actions hidden flex-none items-center gap-0.5">
           <Button
@@ -437,7 +446,7 @@ function ScheduleCard({
             disabled={busy}
             onClick={() => void onAct(() => invoke('schedules.runNow', s.id))}
           >
-            <Play size={13} />
+            <Zap size={13} />
           </Button>
           {s.state !== 'completed' && (
             <Button
@@ -489,6 +498,12 @@ function ScheduleCard({
       )}
       <div className="flex min-h-6 items-center gap-2 text-caption text-muted-foreground">
         <span className="min-w-0 truncate">{meta.join(' · ')}</span>
+        {/* How the last run went, without opening the history: a failure should not hide behind a count. */}
+        {lastRun && (
+          <span className={`flex-none ${isProblemRun(lastRun.status) ? 'text-bad' : ''}`}>
+            {t('Last run {status} · {when}', { status: t(lastRun.status), when: timeAgo(lastRun.dueAt) })}
+          </span>
+        )}
         <span className="min-w-0 flex-1" />
         {s.sourceTaskId && ws.tasks.some((task) => task.id === s.sourceTaskId) && (
           <Button

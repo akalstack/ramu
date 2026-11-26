@@ -14,6 +14,8 @@ Enter uses your Steer or Queue choice, and Cmd/Ctrl+Enter uses the other. **Stee
 
 A steered message stays part of the turn it joined: the turn keeps one timer and folds under one **Worked for** with its whole time, and the work after each steer folds under **Continued for** below that message. A turn folds only once it has finished. A stopped turn says **Stopped after**.
 
+**Worked for** appears only once the thread has stopped working. While sub-agents the turn started are still running, or the agent has picked the work up again and shown nothing new yet, the row keeps counting as **Working for**, and the finished time runs to the last of those sub-agents. A background command keeps the row counting the same way only when the agent says it is waiting on it (`background_wait`, for a Claude Code thread's own background commands, such as a test run or a build): the thread then shows as working until the command ends, the agent clears the wait or you stop the turn. A dev server or watcher left running does not hold the turn. Work the agent picks up by itself after a result, such as a sub-agent reporting back or a goal continuing, folds under **Continued for** rather than a second **Worked for**.
+
 Sub-agents started together read as one row, such as **3 agents** with how many are done and running, that opens to each agent; it starts open while any of them is working. The same error or notice back to back shows once with its count, such as **×3**.
 
 Threads in the same checkout work at the same time. A message waits only for the few seconds an undo or restore rewrites that checkout's files. See [Threads sharing a checkout](working-with-agents.md#threads-sharing-a-checkout) for how each thread keeps its own changes apart.
@@ -24,7 +26,7 @@ On the phone, **Settings → Threads** sets the choice, and the warning before c
 
 Agents can start a development server, watcher or long test run that keeps going after their reply. It runs on the thread's host, in its checkout. Outside Full access you approve each exact command first, and Full access still asks before a command that can destroy work or the machine.
 
-**Background terminals** (above the composer on the desktop, a pill on the phone) lists the ones still running, with their output and **Stop**. A command leaves the list when it ends, and the thread says how it ended. A Claude command still running after the **Move slow commands to background** time, or one Claude moved to the background itself, is listed there too, marked **Moved to the background**.
+**Background terminals** (above the composer on the desktop, a pill on the phone) lists the ones still running, with their output and **Stop**. A command leaves the list when it ends, and the thread says how it ended. A Claude command still running after the **Move slow commands to background** time, or one Claude moved to the background itself, is listed there too, marked **Moved to the background**. One the agent is waiting on also says **Agent is waiting**.
 
 **Servers**, above the composer on the desktop, lists what the thread's agents, terminals and commands are listening on, such as `localhost:5173 · npm run dev · node`. Click one that serves pages to open it in the browser pane. ⌘-click (Ctrl-click) opens it in your own browser when the host is this device. **Stop** ends that server only. A server started with `nohup` or `&` still shows under the thread that started it, and one that outlived its terminal or agent says so. On the phone, a **Servers** pill above the composer opens the same list: tap a server that serves pages to open it in the thread's browser on the host, or **Stop** it. Resources lists every thread's servers too. Ports used by an agent's own program are left out.
 
@@ -55,7 +57,7 @@ On the phone, webhook schedules can be renamed, edited, paused and run, and a we
 
 ## Recaps
 
-[Recaps](inbox.md#learned-and-done) summarize what threads did and what is left. Inbox's Brief lists items that need a decision, and **Inbox → Done** shows the rest on each finished thread's row. Recaps use model tokens only when something changed. A phone can get one daily "Your daily recap is ready" notification.
+[Recaps](inbox.md#learned-and-done) summarize what threads did and what is left. Inbox's Brief lists items that need a decision, and **Inbox → Done** shows the rest on each finished thread's row. Recaps use model tokens only when something changed. They are written with the background model (**Settings → Models → Models for Ramu’s own work**), or with your default model when none is chosen; at a usage limit they move to another login of that provider, then down your fallback order. A phone can get one daily "Your daily recap is ready" notification.
 
 ## Reviews and undo
 

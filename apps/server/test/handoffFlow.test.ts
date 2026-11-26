@@ -282,7 +282,7 @@ describe('what a switch carries', () => {
     expect(settingsEvents(svc, s.id).at(-1)).toMatchObject({ handoff: false })
   })
 
-  it('refuses a model change that would end native sub-agents still running, but not Ramu’s own helpers', async () => {
+  it('holds a model change while native sub-agents run, but not for Ramu’s own helpers, and applies it when they end', async () => {
     const svc = make()
     const s = svc.start('t', scopeOf(cwd), 'remember plum', codex)
     await until(() => idle(svc, s.id))
@@ -292,8 +292,29 @@ describe('what a switch carries', () => {
     record({ kind: 'agent', agentId: 'mine', name: 'Review', status: 'running', childSessionId: 'child-1' })
     await svc.configure(s.id, { ...codex, model: 'codex-next' })
     record({ kind: 'agent', agentId: 'native', name: 'Explore', status: 'running' })
-    await expect(svc.configure(s.id, codex)).rejects.toThrow('still running in this thread')
+    await svc.configure(s.id, codex)
     expect(svc.get(s.id).settings.model).toBe('codex-next')
+    expect(svc.events(s.id).findLast((e) => e.kind === 'settings-waiting')).toMatchObject({ settings: codex })
+    record({ kind: 'agent', agentId: 'native', name: 'Explore', status: 'completed' })
+    await until(() => svc.get(s.id).settings.model === codex.model)
+    expect(svc.events(s.id).findLast((e) => e.kind === 'settings-waiting')).toMatchObject({ settings: null })
+  })
+
+  it('applies a held model change at once when asked to, and drops it when the person picks the current model', async () => {
+    const svc = make()
+    const s = svc.start('t', scopeOf(cwd), 'remember plum', codex)
+    await until(() => idle(svc, s.id))
+    const record = (event: AgentEvent) =>
+      (svc as unknown as { record(id: string, event: AgentEvent): void }).record(s.id, event)
+    record({ kind: 'agent', agentId: 'native', name: 'Explore', status: 'running' })
+    const next = { ...codex, model: 'codex-next' }
+    await svc.configure(s.id, next)
+    await svc.configure(s.id, codex)
+    expect(svc.events(s.id).findLast((e) => e.kind === 'settings-waiting')).toMatchObject({ settings: null })
+    await svc.configure(s.id, next)
+    await svc.configure(s.id, next, 'now')
+    expect(svc.get(s.id).settings.model).toBe('codex-next')
+    expect(svc.events(s.id).findLast((e) => e.kind === 'settings-waiting')).toMatchObject({ settings: null })
   })
 
   it('preflights a fresh-session model change and transfers history instead of resuming', async () => {

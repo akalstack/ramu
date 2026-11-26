@@ -7,16 +7,19 @@ import { SettingsChange, SwitchBackLabel } from './SettingsChange'
 
 /**
  * A model change waiting for the next message, drawn at the end of the chat like the separator it becomes once sent.
- * Another provider hands the conversation over, so it reads "Context handoff".
+ * Another provider hands the conversation over, so it reads "Context handoff". One the host holds while the provider's
+ * own sub-agents run (`onApplyNow`) can be applied at once, ending them, since they may run for a long time.
  */
 export function PendingSettingsChange({
   next,
   previous,
   onCancel,
+  onApplyNow,
 }: {
   next: AgentSettings
   previous: AgentSettings
   onCancel: () => void
+  onApplyNow?: () => void
 }) {
   const handoff = next.provider !== previous.provider
   const Icon = handoff ? ArrowRightLeft : Settings2
@@ -40,7 +43,18 @@ export function PendingSettingsChange({
             </span>
           </Button>
         </span>
-        <small>{translate('Applies when you send your next message')}</small>
+        <small>
+          {onApplyNow ? (
+            <>
+              {translate('Applies when the sub-agents and background commands finish')}{' '}
+              <Button variant="link" onClick={onApplyNow}>
+                {translate('Change now and stop them')}
+              </Button>
+            </>
+          ) : (
+            translate('Applies when you send your next message')
+          )}
+        </small>
       </span>
     </div>
   )

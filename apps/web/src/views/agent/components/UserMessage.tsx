@@ -27,7 +27,7 @@ import {
 } from '@ramu/shared/chat/agentTasks'
 import { sentComments } from '../../../git/ReviewChip'
 import { Attachments } from '../../../composer/Attachments'
-import { parseAnswerMessage } from '@ramu/shared/chat/questions'
+import { answerPairs, parseAnswerMessage } from '@ramu/shared/chat/questions'
 import { parseInlineUiActionMessage } from '@ramu/shared/chat/inlineUi'
 import { visibleText } from '../lib/messages'
 import { ThreadAgents } from '../lib/threadAgents'
@@ -194,7 +194,16 @@ export function UserMessage({
           </>
         }
       >
-        <UserBubble>{answers.body}</UserBubble>
+        <UserBubble>
+          <span className="flex flex-col gap-2.5">
+            {answerPairs(answers.body).map((pair, index) => (
+              <span key={index} className="flex flex-col gap-0.5">
+                {pair.question && <span className="text-control text-muted-foreground">{pair.question}</span>}
+                <span>{pair.answer}</span>
+              </span>
+            ))}
+          </span>
+        </UserBubble>
         <MessageActions latest={latest} className="mt-0.5 mr-1">
           <MessageTime at={e.at} />
           <CopyButton text={answers.body} />

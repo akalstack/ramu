@@ -1,23 +1,18 @@
-import { useLayoutEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { elapsedText } from '@ramu/shared/chat/agentActivity'
+import { t as translate } from '../i18n'
 import { CHAT_MOTION, SENT_MOTION } from '@ramu/shared/chat/presentation'
 import { reducedMotion } from '../workspace/panelMotion'
 import { WorkingText } from '../views/agent/components/WorkingText'
 import { WORKING_CLASS } from '../views/agent/styles'
 import { Spinner } from '@/components/ui/spinner'
 
-/** Fade changed content without replacing its disclosure, focus target, or live region. */
-export function ChatFade({
-  identity,
-  children,
-  className,
-  animate = false,
-}: {
-  identity: string
-  children: ReactNode
-  className?: string
-  animate?: boolean
-}) {
-  const node = useRef<HTMLSpanElement>(null)
+/**
+ * Fades an element in each time `identity` changes, and when it first shows if `animate`. Text that changes under the
+ * same identity (a streaming line, a running timer) stays still.
+ */
+export function useChatFade<T extends HTMLElement>(identity: string, animate = false) {
+  const node = useRef<T>(null)
   const previous = useRef(identity)
   const enter = useRef(animate).current
   useLayoutEffect(() => {
@@ -33,6 +28,22 @@ export function ChatFade({
     )
     return () => animation?.cancel()
   }, [identity, enter])
+  return node
+}
+
+/** Fade changed content without replacing its disclosure, focus target, or live region. */
+export function ChatFade({
+  identity,
+  children,
+  className,
+  animate = false,
+}: {
+  identity: string
+  children: ReactNode
+  className?: string
+  animate?: boolean
+}) {
+  const node = useChatFade<HTMLSpanElement>(identity, animate)
   return (
     <span ref={node} className={className} style={{ display: 'inline-block' }}>
       {children}
@@ -72,31 +83,40 @@ export function useSentRise<T extends HTMLElement>(start: boolean) {
 }
 
 /**
- * Status phases share the same entrance motion as messages; token and elapsed updates keep their identity. From the
- * send to the turn's end the line keeps its place, as on the phone: `quiet` (a live tool group above already says what
- * the agent is doing) hides the words but not the line, so the reply never swaps places with it. `enter: false` skips
- * the entrance for a line that was already on screen in the view this one replaces, as when a new thread opens.
+ * Status phases share the same entrance motion as messages; token and elapsed updates keep their identity. The line is
+ * left out while a live tool group says what the agent is doing, so that group's row sits on the line this one held.
+ * `enter: false` skips the entrance for a line that was already on screen in the view this one replaces, as when a new
+ * thread opens.
  */
 export function ChatStatus({
   label,
   compacting,
-  quiet,
   enter = true,
+  since,
 }: {
   label: string
   compacting?: boolean
-  quiet?: boolean
   enter?: boolean
+  /** When the running turn began: the line reads "Working for 12s" and counts on, as T3 Code's does. */
+  since?: number | null
 }) {
   return (
     <div className={WORKING_CLASS} role="status" aria-live="polite" data-compacting={compacting || undefined}>
-      <span className={quiet ? 'invisible' : undefined} aria-hidden={quiet || undefined}>
-        <ChatFade identity={label} animate={enter}>
-          <WorkingText>{label}</WorkingText>
-        </ChatFade>
-      </span>
+      <ChatFade identity={label} animate={enter}>
+        <WorkingText>{since ? <WorkingFor since={since} /> : label}</WorkingText>
+      </ChatFade>
     </div>
   )
+}
+
+/** "Working for 12s", counting on once a second. */
+function WorkingFor({ since }: { since: number }) {
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [since])
+  return translate('Working for {0}', { 0: elapsedText(now - since) })
 }
 
 /**

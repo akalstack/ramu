@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   HostClient,
   HostError,
+  registerRequestProof,
   registerSocketProvider,
   checkHostConnection,
   readConnectionStatus,
@@ -111,6 +112,39 @@ test('a socket that never connects is checked once over HTTP to say why', async 
   await assert.rejects(blocked.invoke('tasks.list'), /blocks live connections/)
   const offline = client(async () => Promise.reject(new Error('offline')))
   await assert.rejects(offline.invoke('tasks.list'), (error) => error.message === 'Host unreachable')
+})
+
+test('a refused proof is not a revoked pairing: the clock is read once and the check repeated', async () => {
+  provide(socket({ whenReady: async () => Promise.reject(Object.assign(new Error('late'), { notSent: true })) }))
+  const refuse = (error) => new Response(JSON.stringify({ error }), { status: 401 })
+  let offset = 0
+  const synced = []
+  registerRequestProof({
+    sign: () => `proof@${offset}`,
+    sync: async (address) => {
+      synced.push(address)
+      offset = 7200
+    },
+  })
+  try {
+    // A clock two hours off: stale at first, accepted once the host's clock is used.
+    const proofs = []
+    const skewed = client(async (_url, options) => {
+      proofs.push(options.headers['x-ramu-proof'])
+      return proofs.length === 1 ? refuse('proof-stale') : new Response('{"access":"owner"}')
+    })
+    await assert.rejects(skewed.invoke('tasks.list'), /blocks live connections/)
+    assert.deepEqual(proofs, ['proof@0', 'proof@7200'])
+    assert.deepEqual(synced, ['https://host.example'])
+    // A key that cannot be read just now: the pairing stands, so this is an ordinary failed connection.
+    const locked = client(async () => refuse('proof-missing'))
+    await assert.rejects(locked.invoke('tasks.list'), (error) => error.status !== 401)
+    // No proof problem named: the token itself was refused.
+    const revoked = client(async () => new Response('', { status: 401 }))
+    await assert.rejects(revoked.invoke('tasks.list'), (error) => error.status === 401)
+  } finally {
+    registerRequestProof(null)
+  }
 })
 
 test('a host with operation keys gets the same key on a retried send after a lost connection', async () => {

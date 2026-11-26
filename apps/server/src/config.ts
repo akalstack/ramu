@@ -56,7 +56,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
       `Refusing to listen on ${listen.host}: traffic is not encrypted. Bind 127.0.0.1 and tunnel it (SSH, a TLS proxy), serve HTTPS with --tls-cert and --tls-key, or pass --private-network if every device that can reach this address is on a network you trust, such as a VPN (Tailscale, NetBird, ZeroTier, WireGuard).`,
     )
   }
-  const lifetime = env.RAMU_DEVICE_TOKEN_DAYS ?? '90'
+  const lifetime = env.RAMU_DEVICE_TOKEN_DAYS ?? '30'
   const deviceLifetimeMs = lifetime === 'never' ? null : Number(lifetime) * 86_400_000
   if (deviceLifetimeMs !== null && (!Number.isSafeInteger(deviceLifetimeMs) || deviceLifetimeMs <= 0))
     throw new Error('RAMU_DEVICE_TOKEN_DAYS must be positive days, or never')

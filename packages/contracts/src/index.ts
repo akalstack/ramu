@@ -47,6 +47,8 @@ export const RENEW_PATH = '/renew'
 export interface RenewResponse {
   token: string
   expiresAt: number | null
+  /** The new token is bound to this device's key: the host will ask for a proof with it. Absent from older hosts. */
+  bound?: boolean
 }
 
 /** Body of `POST /pair`. The code comes from `ramu pair` on the server's computer; it works once and expires. */

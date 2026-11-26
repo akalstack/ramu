@@ -2,11 +2,12 @@ import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import type { DeviceChange, NetworkDevice, NetworkStatus } from '@ramu/shared/types'
 import { deviceChangeText } from '@ramu/shared/deviceChanges'
-import { permissionsFor } from '@ramu/shared/devicePermissions'
+import { customDefaultPermissions, deviceLimited, type DevicePermission } from '@ramu/shared/devicePermissions'
 import { osLine } from '@ramu/shared/deviceOs'
 import { SettingsAdvanced, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Button } from '@/components/desktop-button'
+import { Badge } from '@/components/ui/badge'
 import { RowButton } from '@/components/row-button'
 import { DeviceIcon } from '@/components/device-icon'
 import { Dialog as ConfirmDialog, Dropdown, timeAgo } from '../../Menu'
@@ -45,11 +46,7 @@ function deviceSummary(device: NetworkDevice): string {
   return [osLine(device.os), accessSummary(device)].filter(Boolean).join(' · ')
 }
 function accessSummary(device: NetworkDevice): string {
-  if (device.role === 'viewer') return t('View only')
-  if (!device.permissions) return t('Full access')
-  const offered = permissionsFor(device.os)
-  const allowed = offered.filter((permission) => device.permissions?.[permission]).length
-  return t('Full access · {0} of {1} permissions', { 0: allowed, 1: offered.length })
+  return device.role === 'viewer' ? t('View only') : t('Full access')
 }
 
 /** Asks before a device stops working here; it pairs again to come back. */
@@ -132,6 +129,7 @@ export function PairedDevices({
           onRemove={() => setRemoving(device)}
           onRename={() => setRenaming(device)}
           hostDays={status.deviceLifetime.days}
+          defaults={status.defaultPermissions}
         />
       ))}
       {!devices.length && (
@@ -156,7 +154,10 @@ export function PairedDevices({
               />
             </SettingsRow>
           )}
-          <DefaultPermissions status={status} invoke={change} />
+          {/* New devices pair with full access. A host that chose its own set before keeps it, and can still change it. */}
+          {customDefaultPermissions(status.defaultPermissions ?? []) && (
+            <DefaultPermissions status={status} invoke={change} />
+          )}
         </SettingsAdvanced>
       )}
       {renaming && (
@@ -243,7 +244,7 @@ function DeviceExpiry({
         onChange={stage}
         options={[
           { value: 'default', label: t('Like other devices ({0})', { 0: sameAsOthers }) },
-          ...lifetimeOptions(device.lifetimeDays ?? 90, false),
+          ...lifetimeOptions(device.lifetimeDays ?? hostDays, false),
         ]}
       />
     </div>
@@ -262,6 +263,7 @@ function PairedDeviceRow({
   onRemove,
   onRename,
   hostDays,
+  defaults,
 }: {
   device: NetworkDevice
   /** This computer itself, on another host's list. */
@@ -273,9 +275,12 @@ function PairedDeviceRow({
   onRename: () => void
   /** This host's default pairing lifetime, which a device follows unless it has its own. */
   hostDays: number | 'never'
+  /** What this host gives a new device, which a device marked Limited holds less than. */
+  defaults?: readonly DevicePermission[]
 }) {
   const [open, setOpen] = useState(false)
   const seen = device.lastSeenAt ? timeAgo(device.lastSeenAt) : t('never')
+  const limited = deviceLimited(device, Date.now(), defaults)
   return (
     <Collapsible open={open} onOpenChange={setOpen} render={<SettingsRow className="settings-stack gap-0 p-1.5" />}>
       <CollapsibleTrigger
@@ -283,7 +288,11 @@ function PairedDeviceRow({
           <RowButton
             size="lg"
             className="rounded-(--radius-s) px-2.5 py-2.5"
-            aria-label={t('{0}, {1}, last seen {2}', { 0: device.name, 1: deviceSummary(device), 2: seen })}
+            aria-label={t('{0}, {1}, last seen {2}', {
+              0: device.name,
+              1: [deviceSummary(device), limited ? t('Limited') : ''].filter(Boolean).join(', '),
+              2: seen,
+            })}
           />
         }
       >
@@ -291,8 +300,16 @@ function PairedDeviceRow({
           <DeviceIcon os={device.os} name={device.name} />
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="truncate text-control font-medium text-foreground">
-            {self ? t('{0} (this computer)', { 0: device.name }) : device.name}
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate text-control font-medium text-foreground">
+              {self ? t('{0} (this computer)', { 0: device.name }) : device.name}
+            </span>
+            {/* Full access means everything a new device gets; one that was cut back says so here. */}
+            {limited && (
+              <Badge variant="outline" className="flex-none rounded-full px-1.5 text-caption text-muted-foreground">
+                {t('Limited')}
+              </Badge>
+            )}
           </span>
           <span className="truncate text-caption text-muted-foreground">
             {`${deviceSummary(device)} · ${t('last seen {0}', { 0: seen })}`}

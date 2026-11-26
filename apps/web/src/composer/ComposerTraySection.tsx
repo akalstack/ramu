@@ -1,10 +1,17 @@
 import type { ComponentProps, ReactNode } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, LoaderCircle } from 'lucide-react'
 import { cn } from 'cn'
 import { Button } from '@/components/desktop-button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { t } from '../i18n'
+import { useSteadySpin } from '../lib/steadyActivity'
 import { useInTrayStack, useTraySection } from './TrayStack'
+
+/** The same thin arc the sidebar marks a working thread with, so "working" reads one way everywhere. */
+function LiveMark() {
+  const ref = useSteadySpin<SVGSVGElement>()
+  return <LoaderCircle ref={ref} aria-hidden className="composer-tray-live animate-spin" />
+}
 
 /**
  * One accessible disclosure treatment for questions, goals, the message queue and live work.
@@ -29,7 +36,7 @@ export function ComposerTraySection({
   title: ReactNode
   /** A shorter name for the chip when the title is long, such as a goal's status without its objective. */
   chip?: ReactNode
-  /** The work is happening right now, such as an agent driving the browser; the chip shows a dot. */
+  /** The work is happening right now, such as an agent driving the browser; the chip shows the working mark. */
   live?: boolean
   icon: ReactNode
   /** How many items the section holds, shown after the title as "Title · 3". */
@@ -69,7 +76,7 @@ export function ComposerTraySection({
         <CollapsibleTrigger render={<Button variant="ghost" />} className="composer-tray-chip-trigger">
           {icon}
           {label(chip ?? title)}
-          {live && <span aria-hidden className="composer-tray-live" />}
+          {live && <LiveMark />}
         </CollapsibleTrigger>
         <CollapsibleContent
           keepMounted
@@ -117,3 +124,10 @@ export function ComposerTraySection({
     </Collapsible>
   )
 }
+
+/**
+ * A tray section's list of rows: it scrolls once it is taller than a few rows. The rows keep their own height, since a
+ * flex column would otherwise squeeze two-line rows into each other instead of scrolling.
+ */
+export const TRAY_LIST_CLASS =
+  'my-0 -mx-1.5 flex max-h-40 list-none flex-col gap-0.5 overflow-y-auto overscroll-contain p-0 [&>li]:flex-none'

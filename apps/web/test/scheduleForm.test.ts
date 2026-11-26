@@ -6,6 +6,7 @@ import {
   byNextRun,
   canSaveSchedule,
   defaultScheduleInput,
+  describeRule,
   isProblemRun,
   onceIso,
   onceLocalValue,
@@ -117,5 +118,38 @@ describe('webhook schedules', () => {
     expect(canSaveSchedule(form)).toBe(false)
     expect(canSaveSchedule({ ...form, webhook: true })).toBe(true)
     expect(splitList(' opened, ,reopened ')).toEqual(['opened', 'reopened'])
+  })
+})
+
+describe('describeRule', () => {
+  // Translation left out: the keys are the English copy, with their values filled in.
+  const say = (text: string, values: Record<string, string | number> = {}) =>
+    text.replace(/\{(\w+)\}/g, (_match, key: string) => String(values[key]))
+  const day = (n: number) => ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][n - 1]!
+  const line = (rule: Parameters<typeof describeRule>[0]) => describeRule(rule, say, day)
+
+  it('names the days a weekly schedule runs', () => {
+    expect(line({ kind: 'weekly', time: '08:30', weekdays: [5, 1, 2, 3, 4] })).toBe('Weekdays at 08:30')
+    expect(line({ kind: 'weekly', time: '10:00', weekdays: [6, 7] })).toBe('Weekends at 10:00')
+    expect(line({ kind: 'weekly', time: '09:00', weekdays: [3, 1, 1] })).toBe('Mon, Wed at 09:00')
+    expect(line({ kind: 'weekly', time: '07:00', weekdays: [1, 2, 3, 4, 5, 6, 7] })).toBe('Every day at 07:00')
+  })
+
+  it('reads an interval in its largest whole unit', () => {
+    const anchor = '2026-11-01T00:00:00+07:00'
+    expect(line({ kind: 'interval', minutes: 45, anchor })).toBe('Every 45 minutes')
+    expect(line({ kind: 'interval', minutes: 60, anchor })).toBe('Every hour')
+    expect(line({ kind: 'interval', minutes: 240, anchor })).toBe('Every 4 hours')
+    expect(line({ kind: 'interval', minutes: 2880, anchor })).toBe('Every 2 days')
+    expect(line({ kind: 'interval', minutes: 10080, anchor })).toBe('Every week')
+  })
+
+  it('describes the other kinds', () => {
+    expect(line({ kind: 'daily', time: '01:00' })).toBe('Every day at 01:00')
+    expect(line({ kind: 'monthly', time: '09:00', day: 1 })).toBe('Day 1 of each month at 09:00')
+    expect(line({ kind: 'once', at: '2026-12-01T10:00:00+07:00' })).toBe('Once')
+    const preset = (source: string) => webhookRule(WEBHOOK_PRESETS.find((entry) => entry.source === source)!)
+    expect(line(preset('github'))).toBe('When GitHub sends a request')
+    expect(line(preset('generic'))).toBe('When a request arrives')
   })
 })

@@ -183,6 +183,7 @@ export class AgentService {
         return parts.pump.agentCalls
       },
       analyze: (...a) => this.analyze(...a),
+      applyWaiting: (...a) => parts.router.applyWaiting(...a),
       autoResumeOf: (...a) => parts.providerWaits.autoResumeOf(...a),
       applySavedPermission: (...a) => parts.requests.applySavedPermission(...a),
       get attempted() {
@@ -322,6 +323,7 @@ export class AgentService {
         return parts.dispatcher.steering
       },
       stop: (...a) => parts.process.stop(...a),
+      stopAwaiting: (...a) => parts.tasks.stopAwaiting(...a),
       stopAndWait: (...a) => parts.process.stopAndWait(...a),
       subagentHooks: (...a) => parts.subagents.subagentHooks(...a),
       subagentSettings: (...a) => parts.router.subagentSettings(...a),
@@ -685,10 +687,6 @@ export class AgentService {
 
   claudeAccountUsage(...args: Parameters<ContextUsageTracker['claudeAccountUsage']>) {
     return this.parts.contexts.claudeAccountUsage(...args)
-  }
-
-  readClaudeUsage(...args: Parameters<ContextUsageTracker['readClaudeUsage']>) {
-    return this.parts.contexts.readClaudeUsage(...args)
   }
 
   invalidateCatalog(...args: Parameters<CatalogService['invalidateCatalog']>) {
@@ -1181,6 +1179,10 @@ export class AgentService {
 
   backgroundTool(...args: Parameters<AgentTasks['backgroundTool']>) {
     return this.parts.tasks.backgroundTool(...args)
+  }
+
+  awaitCommands(...args: Parameters<AgentTasks['awaitCommands']>) {
+    return this.parts.tasks.awaitCommands(...args)
   }
 
   stopTask(...args: Parameters<AgentTasks['stopTask']>) {

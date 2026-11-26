@@ -68,6 +68,7 @@ export const ChatRow = memo(function ChatRow({
   selectable,
   earlierRuns,
   recap,
+  inProject,
 }: {
   chat: Chat
   project?: string
@@ -78,6 +79,8 @@ export const ChatRow = memo(function ChatRow({
   earlierRuns?: number
   /** The list offers Select: while selecting, a tap picks the row instead of opening it. */
   selectable?: boolean
+  /** Listed under its project's header, which names the checkout's branch once for every thread working in it. */
+  inProject?: boolean
 }) {
   const say = useSay()
   const { c, textSize } = useTheme()
@@ -108,6 +111,7 @@ export const ChatRow = memo(function ChatRow({
   const selecting = !!selectable && selection.on && !chat.pending
   const picked = selecting && selection.ids.has(chat.id)
   const [shortKey, fullKey] = status ? SHORT[status.kind] : []
+  const working = status?.kind === 'working' || status?.kind === 'goal' || status?.kind === 'verifying'
   const helpers = chat.helperSummary?.active ?? 0
   const blocker = status && WAITING.has(status.kind) ? inboxBlocker(chat) : null
   // What the thread is doing, first on its detail line: the agent's step while it works, what it needs from you, or how
@@ -116,7 +120,7 @@ export const ChatRow = memo(function ChatRow({
     ? { text: say('Waiting to send'), tone: 'muted' }
     : !status || status.kind === 'finished'
       ? null
-      : status.kind === 'working' || status.kind === 'goal' || status.kind === 'verifying'
+      : working
         ? { text: chat.activityLabel ? say(chat.activityLabel) : strings[shortKey!], tone: 'accent' }
         : WAITING.has(status.kind)
           ? {
@@ -135,7 +139,8 @@ export const ChatRow = memo(function ChatRow({
               : { text: strings[shortKey!], tone: status.kind === 'limit' ? 'warn' : 'muted' }
   // Then where the work lands: its branch (a worktree's own, or the one its checkout has out), the project in lists
   // that mix projects, helpers still working, and an unreachable host.
-  const branch = chat.branch || (chat.mode === 'worktree' ? say('Worktree') : '')
+  const branch =
+    inProject && chat.mode !== 'worktree' ? '' : chat.branch || (chat.mode === 'worktree' ? say('Worktree') : '')
   const pr = chat.pullRequest ?? null
   const prLabel = pr
     ? say('Pull request #{0}: {1}', { 0: pr.number, 1: say(PULL_REQUEST_STAGE_LABEL[pr.stage]) })
@@ -168,7 +173,7 @@ export const ChatRow = memo(function ChatRow({
         ]
   return (
     <>
-      {divider ? <Divider inset={selecting ? ROW_INSET : space.l} /> : null}
+      {divider ? <Divider inset={ROW_INSET} /> : null}
       <SwipeRow actions={actions} background={c.window} fullSwipe>
         <Row
           onLongPress={
@@ -203,8 +208,10 @@ export const ChatRow = memo(function ChatRow({
             .filter(Boolean)
             .join(', ')}
         >
-          {selecting ? (
-            <View style={{ paddingTop: detail ? 1 : 0 }}>
+          {/* One leading column, as a mail list keeps its unread dot: the thread's mark when it has something to report,
+              and the selection circle in its place while selecting. Titles line up whether or not a row has one. */}
+          <View style={{ width: 16, minHeight: 20, alignItems: 'center', justifyContent: 'center' }}>
+            {selecting ? (
               <View
                 style={{
                   width: 18,
@@ -219,8 +226,12 @@ export const ChatRow = memo(function ChatRow({
               >
                 {picked ? <Check size={12} color={c.primaryInk} strokeWidth={3} /> : null}
               </View>
-            </View>
-          ) : null}
+            ) : chat.pending ? (
+              <Clock size={13} color={c.muted} />
+            ) : status ? (
+              <StateMark status={status} retrying={!!chat.waitingUntil} label={strings[fullKey!]} />
+            ) : null}
+          </View>
           <View style={{ flex: 1, gap: 3 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <T size={font.body} weight={unread ? '600' : '500'} numberOfLines={stacked ? 2 : 1} style={{ flex: 1 }}>
@@ -245,34 +256,28 @@ export const ChatRow = memo(function ChatRow({
               ) : null}
               {chat.pinnedAt !== null ? <Pin size={11} color={c.muted} /> : null}
               {detail ? null : <AgentStack agents={agents} />}
-              {/* As in the desktop sidebar: the thread's mark when it has something to report, otherwise its age. */}
-              {chat.pending ? (
-                <Clock size={13} color={c.muted} />
-              ) : status ? (
-                <StateMark status={status} retrying={!!chat.waitingUntil} label={strings[fullKey!]} />
-              ) : (
-                <T size={font.caption} tone="muted">
+              {/* A thread at work is current by definition; every other row says when it last moved. */}
+              {chat.pending || working ? null : (
+                <T size={font.caption} tone="muted" style={{ fontVariant: ['tabular-nums'] }}>
                   {ago(chat.lastActiveAt)}
                 </T>
               )}
             </View>
             {state || reply ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m }}>
-                {state ? (
-                  <Fact tone={state.tone} grow>
-                    {state.text}
-                  </Fact>
-                ) : (
-                  <T size={font.control} tone="muted" numberOfLines={stacked ? 2 : 1} style={{ flex: 1 }}>
-                    {reply}
-                  </T>
-                )}
-                {facts ? null : (
-                  <>
-                    <View style={{ flex: 1, minWidth: space.s }} />
-                    <AgentStack agents={agents} />
-                  </>
-                )}
+                {/* The text takes the line; the agents' marks keep their place at its end. */}
+                <View style={{ flex: 1, minWidth: 0, flexDirection: 'row' }}>
+                  {state ? (
+                    <Fact tone={state.tone} grow>
+                      {state.text}
+                    </Fact>
+                  ) : (
+                    <T size={font.control} tone="muted" numberOfLines={stacked ? 2 : 1} style={{ flex: 1 }}>
+                      {reply}
+                    </T>
+                  )}
+                </View>
+                {facts ? null : <AgentStack agents={agents} />}
               </View>
             ) : null}
             {facts ? (

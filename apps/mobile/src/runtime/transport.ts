@@ -69,6 +69,18 @@ export function registerSocketProvider(
   closeSocket = close
   probeSocket = probe
 }
+/**
+ * Signs a plain request made with a key-bound token, and reads a host's clock when this phone's is off; set by the
+ * platform, which holds the key.
+ */
+export interface RequestProof {
+  sign(token: string): string | null
+  sync(address: string): Promise<void>
+}
+let requestProof: RequestProof | null = null
+export function registerRequestProof(proof: RequestProof | null) {
+  requestProof = proof
+}
 const socketOf = (address: string, token: string): HostSocket => {
   if (!socketProvider) throw new HostError('This build cannot connect to a host. Update Ramu and try again.')
   return socketProvider(address, token)
@@ -160,12 +172,38 @@ export class HostClient {
         resolve(known)
       }, 8000)
     })
+    const ask = () => {
+      const proof = requestProof?.sign(this.token)
+      return this.fetcher(`${this.address}/session`, {
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+          [PROTOCOL_HEADER]: String(PROTOCOL_VERSION),
+          ...(proof ? { 'x-ramu-proof': proof } : {}),
+        },
+        signal: controller.signal,
+      })
+    }
+    /** The host knows the token and refused its proof (a clock that is off, a key not readable yet): not a revocation. */
+    const proofRefusal = async (response: Response): Promise<string | null> => {
+      if (response.status !== 401) return null
+      const error = await response
+        .json()
+        .then((body: { error?: unknown }) => body?.error)
+        .catch(() => null)
+      return typeof error === 'string' && error.startsWith('proof-') ? error : null
+    }
     const check = async (): Promise<HostError> => {
       try {
-        const response = await this.fetcher(`${this.address}/session`, {
-          headers: { Authorization: `Bearer ${this.token}`, [PROTOCOL_HEADER]: String(PROTOCOL_VERSION) },
-          signal: controller.signal,
-        })
+        let response = await ask()
+        let refused = await proofRefusal(response)
+        if (refused === 'proof-stale' && requestProof) {
+          // This phone's clock is far from the host's: read the host's and ask once more.
+          await requestProof.sync(this.address)
+          response = await ask()
+          refused = await proofRefusal(response)
+        }
+        // Still refused for its proof: the pairing stands, so the connection keeps trying instead of asking to pair.
+        if (refused) return known
         if (response.status === 401) return new HostError('Pairing was revoked. Pair this host again.', 401)
         if (response.ok)
           return new HostError(

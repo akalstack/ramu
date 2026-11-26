@@ -39,6 +39,9 @@ import {
   type ReviewFileState,
   type ReviewBranchState,
 } from '@ramu/shared/types'
+
+/** A command held for less than this leaves no note in its thread. */
+const WAIT_NOTE_MS = 3_000
 const exec = promisify(execFile)
 /** Recent turns read to tell whose an uncommitted file is; older ones were most likely committed already. */
 const OWNER_REVIEWS = 200
@@ -274,11 +277,19 @@ export class ReviewService {
     } catch {
       return
     }
-    const waited = await this.ledger.commandTurn(root, toolUseId, signal, (other) => {
+    // A hold of a moment is not worth a line in the thread; one the person would notice says whose command it was.
+    let note: ReturnType<typeof setTimeout> | undefined
+    let noted = false
+    await this.ledger.commandTurn(root, toolUseId, signal, (other) => {
       const taskId = this.taskOf(other)
-      if (taskId) this.agents.recordCommandWait(root, taskId)
+      if (!taskId) return
+      note = setTimeout(() => {
+        noted = true
+        this.agents.recordCommandWait(root, taskId)
+      }, WAIT_NOTE_MS)
     })
-    if (waited) this.agents.recordCommandWait(root, null)
+    clearTimeout(note)
+    if (noted) this.agents.recordCommandWait(root, null)
   }
   /** Files set apart as written by others that the person says belong to this turn: undone and committed with it. */
   claimElsewhere(id: string, fileIds: string[]): ChangeReview {

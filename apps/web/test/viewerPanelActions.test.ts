@@ -47,7 +47,13 @@ vi.mock('../src/views/agent/components/ToolGroup', () => ({ ToolGroup: () => nul
 vi.mock('../src/views/agent/components/TurnDiff', () => ({ TurnDiff: () => null }))
 vi.mock('../src/chat/AgentContentView', () => ({ AgentContentView: () => null }))
 vi.mock('../src/chat/MarkdownText', () => ({ MarkdownText: () => null }))
-vi.mock('../src/models/ModelSets', () => ({ modelDisplayName: (name: string) => name }))
+vi.mock('../src/models/ModelSets', () => ({
+  modelDisplayName: (name: string) => name,
+  useModelSets: () => ({ catalogs: [] }),
+}))
+vi.mock('../src/composer/Composer', () => ({ Composer: () => null }))
+vi.mock('../src/composer/ComposerInput', () => ({ focusComposer() {} }))
+vi.mock('../src/settings/AppSettings', () => ({ useAppSettings: () => ({ preferences: { asideModel: null } }) }))
 vi.mock('../src/chat/AgentControls', () => ({ providerName: (name: string) => name }))
 vi.mock('../src/components/app-toaster', () => ({ notify: { add: vi.fn() } }))
 const { AgentTaskPanel } = await import('../src/views/agent/components/AgentTaskPanel')
@@ -61,6 +67,8 @@ function nodes(tree: ReactNode): Record<string, unknown>[] {
 const find = (tree: ReactNode, label: string) => nodes(tree).find((props) => props['aria-label'] === label)!
 /** The panel's message box, by its label: a shared composer whose `onChange` takes the text. */
 const box = (tree: ReactNode, label: string) => nodes(tree).find((props) => props.label === label)!
+/** The aside's message box: the thread's composer, which sends through `onSubmit`. */
+const asideBox = (tree: ReactNode) => nodes(tree).find((props) => props.submitLabel === 'Ask aside')!
 beforeEach(() => {
   state.index = 0
   state.values = []
@@ -112,26 +120,44 @@ it('keeps aside drafts and existing answers readable without sending or deleting
     return AsidePanel({
       sessionId: 's',
       asides: [aside],
-      open: { id: 'aside', quote: '', from: 'assistant' },
-      onOpen: vi.fn(),
+      open: { quote: '', from: 'assistant' },
       onClose: vi.fn(),
       onQuote: vi.fn(),
+      onPromote: vi.fn(),
       readOnly,
     })
   }
-  ;(box(RenderAside(false), 'Ask aside').onChange as (value: string) => void)('My follow-up')
+  ;(asideBox(RenderAside(false)).onChange as (value: string) => void)('My follow-up')
   const viewer = RenderAside(true)
-  expect(box(viewer, 'Ask aside').value).toBe('My follow-up')
+  expect(asideBox(viewer).value).toBe('My follow-up')
   expect(
     nodes(viewer).some((props) => (props.event as { text?: string } | undefined)?.text === 'An existing answer'),
   ).toBe(true)
-  expect(box(viewer, 'Ask aside').disabled).toBe(true)
+  expect(asideBox(viewer).disabled).toBe(true)
   expect(find(viewer, 'Delete aside').disabled).toBe(true)
   ;(find(viewer, 'Delete aside').onClick as () => void)()
-  ;(box(viewer, 'Ask aside').onSend as () => void)()
-  await Promise.resolve()
+  await (asideBox(viewer).onSubmit as () => Promise<void>)()
   expect(state.invoke).not.toHaveBeenCalled()
-  expect(box(RenderAside(false), 'Ask aside').value).toBe('My follow-up')
+  expect(asideBox(RenderAside(false)).value).toBe('My follow-up')
+})
+
+it('asks an aside with the model chosen in the thread, so it is answered by that model', async () => {
+  const settings = { provider: 'claude-code', model: 'fable' } as never
+  const RenderAside = () => {
+    state.index = 0
+    return AsidePanel({
+      sessionId: 's',
+      asides: [],
+      open: { quote: 'Quoted', from: 'assistant' },
+      settings,
+      onClose: vi.fn(),
+      onQuote: vi.fn(),
+      onPromote: vi.fn(),
+    })
+  }
+  ;(asideBox(RenderAside()).onChange as (value: string) => void)('Why this way?')
+  await (asideBox(RenderAside()).onSubmit as () => Promise<void>)()
+  expect(state.invoke).toHaveBeenCalledWith('aside.ask', 's', null, 'Quoted', 'assistant', 'Why this way?', settings)
 })
 
 it('does not fetch a revert plan or rewind when a viewer reaches an already-open edit dialog', async () => {

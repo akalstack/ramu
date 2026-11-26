@@ -65,6 +65,8 @@ export interface AppPreferences extends WorkspaceDefaults {
   defaultCommitBranch: 'new-branch' | 'current'
   /** Model that drafts commit messages; null follows the default model step in Model sets. */
   commitModel: IntelligencePreferences['maintenanceModel']
+  /** Model that answers asides; null follows the model chosen in the thread the aside is about. */
+  asideModel: IntelligencePreferences['maintenanceModel']
   recentChats: number
   /** Archived chats idle this many days are deleted automatically; 0 keeps them forever. */
   cleanupArchivedDays: number
@@ -188,6 +190,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   defaultCommitAction: 'commit',
   defaultCommitBranch: 'new-branch',
   commitModel: null,
+  asideModel: null,
   recentChats: 10,
   cleanupArchivedDays: 90,
   terminalTabPosition: 'top',

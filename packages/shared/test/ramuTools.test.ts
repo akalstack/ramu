@@ -179,6 +179,22 @@ describe('protected edits in review threads', () => {
     ).toEqual([])
   })
 
+  it('reads a wait on the agent own background command as waiting, cleared or not found', () => {
+    const call = (args: Record<string, unknown>) => ramuTool(use('mcp__ramu__background_wait', args))!
+    const found = JSON.stringify({ matched: ['b1'], unmatched: [] })
+    expect(describeRamuTool(call({ taskIds: ['b1'] }), found)).toMatchObject({
+      done: 'Waiting on a background command',
+      icon: 'terminal',
+      facts: [],
+    })
+    expect(describeRamuTool(call({ taskIds: ['b1'], waiting: false }), found).done).toBe(
+      'Stopped waiting on a background command',
+    )
+    expect(describeRamuTool(call({ taskIds: ['x'] }), JSON.stringify({ matched: [], unmatched: ['x'] })).done).toBe(
+      'Found no background command to wait on',
+    )
+  })
+
   it('reads background command waits by what came of them', () => {
     const call = (args: Record<string, unknown>) => ramuTool(use('mcp__ramu__background_terminal_wait', args))!
     const waiting = describeRamuTool(call({ ids: ['a'], outputIncludes: ['ready'] }))

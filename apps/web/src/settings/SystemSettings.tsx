@@ -5,6 +5,7 @@ import type { AppPreferences } from '@ramu/shared/types'
 import { BackgroundControls } from '../Automation'
 import { t } from '../i18n'
 import { SETTINGS_FORM_CLASS, type DraftSetter } from './constants'
+import { WorkModelNote } from './WorkModels'
 import { KeepAwakeSettings } from './KeepAwakeSettings'
 import { ToggleRow } from './ToggleRow'
 import { useSettingsInvoke } from './SettingsScope'
@@ -13,10 +14,12 @@ export function SystemSettings({
   draft,
   onChange,
   busy,
+  onOpenModels,
 }: {
   draft: AppPreferences
   onChange: DraftSetter
   busy: boolean
+  onOpenModels: () => void
 }) {
   const invoke = useSettingsInvoke()
   const toggleProps = { draft, onChange, busy }
@@ -51,6 +54,9 @@ export function SystemSettings({
             onChange={(e) => onChange({ ...draft, recapTime: e.target.value })}
           />
         </SettingsRow>
+      )}
+      {draft.recapsEnabled && (
+        <WorkModelNote title="Background model" value={draft.intelligence.maintenanceModel} onOpen={onOpenModels} />
       )}
     </div>
   )

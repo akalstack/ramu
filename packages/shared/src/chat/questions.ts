@@ -54,6 +54,22 @@ export function parseAnswerMessage(text: string): { requestId: string; body: str
   return match ? { requestId: match[1]!, body: match[2]! } : null
 }
 
+/**
+ * A late answer's body as question and answer pairs, so the chat can set what was asked apart from what the person
+ * said. A paragraph of one line continues the answer before it, as a typed answer of several paragraphs does.
+ */
+export function answerPairs(body: string): { question: string; answer: string }[] {
+  const pairs: { question: string; answer: string }[] = []
+  for (const block of body.split(/\n{2,}/)) {
+    const at = block.indexOf('\n')
+    const last = pairs.at(-1)
+    if (at < 0 && last) last.answer = `${last.answer}\n\n${block}`
+    else if (at < 0) pairs.push({ question: '', answer: block })
+    else pairs.push({ question: block.slice(0, at), answer: block.slice(at + 1) })
+  }
+  return pairs
+}
+
 export const QUESTION_INPUT_GUIDANCE =
   'For an open-ended question that needs the user’s own words, omit options or pass options=[]; the user must type and submit an explicit non-empty answer. Do not invent choices or a default answer for these questions.'
 

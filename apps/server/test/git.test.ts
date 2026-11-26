@@ -233,3 +233,32 @@ describe('the remote a branch publishes to', () => {
     expect(sh(tmp, '--git-dir', fork, 'rev-parse', 'main')).toBe(sh(repo, 'rev-parse', 'HEAD'))
   })
 })
+
+describe('a remote that never answers', () => {
+  it.skipIf(process.platform === 'win32')(
+    'stops the command and its helpers instead of holding the repository',
+    async () => {
+      const marker = join(tmp, 'helper-pid')
+      const helper = join(tmp, 'stall.sh')
+      writeFileSync(helper, `#!/bin/sh\necho $$ > '${marker}'\nexec sleep 30\n`, { mode: 0o755 })
+      sh(repo, 'config', 'protocol.ext.allow', 'always')
+      sh(repo, 'remote', 'add', 'stalled', `ext::${helper}`)
+      const started = Date.now()
+      // Long enough for git to start the helper on a busy machine, so there is a helper to find stopped.
+      await expect(git.git(repo, ['fetch', 'stalled'], { timeoutMs: 3_000 })).rejects.toThrow(
+        /did not finish within 3 seconds/,
+      )
+      expect(Date.now() - started).toBeLessThan(15_000)
+      const pid = Number(readFileSync(marker, 'utf8').trim())
+      const alive = () => {
+        try {
+          process.kill(pid, 0)
+          return true
+        } catch {
+          return false
+        }
+      }
+      await expect.poll(alive).toBe(false)
+    },
+  )
+})

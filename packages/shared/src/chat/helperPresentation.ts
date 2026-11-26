@@ -11,6 +11,45 @@ import { parseAnswerMessage } from '@ramu/shared/chat/questions'
 export const helperIdentity = (host: string, session: string, helper: string): string =>
   JSON.stringify([host, session, helper])
 export const helperActive = (task: AgentTask): boolean => task.status === 'running' && !task.recovered
+/**
+ * Work the thread waits on: a sub-agent, or a background command the agent said it is waiting on. Other background
+ * commands and advisors run beside a turn without holding it open.
+ */
+const turnHelper = (task: AgentTask): boolean =>
+  task.taskType === 'local_bash' ? task.awaited === true : task.taskType !== 'advisor'
+
+/** A sub-agent or awaited command still at work, which keeps its thread working after the main agent's result. */
+export const holdsTurn = (task: AgentTask): boolean => turnHelper(task) && helperActive(task)
+
+/**
+ * When a turn's work stopped: its result, or later when sub-agents it started or commands it waited on were still
+ * finishing, since the person watched them work under it. Never past `before`, the start of the turn after it.
+ */
+export function turnWorkEnd(
+  resultAt: number | undefined,
+  helpers: readonly AgentTask[],
+  before?: number,
+): number | undefined {
+  if (resultAt === undefined) return undefined
+  const ends = helpers.flatMap((task) => {
+    // A helper messaged again long after its turn would stretch that turn to the later visit.
+    if (!turnHelper(task) || task.status === 'running' || task.resumedAt !== undefined) return []
+    const end =
+      task.endedAt ??
+      (task.startedAt !== undefined && task.durationMs !== undefined ? task.startedAt + task.durationMs : undefined)
+    return end === undefined ? [] : [end]
+  })
+  const last = Math.max(resultAt, ...ends)
+  return before === undefined ? last : Math.max(resultAt, Math.min(last, before))
+}
+
+/**
+ * Background commands the agent said it was waiting on, running or ended. They are not helpers in the transcript, so
+ * a turn's clock reads them from here.
+ */
+export const awaitedCommands = (events: AgentEvent[]): AgentTask[] =>
+  latestTasks(events).filter((task) => task.taskType === 'local_bash' && task.awaited === true)
+
 /** The agent's own background shell commands still running, such as a dev server; they are not helpers in the transcript. */
 export const runningCommands = (events: AgentEvent[]): AgentTask[] =>
   latestTasks(events).filter((task) => task.taskType === 'local_bash' && task.background && helperActive(task))

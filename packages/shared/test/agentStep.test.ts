@@ -25,7 +25,7 @@ it('names the running tool and what it runs on, and falls back to what the agent
       result('a'),
       { kind: 'text', text: 'Done' } as AgentEvent,
     ]),
-  ).toEqual({ label: 'Writing…' })
+  ).toEqual({ label: 'Working' })
   expect(currentStep('starting', [])).toEqual({ label: 'Starting…' })
   expect(currentStep('idle', [user(1)])).toBeNull()
 })

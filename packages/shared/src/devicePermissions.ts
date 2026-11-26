@@ -102,6 +102,38 @@ export function mayUse(view: DevicePermissionsView | null | undefined, permissio
   return !view || grantActive(view.permissions[permission] ?? undefined, now)
 }
 
+/**
+ * Whether a full-access device holds less than a newly paired one does: a permission new devices get is asked for each
+ * time, blocked, or allowed only for a while. Someone limited it on purpose, so the device list says so. Agents is no
+ * part of this: it is given to a device, never held from the start.
+ */
+export function deviceLimited(
+  device: {
+    role?: 'owner' | 'viewer'
+    kind?: 'host'
+    permissions?: Partial<Record<DevicePermission, PermissionGrant>>
+    os?: { form: 'phone' | 'tablet' | 'computer' | 'server' }
+  },
+  now: number,
+  /** What this host gives a new device: its own saved set, or every permission but Agents. */
+  defaults: readonly DevicePermission[] = AUTOMATIC_PERMISSIONS,
+): boolean {
+  if (device.role === 'viewer' || device.kind === 'host' || !device.permissions) return false
+  const offered = permissionsFor(device.os)
+  return defaults.some((permission) => {
+    // Agents is asked for and granted on its own, so lacking it is never a limit.
+    if (permission === 'agents') return false
+    if (!offered.includes(permission)) return false
+    const grant = device.permissions?.[permission]
+    return !grantActive(grant, now) || grant?.until !== null || !!grant.session
+  })
+}
+
+/** Whether a host saved its own set for new devices, different from the one every host starts with. */
+export const customDefaultPermissions = (defaults: readonly DevicePermission[]): boolean =>
+  defaults.length !== AUTOMATIC_PERMISSIONS.length ||
+  AUTOMATIC_PERMISSIONS.some((permission) => !defaults.includes(permission))
+
 /** What this device holds on a host, as the host reports it to the device. */
 export interface DevicePermissionsView {
   permissions: Record<DevicePermission, PermissionGrant | null>

@@ -107,7 +107,9 @@ it('headlines a live group with its newest thought when the agent is thinking af
       live: true,
     }),
   )
-  expect(html).toContain('Check the config next')
+  // The paragraph still being written waits; the one before it is the newest finished thought.
+  expect(html).toContain('First idea')
+  expect(html).not.toContain('Check the config next')
   expect(html).not.toContain('Thinking')
   expect(html).toContain('lucide-brain')
 })

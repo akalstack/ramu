@@ -116,7 +116,11 @@ export function EventRow({
           <span className="h-px min-w-4 flex-1 bg-line" aria-hidden="true" />
           <span className="inline-flex min-w-0 flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center">
             <Minimize2 size={14} className="flex-none" aria-hidden="true" />
-            {e.state === 'completed' ? translate('Context compacted') : compactionLabel(e)}
+            {e.state === 'completed'
+              ? translate('Context compacted')
+              : e.state === 'unknown'
+                ? translate('Context compaction · {0}', { 0: e.providerStatus ?? 'Unknown status' })
+                : translate(compactionLabel(e))}
             <RepeatCount count={repeats} />
             {e.state === 'completed' && (
               <span

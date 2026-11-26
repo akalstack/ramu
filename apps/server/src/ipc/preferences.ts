@@ -190,6 +190,14 @@ export const appPreferences = z.object({
     })
     .nullable()
     .default(null),
+  asideModel: z
+    .object({
+      provider: z.enum(['claude-code', 'codex', 'opencode', 'cursor', 'antigravity']),
+      model: z.string().max(200),
+      effort: z.enum(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']).nullable(),
+    })
+    .nullable()
+    .default(null),
   recentChats: z.number().int().min(3).max(20).default(DEFAULT_APP_PREFERENCES.recentChats),
   cleanupArchivedDays: z.number().int().min(0).max(3650).default(DEFAULT_APP_PREFERENCES.cleanupArchivedDays),
   terminalTabPosition: z.enum(['top', 'right']).default(DEFAULT_APP_PREFERENCES.terminalTabPosition),

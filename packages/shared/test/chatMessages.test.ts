@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { answerMessage, parseAnswerMessage } from '../src/chat/questions'
+import { answerMessage, answerPairs, parseAnswerMessage } from '../src/chat/questions'
 import { parseTaskStop, taskStopPrompt } from '../src/chat/agentTasks'
 
 // Messages Ramu sends on the user's behalf: the agent reads the full text, the chat shows only what the user did.
@@ -16,6 +16,15 @@ describe('thread messages Ramu writes for the user', () => {
     })
     expect(parseAnswerMessage(answerMessage('req-2', [{ question: 'Q', answer: 'A' }]))?.body).toBe('Q\nA')
     expect(parseAnswerMessage('Answer to your earlier question, please')).toBeNull()
+  })
+  it('sets each late answer apart from the question it answers', () => {
+    expect(answerPairs('Which database?\nSQLite\n\nWhich region?\nJakarta\nor Singapore')).toEqual([
+      { question: 'Which database?', answer: 'SQLite' },
+      { question: 'Which region?', answer: 'Jakarta\nor Singapore' },
+    ])
+    expect(answerPairs('Why?\nFirst reason\n\nSecond reason')).toEqual([
+      { question: 'Why?', answer: 'First reason\n\nSecond reason' },
+    ])
   })
   it('shows a Codex sub-agent stop request as a note', () => {
     expect(

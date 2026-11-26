@@ -58,3 +58,8 @@ it('keeps steers in the transcript and only queued messages in the tray', () => 
   const later: QueuedMessage = { id: 'q', text: 'Then run tests', mode: 'queue' }
   expect(splitSteering([steer, later])).toEqual({ tray: [later], steering: [steer] })
 })
+it('replaces a send that ended in a space, queued or steered, instead of showing it twice', () => {
+  const spaced = { ...pending, text: 'Hello ', payload: { ...pending.payload, outgoing: 'Hello ' } }
+  expect(visible(spaced, [old, { kind: 'user', text: 'Hello ', steered: true }])).toBe(false)
+  expect(visible(spaced, [old], [{ id: 'new', text: 'Hello ', mode: 'steer' }])).toBe(false)
+})

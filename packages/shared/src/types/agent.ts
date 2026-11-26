@@ -174,7 +174,10 @@ export interface ThreadInputRequest {
   /** One-tap answers, for a single single-choice question: its answer key and option labels. */
   choices?: { key: string; options: string[] }
 }
-/** Independently running helpers of a thread's main sessions; advisors, shell commands and restored activity are excluded. */
+/**
+ * Independently running helpers of a thread's main sessions. Advisors, restored activity and shell commands are excluded,
+ * except a command the agent said it is waiting on.
+ */
 export interface ThreadHelperSummary {
   active: number
   /** Active helpers held on input or a provider limit. */
@@ -336,6 +339,8 @@ export interface AgentTask {
   status: AgentTaskStatus
   /** Keeps running after the main turn ends. */
   background?: boolean
+  /** The agent said it is waiting on this command: it keeps the thread working until it ends. */
+  awaited?: boolean
   prompt?: string
   /** Latest progress summary, or the final report. */
   summary?: string
@@ -415,6 +420,12 @@ type AgentEventBody =
   /** One ability call (an image, a web search, a long read) that Ramu ran on a provider that has the ability. */
   | { kind: 'ability'; call: import('../providers/abilities').AbilityCall }
   | ({ kind: 'provider-wait' } & ProviderWaitFields)
+  /**
+   * A settings change held while the provider's own sub-agents or background commands run, since applying it restarts
+   * the provider's process and would end them. The latest one is current; `settings` is null once it was applied or
+   * cancelled.
+   */
+  | { kind: 'settings-waiting'; settings: AgentSettings | null; previous?: AgentSettings }
   | {
       kind: 'queue'
       messages: QueuedMessage[]

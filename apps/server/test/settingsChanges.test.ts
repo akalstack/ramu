@@ -60,7 +60,7 @@ it('refuses settings only the person may change, and still finds them with the p
   expect(saved.defaultAccess).toBe(DEFAULT_APP_PREFERENCES.defaultAccess)
   const found = await changes.find('default access')
   expect(found[0]).toMatchObject({ path: 'defaultAccess', change: 'yourself', page: 'Permissions' })
-  expect((await changes.find('pair device'))[0]).toMatchObject({ title: 'Connect a device', change: 'yourself' })
+  expect((await changes.find('connect device'))[0]).toMatchObject({ title: 'Connect a device', change: 'yourself' })
   expect((await changes.find('warn model'))[0]).toMatchObject({
     path: 'warnModelChange',
     change: 'agent',

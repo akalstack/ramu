@@ -1,4 +1,5 @@
 import { realpathSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { stat } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { HOST_FILES_REPO, localFileLink } from '@ramu/shared/workspace/fileLinks'
@@ -13,8 +14,10 @@ export async function resolveFileLink(
   options: { folders?: boolean } = {},
   withheld: string[] = [],
 ) {
-  const target = localFileLink(href)
-  if (!target) return null
+  const written = localFileLink(href)
+  if (!written) return null
+  // A path from the home folder, as agents and shells write it, is that folder on this host.
+  const target = /^~[\\/]/.test(written.path) ? { ...written, path: join(homedir(), written.path.slice(2)) } : written
   const bindings = workspace.fileBindings(taskId),
     scope = workspace.agentScope(taskId)
   const candidates = isAbsolute(target.path)

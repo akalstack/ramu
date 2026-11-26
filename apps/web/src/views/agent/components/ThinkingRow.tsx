@@ -2,7 +2,8 @@ import { t as translate, useLanguage } from '../../../i18n'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Button } from '@/components/desktop-button'
 import { Brain, ChevronRight } from 'lucide-react'
-import { NEW_THOUGHT, thoughtLine, thoughtTitle, tickThought } from '@ramu/shared/chat/thoughtLine'
+import { NEW_THOUGHT, thoughtBlock, thoughtLine, thoughtTitle, tickThought } from '@ramu/shared/chat/thoughtLine'
+import { useChatFade } from '../../../chat/ChatMotion'
 import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import { MarkdownText } from '../../../chat/MarkdownText'
 import { scrollMotion } from '../../../workspace/panelMotion'
@@ -23,6 +24,8 @@ export function ThinkingRow({ text, active = false }: { text: string; active?: b
   const [timing, setTiming] = useState(() => tickThought(NEW_THOUGHT, active, Date.now()))
   const body = useScrollFade<HTMLDivElement>()
   const line = useMemo(() => thoughtLine(text, active), [text, active])
+  // The closed line moves on a paragraph at a time while it streams, each one fading in as a reply's blocks do.
+  const lineFade = useChatFade<HTMLSpanElement>(active ? String(thoughtBlock(text)) : '')
   useEffect(() => setTiming((current) => tickThought(current, active, Date.now())), [active])
   const heading = thoughtTitle(active, timing.took)
   const longThought = heading.label === 'Thought for {0}'
@@ -46,13 +49,14 @@ export function ThinkingRow({ text, active = false }: { text: string; active?: b
         <Brain size={14} className={TOOL_ICON_CLASS} />
         {/* Not a tool-summary: a tool group shrinks those, and this label must always read in full. Open, the row is
             titled, since the thought itself has moved below it; closed, the thought's own line says what it is. */}
-        {open || longThought ? (
+        {/* A thought still on its first paragraph has no line of its own yet, so the row says "Thinking". */}
+        {open || longThought || !line ? (
           <span className="flex-none whitespace-nowrap font-sans text-chat text-inherit">{title}</span>
         ) : (
           <span className="sr-only">{title}</span>
         )}
         {!open && line && (
-          <span className={`${TOOL_SUMMARY_CLASS} thinking-line text-muted-foreground`}>
+          <span ref={lineFade} className={`${TOOL_SUMMARY_CLASS} thinking-line text-muted-foreground`}>
             {active ? <WorkingText>{line}</WorkingText> : line}
           </span>
         )}

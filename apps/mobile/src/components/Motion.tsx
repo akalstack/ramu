@@ -1,5 +1,5 @@
 import { CHAT_MOTION, SENT_MOTION, sweepDuration, TOOL_MOTION } from '@ramu/shared/chat/presentation'
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { AccessibilityInfo, LayoutAnimation, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native'
 import Reanimated, {
   cancelAnimation,
@@ -12,7 +12,6 @@ import Reanimated, {
   withRepeat,
   withSequence,
   withTiming,
-  type SharedValue,
 } from 'react-native-reanimated'
 import { scheduleOnRN } from 'react-native-worklets'
 import { font, useTheme } from '../theme'
@@ -36,12 +35,11 @@ export function useReducedMotion() {
   return reduced
 }
 
-const WINDOW = 0.28
-
 /**
- * The desktop's "Working…" shimmer: a highlight sweeping across muted text, at least 2.2 s a pass and slower across a
- * long label, so it never streaks. React Native cannot clip a gradient to text without a native dependency, so each
- * character brightens as the sweep passes it.
+ * The desktop's "Working…" shimmer, as one breathing label: the text brightens and dims, at least 2.2 s a pass and
+ * slower across a long label. React Native cannot clip a moving gradient to text without a native dependency, and
+ * sweeping it letter by letter animated one view per character on every frame, which kept the phone warm while a
+ * thread ran; one animated label costs the same whatever its length.
  */
 export function Shimmer({
   children,
@@ -58,25 +56,25 @@ export function Shimmer({
   visibleWidth?: number
 }) {
   const reduced = useReducedMotion()
-  const sweep = useSharedValue(-WINDOW)
+  const pulse = useSharedValue(1)
   const [measured, setMeasured] = useState(0)
   const width = visibleWidth ? Math.min(visibleWidth, measured || visibleWidth) : measured
   const duration = sweepDuration(width, TOOL_MOTION.sweepMs, TOOL_MOTION.sweepPxPerSecond)
   useEffect(() => {
     if (reduced) return
-    // Each pass rests off the end before the next, like the desktop's highlight that slides past the text.
-    sweep.value = -WINDOW
-    sweep.value = withRepeat(
+    pulse.value = 1
+    pulse.value = withRepeat(
       withSequence(
-        withTiming(1 + WINDOW, { duration, easing: ReEasing.inOut(ReEasing.quad) }),
-        withDelay(TOOL_MOTION.restMs, withTiming(-WINDOW, { duration: 0 })),
+        withTiming(0.45, { duration: duration / 2, easing: ReEasing.inOut(ReEasing.quad) }),
+        withTiming(1, { duration: duration / 2, easing: ReEasing.inOut(ReEasing.quad) }),
+        withDelay(TOOL_MOTION.restMs, withTiming(1, { duration: 0 })),
       ),
       -1,
     )
-    return () => cancelAnimation(sweep)
-  }, [reduced, sweep, duration])
-  const characters = useMemo(() => [...children], [children])
+    return () => cancelAnimation(pulse)
+  }, [reduced, pulse, duration])
   const { c } = useTheme()
+  const animated = useAnimatedStyle(() => ({ opacity: pulse.value }))
   if (reduced)
     return (
       <T size={size} tone="muted" style={style}>
@@ -84,44 +82,12 @@ export function Shimmer({
       </T>
     )
   return (
-    <View
-      accessible
+    <Reanimated.Text
       accessibilityRole="text"
-      accessibilityLabel={children}
+      numberOfLines={singleLine ? 1 : undefined}
       onLayout={(event) => setMeasured(event.nativeEvent.layout.width)}
-      style={{ flexDirection: 'row', flexWrap: singleLine ? 'nowrap' : 'wrap' }}
+      style={[{ fontSize: size, color: c.text, fontVariant: ['tabular-nums'] }, style, animated]}
     >
-      {characters.map((character, index) => (
-        <ShimmerCharacter
-          key={index}
-          sweep={sweep}
-          at={characters.length > 1 ? index / (characters.length - 1) : 0}
-          style={[{ fontSize: size, color: c.text, fontVariant: ['tabular-nums'] }, style]}
-        >
-          {character === ' ' ? '\u00a0' : character}
-        </ShimmerCharacter>
-      ))}
-    </View>
-  )
-}
-
-/** One character of the shimmer, brightened on the UI thread as the sweep passes it. */
-function ShimmerCharacter({
-  sweep,
-  at,
-  style,
-  children,
-}: {
-  sweep: SharedValue<number>
-  at: number
-  style: StyleProp<TextStyle>
-  children: string
-}) {
-  const animated = useAnimatedStyle(() => ({
-    opacity: interpolate(sweep.value, [at - WINDOW, at, at + WINDOW], [0.45, 1, 0.45], Extrapolation.CLAMP),
-  }))
-  return (
-    <Reanimated.Text importantForAccessibility="no" style={[style, animated]}>
       {children}
     </Reanimated.Text>
   )

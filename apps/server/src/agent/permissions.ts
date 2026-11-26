@@ -53,8 +53,9 @@ export function alwaysAskHooks(scope: CommandScope, access: AgentSettings['acces
 }
 
 /**
- * Holds each command until no other thread's command runs in the checkout this chat shares, so whatever it writes
- * belongs to one thread. It never decides the call: a hold that fails lets the command go ahead.
+ * Holds each command that can write until no other thread's command runs in the checkout this chat shares, so whatever
+ * it writes belongs to one thread. A command that only reads has nothing to tell apart and never waits. It never
+ * decides the call: a hold that fails lets the command go ahead.
  */
 export function commandTurnHooks(
   turn: (toolUseId: string, signal: AbortSignal) => Promise<void>,
@@ -67,7 +68,8 @@ export function commandTurnHooks(
           async (input, toolUseId, { signal }) => {
             if (input.hook_event_name !== 'PreToolUse') return {}
             const id = toolUseId ?? input.tool_use_id
-            if (id) await turn(id, signal).catch(() => {})
+            const command = (input.tool_input as { command?: unknown } | undefined)?.command
+            if (id && !(typeof command === 'string' && readsOnly(command))) await turn(id, signal).catch(() => {})
             return {}
           },
         ],

@@ -138,7 +138,7 @@ it('supports never-expiring devices only through an explicit lifetime choice', (
 it('lets the host choose how long devices stay paired, keeps the choice across pairings, and can return to the default', () => {
   const { devices, path } = store()
   const day = 86_400_000
-  expect(devices.lifetime()).toEqual({ days: 90, saved: false })
+  expect(devices.lifetime()).toEqual({ days: 30, saved: false })
   devices.setLifetime(7)
   expect(devices.lifetime()).toEqual({ days: 7, saved: true })
   const now = Date.now()
@@ -157,7 +157,7 @@ it('lets the host choose how long devices stay paired, keeps the choice across p
   expect(devices.authenticate(`Bearer ${second.token}`, now + 3650 * day)?.id).toBe(second.device.id)
 
   devices.setLifetime(null)
-  expect(devices.lifetime()).toEqual({ days: 90, saved: false })
+  expect(devices.lifetime()).toEqual({ days: 30, saved: false })
 })
 
 it('rejects lifetimes outside 1 to 3650 days and ignores an invalid saved value', () => {
@@ -165,7 +165,7 @@ it('rejects lifetimes outside 1 to 3650 days and ignores an invalid saved value'
   for (const bad of [0, -1, 1.5, 3651, Number.NaN, '30' as unknown as number])
     expect(() => devices.setLifetime(bad)).toThrow()
   writeFileSync(path, JSON.stringify({ devices: [], pending: [], lifetimeDays: 99999 }))
-  expect(devices.lifetime()).toEqual({ days: 90, saved: false })
+  expect(devices.lifetime()).toEqual({ days: 30, saved: false })
 })
 
 it('renews a token: the old one keeps working until the new one is used, then stops after a short overlap', () => {

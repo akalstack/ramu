@@ -26,7 +26,7 @@ export class UsageService {
   }
 
   list(accounts: Partial<Record<AgentProvider, string>> = {}): UsageReading[] {
-    return this.readings.filter(
+    return this.all().filter(
       (reading) =>
         (reading.accountId ?? 'default') === (accounts[reading.provider] ?? providerAccountId(reading.provider)),
     )
@@ -34,7 +34,16 @@ export class UsageService {
 
   /** Every current login's readings, for choosing which login a chat continues on and for plan usage. */
   all(): UsageReading[] {
-    return this.readings.filter((reading) => this.known(reading.provider, reading.accountId ?? 'default'))
+    return this.readings.filter((reading) => this.exists(reading))
+  }
+
+  /** Until the host has loaded its preferences, every saved login still counts. */
+  private exists(reading: UsageReading): boolean {
+    try {
+      return this.known(reading.provider, reading.accountId ?? 'default')
+    } catch {
+      return true
+    }
   }
 
   update(next: UsageReading[]): void {

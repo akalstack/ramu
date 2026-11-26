@@ -156,8 +156,15 @@ export function LiveActivityMonitor() {
     const registered = state.drafts['live-activity-start-host'] || ''
     const key = `${want}:${token}:${state.language}`
     if (startKey.current === key && registered === want) return
-    if (registered && registered !== want && state.computers.some((c) => c.id === registered))
-      await state.invoke(registered, 'liveActivity.unregisterStart').catch(() => {})
+    if (registered && registered !== want && state.computers.some((c) => c.id === registered)) {
+      // A host that did not hear this keeps the token and goes on starting activities, with Live Activities turned off
+      // too. It stays recorded as holding the token, so the next change of state asks it again.
+      const released = await state.invoke(registered, 'liveActivity.unregisterStart').then(
+        () => true,
+        () => false,
+      )
+      if (!released) return
+    }
     if (want) {
       const ok = await state
         .invoke(want, 'liveActivity.registerStart', {
@@ -219,7 +226,12 @@ export function LiveActivityMonitor() {
       dismissEnding()
       suppress(null)
     }
-    if (state.drafts['live-activities-enabled'] === 'no') return
+    if (state.drafts['live-activities-enabled'] === 'no') {
+      // Off means none on the Lock Screen: one the host started while Ramu was closed, or one left from before, is not
+      // the activity tracked above, and would otherwise stay until iOS timed it out.
+      for (const instance of WorkActivityFactory.getInstances()) await instance.end('immediate').catch(() => {})
+      return
+    }
     if (suppressed.current && suppressed.current !== state.selected) suppress(null)
     const computer = state.computers.find((c) => c.id === state.selected)
     if (computer?.status === 'revoked') {

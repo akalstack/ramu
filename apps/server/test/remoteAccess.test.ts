@@ -255,3 +255,42 @@ it('names the host’s own addresses in the proven answer, and keeps only well-f
   // A token the host does not hold learns nothing: the answer is only believed once its proof checks out.
   expect((await check('someone-elses-token', data.hostId)).state).toBe('mismatch')
 })
+
+it('binds a token to the device key at renewal, then answers only with a proof and says why it refuses one', async () => {
+  const { deviceKey, signProof } = await import('@ramu/shared/deviceProof')
+  const { randomBytes } = await import('node:crypto')
+  const random = (bytes: number) => new Uint8Array(randomBytes(bytes))
+  const f = await fixture()
+  const paired = (await (await f.pair(f.devices.createCode(f.now()).code)).json()) as { token: string }
+  const key = deviceKey(random)
+  const renewed = (await (
+    await f.request('/renew', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${paired.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: key.publicKey }),
+    })
+  ).json()) as { token: string; bound: boolean }
+  expect(renewed.bound).toBe(true)
+  const call = (headers: Record<string, string>) =>
+    f.request('/act', { headers: { Authorization: `Bearer ${renewed.token}`, ...headers } })
+  const bare = await call({})
+  expect(bare.status).toBe(401)
+  expect(await bare.json()).toEqual({ error: 'proof-missing' })
+  expect(
+    (await call({ 'X-Ramu-Proof': signProof(key.secret, renewed.token, 'request', f.now(), random) })).status,
+  ).toBe(200)
+  // A device whose clock is an hour off learns that, and the host's clock from the answer's Date.
+  const late = await call({
+    'X-Ramu-Proof': signProof(key.secret, renewed.token, 'request', f.now() - 60 * 60_000, random),
+  })
+  expect(late.status).toBe(401)
+  expect(await late.json()).toEqual({ error: 'proof-stale' })
+  expect(Number.isFinite(Date.parse(late.headers.get('date') ?? ''))).toBe(true)
+  // A copied token cannot renew, with or without a key of its own.
+  const stolen = await f.request('/renew', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${renewed.token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ key: deviceKey(random).publicKey }),
+  })
+  expect(stolen.status).toBe(401)
+})

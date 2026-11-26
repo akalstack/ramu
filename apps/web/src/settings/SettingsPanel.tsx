@@ -1,6 +1,7 @@
 import { SettingsScopeContext, useSettingsScope } from './SettingsScope'
 import { sameValue, settingValue } from '@ramu/shared/settingsCompatibility'
 import { LearningSettings, MaintenanceModelSettings, MemoryAdvancedSettings } from './IntelligenceSettings'
+import { WORK_MODELS_TITLE, WorkModelSettings } from './WorkModels'
 import { SettingsGroupTitle } from '@/components/settings-row'
 import { t, useLanguage } from '../i18n'
 import { ProviderSettings } from './ProviderSettings'
@@ -82,6 +83,7 @@ export function SettingsPanel({
     setPage(section)
     setJump({ title })
   }
+  const openWorkModels = () => openAt('models', WORK_MODELS_TITLE)
   const scope = useSettingsScope(page, initialHost)
   const [appDraft, setAppDraft] = useState<AppPreferences>(() => structuredClone(scope.preferences))
   const store = useModelSets()
@@ -259,7 +261,7 @@ export function SettingsPanel({
                     {scope.primaryId === scope.currentId && <SettingsTransfer />}
                   </>
                 )}
-                {page === 'system' && <SystemSettings {...draftProps} />}
+                {page === 'system' && <SystemSettings {...draftProps} onOpenModels={openWorkModels} />}
                 {page === 'about' && <AboutSettings {...draftProps} />}
                 {page === 'appearance' && (
                   <AppearanceSettings {...draftProps} sizesReset={sizesReset} onResetSizes={() => setReset('sizes')} />
@@ -283,7 +285,7 @@ export function SettingsPanel({
                     <MaintenanceModelSettings
                       value={appDraft.intelligence}
                       cleanup={appDraft.memory.enabled && appDraft.memory.dream}
-                      onChange={(intelligence) => setAppDraft({ ...appDraft, intelligence })}
+                      onOpenModels={openWorkModels}
                     />
                     <SummarySettings
                       value={appDraft.intelligence}
@@ -315,7 +317,7 @@ export function SettingsPanel({
                     </div>
                   </>
                 )}
-                {page === 'git' && <GitSettings {...draftProps} />}
+                {page === 'git' && <GitSettings {...draftProps} onOpenModels={openWorkModels} />}
                 {page === 'shortcuts' && <ShortcutsSettings shortcuts={shortcuts} />}
                 {page === 'models' && (
                   <ModelSetsEditor
@@ -336,6 +338,7 @@ export function SettingsPanel({
                   />
                 )}
                 {page === 'models' && <ProviderFallbackSettings {...draftProps} />}
+                {page === 'models' && <WorkModelSettings draft={appDraft} onChange={setAppDraft} />}
                 {page === 'models' && (
                   <AbilitySettings
                     value={appDraft}

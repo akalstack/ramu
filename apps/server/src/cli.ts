@@ -113,7 +113,7 @@ Options:
 
 Environment: RAMU_USER_DATA, RAMU_SOCKET, RAMU_LISTEN, RAMU_DEVICES_FILE, RAMU_WORKTREES,
              RAMU_ALLOW_PLAINTEXT_REMOTE, RAMU_DISCOVERABLE, RAMU_TLS_CERT, RAMU_TLS_KEY, RAMU_PUBLIC_URL,
-             RAMU_DEVICE_TOKEN_DAYS (90 or never),
+             RAMU_DEVICE_TOKEN_DAYS (30 or never),
              RAMU_BROWSER_ORIGINS (comma-separated exact origins),
              RAMU_BROWSER_EXECUTABLE (optional host Chromium executable; Setup checks its sandbox).
 A paired device has the same control as the desktop app, including shell access. Pair only devices you own.`

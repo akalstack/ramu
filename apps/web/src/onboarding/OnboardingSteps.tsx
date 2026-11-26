@@ -406,7 +406,8 @@ export function ModelChoiceStep({
         <div
           role="radiogroup"
           aria-label={t('Default model')}
-          className="overflow-hidden rounded-(--radius-m) bg-fill [&>*+*]:border-t [&>*+*]:border-(--line)"
+          // A provider with many models scrolls inside its own list, so the effort choice under it stays in view.
+          className="max-h-[min(310px,_38vh)] overflow-y-auto rounded-(--radius-m) bg-fill [&>*+*]:border-t [&>*+*]:border-(--line)"
         >
           {models.map((model) => (
             <Choice

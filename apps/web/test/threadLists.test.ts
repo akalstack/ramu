@@ -84,6 +84,15 @@ it('keeps a host tree key independent of which host is on screen', async () => {
   expect(sidebarTreeKey('mini', 'own', 'project:p')).toBe('host:mini:project:p')
 })
 
+it('reads a shared section as closed from its own key or any host namespace, and from nothing else', async () => {
+  const { sharedSectionKeys } = await import('../src/sidebar/projects/threadLists')
+  expect(sharedSectionKeys(['section:pinned', 'host:mini:section:chats'], 'section:done')).toEqual([])
+  expect(sharedSectionKeys(['section:done', 'project:p'], 'section:done')).toEqual(['section:done'])
+  expect(sharedSectionKeys(['host:mini:section:done', 'host:mini:host'], 'section:done')).toEqual([
+    'host:mini:section:done',
+  ])
+})
+
 it('folds quiet schedule runs into the newest and keeps runs that still have something to show', async () => {
   const { projectThreadPreview } = await import('../src/sidebar/projects/threadLists')
   const run = (id: string, lastActiveAt: number, extra: Partial<Task> = {}) =>

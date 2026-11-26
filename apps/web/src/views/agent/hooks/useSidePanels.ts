@@ -23,8 +23,8 @@ export function useSidePanels({
   const { on } = useHostRuntime()
   // The sub-agent panel: one agent's transcript, or '*' for the list of all of them.
   const [openAgent, setOpenAgentState] = useState<string | null>(null)
-  // The aside panel: one aside (a new one carries its quote), or '*' for the list.
-  const [openAside, setOpenAsideState] = useState<AsideTarget | '*' | null>(null)
+  // The aside panel: the thread's one side chat, opened with the passage the next question is about.
+  const [openAside, setOpenAsideState] = useState<AsideTarget | null>(null)
   // The aside and sub-agent dock land in one step and fade in, like the terminal: they hold whole transcripts that would otherwise
   // reflow on every frame of a width animation.
   const dock = useRef<HTMLDivElement>(null)
@@ -79,18 +79,8 @@ export function useSidePanels({
     }
   }, [sessionId, invoke, on])
 
-  /** With nothing to quote, the aside is about the whole chat: type the question straight away. Existing asides stay listed. */
-  const newAside: AsideTarget = { id: null, quote: '', from: 'assistant' }
-  const toggleAside = () =>
-    setOpenAside(
-      openAside
-        ? null
-        : asides.length === 0
-          ? newAside
-          : asides.length === 1
-            ? { id: asides[0]!.id, quote: '', from: 'assistant' }
-            : '*',
-    )
+  /** With nothing to quote, the next question is about the whole chat. */
+  const toggleAside = () => setOpenAside(openAside ? null : { quote: '', from: 'assistant' })
   const toggleAsideRef = useRef(toggleAside)
   toggleAsideRef.current = toggleAside
   useEffect(() => {

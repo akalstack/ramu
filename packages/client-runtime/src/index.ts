@@ -15,6 +15,8 @@ export { runtimeNetwork } from './network'
 export { PresenceListener, presenceKey, presenceMessage } from './presence'
 export { RuntimeSocket, type SocketFactory, type SocketState } from './socket'
 export { nodeSocketFactory } from './nodeSocket'
+export { DeviceProver, deviceKey, deviceProver, setDeviceProver, type DeviceKey, type Prover } from './deviceProver'
+import { PROOF_HEADER, deviceProver } from './deviceProver'
 export { closeHostSockets, forgetHostSocket, hostSocket, listenToHost } from './hostSocket'
 export type { HostListener } from './hostSocket'
 import { join } from 'node:path'
@@ -182,13 +184,26 @@ export function runtimePair(serverUrl: string, code: string, name?: string, kind
 export function runtimeRenew(serverUrl: string, token: string): Promise<RenewResponse | null> {
   return new Promise((resolve, reject) => {
     const url = new URL(parseRemoteUrl(serverUrl))
+    // With a device key, the renewal binds the new token to it, and proves the key once the host has bound one.
+    const prover = deviceProver()
+    const body = prover ? JSON.stringify({ key: prover.publicKey }) : ''
     const req = (url.protocol === 'https:' ? httpsRequest : httpRequest)(
       {
         hostname: url.hostname.replace(/^\[|\]$/g, ''),
         port: url.port || (url.protocol === 'https:' ? 443 : 80),
         path: RENEW_PATH,
         method: 'POST',
-        headers: { [PROTOCOL_HEADER]: String(PROTOCOL_VERSION), Authorization: `${AUTH_SCHEME} ${token}` },
+        headers: {
+          [PROTOCOL_HEADER]: String(PROTOCOL_VERSION),
+          Authorization: `${AUTH_SCHEME} ${token}`,
+          ...(prover
+            ? {
+                [PROOF_HEADER]: prover.header(token, 'renew'),
+                'Content-Type': 'application/json',
+                'Content-Length': String(Buffer.byteLength(body)),
+              }
+            : {}),
+        },
       },
       (res) => {
         const chunks: Buffer[] = []
@@ -207,7 +222,7 @@ export function runtimeRenew(serverUrl: string, token: string): Promise<RenewRes
     )
     req.on('error', reject)
     req.setTimeout(15000, () => req.destroy(new Error('Renewal request timed out')))
-    req.end()
+    req.end(body)
   })
 }
 

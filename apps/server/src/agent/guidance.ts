@@ -1,5 +1,6 @@
 import { INTERACTIVE_GUIDE } from '../interactive/tools'
 import { BACKGROUND_TERMINAL_GUIDE } from './backgroundTerminalTools'
+import { BACKGROUND_WAIT_GUIDE } from './backgroundWaitTools'
 import { USER_TERMINAL_GUIDE } from './userTerminalTools'
 import { BACKGROUND_PREAMBLE } from '@ramu/shared/chat/agentTasks'
 import { QUESTION_INPUT_GUIDANCE, QUESTION_PREAMBLE } from '@ramu/shared/chat/questions'
@@ -20,6 +21,8 @@ export interface GuidanceSections {
   /** Ramu's async questions, Ramu's questions made blocking, or only the provider's own question tool. */
   questions: 'async' | 'blocking' | 'native'
   background: boolean
+  /** The provider's own background commands are tracked, so the agent is told to mark the ones it waits on. */
+  backgroundWait?: boolean
   advisor: boolean
   /** Main chats get request_secret; helpers have no card of their own to show. */
   secrets?: boolean
@@ -52,6 +55,7 @@ export function sessionGuidance(sections: GuidanceSections): string {
         : 'When you need a decision from the user, ask with your built-in question tool and wait for the answer. Never assume an unanswered decision.'
   let instructions = `${USER_MESSAGE_PREAMBLE}\n\n${TOOL_PRESENTATION_PREAMBLE}\n\n${questions}`
   if (sections.background) instructions += `\n\n${BACKGROUND_PREAMBLE}`
+  if (sections.backgroundWait) instructions += `\n\n${BACKGROUND_WAIT_GUIDE}`
   if (sections.advisor) instructions += `\n\n${ADVISOR_PREAMBLE}`
   if (sections.secrets) instructions += `\n\n${SECRET_PREAMBLE}`
   if (sections.goal !== null) instructions += `\n\n${sections.goal}`

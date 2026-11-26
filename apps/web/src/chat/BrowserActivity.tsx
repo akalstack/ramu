@@ -1,3 +1,4 @@
+import { keepReading, lastReading } from '../lib/lastReading'
 import { RowButton } from '@/components/row-button'
 import { useEffect, useState } from 'react'
 import { Globe, PictureInPicture2, Plus } from 'lucide-react'
@@ -9,7 +10,7 @@ import { useHost } from '../workspace/HostProvider'
 import { useWorkspace, useHostRuntime } from '../workspace/workspace'
 import { Button } from '@/components/desktop-button'
 import { openBrowser } from '../views/browserPane'
-import { ComposerTraySection } from '../composer/ComposerTraySection'
+import { ComposerTraySection, TRAY_LIST_CLASS } from '../composer/ComposerTraySection'
 import { floatLiveView } from '../liveView/liveViewStore'
 import { useAppSettings } from '../settings/AppSettings'
 
@@ -50,7 +51,9 @@ export function useBrowserActivity(taskId: string | undefined, visible: boolean)
       const mine = ++revision
       try {
         const { tabs } = await readThreadTabs(invoke, host, taskId)
-        if (active && mine === revision) setReading({ scope, tabs, stale: false })
+        if (!active || mine !== revision) return
+        keepReading('browser', scope, tabs)
+        setReading({ scope, tabs, stale: false })
       } catch {
         if (active && mine === revision)
           setReading((previous) =>
@@ -71,7 +74,7 @@ export function useBrowserActivity(taskId: string | undefined, visible: boolean)
   }, [scope, host, taskId, visible, invoke, events])
   return {
     taskId,
-    tabs: reading.scope === scope ? reading.tabs : [],
+    tabs: reading.scope === scope ? reading.tabs : (lastReading<BrowserTabInfo[]>('browser', scope) ?? []),
     stale: reading.scope !== scope || reading.stale,
   }
 }
@@ -133,7 +136,7 @@ export function BrowserActivity({ state }: { state: ReturnType<typeof useBrowser
         )
       }
     >
-      <ul className="my-0 -mx-1.5 flex max-h-40 list-none flex-col overflow-y-auto overscroll-contain p-0">
+      <ul className={TRAY_LIST_CLASS}>
         {state.tabs.map((tab) => (
           <li key={tab.id} className="flex items-center gap-2 text-control">
             <RowButton

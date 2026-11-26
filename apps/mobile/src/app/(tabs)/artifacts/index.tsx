@@ -1,18 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { RefreshControl, TextInput, View } from 'react-native'
+import { RefreshControl, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { AppWindow, Pin } from 'lucide-react-native'
 import { useTabActions } from '../../../components/Overlays'
 import { ARTIFACT_KINDS, type ArtifactInfo, type ArtifactKind } from '@ramu/shared/artifacts'
+import { shortHostName } from '@ramu/shared/hostLabel'
 import { font, space, useTheme } from '../../../theme'
 import { useStore } from '../../../runtime/store'
 import { ago, useSay } from '../../../i18n'
 import { Header, LargeTitle, PageScrollView, Screen, useScrolledUnderBar } from '../../../components/Screen'
 import { Nothing } from '../../../components/InboxParts'
 import { HostChip } from '../../../components/HostChip'
-import { Chip, Row, Sheet, T } from '../../../components/ui'
+import { Chip, Divider, Row, Sheet, T } from '../../../components/ui'
+import { ListSearch } from '../../../components/ListSearch'
 import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
 import { ArtifactKindMark, kindIcon, kindLabel } from '../../../components/ArtifactKindMark'
+
+/** The column an artifact's emoji sits in, and where the row's text and divider start after it. */
+const ARTIFACT_ICON = 28
+const ARTIFACT_TEXT_INSET = space.l + ARTIFACT_ICON + space.m
 
 /** Every artifact on the paired hosts, newest first with pinned ones on top, as the desktop's Artifacts. */
 export default function PagesScreen() {
@@ -91,68 +97,58 @@ export default function PagesScreen() {
         }
       >
         <LargeTitle>{say('Artifacts')}</LargeTitle>
-        <View style={{ flexDirection: 'row', paddingHorizontal: space.l, paddingTop: space.m }}>
+        {/* Search first, then what narrows the list, in the order Pull requests keeps them. */}
+        <ListSearch value={query} onChangeText={setQuery} label={say('Search artifacts')} />
+        <View style={{ flexDirection: 'row', gap: space.s, paddingHorizontal: space.l, paddingVertical: space.m }}>
           <HostChip all={multi && allHosts} onAll={multi ? setAllHosts : undefined} />
           {kinds.length > 1 ? (
-            <View style={{ marginLeft: space.s }}>
-              <Chip
-                label={kind === 'all' ? say('All kinds') : say(kindLabel(kind))}
-                accessibilityLabel={say('Kind')}
-                chevron
-                onPress={() => setChoosingKind(true)}
-              />
-            </View>
+            <Chip
+              label={kind === 'all' ? say('All kinds') : say(kindLabel(kind))}
+              accessibilityLabel={say('Kind')}
+              chevron
+              onPress={() => setChoosingKind(true)}
+            />
           ) : null}
         </View>
-        <TextInput
-          accessibilityLabel={say('Search artifacts')}
-          placeholder={say('Search artifacts')}
-          placeholderTextColor={c.muted}
-          value={query}
-          onChangeText={setQuery}
-          style={{
-            marginHorizontal: space.l,
-            marginTop: space.m,
-            marginBottom: space.s,
-            minHeight: 40,
-            paddingHorizontal: space.m,
-            borderRadius: 10,
-            backgroundColor: c.fill,
-            color: c.text,
-          }}
-        />
         {rows.length ? (
-          rows.map(({ page, host }) => (
-            <Row
-              key={`${host.id}:${page.id}`}
-              accessibilityLabel={page.title}
-              onPress={() =>
-                router.push({ pathname: '/artifact/[computer]/[id]', params: { computer: host.id, id: page.id } })
-              }
-              style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l }}
-            >
-              <T size={font.title}>{page.icon}</T>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <T numberOfLines={1}>{page.title}</T>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <ArtifactKindMark kind={page.kind} size={12} color={c.muted} />
-                  <T size={font.caption} tone="muted" numberOfLines={1} style={{ flex: 1 }}>
-                    {[
-                      say(kindLabel(page.kind)),
-                      multi ? host.name : null,
-                      `v${page.version}`,
-                      page.lastError ? say('Has an error') : null,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </T>
+          rows.map(({ page, host }, index) => (
+            <View key={`${host.id}:${page.id}`}>
+              {index ? <Divider inset={ARTIFACT_TEXT_INSET} /> : null}
+              <Row
+                accessibilityLabel={page.title}
+                onPress={() =>
+                  router.push({ pathname: '/artifact/[computer]/[id]', params: { computer: host.id, id: page.id } })
+                }
+              >
+                <View style={{ width: ARTIFACT_ICON, alignItems: 'center' }}>
+                  <T size={font.title}>{page.icon}</T>
                 </View>
-              </View>
-              {page.pinned ? <Pin size={14} color={c.muted} /> : null}
-              <T size={font.caption} tone="muted">
-                {ago(page.changedAt)}
-              </T>
-            </Row>
+                <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space.s }}>
+                    <T weight="500" numberOfLines={1} style={{ flex: 1 }}>
+                      {page.title}
+                    </T>
+                    {page.pinned ? <Pin size={11} color={c.muted} /> : null}
+                    <T size={font.caption} tone="muted" style={{ fontVariant: ['tabular-nums'] }}>
+                      {ago(page.changedAt)}
+                    </T>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <ArtifactKindMark kind={page.kind} size={12} color={c.muted} />
+                    <T size={font.control} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
+                      {[say(kindLabel(page.kind)), multi ? shortHostName(host.name) : null, `v${page.version}`]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </T>
+                    {page.lastError ? (
+                      <T size={font.control} tone="bad" numberOfLines={1}>
+                        {`· ${say('Has an error')}`}
+                      </T>
+                    ) : null}
+                  </View>
+                </View>
+              </Row>
+            </View>
           ))
         ) : (
           <Nothing

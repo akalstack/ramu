@@ -1,12 +1,18 @@
 import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HOST_FILES_REPO, localFileLink } from '@ramu/shared/workspace/fileLinks'
 import { resolveFileLink, withheldPath } from '../src/workspace/fileLinks'
 import { openDb } from '../src/db'
 import { Workspace } from '../src/workspace/workspace'
 import { NO_PROJECT } from '@ramu/shared/types'
+
+const home = vi.hoisted(() => ({ dir: '' }))
+vi.mock('node:os', async (original) => {
+  const os = await original<typeof import('node:os')>()
+  return { ...os, homedir: () => home.dir || os.homedir() }
+})
 
 let root: string, ws: Workspace, taskId: string
 beforeEach(async () => {
@@ -99,6 +105,19 @@ describe('local file links', () => {
     expect(await resolveFileLink(ws, taskId, join(outside, 'draft.md'), {}, [outside])).toBeNull()
     expect(withheldPath(join(outside, 'new.md'), [outside])).toBe(true)
     expect(withheldPath(join(outside, 'draft.md'), [join(root, 'elsewhere')])).toBe(false)
+  })
+  it('opens a path written from the home folder, as agents and shells write it', async () => {
+    home.dir = join(root, 'home')
+    mkdirSync(join(home.dir, '.tool'), { recursive: true })
+    writeFileSync(join(home.dir, '.tool', 'settings.json.bak-old'), '{}')
+    expect(await resolveFileLink(ws, taskId, '~/.tool/settings.json.bak-old')).toEqual({
+      repoId: HOST_FILES_REPO,
+      path: join(home.dir, '.tool', 'settings.json.bak-old').slice(1),
+      line: undefined,
+      column: undefined,
+    })
+    expect(await resolveFileLink(ws, taskId, '~/.tool/missing.json')).toBeNull()
+    home.dir = ''
   })
   it('rejects missing files, folders, traversal, and links into another thread', async () => {
     const cwd = ws.agentScope(taskId).cwd

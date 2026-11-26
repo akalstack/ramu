@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { ProcessRoot } from '@ramu/shared/resources'
 import { ServerService } from '../src/background/servers'
 
@@ -41,4 +41,35 @@ it('refuses to stop a process that is not one of the thread’s servers', async 
   const servers = service(() => [command])
   await expect(servers.stop('t1', 77, 5037)).rejects.toThrow('not one this thread started')
   await expect(servers.stop('t2', 21, 5173)).rejects.toThrow('not one this thread started')
+})
+
+describe('answersHttp', () => {
+  const listen = async (status: number) => {
+    const { createServer } = await import('node:http')
+    const server = createServer((_req, res) => res.writeHead(status).end())
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const port = (server.address() as { port: number }).port
+    return { port, close: () => new Promise((resolve) => server.close(resolve)) }
+  }
+
+  it('counts a page, and a dev server that answers 404 at its root', async () => {
+    const { answersHttp } = await import('../src/background/servers')
+    for (const status of [200, 302, 404]) {
+      const server = await listen(status)
+      expect(await answersHttp({ port: server.port, host: '127.0.0.1' })).toBe(true)
+      await server.close()
+    }
+  })
+
+  it('does not count a listener that asks for a credential or another protocol, or nothing listening', async () => {
+    const { answersHttp } = await import('../src/background/servers')
+    for (const status of [401, 403, 426]) {
+      const server = await listen(status)
+      expect(await answersHttp({ port: server.port, host: '127.0.0.1' })).toBe(false)
+      await server.close()
+    }
+    const gone = await listen(200)
+    await gone.close()
+    expect(await answersHttp({ port: gone.port, host: '127.0.0.1' })).toBe(false)
+  })
 })

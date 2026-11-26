@@ -1,4 +1,4 @@
-import { Bot, List, SquareTerminal, Users } from 'lucide-react'
+import { Bot, List, SquareTerminal } from 'lucide-react'
 import { RowButton } from '@/components/row-button'
 import { ComposerTraySection } from '../../../composer/ComposerTraySection'
 import { ActivityText } from '../../../chat/ActivityText'
@@ -35,7 +35,7 @@ export function AgentsSection({
       title={t('Agents')}
       count={agents.length}
       live={working > 0}
-      icon={<Users />}
+      icon={<Bot />}
       actions={
         <>
           {working > 0 && (

@@ -56,6 +56,12 @@ it('uses the current OS timezone for daily timing', async () => {
   await service.tick(Date.parse('2026-01-02T08:30:00Z')) // 15:30, after the configured time
   expect(analyze).toHaveBeenCalledTimes(1)
 })
+it('writes the recap with the background model when one is chosen', async () => {
+  const maintenanceModel = { provider: 'codex', model: 'gpt-mini', effort: 'low' }
+  ws.setAppState('app-preferences', { recapsEnabled: true, intelligence: { maintenanceModel } })
+  await service.refresh()
+  expect(analyze.mock.calls[0]![1]).toMatchObject(maintenanceModel)
+})
 afterEach(() => {
   db.close()
   rmSync(dir, { recursive: true, force: true })

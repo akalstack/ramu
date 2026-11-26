@@ -105,6 +105,21 @@ test('a human background stop remains visible without becoming a message or comp
   const items = transcript([{ kind: 'background-terminal-stop', terminalId: 'command-1', command: 'pnpm dev', seq: 3 }])
   assert.equal(items.length, 1)
   assert.equal(items[0].kind, 'note')
-  assert.equal(items[0].title, 'Background command stop requested')
-  assert.equal(items[0].detail, 'pnpm dev')
+  assert.equal(items[0].title, 'You requested a stop for pnpm dev')
+  assert.deepEqual(items[0].titleCopy, { text: 'You requested a stop for {0}', values: { 0: 'pnpm dev' } })
+})
+
+test('a call with no result stops reading as running once the agent has written after it or the turn ended', () => {
+  const call = { kind: 'tool-use', toolUseId: 'c1', name: 'Bash', summary: 'pnpm test' }
+  const status = (events) => transcript(events).find((item) => item.kind === 'tool').status
+  // Still the newest thing the agent did: running.
+  assert.equal(status([call]), 'in_progress')
+  // Steering arrives while it runs.
+  assert.equal(status([call, { kind: 'user', text: 'also check the lint' }]), 'in_progress')
+  // The agent wrote on, or the turn ended: no result is coming.
+  assert.equal(status([call, { kind: 'text', text: 'Tests pass.' }]), 'completed')
+  assert.equal(status([call, { kind: 'result', text: '', isError: false }]), 'completed')
+  // A result that says it is still running keeps the row running, whatever follows.
+  const live = { kind: 'tool-result', toolUseId: 'c1', summary: '', isError: false, running: true }
+  assert.equal(status([call, live, { kind: 'text', text: 'Started in the background.' }]), 'in_progress')
 })

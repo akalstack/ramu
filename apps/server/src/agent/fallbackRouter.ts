@@ -60,7 +60,7 @@ export interface FallbackRouterHost
     Pick<ProviderWaits, 'waitForGoalProvider'>,
     Pick<SessionRecorder, 'record' | 'setState'>,
     Pick<SessionRegistry, 'draining' | 'revisions' | 'transitioning'>,
-    Pick<SessionStore, 'get' | 'events' | 'hasNativeWork'>,
+    Pick<SessionStore, 'get' | 'events' | 'hasNativeWork' | 'latestEvent'>,
     Pick<SubagentRunner, 'settleChild'> {
   catalog(refresh?: boolean): Promise<ProviderCatalog[]>
   mcpDestination(): AgentService['mcpDestination']
@@ -100,21 +100,51 @@ export class FallbackRouter {
       : launchCompatibility.blockedProviders(AGENT_PROVIDERS)
   }
 
-  /** Apply user changes to model, effort or access. */
-  async configure(id: string, settings: AgentSettings): Promise<AgentSessionInfo> {
+  /**
+   * Apply user changes to model, effort or access. Changing settings restarts the provider's process, which would end
+   * its own sub-agents and background commands, so while they run the change waits for them unless `now` is asked for.
+   */
+  async configure(id: string, settings: AgentSettings, when?: 'now'): Promise<AgentSessionInfo> {
     const current = this.host.get(id).settings
     // The per-thread auto-resume choice changes only through setAutoResume, so a settings save never drops or sets it.
     const { autoResume: _ignored, ...incoming } = settings
     settings = current.autoResume === undefined ? incoming : { ...incoming, autoResume: current.autoResume }
-    if (sameSettings(current, settings)) return this.host.get(id)
-    // Changing settings restarts the provider's process, which would silently end its own sub-agents and commands.
-    if (this.host.hasNativeWork(id))
-      throw new Error(
-        'Sub-agents or background commands are still running in this thread, and changing its model would end them. Wait for them to finish or stop them, then change it.',
-      )
+    if (sameSettings(current, settings)) {
+      this.dropWaiting(id)
+      return this.host.get(id)
+    }
+    if (when !== 'now' && this.host.hasNativeWork(id)) {
+      this.host.record(id, { kind: 'settings-waiting', settings, previous: current })
+      return this.host.get(id)
+    }
     const updated = await this.applySettings(id, settings)
+    this.dropWaiting(id)
     this.holds.delete(id)
     return updated
+  }
+
+  /** A settings change waiting for the provider's own sub-agents and background commands to finish. */
+  private waitingSettings(id: string): AgentSettings | null {
+    return this.host.latestEvent(id, 'settings-waiting')?.settings ?? null
+  }
+
+  private dropWaiting(id: string): void {
+    if (this.waitingSettings(id)) this.host.record(id, { kind: 'settings-waiting', settings: null })
+  }
+
+  /** Applies a change that waited for the provider's own work, once that work has ended. */
+  async applyWaiting(id: string): Promise<void> {
+    const settings = this.waitingSettings(id)
+    if (!settings || this.host.hasNativeWork(id) || this.host.transitioning.has(id)) return
+    try {
+      await this.configure(id, settings)
+    } catch (error) {
+      this.dropWaiting(id)
+      this.host.record(id, {
+        kind: 'error',
+        message: `The model change could not be applied: ${error instanceof Error ? error.message : String(error)}`,
+      })
+    }
   }
 
   /** Moves a chat to other settings (any provider): ends the old process, keeps or hands over the conversation, relaunches if it was mid-request. */
@@ -451,6 +481,7 @@ export class FallbackRouter {
 
   /** Before sending, fall back only at the usage threshold, respecting explicit composer holds. */
   async switchBeforeSend(id: string): Promise<boolean> {
+    await this.applyWaiting(id)
     const s = this.host.get(id)
     let routing = this.routing(s.settings, s.taskId)
     if (!routing) return false

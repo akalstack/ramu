@@ -155,7 +155,8 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
     (readings) => host.send('usage:changed', readings),
     (provider, accountId) => providerAccountRows(loadPreferences().providerBinaries, provider).includes(accountId),
   )
-  // Read every enabled login on demand and on a timer, only through each provider's own runtime; Codex also needs reads with only one login.
+  // Read every enabled login on demand and on a timer, only through each provider's own runtime. Both are read even with
+  // one login: their own readings only arrive while they run, and a lone login need not be the default one.
   const accountUsage = new AccountUsage(
     (readings) => usage.update(readings),
     () => loadPreferences().providerBinaries,
@@ -163,8 +164,12 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
       'claude-code': (account) => (agents ? agents.claudeAccountUsage(account) : Promise.resolve([])),
       codex: (account) => codexUsage(account),
     },
-    ['codex'],
+    ['codex', 'claude-code'],
   )
+  const usageConfigurationChanged = () => {
+    accountUsage.forgetAll()
+    void accountUsage.refresh().catch(() => {})
+  }
   const loadPreferences = (): AppPreferences => {
     const saved = storedPreferences()
     return appPreferences.parse({
@@ -193,7 +198,11 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
     host.send('usage:changed', usage.list())
     updates.settingsChanged()
     // Ordinary preference saves must not launch provider discovery for the returned settings snapshot.
-    if (catalogChanged) agents.invalidateCatalog()
+    if (catalogChanged) {
+      agents.invalidateCatalog()
+      // A login added, removed or switched, or a provider turned on: its gauges are read now, not at the next poll.
+      usageConfigurationChanged()
+    }
     agents.goalsSettingsChanged()
     memory?.settingsChanged()
     learning?.settingsChanged()
@@ -229,7 +238,7 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
     })
   }
   // Plan usage only arrives while a provider runs, so poll it too; each read is throttled per login.
-  const refreshUsage = () => void Promise.allSettled([agents?.readClaudeUsage(), accountUsage.refresh()])
+  const refreshUsage = () => void accountUsage.refresh().catch(() => {})
   setTimeout(refreshUsage, 15_000).unref()
   setInterval(refreshUsage, ACCOUNT_USAGE_INTERVAL_MS).unref()
   setTimeout(() => void cleanupArchived(), 30_000).unref()
@@ -285,6 +294,7 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
     hostUpdates,
     usage,
     accountUsage,
+    usageConfigurationChanged,
     environment,
     apiKeys,
     forgeAccounts,

@@ -5,6 +5,7 @@ import { REFERENCE_APPEARANCE } from '@ramu/shared/chat/presentation'
 import { isValidElement, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useFocusEffect } from 'expo-router'
 import {
+  Image,
   Alert,
   Linking,
   Platform,
@@ -16,6 +17,8 @@ import {
   type TextStyle,
   View,
 } from 'react-native'
+import { Pressable as NativePressable } from 'react-native-gesture-handler'
+import { attachmentPreview, keepAttachmentPreview } from '../runtime/attachmentPreviews'
 import { MenuView } from '@react-native-menu/menu'
 import { markdownRuns, type MarkdownMark } from '@ramu/shared/chat/markdownRuns'
 import { composerDraft } from '@ramu/shared/chat/composerDraft'
@@ -319,7 +322,7 @@ export function ModelChip({
   }
   return (
     <>
-      <Pressable
+      <NativePressable
         accessibilityRole="button"
         accessibilityLabel={
           say('Model: {0}', { 0: effort ? `${label}, ${effort}` : label }) + (limited ? `, ${t.limitReached}` : '')
@@ -361,7 +364,7 @@ export function ModelChip({
           </T>
         ) : null}
         <ChevronDown size={13} color={c.muted} />
-      </Pressable>
+      </NativePressable>
       <Sheet
         open={open}
         onClose={close}
@@ -1303,19 +1306,28 @@ export function Composer({
               open={() => void files.openLink(fileAtCaret)}
             />
           ) : null}
-          {attachments.map((a) => (
-            <ContextChip
-              key={a.id}
-              icon={Paperclip}
-              label={a.name}
-              detail={
-                draftKey && store.drafts[`${draftKey}:restored-attachments`] === 'yes'
-                  ? t.attachmentNeedsCheck
-                  : undefined
-              }
-              remove={() => setAttachments((old) => old.filter((x) => x.id !== a.id))}
-            />
-          ))}
+          {attachments.map((a) =>
+            attachmentPreview(a.id) ? (
+              <AttachmentThumb
+                key={a.id}
+                uri={attachmentPreview(a.id)!}
+                name={a.name}
+                remove={() => setAttachments((old) => old.filter((x) => x.id !== a.id))}
+              />
+            ) : (
+              <ContextChip
+                key={a.id}
+                icon={Paperclip}
+                label={a.name}
+                detail={
+                  draftKey && store.drafts[`${draftKey}:restored-attachments`] === 'yes'
+                    ? t.attachmentNeedsCheck
+                    : undefined
+                }
+                remove={() => setAttachments((old) => old.filter((x) => x.id !== a.id))}
+              />
+            ),
+          )}
           {context.map((file) => (
             <ContextChip
               key={`${file.repoId}:${file.path}`}
@@ -1531,8 +1543,9 @@ export function Composer({
               onPress={() => compaction.onChange(!compaction.compact)}
             />
           ) : null}
+          {/* Stop and Resume take Send's place and are tapped while a thread streams, so they share its native tap. */}
           {running && !has && !offline ? (
-            <Pressable
+            <NativePressable
               accessibilityRole="button"
               accessibilityLabel={t.stop}
               onPress={() => {
@@ -1549,9 +1562,9 @@ export function Composer({
               }}
             >
               <Square size={13} color={c.canvas} fill={c.canvas} />
-            </Pressable>
+            </NativePressable>
           ) : onResume && !has && !running && !offline ? (
-            <Pressable
+            <NativePressable
               accessibilityRole="button"
               accessibilityLabel={resumeLabel ?? say('Continue where the agent left off')}
               onPress={() => {
@@ -1568,9 +1581,12 @@ export function Composer({
               }}
             >
               <Play size={15} color={c.text} fill={c.text} />
-            </Pressable>
+            </NativePressable>
           ) : (
-            <Pressable
+            // Recognised by the system's own tap gesture, not measured in JavaScript: a press that React Native works
+            // out itself is dropped when the app is busy with a streaming thread or the composer has just moved with
+            // the keyboard, and Send then needed a second tap.
+            <NativePressable
               accessibilityRole="button"
               accessibilityHint={holdToChoose ? say('Hold to choose how to send') : undefined}
               accessibilityLabel={
@@ -1610,7 +1626,7 @@ export function Composer({
               ) : (
                 <ArrowUp size={18} color={has ? c.primaryInk : c.placeholder} strokeWidth={2.4} />
               )}
-            </Pressable>
+            </NativePressable>
           )}
         </View>
       </View>
@@ -1859,7 +1875,10 @@ async function pickAttachment(
         })
       : await new File(asset.uri).base64()
     if (base64.length > 13_400_000) throw new Error(say('Attachments must be 10 MB or smaller.'))
-    add(await store.invoke(computerId, 'attachments.add', asset.name, base64))
+    const added = await store.invoke(computerId, 'attachments.add', asset.name, base64)
+    // The phone's own copy of a picture stands in as its thumbnail, here and in the sent message.
+    if (added.mimeType.startsWith('image/')) keepAttachmentPreview(added.id, asset.uri)
+    add(added)
   } catch (error) {
     Alert.alert(say('Attachment failed'), error instanceof Error ? error.message : String(error))
   }
@@ -1880,6 +1899,43 @@ function splitQuotes(text: string) {
   return { quotes, body: body + text.slice(cursor) }
 }
 const joinQuotes = (quotes: string[], body: string) => quotes.map((quote) => `${quote.trimEnd()}\n\n`).join('') + body
+
+/** A picture waiting to be sent, as a thumbnail with its own remove button. */
+function AttachmentThumb({ uri, name, remove }: { uri: string; name: string; remove: () => void }) {
+  const { c } = useTheme()
+  const say = useSay()
+  return (
+    <View style={{ width: 56, height: 56 }}>
+      <Image
+        source={{ uri }}
+        accessibilityLabel={name}
+        style={{ width: 56, height: 56, borderRadius: radius.row, backgroundColor: c.fill }}
+      />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={say('Remove {0}', { '0': name })}
+        hitSlop={8}
+        onPress={() => {
+          tap()
+          remove()
+        }}
+        style={{
+          position: 'absolute',
+          top: -6,
+          right: -6,
+          width: 20,
+          height: 20,
+          borderRadius: 10,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: c.raised,
+        }}
+      >
+        <X size={12} color={c.text} strokeWidth={2.4} />
+      </Pressable>
+    </View>
+  )
+}
 
 function ContextChip({
   icon: I,

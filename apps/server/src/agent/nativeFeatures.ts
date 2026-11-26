@@ -29,3 +29,7 @@ export const nativeToolSearch = (s: AgentSessionInfo): boolean => !!providerAdap
 export function usesRamuToolSearch(preference: boolean, s: AgentSessionInfo): boolean {
   return preference && !nativeToolSearch(s)
 }
+
+/** Whether the provider's own background commands reach Ramu as tasks, so the agent can say which it is waiting on. */
+export const tracksBackgroundCommands = (s: AgentSessionInfo): boolean =>
+  !!providerAdapter(s.provider).native?.backgroundCommands

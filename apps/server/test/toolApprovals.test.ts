@@ -10,7 +10,15 @@ describe('mcpCallSkipsCard', () => {
   it('trusts every Ramu tool in Auto and Full, and in Allow edits only those that ask or only manage the chat', () => {
     expect(mcpCallSkipsCard('auto', 'ramu', 'schedule_create')).toBe(true)
     expect(mcpCallSkipsCard('full', 'ramu', 'memory_save')).toBe(true)
-    for (const tool of ['ask_user', 'run_script', 'settings_change', 'browser_click', 'computer_observe', 'ask_parent'])
+    for (const tool of [
+      'ask_user',
+      'run_script',
+      'settings_change',
+      'browser_click',
+      'computer_observe',
+      'ask_parent',
+      'background_wait',
+    ])
       expect(mcpCallSkipsCard('edits', 'ramu', tool), tool).toBe(true)
     for (const tool of ['schedule_create', 'memory_save', 'generate_image'])
       expect(mcpCallSkipsCard('edits', 'ramu', tool), tool).toBe(false)

@@ -1962,7 +1962,8 @@ export interface RamuMethods extends ArtifactMethods {
   /** Models a provider started offering since the host first knew it, until a device dismisses them. */
   'models.news'(): ModelNotice[]
   'models.dismissNews'(provider: import('./types').AgentProvider, model: string): void
-  'agent.configure'(sessionId: string, settings: AgentSettings): AgentSessionInfo
+  /** Applies at once unless the provider's own sub-agents or commands are running; then it waits for them, or `now` ends them. */
+  'agent.configure'(sessionId: string, settings: AgentSettings, when?: 'now'): AgentSessionInfo
   'files.all'(taskId: string): { repoId: string; path: string }[]
   'files.resolveLink'(
     taskId: string,
@@ -2026,13 +2027,17 @@ export interface RamuMethods extends ArtifactMethods {
    */
   'agent.nextMessages'(sessionId: string): string[]
   'aside.list'(sessionId: string): Aside[]
-  /** Starts an aside (asideId null) or continues one. Returns at once; the answer arrives as aside:changed. */
+  /**
+   * Starts an aside (asideId null) or continues one. Returns at once; the answer arrives as aside:changed. `settings` is
+   * the model chosen in the thread's composer when the session has not taken it yet.
+   */
   'aside.ask'(
     sessionId: string,
     asideId: string | null,
     quote: string,
     quoteFrom: 'assistant' | 'user',
     question: string,
+    settings?: AgentSettings,
   ): Aside
   'aside.delete'(sessionId: string, asideId: string): void
   /**

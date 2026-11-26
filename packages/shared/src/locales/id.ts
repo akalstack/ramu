@@ -73,9 +73,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Read-only: it can read and report, never edit': 'Hanya baca: bisa membaca dan melapor, tidak bisa mengedit',
   'Reusable agents for sub-agent work. The thread’s agent reads each description and picks one when it fits, and the thread shows which one ran. A custom agent replaces a sub-agent type with the same name.':
     'Agent yang bisa dipakai ulang untuk tugas sub-agent. Agent thread membaca tiap deskripsi dan memilih yang cocok, lalu thread menampilkan mana yang berjalan. Agent kustom menggantikan tipe sub-agent dengan nama yang sama.',
-  'Describe a new agent': 'Jelaskan agent baru',
-  'A strict reviewer for security and missing tests': 'Peninjau ketat untuk keamanan dan tes yang kurang',
-  'Drafting…': 'Membuat draf…',
   'New agent': 'Agent baru',
   'Read-only': 'Hanya baca',
   // Connecting a phone (desktop).
@@ -101,7 +98,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Your phone': 'Ponselmu',
   'Connect your phone': 'Hubungkan ponselmu',
   'Scan one code and Ramu is on your phone too. Skip it for now and connect later with the phone button in the sidebar.': 'Pindai satu kode dan Ramu ada di ponselmu juga. Lewati dulu dan hubungkan nanti dengan tombol ponsel di sidebar.',
-  'A helper on {0} reviews this': 'Helper di {0} meninjau ini',
+  'A helper on {0}: reads only unless you ask for changes':
+    'Helper di {0}: hanya membaca kecuali kamu meminta perubahan',
   'Ask {0}': 'Tanya {0}',
   'What should it do?': 'Apa yang harus dilakukan?',
   'Connect Azure DevOps in Settings → Git, or set AZURE_DEVOPS_EXT_PAT on the host.':
@@ -683,7 +681,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Choose configured steps, or choose a model and adjust its supported effort. Switching keeps your current selection and draft.':
     'Pilih langkah yang sudah diatur, atau pilih model lalu atur effort-nya. Mengganti cara ini tetap mempertahankan pilihan dan drafmu.',
 
-  'Automatic selection': 'Pemilihan otomatis',
 
   'Default Markdown view': 'Tampilan Markdown bawaan',
   'Choose how Markdown files open. Links to a specific line open Source.':
@@ -1068,8 +1065,17 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Setelah thread, cari catatan penting dan skill yang bisa dipakai ulang. Memakai token model saat idle.',
   'Any number from 1 to 1000.': 'Angka apa pun dari 1 sampai 1000.',
   'Ask me first': 'Tanya dulu',
-  'Used for learning reviews and memory cleanup. A cheaper model keeps token use low.':
-    'Dipakai untuk tinjauan pembelajaran dan pembersihan memori. Model yang lebih hemat menjaga pemakaian token tetap rendah.',
+  'Writes daily recaps, learning reviews and memory cleanup. A cheaper model keeps token use low.':
+    'Menulis rekap harian, tinjauan pembelajaran dan pembersihan memori. Model yang lebih hemat menjaga pemakaian token tetap rendah.',
+  'Models for Ramu’s own work': 'Model untuk pekerjaan Ramu sendiri',
+  'Aside model': 'Model sampingan',
+  'Continue in a new thread': 'Lanjutkan di thread baru',
+  'Continue in a new thread. The aside stays here, and nothing is sent until you send it.':
+    'Lanjutkan di thread baru. Pertanyaan sampingan tetap di sini, dan tidak ada yang dikirim sampai Anda mengirimnya.',
+  'Same as thread': 'Sama dengan thread',
+  'Answers side questions about a thread. Same as thread uses the model chosen in that thread.':
+    'Menjawab pertanyaan sampingan tentang sebuah thread. Sama dengan thread memakai model yang dipilih di thread itu.',
+  'Chosen once in Models, for every feature that uses it.': 'Dipilih sekali di Model, untuk setiap fitur yang memakainya.',
   'For providers without their own tool search (Antigravity and Cursor), keep optional Ramu tools out of the prompt until the agent needs them. Claude, Codex and OpenCode always do this themselves. Applies to new provider sessions.':
     'Untuk provider tanpa pencarian tool sendiri (Antigravity dan Cursor), tool Ramu opsional tidak dimasukkan ke prompt sampai agent membutuhkannya. Claude, Codex, dan OpenCode selalu melakukannya sendiri. Berlaku untuk sesi provider baru.',
   'Load tools on demand': 'Muat tool saat dibutuhkan',
@@ -1078,13 +1084,11 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Open saved memories': 'Buka memori tersimpan',
   'Review recent threads for lessons and skills now': 'Tinjau thread terbaru untuk pelajaran dan skill sekarang',
   'Background model': 'Model latar belakang',
-  'Model for background maintenance': 'Model untuk pemeliharaan latar belakang',
   'No skills yet. Ramu adds them here when it learns a repeatable procedure.':
     'Belum ada skill. Ramu menambahkannya di sini saat mempelajari prosedur yang berulang.',
   'Only skills Ramu created are archived. Pinned skills are kept.':
     'Hanya skill buatan Ramu yang diarsipkan. Skill yang disematkan tetap disimpan.',
   'Reviews per day': 'Tinjauan per hari',
-  'Same as thread': 'Sama dengan thread',
   'Save automatically': 'Simpan otomatis',
   'Sending messages': 'Mengirim pesan',
   'Token efficiency': 'Efisiensi token',
@@ -1581,6 +1585,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Switch repository': 'Ganti repositori',
   'Could not load branch': 'Tidak dapat memuat branch',
   'Next thread': 'Thread berikutnya',
+  'Next {0}': 'Berikutnya {0}',
   'Previous thread': 'Thread sebelumnya',
   'Open thread': 'Buka thread',
   'Hide file tree': 'Sembunyikan pohon file',
@@ -1598,7 +1603,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'All agents': 'Semua agent',
   'All agents in this thread': 'Semua agent di thread ini',
   'All agents · {0}': 'Semua agent · {0}',
-  'Asides · {0}': 'Pertanyaan sampingan · {0}',
   'Show completed': 'Tampilkan yang selesai',
   'Hide completed': 'Sembunyikan yang selesai',
   'All sub-agents': 'Semua sub-agent',
@@ -1685,7 +1689,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Scroll to latest': 'Gulir ke yang terbaru',
   Working: 'Lagi bekerja',
   Thinking: 'Lagi mikir',
-  'Writing…': 'Menulis…',
   Thought: 'Pemikiran',
   'Thought for {0}': 'Berpikir selama {0}',
   Worked: 'Dikerjakan',
@@ -1947,6 +1950,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Send through the main agent': 'Kirim lewat agent utama',
   "This provider can't steer a running turn": 'Provider ini tidak bisa mengarahkan giliran yang sedang berjalan',
   'Applies when you send your next message': 'Berlaku saat kamu mengirim pesan berikutnya',
+  'Applies when the sub-agents and background commands finish': 'Berlaku saat sub-agen dan perintah latar belakang selesai',
+  'Change now and stop them': 'Ganti sekarang dan hentikan mereka',
   'Send after active tools finish': 'Kirim setelah alat aktif selesai',
   'Send when the agent finishes its turn': 'Kirim setelah giliran agent selesai',
   'Choose how to send this message': 'Pilih cara mengirim pesan ini',
@@ -2010,11 +2015,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Comment on selection': 'Komentari pilihan',
   'Comment on the selected lines': 'Komentari baris yang dipilih',
   'What should change, or what would you like to ask?': 'Mau ubah apa, atau ada yang mau ditanyakan?',
-  'Whole thread': 'Seluruh thread',
   Asides: 'Pertanyaan sampingan',
   Aside: 'Pertanyaan sampingan',
   'Asides ·': 'Pertanyaan sampingan ·',
-  'All asides': 'Semua pertanyaan sampingan',
   'Ask aside': 'Tanya sampingan',
   'Close aside': 'Tutup pertanyaan sampingan',
   'Delete aside': 'Hapus pertanyaan sampingan',
@@ -2182,13 +2185,10 @@ export const indonesian: Readonly<Record<string, string>> = {
   Limited: 'Dibatasi',
   'Fallback continues the thread when a usage limit is reached.':
     'Fallback melanjutkan thread saat batas pemakaian tercapai.',
-  'Where sub-agents run': 'Tempat sub-agent berjalan',
   Native: 'Bawaan provider',
   'Per provider': 'Per provider',
   'One provider for all': 'Satu provider untuk semua',
-  'By type': 'Berdasarkan jenis',
   'All sub-agents use': 'Semua sub-agent memakai',
-  'When a sub-agent is limited': 'Saat sub-agent mencapai batas',
   'Copy from main': 'Salin dari agent utama',
   'Decide before Codex starts its own sub-agents': 'Atur sebelum Codex memulai sub-agent-nya',
   'Codex trusts the hook.': 'Codex sudah memercayai hook.',
@@ -2373,6 +2373,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Live video': 'Video langsung',
   'Loading conversation': 'Memuat percakapan',
   'Syncing messages…': 'Menyinkronkan pesan…',
+  'Syncing threads…': 'Menyinkronkan thread…',
   'Looking for profiles…': 'Mencari profil…',
   'Mark selected done': 'Tandai yang dipilih selesai',
   'Name the current scenario': 'Beri nama skenario saat ini',
@@ -2676,6 +2677,10 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Retry:': 'Coba lagi:',
   'Resumed after restart': 'Dilanjutkan setelah mulai ulang',
   'Context compacted': 'Konteks diringkas',
+  'Context compacted · {0} → {1} tokens': 'Konteks diringkas · {0} → {1} token',
+  'Context compaction failed': 'Peringkasan konteks gagal',
+  'Context compaction cancelled': 'Peringkasan konteks dibatalkan',
+  'Context compaction · {0}': 'Peringkasan konteks · {0}',
   'Context handoff': 'Serah terima konteks',
   'When a usage limit is reached': 'Saat batas penggunaan tercapai',
   'Switching applies to new threads. Waiting and stopping apply to every thread, including ones already waiting.':
@@ -2731,7 +2736,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Restored {0} files · message {1} onward': 'Memulihkan {0} file · mulai pesan {1}',
   'Not reported': 'Tidak dilaporkan',
   '{0} → {1} tokens': '{0} → {1} token',
-  'Continued after restart': 'Dilanjutkan setelah mulai ulang',
   'Resume where it stopped': 'Lanjutkan dari terakhir berhenti',
   'Let an agent handle it later': 'Biar agent kerjakan nanti',
   'Preparing your first recap': 'Menyiapkan ringkasan pertamamu',
@@ -3586,6 +3590,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Waiting for output': 'Menunggu output',
   'Waiting for a background command': 'Menunggu perintah latar belakang',
   'Waited for a background command': 'Menunggu perintah latar belakang',
+  'Waiting on a background command': 'Menunggu perintah latar belakang',
+  'Stopped waiting on a background command': 'Berhenti menunggu perintah latar belakang',
+  'Found no background command to wait on': 'Tidak menemukan perintah latar belakang untuk ditunggu',
   Saw: 'Dilihat',
   'Background command failed': 'Perintah latar belakang gagal',
   'Background command finished': 'Perintah latar belakang selesai',
@@ -3655,7 +3662,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Choosing a project…': 'Memilih project…',
   'Starting the agent…': 'Memulai agent…',
   'Starting in {0}…': 'Memulai di {0}…',
-  'Full access · {0} of {1} permissions': 'Akses penuh · {0} dari {1} izin',
   '{0}, {1}, last seen {2}': '{0}, {1}, terakhir terlihat {2}',
   'last seen {0}': 'terakhir terlihat {0}',
   'What this computer may do there': 'Yang boleh dilakukan komputer ini di sana',
@@ -3804,8 +3810,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Hosts added for agents': 'Host yang ditambahkan untuk agent',
   'They stay connected together while Ramu is open.': 'Semua tetap terhubung selama Ramu terbuka.',
   'No devices paired yet. Connect a phone or another computer above.': 'Belum ada perangkat yang dipasangkan. Hubungkan ponsel atau komputer lain di atas.',
-  'No custom agents yet. Describe one above and Ramu drafts it for you to edit.':
-    'Belum ada agent kustom. Jelaskan satu di atas, lalu Ramu membuat drafnya untuk kamu edit.',
+  'No custom agents yet. Add one to give a helper its own model, instructions and a read-only switch.':
+    'Belum ada custom agent. Tambahkan satu untuk memberi helper model, instruksi, dan sakelar baca-saja sendiri.',
   'No skills of your own yet. Create one to give agents instructions they can reuse.':
     'Belum ada skill buatanmu. Buat satu untuk memberi agent instruksi yang bisa dipakai ulang.',
   'No saved approvals yet. They appear here when you choose Always allow on an agent’s request.':
@@ -4288,8 +4294,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Agent is waiting': 'Agent sedang menunggu',
   'Waiting on {0}': 'Menunggu {0}',
   'Waiting on {0} agents': 'Menunggu {0} agent',
+  'Waiting on {0} tasks': 'Menunggu {0} tugas',
   'Started by a sub-agent': 'Dimulai oleh sub-agent',
-  'Background command stop requested': 'Perintah latar belakang diminta berhenti',
   'You requested a stop for {0}': 'Kamu meminta {0} dihentikan',
   'Waiting for the current browser action to finish': 'Menunggu tindakan browser saat ini selesai',
   'Agent browser': 'Browser agent',
@@ -4909,7 +4915,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Masuk ke GitHub dengan gh auth login, atau simpan token GitHub di Pengaturan, untuk membuat pull request di sini.',
   'Account for this repository': 'Akun untuk repositori ini',
   'Choose an account': 'Pilih akun',
-  'GitHub access': 'Akses GitHub',
   'Several GitHub accounts are saved. Choose one in Settings before publishing.':
     'Beberapa akun GitHub tersimpan. Pilih satu di Pengaturan sebelum memublikasikan.',
   'Publishing as {0}': 'Memublikasikan sebagai {0}',
@@ -5873,6 +5878,15 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Desktop preview of {title}': 'Pratinjau desktop {title}',
   'Every Monday at {time}': 'Setiap Senin pukul {time}',
   'Every day at {time}': 'Setiap hari pukul {time}',
+  'When {0} sends a request': 'Saat {0} mengirim permintaan',
+  'Day {day} of each month at {time}': 'Tanggal {day} tiap bulan pukul {time}',
+  'Weekdays at {time}': 'Hari kerja pukul {time}',
+  'Weekends at {time}': 'Akhir pekan pukul {time}',
+  '{days} at {time}': '{days} pukul {time}',
+  'Every {count} weeks': 'Setiap {count} minggu',
+  'Every {count} days': 'Setiap {count} hari',
+  'Every {count} hours': 'Setiap {count} jam',
+  'Last run {status} · {when}': 'Terakhir {status} · {when}',
   'Let its runs search the web': 'Izinkan run-nya mencari di web',
   'Let its runs use {server}; each call asks you first':
     'Izinkan run-nya memakai {server}; setiap panggilan minta izinmu dulu',
@@ -7845,9 +7859,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Limit reached · resuming automatically': 'Batas tercapai · lanjut otomatis',
   'Message to {0}': 'Pesan untuk {0}',
   'Schedule created: {0}': 'Jadwal dibuat: {0}',
-  'Could not compact the conversation': 'Tidak dapat meringkas percakapan',
-  'Conversation compacted · {0}k → {1}k tokens': 'Percakapan diringkas · {0}k → {1}k token',
-  'Conversation compacted': 'Percakapan diringkas',
   'Temporary profile · not shared': 'Profil sementara · tidak dibagikan',
   'Default profile · shared with other tabs': 'Profil bawaan · dibagikan dengan tab lain',
   'Named profile · shared with other tabs': 'Profil bernama · dibagikan dengan tab lain',

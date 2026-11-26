@@ -15,6 +15,7 @@ import { PanelComposer } from '@/components/panel-composer'
 import { type ToolResult } from '../types'
 import { toBlocks } from '../lib/blocks'
 import { ToolGroup } from './ToolGroup'
+import { groupToolThinking, isLiveToolGroup } from '../lib/toolThinking'
 import { AssistantText } from './AssistantText'
 import { TurnDiff } from './TurnDiff'
 import { HelperIcon, RoleTag, TASK_STATUS, TaskStatusIcon, taskMeta } from './TaskStatus'
@@ -33,6 +34,41 @@ import {
 import { Message, MessageContent } from '@/components/ui/message'
 import { ErrorNote } from './ErrorNote'
 import { UserBubble } from './UserMessage'
+
+/** A brief longer than this many characters or lines opens folded. */
+const LONG_PROMPT = { characters: 320, lines: 4 }
+
+/**
+ * What the helper was asked to do. A long brief opens folded to its first lines, so the helper's work is on screen
+ * without scrolling past it; Show more opens it in place.
+ */
+function TaskPrompt({ text }: { text: string }) {
+  const [open, setOpen] = useState(false)
+  const long = text.length > LONG_PROMPT.characters || text.split('\n').length > LONG_PROMPT.lines
+  return (
+    <>
+      <div
+        className={cn(
+          'agent-panel-prompt-text whitespace-pre-wrap [overflow-wrap:anywhere] text-soft text-control leading-[1.5]',
+          long && !open && 'line-clamp-4',
+        )}
+      >
+        {text}
+      </div>
+      {long && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn(GHOST_TEXT_BUTTON_CLASS, 'ml-[-8px] self-start')}
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        >
+          {open ? translate('Show less') : translate('Show more')}
+        </Button>
+      )}
+    </>
+  )
+}
 
 /** One sub-agent's own conversation beside the chat, or the list of all of them. */
 export function AgentTaskPanel({
@@ -123,6 +159,9 @@ export function AgentTaskPanel({
   }, [own.length])
   const actions = task ? helperActions(task, !offline) : { canStop: false, canMessage: false }
   const status = task ? effectiveStatus(task, live) : 'stopped'
+  const running = status === 'running' && live
+  const work = useMemo(() => groupToolThinking(own), [own])
+  const statusGroup = running ? own.findLast((block) => block.kind === 'tools') : undefined
   const working = !offline && !!task && helperActive(task)
   const meta = task ? taskMeta(task, status) : ''
   const send = async () => {
@@ -263,40 +302,45 @@ export function AgentTaskPanel({
             {task.prompt && (
               <div className="agent-panel-prompt p-[10px_12px] [border:1px_solid_transparent] rounded-(--radius-m) bg-raised">
                 <span className={PANEL_LABEL_CLASS}>{translate('Task')}</span>
-                <div className="agent-panel-prompt-text whitespace-pre-wrap [overflow-wrap:anywhere] text-soft text-control leading-[1.5]">
-                  {task.prompt}
-                </div>
+                <TaskPrompt key={task.agentId} text={task.prompt} />
               </div>
             )}
-            {own.map((block, index) => (
-              <div key={index}>
-                {block.kind === 'tools' ? (
-                  <ToolGroup
-                    tools={block.tools}
-                    results={results}
-                    cwd={cwd}
-                    active={status === 'running' && live}
-                    taskId={taskId}
-                  />
-                ) : block.event.kind === 'text' ? (
-                  <AssistantText event={block.event} generating={false} actions={false} taskId={taskId} />
-                ) : block.event.kind === 'content' ? (
-                  <AgentContentView content={block.event.content} taskId={taskId} />
-                ) : block.event.kind === 'turn-diff' ? (
-                  <TurnDiff diff={block.event.diff} />
-                ) : block.event.kind === 'user' ? (
-                  <Message align="end">
-                    <MessageContent className="items-end">
-                      <UserBubble>{visibleText(block.event.text)}</UserBubble>
-                    </MessageContent>
-                  </Message>
-                ) : block.event.kind === 'thinking' ? (
-                  <ThinkingRow text={block.event.text} active={status === 'running' && live && block === own.at(-1)} />
-                ) : block.event.kind === 'error' ? (
-                  <ErrorNote message={block.event.message} />
-                ) : null}
-              </div>
-            ))}
+            {work.map((item) => {
+              if (Array.isArray(item)) return null
+              const block = item.kind === 'work' ? item.block : item
+              return (
+                <div key={own.indexOf(item.kind === 'work' ? item.first : item)}>
+                  {block.kind === 'tools' ? (
+                    // Thoughts between calls fold into the group and the newest group names what it is doing now, as in the chat.
+                    <ToolGroup
+                      tools={block.tools}
+                      entries={item.kind === 'work' ? item.entries : undefined}
+                      results={results}
+                      cwd={cwd}
+                      active={running}
+                      live={isLiveToolGroup(block, statusGroup, own)}
+                      taskId={taskId}
+                    />
+                  ) : block.event.kind === 'text' ? (
+                    <AssistantText event={block.event} generating={false} actions={false} taskId={taskId} />
+                  ) : block.event.kind === 'content' ? (
+                    <AgentContentView content={block.event.content} taskId={taskId} />
+                  ) : block.event.kind === 'turn-diff' ? (
+                    <TurnDiff diff={block.event.diff} />
+                  ) : block.event.kind === 'user' ? (
+                    <Message align="end">
+                      <MessageContent className="items-end">
+                        <UserBubble>{visibleText(block.event.text)}</UserBubble>
+                      </MessageContent>
+                    </Message>
+                  ) : block.event.kind === 'thinking' ? (
+                    <ThinkingRow text={block.event.text} active={running && block === own.at(-1)} />
+                  ) : block.event.kind === 'error' ? (
+                    <ErrorNote message={block.event.message} />
+                  ) : null}
+                </div>
+              )
+            })}
             {!own.length && (
               <p className="muted text-muted-foreground small text-caption">
                 {status === 'running'

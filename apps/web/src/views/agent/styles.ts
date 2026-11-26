@@ -64,9 +64,6 @@ export const SELECTION_ACTION_CLASS =
   'bg-fill hover:bg-fill-hover selection-action [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:0] [&_svg]:text-soft h-[26px] min-h-[26px] gap-1.5 p-[0_10px] [border:0] rounded-full bg-transparent text-foreground text-control whitespace-nowrap'
 
 /** Quote line inside an aside row. */
-export const ASIDE_ROW_QUOTE_CLASS =
-  'aside-row-quote font-semibold overflow-hidden text-ellipsis whitespace-nowrap max-w-full'
-
 /** A quiet line at the end of a turn; add `error text-bad` for a failure. */
 export const TURN_END_CLASS =
   'turn-end [&_svg]:text-ok [&_svg]:flex-none [&_svg]:w-3.5 [&_svg]:h-3.5 [&_svg]:p-0.5 [&_svg]:rounded-full [&_svg]:[background:var(--ok-wash)] [&.error_svg]:text-bad [&.error_svg]:[background:var(--bad-wash)] [&.chat-note]:m-[8px_0] [&.chat-note_svg]:text-muted-foreground [&_.muted]:ml-auto [&_.muted]:tabular-nums [&.error]:[border-top:none] [&.error]:text-bad flex items-center text-caption text-muted-foreground gap-2 p-[6px_0_2px] [border-top:1px_solid_var(--line)] mt-1'

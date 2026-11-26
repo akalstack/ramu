@@ -696,10 +696,10 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
         {
           kind: 'model',
           path: 'intelligence.maintenanceModel',
-          title: 'Model for background maintenance',
-          help: 'Used for learning reviews and memory cleanup. A cheaper model keeps token use low.',
+          title: 'Background model',
+          help: 'Writes daily recaps, learning reviews and memory cleanup. A cheaper model keeps token use low.',
           words: 'background model cheap tokens learning cleanup maintenance',
-          emptyLabel: 'Same as thread',
+          emptyLabel: 'Default model',
         },
         {
           kind: 'choice',

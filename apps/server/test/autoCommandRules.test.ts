@@ -4,6 +4,7 @@ import {
   judgeCommand,
   matchesAutoCommandRule,
   parseCommand,
+  readsOnly,
 } from '../src/agent/autoCommandRules'
 
 const allowed = (command: string) => judgeCommand(command)
@@ -272,5 +273,45 @@ describe('rule matching', () => {
     expect(judgeCommand(`ls ${'a'.repeat(3000)}`).risks).toContain('shell-review')
     expect(judgeCommand('ls\nrm -rf x').risks).toContain('shell-review')
     expect(allowed('ls').allow).toBe('read')
+  })
+})
+
+describe('what a read-only helper may run', () => {
+  it('searches with a quoted pattern that holds backslashes, parentheses or a dollar sign', () => {
+    for (const command of [
+      String.raw`grep -rn "\.authenticate(" apps/server/src | head -40`,
+      String.raw`grep -rn "\.authenticate(\|\.renew(" apps/server/src --include=*.ts | grep -v test | head -40`,
+      String.raw`grep -rnE "authenticate\(|renew\(" apps/server/src`,
+      String.raw`grep -rn 'tokenHash$' apps/server/src`,
+      String.raw`grep -n "C:\\Users" notes.txt`,
+    ])
+      expect(readsOnly(command), command).toBe(true)
+  })
+
+  it('prints a range of lines with sed, and nothing else sed can do', () => {
+    expect(readsOnly(`sed -n '600,640p' apps/server/src/remote/devices.ts`)).toBe(true)
+    expect(readsOnly(`grep -n 'renew(' src/a.ts; sed -n -e 12p src/a.ts`)).toBe(true)
+    for (const command of [
+      `sed -i 's/a/b/' src/a.ts`,
+      `sed -n '1,5p;w out.txt' src/a.ts`,
+      `sed -n '1e rm -rf .' src/a.ts`,
+      `sed 's/a/b/' src/a.ts`,
+      `sed -n '1,5p'`,
+      `sed -n '1,5p' .env`,
+    ])
+      expect(readsOnly(command), command).toBe(false)
+  })
+
+  it('still refuses what the shell would expand or where a quote could be escaped', () => {
+    for (const command of [
+      'grep "$(cat secret)" src',
+      'grep "`id`" src',
+      String.raw`grep "a\" src; rm -rf "x`,
+      String.raw`grep a\ b src`,
+      'cat src/a.ts > out.txt',
+      `awk 'BEGIN { system("id") }' src/a.ts`,
+      'find src -name "*.ts" | xargs grep -l renew',
+    ])
+      expect(readsOnly(command), command).toBe(false)
   })
 })

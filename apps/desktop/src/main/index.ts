@@ -48,6 +48,7 @@ import { ServiceRestart } from './serviceRestart'
 import { installsAtLaunch, mayInstallUnattended } from './unattendedUpdate'
 import { rememberBounds, savedBounds } from './windowBounds'
 import { runtimeBuild } from '@ramu/server/build'
+import { deviceProverFor, loadDeviceKey } from './deviceKeyStore'
 import { unloadLoginService } from './runtimeLauncher'
 import type { AppUpdateStatus } from '@ramu/shared/updates'
 import { configureDesktopLanguage, desktopLanguage, t } from './localization'
@@ -92,6 +93,8 @@ import {
   runtimeInvokeRecoverable,
   runtimePair,
   runtimeRenew,
+  deviceProver,
+  setDeviceProver,
   subscribeRuntime,
   refreshRuntimeNetwork,
   runtimeNetwork,
@@ -313,6 +316,15 @@ async function main() {
     seal: (text) => safeStorage.encryptString(text).toString('base64'),
     open: (text) => safeStorage.decryptString(Buffer.from(text, 'base64')),
   })
+  // Tokens for other hosts are bound to this computer's key at their next renewal, and proved with it from then on.
+  const ownKey = loadDeviceKey(join(userData, 'device-key.json'), {
+    get available() {
+      return safeStorage.isEncryptionAvailable()
+    },
+    seal: (text) => safeStorage.encryptString(text).toString('base64'),
+    open: (text) => safeStorage.decryptString(Buffer.from(text, 'base64')),
+  })
+  if (ownKey) setDeviceProver(deviceProverFor(ownKey))
   const canStartAtLogin = loginSupported()
   const setLoginService = async (enabled: boolean) => {
     const firstInstall = enabled && !existsSync(join(userData, 'background-ever-installed.json'))
@@ -925,6 +937,7 @@ async function main() {
     invoke: runtimeInvoke,
     pair: runtimePair,
     renew: (url, token) => runtimeRenew(url, token),
+    holdsKey: () => deviceProver() !== null,
     deliver: (id, ...[channel, payload]) => {
       if (id === LOCAL && channel === 'pairing:requests') pairing.receive(payload.requests)
       if (id === LOCAL && channel === 'pairing:joined') pairing.joined(payload)

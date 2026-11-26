@@ -4,7 +4,8 @@ import type { AgentSettings } from '@ramu/shared/types'
 
 /**
  * Ramu tools that need no provider card in Allow edits, because each either asks the person itself or only manages
- * the conversation: questions, goals, the advisor, the parent and sub-agent channel and reads of Ramu's own records.
+ * the conversation: questions, goals, the advisor, the parent and sub-agent channel, the mark on a command the agent
+ * is waiting on and reads of Ramu's own records.
  */
 const SELF_GATED = new Set([
   // Questions and secrets only show the person a card; what the agent then runs still asks as usual.
@@ -21,6 +22,8 @@ const SELF_GATED = new Set([
   'set_goal',
   'get_goal',
   'update_goal',
+  // Only says which of the thread's own running commands the agent is waiting on; it starts and stops nothing.
+  'background_wait',
   'tool_search',
   'memory_read',
   'session_recall',

@@ -6,6 +6,7 @@ import * as sendJournal from '../src/runtime/sendJournal.ts'
 import * as sharedOutbox from '../../../packages/shared/src/outbox.ts'
 import * as goalVerify from '../src/runtime/goalVerify.ts'
 import * as threadGroups from '../src/runtime/threadGroups.ts'
+import * as threadsSync from '../src/runtime/threadsSync.ts'
 import * as sideChat from '../src/runtime/sideChat.ts'
 import * as scrollSurface from '../src/runtime/scrollSurface.ts'
 import * as mobileTranscript from '../src/runtime/transcript.ts'
@@ -240,6 +241,13 @@ function load(file, os, overrides = {}, globals = {}) {
       if (id === '@ramu/shared/browserLinks') return browserLinks
       if (id === '@ramu/shared/browserBridge') return browserBridge
       if (id === '@ramu/shared/chat/toolActivity') return toolActivity
+      if (id.endsWith('/attachmentPreviews')) return load('runtime/attachmentPreviews.ts', os, {}, globals)
+      // The wording has its own tests in the shared package; here a row only needs words to draw.
+      if (id === '@ramu/shared/chat/toolSummary')
+        return {
+          summarizeTools: (tools) => `${tools.length} calls`,
+          toolRowWords: (tool) => ({ verb: '', subject: tool.summary }),
+        }
       if (id === './sendJournal') return sendJournal
       if (id === '@ramu/shared/outbox') return sharedOutbox
       if (id === '@ramu/shared/mapBounded') return { mapBounded: (items, _limit, run) => Promise.all(items.map(run)) }
@@ -248,6 +256,7 @@ function load(file, os, overrides = {}, globals = {}) {
         return load('../../../packages/shared/src/sync/streamSync.ts', os, {}, globals)
       if (id === '../../../runtime/recentThreads') return recentThreads
       if (id === '../../../runtime/threadGroups') return threadGroups
+      if (id === '../../../runtime/threadsSync') return threadsSync
       if (id === '../../../runtime/sideChat') return sideChat
       if (id === '@ramu/shared/chat/presentation') return chatPresentation
       if (id === '@ramu/shared/viewerAccess') return sharedViewerAccess
@@ -4508,8 +4517,24 @@ test('mobile answered questions keep the bold answer outside the collapsed origi
 test('mobile grouped tool rows open at once, without a height animation, and preserve every tool', () => {
   const view = chatView()
   const tools = [
-    { kind: 'tool', id: 'first', tool: 'read', verb: 'Read', subject: 'a.ts', status: 'completed' },
-    { kind: 'tool', id: 'second', tool: 'execute', verb: 'Bash', subject: 'tests', status: 'in_progress' },
+    {
+      kind: 'tool',
+      id: 'first',
+      tool: 'read',
+      source: { name: 'Read', kind: 'read', summary: 'a.ts' },
+      verb: 'Read',
+      subject: 'a.ts',
+      status: 'completed',
+    },
+    {
+      kind: 'tool',
+      id: 'second',
+      tool: 'execute',
+      source: { name: 'Bash', kind: 'execute', summary: 'tests' },
+      verb: 'Bash',
+      subject: 'tests',
+      status: 'in_progress',
+    },
   ]
   const item = { kind: 'tools', id: 'first', tools, entries: tools }
   let tree = view.block(item)
@@ -7459,7 +7484,7 @@ function deliveryStoreHarness() {
     },
     '@ramu/shared/chat/inputSummary': { inputSummary: () => null },
     '@ramu/shared/chat/compaction': { isCompacting: () => false },
-    '@ramu/shared/chat/helperPresentation': { runningCommands: () => [] },
+    '@ramu/shared/chat/helperPresentation': { runningCommands: () => [], awaitedCommands: () => [] },
     '@ramu/shared/chat/threadStatus': { newerTaskSnapshot: (_, next) => next },
   })
   const render = () => hooks.render(() => StoreProvider({ children: null })).props.value
@@ -7723,6 +7748,7 @@ test('Settings uses a native scroll edge and gains a raised background after con
 
 test('Threads uses native toolbar buttons and its usage action opens the shared dialog', () => {
   const hooks = hookHarness()
+  let threadReads = {}
   const react = { ...require('react'), ...hooks.react }
   const screen = load('components/Screen.tsx', 'ios', {
     react,
@@ -7739,6 +7765,7 @@ test('Threads uses native toolbar buttons and its usage action opens the shared 
   const { default: Threads } = load('app/(tabs)/(threads)/index.tsx', 'ios', {
     '../../../runtime/identities': { useHostIdentities: () => null, projectIdentity: () => null },
     '../../../runtime/busyMode': phoneBehavior,
+    '../../../runtime/useDelayedStatus': { useDelayedStatus: (_key, value) => value },
     react,
     '../../../runtime/store': {
       useStore: () => ({
@@ -7750,15 +7777,23 @@ test('Threads uses native toolbar buttons and its usage action opens the shared 
         appPreferences: {},
         inbox: {},
         language: 'en',
+        threadReads,
       }),
     },
-    '../../../i18n': { useT: () => ({ chats: 'Threads' }) },
+    '../../../i18n': { useT: () => ({ chats: 'Threads', empty: 'No threads yet' }) },
     '../../../components/Screen': screen,
     '../../../components/Overlays': { useTabActions: () => actions },
     '../../../components/PlanUsage': { PlanUsageSheet: 'PlanUsageSheet' },
   })
   const render = () => hooks.render(() => Threads())
   const tree = render()
+  // Until the host's threads are read the empty list says it is syncing, and "No threads yet" only afterwards.
+  const footer = (rendered) => nodes(find(rendered, screen.PageFlatList).props.ListFooterComponent)
+  assert.equal(footer(tree).find((node) => node.type === 'SyncLine').props.what, 'threads')
+  assert.ok(!JSON.stringify(footer(tree)).includes('No threads yet'))
+  threadReads = { a: 'read' }
+  assert.ok(!footer(render()).some((node) => node.type === 'SyncLine'))
+  assert.ok(JSON.stringify(footer(render())).includes('No threads yet'))
   const header = nodes(tree).find((node) => node.type === screen.Header)
   assert.equal(header.props.scrollEdge, true)
   const native = screen.Header(header.props)

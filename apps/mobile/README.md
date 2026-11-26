@@ -44,7 +44,7 @@ Use the host's LAN or VPN address, never `localhost`. The host must stay awake a
 
 On an iPad or an Android tablet, a thread, settings, forms and their bottom buttons keep to one centered reading column. The tab lists sit under their large titles at full width, as do code, diffs and conflicts. iPad shows the tabs as a sidebar. On a window at least 900 points wide (an iPad or Android tablet in landscape, a 13-inch iPad either way) an open thread sits beside the list it was opened from, the thread list or the Inbox, and a pull request beside the Pull requests list. Picking another item there swaps it in place, and the open one stays marked. Narrower windows show one screen at a time. Screens rotate and follow Split View and resizable windows.
 
-A viewer pairing can read and answer requests but change nothing. A device's access lapses after 90 days without use.
+A viewer pairing can read and answer requests but change nothing. A device's access lapses after 30 days without use, unless the host sets another time.
 
 ## Notifications
 

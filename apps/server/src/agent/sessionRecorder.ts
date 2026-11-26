@@ -3,7 +3,7 @@ import { permissionKey, PermissionApprovals, commandPatterns } from './permissio
 import { goalContinues } from '@ramu/shared/chat/goalHold'
 import { commandDeploy } from '@ramu/shared/deployActions'
 import { isStaleProgress } from '@ramu/shared/chat/agentTasks'
-import { EMPTY_BLOCK_SCAN, scanBlocks, settledLength, type BlockScan } from '@ramu/shared/chat/settledText'
+import { settledLength } from '@ramu/shared/chat/settledText'
 import type { AppPreferences, AgentEvent, AgentSessionState, AgentTask } from '@ramu/shared/types'
 import type { MessageDispatcher } from './messageDispatcher'
 import type { GoalManager } from './goalManager'
@@ -12,19 +12,19 @@ import { PRODUCTION_DEPLOY_NOTE, type UserRequests } from './userRequests'
 import type { SessionStore } from './sessionStore'
 import type { SubagentRunner } from './subagentRunner'
 import type { AgentTasks } from './agentTasks'
+import type { FallbackRouter } from './fallbackRouter'
 import type { AgentService } from '../agent'
 import type { Db } from '../db'
 
-/** A reply's finished blocks go out at most this often. */
+/** A reply's whole words go out at most this often, so a fast stream costs every device a few redraws a second. */
 const REPLY_STEP_MS = 400
-/** A reply quiet this long mid-block is sent whole. */
+/** A reply quiet this long mid-word is sent whole. */
 const REPLY_IDLE_MS = 800
 
 /** A reply still being written: its whole text so far, what of it went out and when. */
 interface HeldReply {
   event: Extract<AgentEvent, { kind: 'text' }>
   replaces?: string
-  scan: BlockScan
   sent: string
   sentAt: number
   timer?: NodeJS.Timeout
@@ -39,7 +39,8 @@ export interface SessionRecorderHost
     Pick<UserRequests, 'notifyWaiters' | 'applySavedPermission'>,
     Pick<SessionStore, 'emit' | 'events' | 'get' | 'hasRunningTasks' | 'latestEvent' | 'helperSummary' | 'list'>,
     Pick<SubagentRunner, 'children' | 'mirrorChild' | 'settleChild'>,
-    Pick<AgentTasks, 'updateTask'> {
+    Pick<AgentTasks, 'updateTask'>,
+    Pick<FallbackRouter, 'applyWaiting'> {
   preferences(): AppPreferences | undefined
   reviewHooks(): AgentService['reviewHooks']
 }
@@ -57,8 +58,8 @@ export class SessionRecorder {
   private readonly autoBackground = new Map<string, Map<string, NodeJS.Timeout>>()
 
   /**
-   * Replies still being written, by session and message. A reply goes out a whole Markdown block at a time, whatever
-   * pieces its provider streams, so every client shows complete paragraphs, list items, tables and code blocks.
+   * Replies still being written, by session and message. A reply goes out whole words at a time, a few times a second,
+   * whatever pieces its provider streams, so every client sees it grow without a word changing under the reader.
    */
   private readonly unsettled = new Map<string, Map<string, HeldReply>>()
 
@@ -82,7 +83,6 @@ export class SessionRecorder {
       held.set(recorded.messageId, {
         event: recorded,
         replaces: replacesMessageId ?? previous?.replaces,
-        scan: scanBlocks(previous?.scan ?? EMPTY_BLOCK_SCAN, recorded.text),
         sent: previous?.sent ?? '',
         sentAt: previous?.sentAt ?? Number.NEGATIVE_INFINITY,
       })
@@ -92,6 +92,12 @@ export class SessionRecorder {
     // Anything else the agent does (a tool, a question, its result) means the reply before it is complete.
     if (recorded.kind !== 'thinking') this.releaseText(id)
     this.persist(id, recorded, replacesMessageId)
+    // A settings change held for the provider's own sub-agents and commands goes ahead once the last of them ends.
+    if (
+      (recorded.kind === 'agent' && recorded.status !== 'running') ||
+      (recorded.kind === 'state' && recorded.state !== 'running' && recorded.state !== 'starting')
+    )
+      queueMicrotask(() => void this.host.applyWaiting(id))
   }
 
   /**
@@ -105,7 +111,7 @@ export class SessionRecorder {
     clearTimeout(entry.timer)
     entry.timer = undefined
     const now = Date.now()
-    const ready = idle ? entry.event.text : entry.event.text.slice(0, settledLength(entry.scan))
+    const ready = idle ? entry.event.text : entry.event.text.slice(0, settledLength(entry.event.text))
     // What already shows never shrinks; a provider that rewrote its text (not a continuation) replaces it.
     const fresh = ready !== '' && !entry.sent.startsWith(ready)
     const waiting = fresh && !idle && now - entry.sentAt < REPLY_STEP_MS

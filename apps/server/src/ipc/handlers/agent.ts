@@ -169,8 +169,9 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
         agents.modelNews?.dismiss(provider, model),
     },
     'agent.configure': {
-      args: z.tuple([id, agentSettings]),
-      run: (s: string, settings: AgentSettings) => lockSession(ctx, s, () => agents.configure(s, settings)),
+      args: z.tuple([id, agentSettings, z.literal('now').optional()]),
+      run: (s: string, settings: AgentSettings, when?: 'now') =>
+        lockSession(ctx, s, () => agents.configure(s, settings, when)),
     },
     'agent.retryLimitNow': {
       args: z.tuple([id]),

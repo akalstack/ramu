@@ -10,8 +10,8 @@ import type { SshComputers } from './sshComputers'
 export const LOCAL = 'local'
 const COUNT_DELAY_MS = 800
 const SSH_RETRY_MS = 20_000
-/** Rotate a paired computer's token about monthly, well inside the host's default 90-day window. */
-export const RENEW_EVERY_MS = 30 * 24 * 60 * 60_000
+/** Rotate a paired computer's token weekly, well inside the host's default 30-day window. */
+export const RENEW_EVERY_MS = 7 * 24 * 60 * 60_000
 
 interface Live {
   status: ComputerStatus
@@ -42,7 +42,9 @@ export interface ComputerDeps {
   ): Promise<RuntimeResult<M>>
   pair(url: string, code: string, deviceName: string): Promise<{ token: string; deviceId?: string; hostId?: string }>
   /** Swaps a computer's token for a fresh one; null when it declines (no longer paired). */
-  renew(url: string, token: string): Promise<{ token: string } | null>
+  renew(url: string, token: string): Promise<{ token: string; bound?: boolean } | null>
+  /** This computer holds a device key, so a token no host has bound to it yet is renewed at once to bind it. */
+  holdsKey?: () => boolean
   /** Computers reached over SSH keep a tunnel; the registry asks for it before connecting. */
   ssh: Pick<SshComputers, 'ensure' | 'connect' | 'close' | 'closeAll'>
   /** What this computer runs on, told to each host it connects to so that host shows it with the right icon. */
@@ -201,12 +203,16 @@ export class ComputerRegistry {
   /** Rotates the stored token when it is due. Any failure just retries at the next connection. */
   private async renewIfDue(id: string, now = Date.now()) {
     const renewedAt = this.deps.servers.renewedAt(id)
-    if (renewedAt !== null && renewedAt <= now && now - renewedAt < RENEW_EVERY_MS) return
+    const binds = !!this.deps.holdsKey?.() && !this.deps.servers.keyBound(id)
+    if (!binds && renewedAt !== null && renewedAt <= now && now - renewedAt < RENEW_EVERY_MS) return
+    // An older host binds nothing however often it is asked, so it is asked once a day, not at every connection.
+    if (binds && renewedAt !== null && renewedAt <= now && now - renewedAt < 24 * 60 * 60_000) return
     const endpoint = this.deps.servers.endpoint(id)
     if (!endpoint) return
     try {
       const renewed = await this.deps.renew(endpoint.url, endpoint.token)
-      if (renewed && !this.stopped && this.deps.servers.get(id)) this.deps.servers.rotate(id, renewed.token, now)
+      if (renewed && !this.stopped && this.deps.servers.get(id))
+        this.deps.servers.rotate(id, renewed.token, now, renewed.bound === true)
     } catch {
       // Offline: keep the current token.
     }

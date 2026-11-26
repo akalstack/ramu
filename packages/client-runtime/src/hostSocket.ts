@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { RuntimeEndpoint } from '@ramu/contracts'
+import { deviceProver } from './deviceProver'
 import { nodeSocketFactory } from './nodeSocket'
 import { RuntimeSocket, type SocketState } from './socket'
 
@@ -74,6 +75,8 @@ function open(
       token: local ? '' : endpoint.token,
       factory: nodeSocketFactory,
       epoch,
+      // This device's key, when the app holds one; the service on this machine has no token to prove.
+      ...(local ? {} : { prover: deviceProver() ?? undefined }),
       // The service on this machine comes back quickly after a restart; a remote host backs off further.
       ...(local ? { maxBackoffMs: 2000 } : {}),
       headers: {

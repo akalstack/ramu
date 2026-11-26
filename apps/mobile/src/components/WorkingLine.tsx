@@ -3,12 +3,12 @@ import { ActivityIndicator, Pressable, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
 import { translate } from '@ramu/shared/i18n'
 import { elapsedText } from '@ramu/shared/chat/agentActivity'
+import { holdsTurn } from '@ramu/shared/chat/helperPresentation'
 import { useStore } from '../runtime/store'
 import type { Chat } from '../runtime/types'
 import { font, radius, space, useTheme } from '../theme'
 import { T, tap } from './ui'
 import { Shimmer } from './Motion'
-import { helperActive } from '@ramu/shared/chat/helperPresentation'
 import { mobileThreadActivity } from '../runtime/threadActivity'
 
 /**
@@ -42,21 +42,24 @@ export function WorkingLine({
     const timer = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(timer)
   }, [running, since])
-  // The lead finished its turn but sub-agents it started are still at work: the thread is waiting on them, not done,
-  // as T3 Code shows it. Background commands such as a dev server are not waited on; their own pill shows them.
+  // The lead finished its turn but sub-agents it started, or commands it said it is waiting on, are still at work: the
+  // thread is waiting on them, not done, as T3 Code shows it. Other background commands such as a dev server are not
+  // waited on; their own pill shows them.
+  const agentsAtWork =
+    !running && !sending && online ? mobileThreadActivity(chat, online).helpers.filter(holdsTurn) : []
   const waitingOn =
-    !running && !sending && online
-      ? mobileThreadActivity(chat, online).helpers.filter(
-          (task) => helperActive(task) && task.taskType !== 'local_bash' && task.taskType !== 'advisor',
-        )
-      : []
+    !running && !sending && online ? [...agentsAtWork, ...(chat.awaited ?? []).filter(holdsTurn)] : agentsAtWork
   if (inline && waitingOn.length)
     return (
       <View accessibilityRole="text" accessibilityLiveRegion="polite" style={{ height: 24, justifyContent: 'center' }}>
         <Shimmer size={font.control} singleLine>
           {waitingOn.length === 1
             ? translate(store.language, 'Waiting on {0}', { 0: waitingOn[0]!.name })
-            : translate(store.language, 'Waiting on {0} agents', { 0: String(waitingOn.length) })}
+            : translate(
+                store.language,
+                agentsAtWork.length === waitingOn.length ? 'Waiting on {0} agents' : 'Waiting on {0} tasks',
+                { 0: String(waitingOn.length) },
+              )}
         </Shimmer>
       </View>
     )
@@ -79,7 +82,9 @@ export function WorkingLine({
       >
         {quiet ? null : (
           <Shimmer size={font.control} singleLine>
-            {t(running ? (chat.compacting ? 'Compacting context…' : (chat.activityLabel ?? 'Working')) : 'Sending…')}
+            {running && !chat.compacting && since && (chat.activityLabel ?? 'Working') === 'Working'
+              ? translate(store.language, 'Working for {0}', { 0: elapsedText(now - since) })
+              : t(running ? (chat.compacting ? 'Compacting context…' : (chat.activityLabel ?? 'Working')) : 'Sending…')}
           </Shimmer>
         )}
       </View>
@@ -129,13 +134,14 @@ export function WorkingLine({
 }
 
 /**
- * The end of a thread while its host catches up what this phone holds, as T3 Code shows it. Quieter than the turn's
- * status: nothing is wrong and nothing needs the person, so it neither shimmers nor takes the accent.
+ * The end of a thread, or the thread list, while its host catches up what this phone holds, as T3 Code shows it.
+ * Quieter than the turn's status: nothing is wrong and nothing needs the person, so it neither shimmers nor takes the accent.
  */
-export function SyncLine() {
+export function SyncLine({ what = 'messages' }: { what?: 'messages' | 'threads' }) {
   const store = useStore()
   const { c } = useTheme()
-  const label = translate(store.language, 'Syncing messages…')
+  const label =
+    what === 'threads' ? translate(store.language, 'Syncing threads…') : translate(store.language, 'Syncing messages…')
   return (
     <View
       accessible

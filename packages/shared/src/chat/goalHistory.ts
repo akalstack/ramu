@@ -10,6 +10,22 @@ export type GoalChangeType =
   'set' | 'edited' | 'paused' | 'resumed' | 'blocked' | 'stalled' | 'verify-failed' | 'turn-limit' | 'cleared'
 export type GoalChange = { type: GoalChangeType; goal: ChatGoal }
 
+/**
+ * The transcript line for each turning point in a goal, as English translation keys, the same on the desktop and the
+ * phone. A provider's usage limit has no row here: it is "Limit reached" and never a failure of the goal.
+ */
+export const GOAL_NOTE_LABELS: Record<GoalChangeType, string> = {
+  set: 'Goal set',
+  edited: 'Goal updated',
+  paused: 'Goal paused',
+  resumed: 'Goal resumed',
+  blocked: 'Goal needs input',
+  stalled: 'No progress',
+  'verify-failed': 'Verification failed',
+  'turn-limit': 'Goal turn limit reached',
+  cleared: 'Goal cleared',
+}
+
 /** The start of the reason Ramu gives a goal it blocks for lack of progress. */
 export const STALL_REASON = 'No progress'
 /** A goal Ramu blocked because continuations changed nothing, as opposed to one the agent blocked for input. */

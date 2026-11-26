@@ -106,16 +106,16 @@ function Editor({ draft, onSaved, onCancel }: { draft: Draft; onSaved: () => voi
   )
 }
 
-/** Settings › Custom agents: describe one in a sentence, review the draft, save it. The lead uses them when a task fits. */
+/**
+ * Settings › Custom agents: a model, a read-only switch and its own context for sub-agent work. The lead uses one when a
+ * task fits. Reusable instructions alone belong in a skill, which any agent reads.
+ */
 export function CustomAgentSettings() {
   useLanguage()
   const { invoke } = useHost()
   const viewOnly = useViewOnly()
-  const { initialSettings } = useModelSets()
   const [agents, setAgents] = useState<CustomAgent[]>([])
   const [editing, setEditing] = useState<Draft | null>(null)
-  const [sentence, setSentence] = useState('')
-  const [drafting, setDrafting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const reload = useCallback(
     () => invoke('customAgents.list').then(setAgents, (cause) => setError(errorText(cause))),
@@ -124,52 +124,25 @@ export function CustomAgentSettings() {
   useEffect(() => {
     void reload()
   }, [reload])
-  const draft = async () => {
-    setDrafting(true)
-    setError(null)
-    try {
-      const drafted = await invoke('customAgents.draft', sentence, initialSettings)
-      setEditing({ ...drafted, model: null })
-      setSentence('')
-    } catch (cause) {
-      setError(errorText(cause))
-    } finally {
-      setDrafting(false)
-    }
-  }
   return (
     <section className="flex flex-col gap-2" aria-label={t('Custom agents')}>
-      <SettingsGroupTitle>{t('Custom agents')}</SettingsGroupTitle>
+      <div className="flex items-center justify-between gap-2">
+        <SettingsGroupTitle>{t('Custom agents')}</SettingsGroupTitle>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={viewOnly || !!editing}
+          onClick={() => setEditing({ name: '', description: '', instructions: '', model: null, readOnly: true })}
+        >
+          <Plus size={13} />
+          {t('New agent')}
+        </Button>
+      </div>
       <p className="m-0 text-caption text-muted-foreground">
         {t(
           'Reusable agents for sub-agent work. The thread’s agent reads each description and picks one when it fits, and the thread shows which one ran. A custom agent replaces a sub-agent type with the same name.',
         )}
       </p>
-      <form
-        className="flex items-center gap-2"
-        onSubmit={(event) => {
-          event.preventDefault()
-          void draft()
-        }}
-      >
-        <Input
-          aria-label={t('Describe a new agent')}
-          placeholder={t('A strict reviewer for security and missing tests')}
-          maxLength={2000}
-          value={sentence}
-          disabled={viewOnly || drafting}
-          onChange={(event) => setSentence(event.target.value)}
-        />
-        <Button
-          type="submit"
-          variant="secondary"
-          size="sm"
-          disabled={viewOnly || drafting || sentence.trim().length < 3}
-        >
-          <Plus size={13} />
-          {drafting ? t('Drafting…') : t('New agent')}
-        </Button>
-      </form>
       {error && (
         <p role="alert" className="m-0 text-caption text-bad">
           {error}
@@ -188,7 +161,7 @@ export function CustomAgentSettings() {
       )}
       {!agents.length && !editing && (
         <SettingsEmpty>
-          {t('No custom agents yet. Describe one above and Ramu drafts it for you to edit.')}
+          {t('No custom agents yet. Add one to give a helper its own model, instructions and a read-only switch.')}
         </SettingsEmpty>
       )}
       {agents.map((agent) => (

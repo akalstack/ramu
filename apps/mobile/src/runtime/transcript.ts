@@ -18,7 +18,8 @@ import {
 } from '@ramu/shared/chat/agentTasks'
 import { requestOutcomes, parseAnswerMessage, questionState } from '@ramu/shared/chat/questions'
 import { latestSurfaces, parseInlineUiActionMessage } from '@ramu/shared/chat/inlineUi'
-import { goalChanges, goalFactLines } from '@ramu/shared/chat/goalHistory'
+import { GOAL_NOTE_LABELS, goalChanges, goalFactLines } from '@ramu/shared/chat/goalHistory'
+import { compactionCounts } from '@ramu/shared/chat/compaction'
 import { providerWaitState, type ProviderWaitState } from '@ramu/shared/chat/providerWait'
 import { foldSettingsChanges } from '@ramu/shared/chat/settingsChanges'
 import { foldRepeats } from '@ramu/shared/chat/repeats'
@@ -86,6 +87,9 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
   events.forEach((event, index) => {
     if (event.kind === 'permission-request') latestPermissions.set(event.requestId, index)
   })
+  // Where the thread's own agent last wrote text or ended a turn. A message from the person does not count: steering
+  // arrives while a call is still running.
+  const movedOn = events.findLastIndex((event) => !event.agentId && ['text', 'result', 'error'].includes(event.kind))
   const resolved = requestOutcomes(events)
   const answers = new Map<string, Record<string, string>>()
   const results = new Map<string, Extract<AgentEvent, { kind: 'tool-result' }>>()
@@ -94,6 +98,7 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
   const revisions = interactiveRevisions(events)
   const updates = interactiveUpdates(events)
   const cards = latestSurfaces(events)
+  const lastHeld = events.findLastIndex((e) => e.kind === 'settings-waiting')
   // The row of each document's newest version, so an older row can scroll to it.
   const latestItem = new Map<string, string>()
   events.forEach((e, index) => {
@@ -160,17 +165,7 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
       )
     } else if (e.kind === 'goal' && goals.has(e)) {
       const { type, goal } = goals.get(e)!
-      const verb = {
-        set: 'Goal set',
-        edited: 'Goal edited',
-        paused: 'Goal paused',
-        resumed: 'Goal resumed',
-        blocked: 'Goal blocked',
-        stalled: 'No progress',
-        'verify-failed': 'Verification failed',
-        'turn-limit': 'Goal reached its turn limit',
-        cleared: 'Goal cleared',
-      }[type]
+      const verb = GOAL_NOTE_LABELS[type]
       // A failed check and a stall say what happened beneath the title; the others name the goal.
       const facts = type === 'verify-failed' ? goalFactLines(goal) : type === 'stalled' ? [goal.reason] : []
       items.push({
@@ -287,6 +282,13 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
         kind: 'tool',
         id: e.toolUseId,
         tool: isToolKind(kind) ? kind : 'other',
+        source: {
+          name: e.name,
+          kind,
+          summary: e.summary,
+          ...(e.title ? { title: e.title } : {}),
+          ...(call ? { ramu: call.name } : {}),
+        },
         verb: file?.verb ?? plain.verb,
         subject: file ? `${file.name}${file.others ? ` +${file.others}` : ''}` : plain.subject,
         ...(ramu ? { ramu: { done: ramu.done, running: ramu.running, subject: ramu.subject, facts: ramu.facts } } : {}),
@@ -299,7 +301,12 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
               : 'completed'
           : e.status === 'failed'
             ? 'failed'
-            : 'in_progress',
+            : // A call with no result is running only until the agent moves on: once it has written text after it,
+              // or the turn has ended, the result is not coming (it was lost, or the call was cut short), and a row
+              // that kept shimmering would say something is still running.
+              index < movedOn
+              ? 'completed'
+              : 'in_progress',
         detail: result?.summary,
         input: e.input,
       })
@@ -353,7 +360,20 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
         turns: e.goal.turns,
         ...(goalFactLines(e.goal).length ? { detail: goalFactLines(e.goal).join('\n') } : {}),
       })
-    else if (e.kind === 'settings')
+    else if (e.kind === 'settings-waiting') {
+      // Only the latest says what is held; an earlier one was applied, cancelled or replaced.
+      if (e.settings && index === lastHeld)
+        items.push({
+          kind: 'note',
+          id,
+          title: '',
+          detail: 'Applies when the sub-agents and background commands finish',
+          detailIsCopy: true,
+          settings: e.settings,
+          previous: e.previous,
+          held: true,
+        })
+    } else if (e.kind === 'settings')
       items.push({
         kind: 'note',
         id,
@@ -362,24 +382,27 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
         settings: e.settings,
         previous: e.previous,
       })
+    // These notes read as the desktop's rows do.
     else if (e.kind === 'background-terminal-stop')
-      items.push({ kind: 'note', id, ...noteTitle('Background command stop requested'), detail: e.command })
-    else if (e.kind === 'recovery') items.push({ kind: 'note', id, ...noteTitle('Continued after restart') })
-    else if (e.kind === 'compaction' && e.state !== 'started')
+      items.push({ kind: 'note', id, ...noteTitle('You requested a stop for {0}', { 0: e.command }) })
+    else if (e.kind === 'recovery') items.push({ kind: 'note', id, ...noteTitle('Resumed after restart') })
+    else if (e.kind === 'compaction' && e.state !== 'started') {
+      const counts = compactionCounts(e)
       items.push({
         kind: 'note',
         id,
         ...(e.state === 'failed'
-          ? noteTitle('Could not compact the conversation')
-          : e.beforeTokens && e.afterTokens
-            ? noteTitle('Conversation compacted · {0}k → {1}k tokens', {
-                0: Math.round(e.beforeTokens / 1000),
-                1: Math.round(e.afterTokens / 1000),
-              })
-            : noteTitle('Conversation compacted')),
+          ? noteTitle('Context compaction failed')
+          : e.state === 'cancelled'
+            ? noteTitle('Context compaction cancelled')
+            : e.state === 'unknown'
+              ? noteTitle('Context compaction · {0}', { 0: e.providerStatus ?? 'Unknown status' })
+              : e.beforeTokens && e.afterTokens
+                ? noteTitle('Context compacted · {0} → {1} tokens', { 0: counts.before, 1: counts.after })
+                : noteTitle('Context compacted')),
         failed: e.state === 'failed',
       })
-    else if (e.kind === 'result') items.push({ kind: 'end', id, ended: true, interrupted: resultStopped(e) })
+    } else if (e.kind === 'result') items.push({ kind: 'end', id, ended: true, interrupted: resultStopped(e) })
     else if (e.kind === 'state' && ['idle', 'failed', 'stopped'].includes(e.state))
       items.push({ kind: 'end', id, ended: false, interrupted: false })
     // Keep exact event positions even for requests whose IDs are provider-owned.

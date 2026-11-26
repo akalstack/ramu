@@ -5,7 +5,10 @@ import { markSource } from '../runtime/textMark'
 import { ContinuedCard } from './ContinueOnHost'
 import { CheckoutClashCard, CommandWaitNote } from './CheckoutClashCard'
 import { toolActivity } from '@ramu/shared/chat/toolActivity'
-import { NEW_THOUGHT, thoughtLine, thoughtTitle, tickThought } from '@ramu/shared/chat/thoughtLine'
+import { summarizeTools, toolRowWords } from '@ramu/shared/chat/toolSummary'
+import { attachmentPreview } from '../runtime/attachmentPreviews'
+import { GOAL_NOTE_LABELS } from '@ramu/shared/chat/goalHistory'
+import { NEW_THOUGHT, thoughtEnding, thoughtLine, thoughtTitle, tickThought } from '@ramu/shared/chat/thoughtLine'
 import { useHeldHeight } from './heldHeight'
 import { FileIcon } from './FileIcon'
 import { isModelFile, ModelTile } from './ModelViewer'
@@ -302,9 +305,10 @@ function AttachmentTile({ file, chat }: { file: Attachment; chat: Chat }) {
   const { c } = useTheme()
   const store = useStore()
   const image = file.mimeType.startsWith('image/')
-  const [uri, setUri] = useState<string | null>(null)
+  // A picture this phone just sent shows from its own copy, without waiting for the host's thumbnail.
+  const [uri, setUri] = useState<string | null>(() => attachmentPreview(file.id))
   useEffect(() => {
-    if (!image || !store.isOnline(chat.computerId)) return
+    if (!image || uri || !store.isOnline(chat.computerId)) return
     let alive = true
     void store.invoke(chat.computerId, 'attachments.preview', file.id).then(
       (value) => {
@@ -742,7 +746,7 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
       return <GoalDone item={item} />
     case 'summary':
       return (
-        <TurnSummary label={item.label}>
+        <TurnSummary label={item.label} running={item.running}>
           {item.items.map((child) => (
             <TranscriptItemView key={child.id} item={child} chat={chat} />
           ))}
@@ -899,12 +903,20 @@ function NoteRow({ item, chat }: { item: Extract<TranscriptItem, { kind: 'note' 
   const say = useSay()
   const { c } = useTheme()
   const store = useStore()
-  const strings = useT()
   const [undoing, setUndoing] = useState(false)
   const cancelPending = useContext(CancelPendingSettings)
   // As on the desktop: a settings change can be undone, restoring the previous settings for the next message.
+  const configure = (settings: import('@ramu/shared/types').AgentSettings, when?: 'now') => {
+    tap()
+    setUndoing(true)
+    void store
+      .invoke(chat.computerId, 'agent.configure', chat.sessionId!, settings, when)
+      .then(() => store.refresh(chat.computerId, true))
+      .catch((error) => Alert.alert(say('Model'), error instanceof Error ? error.message : String(error)))
+      .finally(() => setUndoing(false))
+  }
   const undo =
-    item.previous && chat.sessionId && !item.pending
+    item.previous && chat.sessionId && !item.pending && !item.held
       ? () => {
           tap()
           setUndoing(true)
@@ -942,7 +954,7 @@ function NoteRow({ item, chat }: { item: Extract<TranscriptItem, { kind: 'note' 
     (s.accountId ?? 'default') !== (item.settings.accountId ?? 'default')
       ? loginName(s)
       : label(s)
-  let title = item.goalNote ? (strings.goalNotes[item.goalNote] ?? item.title) : item.title
+  let title = item.goalNote ? say(GOAL_NOTE_LABELS[item.goalNote]) : item.title
   if (!item.goalNote) title = item.titleCopy ? say(item.titleCopy.text, item.titleCopy.values) : say(item.title)
   // As on the desktop, each model carries its provider's mark: "[Claude] Opus Medium → [Codex] GPT-5.5 High".
   let change: ReactNode = null
@@ -1027,6 +1039,37 @@ function NoteRow({ item, chat }: { item: Extract<TranscriptItem, { kind: 'note' 
             </T>
           </Pressable>
         ) : null}
+        {item.held && item.settings && chat.sessionId ? (
+          <View
+            style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: space.l, marginTop: 2 }}
+          >
+            <Pressable
+              accessibilityRole="button"
+              disabled={undoing}
+              onPress={() => configure(item.settings!, 'now')}
+              hitSlop={8}
+              style={{ opacity: undoing ? 0.5 : 1 }}
+            >
+              <T size={font.caption} weight="600" tone="accent">
+                {say('Change now and stop them')}
+              </T>
+            </Pressable>
+            {item.previous ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={say('Cancel the model change')}
+                disabled={undoing}
+                onPress={() => configure(item.previous!)}
+                hitSlop={8}
+                style={{ opacity: undoing ? 0.5 : 1 }}
+              >
+                <T size={font.caption} weight="600" tone="accent">
+                  {say('Cancel · stay on {0}', { 0: label(item.previous) })}
+                </T>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
         {undo ? (
           <Pressable
             accessibilityRole="button"
@@ -1052,10 +1095,25 @@ function NoteRow({ item, chat }: { item: Extract<TranscriptItem, { kind: 'note' 
 }
 
 /** "Worked for 12m 48s": a finished turn's routine steps, collapsed until tapped. */
-function TurnSummary({ label, children }: { label: string; children: ReactNode }) {
+function TurnSummary({
+  label,
+  running,
+  children,
+}: {
+  label: string
+  running?: Extract<TranscriptItem, { kind: 'summary' }>['running']
+  children: ReactNode
+}) {
   const say = useSay()
   const { c } = useTheme()
   const [open, setOpen] = useState(false)
+  const since = running?.since
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    if (since === undefined) return
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [since])
   const toggled = useContext(RowToggle)
   return (
     <View style={{ gap: space.m }}>
@@ -1079,7 +1137,7 @@ function TurnSummary({ label, children }: { label: string; children: ReactNode }
       >
         {/* A section heading over the steps, so its chevron stays beside the label as on the desktop; the row is the target. */}
         <T size={font.control} tone="muted" style={{ fontVariant: ['tabular-nums'] }}>
-          {say(label)}
+          {running ? say(running.text, { 0: formatDuration(Math.max(0, now - running.since)) }) : say(label)}
         </T>
         <Disclosure open={open} color={c.muted} />
       </Pressable>
@@ -1302,9 +1360,14 @@ type ToolItem = Extract<TranscriptItem, { kind: 'tool' }>
 function toolWords(item: ToolItem, language: Language, running: boolean): { verb: string; subject: string } {
   if (item.ramu)
     return { verb: translate(language, running ? item.ramu.running : item.ramu.done), subject: item.ramu.subject ?? '' }
-  // A command's terminal icon and its own words already say what runs; the tool's name ("Bash") adds nothing.
-  if (item.tool === 'execute' && !item.file && item.subject) return { verb: '', subject: item.subject }
-  return { verb: item.file ? translate(language, toolVerb(item.verb, running)) : item.verb, subject: item.subject }
+  const say = (text: string, values?: Record<string, string | number>) => translate(language, text, values)
+  // Reads, edits and writes name the file; every other call reads as the desktop's row does.
+  if (item.file)
+    return {
+      verb: say(toolVerb(item.verb, running)),
+      subject: `${item.file.name}${item.file.others ? ` ${say('+{count} more', { count: item.file.others })}` : ''}`,
+    }
+  return toolRowWords(item.source, item.source.kind, running, say)
 }
 
 /** `live`: the newest group of a running turn, so its headline names the latest call, as the desktop's does. */
@@ -1317,11 +1380,6 @@ function ToolGroup({ item, live }: { item: Extract<TranscriptItem, { kind: 'tool
   const { current, running, failed } = toolActivity(item.tools, (tool) =>
     tool.status === 'in_progress' ? 'running' : tool.status === 'failed' ? 'failed' : 'done',
   )
-  const counts = new Map<string, number>()
-  for (const tool of item.tools) {
-    const verb = toolWords(tool, language, false).verb || translate(language, 'Commands')
-    counts.set(verb, (counts.get(verb) ?? 0) + 1)
-  }
   const shown = live && !running ? (item.tools.at(-1) ?? current) : current
   const words = shown ? toolWords(shown, language, shown.status === 'in_progress') : null
   // The live group's newest step may be a thought, so its headline reads what the agent is considering now.
@@ -1330,12 +1388,31 @@ function ToolGroup({ item, live }: { item: Extract<TranscriptItem, { kind: 'tool
   // Until the live group settles, its latest thought stays under the headline, between calls too, instead of hiding in
   // the closed group the moment a call finishes.
   const lastThought = live && !thought ? item.entries.findLast((entry) => entry.kind === 'thinking') : undefined
-  const lastThoughtLine = lastThought ? thoughtLine(lastThought.text, true) : ''
+  const lastThoughtLine = lastThought ? thoughtEnding(lastThought.text) : ''
   const headline = thought
     ? thoughtLine(thought.text, true) || say('Thinking')
     : live || running || failed
       ? `${words?.verb ?? ''} ${words?.subject ?? ''}`.trim()
-      : [...counts].map(([verb, count]) => `${verb}${count > 1 ? ` ×${count}` : ''}`).join(' · ')
+      : // A settled group reads as the desktop's does: "Ran 2 commands, Read 3 files".
+        summarizeTools(
+          item.tools.map((tool) => ({
+            name: tool.source.name,
+            running: tool.status === 'in_progress',
+            kind: tool.source.kind,
+            ...(tool.source.title ? { title: tool.source.title } : {}),
+            ...(tool.ramu && tool.source.ramu
+              ? {
+                  ramu: {
+                    key: tool.source.ramu,
+                    done: tool.ramu.done,
+                    running: tool.ramu.running,
+                    subject: tool.ramu.subject,
+                  },
+                }
+              : {}),
+          })),
+          say,
+        )
   const lastFailed = item.tools.findLast((tool) => tool.status === 'failed')
   const lastFailedWords = lastFailed ? toolWords(lastFailed, language, false) : { verb: '', subject: '' }
   const lastFailedLine = lastFailed ? toolFailure(lastFailed.detail).lines.at(-1) : undefined
@@ -2268,7 +2345,7 @@ function ChangesCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: '
  */
 function GoalNote({ item }: { item: Extract<TranscriptItem, { kind: 'note' }> }) {
   const { c } = useTheme()
-  const strings = useT()
+  const say = useSay()
   const [open, setOpen] = useState(false)
   const toggled = useContext(RowToggle)
   const type = item.goalNote!
@@ -2283,7 +2360,7 @@ function GoalNote({ item }: { item: Extract<TranscriptItem, { kind: 'note' }> })
           ? X
           : Target
   const color = warn ? c.warn : type === 'paused' || type === 'cleared' ? c.muted : c.accent
-  const title = strings.goalNotes[type] ?? item.title
+  const title = say(GOAL_NOTE_LABELS[type])
   return (
     <View style={{ gap: space.s }}>
       <Pressable
@@ -2620,7 +2697,8 @@ function ThinkingRow({ text, live }: { text: string; live: boolean }) {
   const title =
     heading.label === 'Thought for {0}' ? say(heading.label, { 0: formatDuration(heading.took) }) : say(heading.label)
   // Closed, the thought's own line says what it is; a long one also says how long it took, as on the desktop.
-  const titled = open || heading.label === 'Thought for {0}'
+  // A thought still on its first paragraph has no line of its own yet, so the row says "Thinking".
+  const titled = open || heading.label === 'Thought for {0}' || !line
   return (
     <View>
       <Pressable

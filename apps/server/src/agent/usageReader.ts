@@ -63,40 +63,4 @@ export class ClaudeUsageReader {
       query.close?.()
     }
   }
-
-  /** Reads Claude's plan usage now with a throwaway process, when the stored reading is old or missing. */
-  async read(): Promise<void> {
-    if (
-      this.host.shutdown() ||
-      !this.host.usage() ||
-      process.env.RAMU_FAKE_AGENT === '1' ||
-      Date.now() - this.lastRead < 5 * 60_000
-    )
-      return
-    this.lastRead = Date.now()
-    const input = new InputQueue()
-    const query = this.host.providerQuery({
-      prompt: input,
-      options: {
-        cwd: tmpdir(),
-        settingSources: [],
-        permissionMode: 'default',
-        canUseTool: async () => ({ behavior: 'deny', message: 'Usage read only' }),
-      },
-    })
-    try {
-      const response = await timeout(
-        query.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }),
-        20_000,
-        'timed out',
-      )
-      const readings = claudeUsageReadings(response as ClaudeUsageResponse)
-      if (readings.length) this.host.usage()!.update(readings)
-    } catch {
-      this.lastRead = 0
-    } finally {
-      input.close()
-      query.close?.()
-    }
-  }
 }

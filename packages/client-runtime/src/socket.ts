@@ -6,7 +6,9 @@ import {
   PROTOCOL_VERSION,
   SOCKET_PATH,
 } from '@ramu/contracts'
+import { PROOF_HEADER } from '@ramu/shared/deviceProof'
 import { checkRpcResult } from '@ramu/shared/rpcResults'
+import type { Prover } from './deviceProver'
 import { RPC_RESULTS } from '@ramu/shared/rpcResults.generated'
 
 /** What a platform's WebSocket must give back: text frames out, and a way to close. */
@@ -50,6 +52,8 @@ export interface RuntimeSocketOptions {
   events?: boolean
   /** Extra upgrade headers (for example the desktop's presence port). */
   headers?: Record<string, string>
+  /** Proves this device holds the key its token is bound to. A host that bound no key ignores the proof. */
+  prover?: Prover
   /** Longest wait between reconnects; the local connection to this machine's own service keeps it short. */
   maxBackoffMs?: number
   connectTimeoutMs?: number
@@ -93,6 +97,8 @@ export class RuntimeSocket {
   private connectedAt = 0
   private suspended = false
   private everReady = false
+  /** The host's clock was read for this run of refusals; the next refusal is final. */
+  private resynced = false
   private lastCode: string | undefined
   private readonly waiters = new Set<() => void>()
   state: SocketState = 'closed'
@@ -136,10 +142,12 @@ export class RuntimeSocket {
       if (this.options.events === false) url.searchParams.set('events', 'none')
       target = url.toString()
     }
+    const prover = this.options.prover
     const headers = {
       ...this.options.headers,
       Authorization: `${AUTH_SCHEME} ${this.options.token}`,
       [PROTOCOL_HEADER]: String(PROTOCOL_VERSION),
+      ...(prover ? { [PROOF_HEADER]: prover.header(this.options.token, 'socket') } : {}),
     }
     const deadline = this.after(this.options.connectTimeoutMs ?? 10_000, () => socket.close())
     const socket: SocketLike = this.options.factory(target, headers, {
@@ -154,6 +162,7 @@ export class RuntimeSocket {
           clearTimeout(deadline)
           this.timers.delete(deadline)
           this.ready = true
+          this.resynced = false
           this.everReady = true
           this.connectedAt = Date.now()
           if (this.epoch !== null && this.epoch !== frame.epoch) this.options.onRestart?.()
@@ -176,6 +185,7 @@ export class RuntimeSocket {
         clearTimeout(deadline)
         this.timers.delete(deadline)
         if (this.socket !== socket) return
+        const wasReady = this.ready
         this.socket = null
         this.ready = false
         clearInterval(this.beat)
@@ -184,6 +194,18 @@ export class RuntimeSocket {
           call.reject(lost('Connection lost before the host answered'))
         }
         if (this.closed) return
+        // A proof is refused when this device's clock is far from the host's. The host's clock is read once and the
+        // connection tried again before the refusal is taken as final; where the refusal cannot be seen (a phone's
+        // socket reports no status) the clock is read before the usual retry.
+        if (prover && !wasReady) {
+          const resync = prover.sync(this.options.url)
+          if (status === 401 && !this.resynced) {
+            this.resynced = true
+            this.set('closed')
+            void resync.finally(() => this.start())
+            return
+          }
+        }
         if (status === 401 || status === 403) return this.set('rejected')
         if (status === 404 || status === 400 || status === 426) return this.set('unsupported')
         // A connection that held for a while was healthy; a flapping host keeps its growing delay.

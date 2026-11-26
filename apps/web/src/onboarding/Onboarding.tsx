@@ -329,6 +329,11 @@ export function Onboarding() {
             {/* Chosen once, on the first step, and saved at once so the rest of setup reads in that language; it
                 stays in Settings → Appearance after that. */}
             {index === 0 && (
+              <span className="flex-none text-caption text-muted-foreground" aria-hidden="true">
+                {t('App language')}
+              </span>
+            )}
+            {index === 0 && (
               <Dropdown
                 label={t('App language')}
                 value={app.preferences.language}
@@ -356,7 +361,7 @@ export function Onboarding() {
           </p>
         </div>
         {/* A little room at the top: the scroll area clips a first card's border and focus ring otherwise. */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-1 pb-4 [scrollbar-width:thin]">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-1 pb-4">
           {key === 'agents' && (
             <section
               className="mb-4 flex flex-wrap items-center gap-2 rounded-(--radius-m) bg-fill p-3"
@@ -402,7 +407,8 @@ export function Onboarding() {
               enabled={enabled}
               onEnabled={setEnabled}
               lead={providers.length ? lead : undefined}
-              leads={providers}
+              // In the host's own order: the list stays put when another agent is picked, though its steps come first.
+              leads={installed.filter((entry) => providers.includes(entry))}
               onLead={setLeadPick}
               onRefresh={refresh}
               onError={setError}

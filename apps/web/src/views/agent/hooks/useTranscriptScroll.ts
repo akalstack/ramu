@@ -29,7 +29,7 @@ export function useTranscriptScroll({
     stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX
   }
 
-  // Match the transcript's usable width, including non-overlay OS scrollbars.
+  // Native scrollbars are hidden, so this measures 0; a scroller that does take width still lines the composer up.
   useLayoutEffect(() => {
     const el = scroller.current
     if (!el) return
@@ -60,6 +60,24 @@ export function useTranscriptScroll({
       release.disconnect()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [mount only] by design; the values it reads beyond these are current as of that run
+  }, [])
+
+  // The tray above the composer (servers, terminals, agents, goal) comes and goes below the transcript. Its height is
+  // taken from the transcript's bottom edge, so the scroll moves by the same amount before the frame paints: the lines
+  // next to the composer stay where they are, and showing then hiding the tray lands exactly where the reader was.
+  useLayoutEffect(() => {
+    const el = scroller.current
+    if (!el) return
+    let previousHeight = el.clientHeight
+    const observer = new ResizeObserver(() => {
+      const height = el.clientHeight
+      const change = previousHeight - height
+      // A hidden view measures 0; it reopens where it was rather than shifting by its whole height.
+      if (change && previousHeight && height) el.scrollTop += change
+      previousHeight = height
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
   }, [])
 
   return { scroller, stick, onScroll }

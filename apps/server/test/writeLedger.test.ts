@@ -165,6 +165,17 @@ it('holds a command while another thread’s command runs in the shared checkout
   expect(await writes.commandTurn('a', 's3')).toBe(false)
 })
 
+it('never holds a thread behind a command that only reads', async () => {
+  const { writes } = ledger()
+  writes.begin('ra', 'a', ['/repo'])
+  writes.begin('rb', 'b', ['/repo'])
+  writes.observe('a', '/repo', {
+    ...bash('s1'),
+    input: JSON.stringify({ command: 'git status --short' }),
+  } as AgentEvent)
+  expect(await writes.commandTurn('b', 's2')).toBe(false)
+})
+
 it('stops holding a command once the other one moves to the background, or after the longest wait', async () => {
   const { writes } = ledger()
   const quick = new WriteLedger({ watch: () => null, turnWaitMs: 20 })

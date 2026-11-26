@@ -33,6 +33,14 @@ export interface TranscriptTool {
   kind: 'tool'
   id: string
   tool: ToolKind
+  /** The call as the provider named it, for the line that sums up a group of calls the way the desktop does. */
+  source: {
+    name: string
+    kind: import('@ramu/shared/types').AgentToolKind
+    title?: string
+    summary: string
+    ramu?: string
+  }
   verb: string
   subject: string
   status: ToolStatus
@@ -204,11 +212,20 @@ export type TranscriptItem = (
       previous?: import('@ramu/shared/types').AgentSettings
       /** A model change waiting for the next send: shown at the end of the chat, with no switch-back action. */
       pending?: boolean
+      /** A model change the host holds until the provider's own sub-agents and background commands finish. */
+      held?: boolean
       /** How many times this same note happened back to back, shown once. */
       repeats?: number
     }
   /** A finished turn's routine steps folded under "Worked for 12m 48s". */
-  | { kind: 'summary'; id: string; label: string; items: TranscriptItem[] }
+  | {
+      kind: 'summary'
+      id: string
+      label: string
+      /** The thread is still at work under this turn, so the row counts up from `since` instead of showing `label`. */
+      running?: { since: number; text: 'Working for {0}' | 'Continuing for {0}' }
+      items: TranscriptItem[]
+    }
 ) & { at?: number; requestSource?: { sessionId: string; agentId: string; name: string; requestId?: string } }
 
 export interface Chat extends Task {
@@ -216,6 +233,8 @@ export interface Chat extends Task {
   compacting?: boolean
   /** The agent's own background commands still running, listed with its helpers so they can be seen and stopped. */
   commands?: import('@ramu/shared/types').AgentTask[]
+  /** Background commands the agent said it was waiting on, running or ended: they keep the last turn's clock going. */
+  awaited?: import('@ramu/shared/types').AgentTask[]
   activityLabel?: string | null
   /** When the running turn began, for its elapsed time. */
   turnStartedAt?: number | null

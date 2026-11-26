@@ -54,10 +54,11 @@ export function ActivityText({
   return (
     <span className={`relative min-w-0 ${className}`}>
       <span>{active && settled ? <WorkingText>{children}</WorkingText> : children}</span>
+      {/* Laid out like the label under it (same wrapping, same ellipsis), so the highlight covers exactly what shows. */}
       <span
         ref={overlay}
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 overflow-hidden text-foreground opacity-0"
+        className="pointer-events-none absolute inset-0 overflow-hidden text-ellipsis text-foreground opacity-0"
       >
         {children}
       </span>

@@ -25,6 +25,11 @@ export class AccountUsage {
     this.last.delete(`${provider}:${accountId}`)
   }
 
+  /** Lets the next refresh read every login at once, as after logins, keys or enabled providers change. */
+  forgetAll(): void {
+    this.last.clear()
+  }
+
   async refresh(only?: AgentProvider, now = Date.now()): Promise<void> {
     const config = this.config()
     const jobs: Promise<void>[] = []

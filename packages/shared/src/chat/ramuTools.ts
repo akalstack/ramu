@@ -77,6 +77,7 @@ const KNOWN = new Set([
   'background_terminal_inspect',
   'background_terminal_wait',
   'background_terminal_stop',
+  'background_wait',
   'terminal_list',
   'terminal_read',
   'codex_pre_tool_use',
@@ -507,6 +508,14 @@ export function describeRamuTool(call: RamuToolCall, result?: string): RamuToolR
       return reply('Stopped a background command', 'Stopping a background command', 'terminal', command(data.command))
     case 'background_terminal_wait':
       return describeWait(args, data, reply)
+    case 'background_wait': {
+      const matched = Array.isArray(data.matched) ? data.matched.length : undefined
+      if (matched === 0)
+        return reply('Found no background command to wait on', 'Waiting on a background command', 'terminal')
+      return args.waiting === false
+        ? reply('Stopped waiting on a background command', 'Stopped waiting on a background command', 'terminal')
+        : reply('Waiting on a background command', 'Waiting on a background command', 'terminal')
+    }
     case 'terminal_list':
       return reply('Looked at your terminals', 'Looking at your terminals', 'terminal')
     case 'terminal_read':

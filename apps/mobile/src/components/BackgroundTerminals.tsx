@@ -201,7 +201,7 @@ export function BackgroundTerminals({
     if (open && !rows.length && !commands.length) onClose()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the host's list changes
   }, [ready, rows, selected, open])
-  const awaited = rows.find((row) => row.agentWaiting)
+  const awaited = rows.find((row) => row.agentWaiting) ?? commands.find((task) => task.awaited)
   const shown = detail.key === detailKey ? detail.record : undefined
   const canControl =
     open &&
@@ -280,7 +280,7 @@ export function BackgroundTerminals({
           // While the agent waits on a command, the pill says which one, so an idle-looking turn has a reason on screen.
           label={
             awaited
-              ? t('Waiting on {0}', { 0: clipCommand(awaited.command) })
+              ? t('Waiting on {0}', { 0: clipCommand('command' in awaited ? awaited.command : awaited.name) })
               : t('{0} background terminals', { 0: rows.length + commands.length })
           }
           accessibilityLabel={t('Background terminals')}
@@ -393,7 +393,7 @@ export function BackgroundTerminals({
                       {index ? <Divider inset={space.l} /> : null}
                       <Row
                         accessibilityRole="button"
-                        accessibilityLabel={`${task.name} · ${t('Running')} · ${t('Moved to the background')}`}
+                        accessibilityLabel={`${task.name} · ${task.awaited ? `${t('Agent is waiting')} · ` : ''}${t('Running')} · ${t('Moved to the background')}`}
                         onPress={() => {
                           onClose()
                           // iOS presents the next sheet only once this one has gone.
@@ -405,6 +405,7 @@ export function BackgroundTerminals({
                             {task.name}
                           </T>
                           <T size={font.caption} tone="muted">
+                            {task.awaited ? `${t('Agent is waiting')} · ` : ''}
                             {t('Running')} · {t('Moved to the background')}
                           </T>
                         </View>

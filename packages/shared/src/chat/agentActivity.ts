@@ -2,45 +2,45 @@ import { KIND_VERB, toolKind } from './agentTools'
 import { toolVerb } from './toolStatus'
 import type { AgentEvent, AgentSessionState } from '../types'
 
-/** Use the current turn's main-agent output rather than treating all work as reasoning. */
-export function agentActivityLabel(state: AgentSessionState | undefined, events: AgentEvent[]): string | null {
+/**
+ * The thread's one live status, as T3 Code keeps it: starting, or working. What the agent is doing within the turn is
+ * the transcript's own business (a thinking row, a tool group), so the line never flips between "Thinking" and
+ * "Writing" as output streams in; it counts the time instead ("Working for 12s").
+ */
+export function agentActivityLabel(state: AgentSessionState | undefined): 'Starting…' | 'Working' | null {
   if (state === 'starting') return 'Starting…'
-  if (state !== 'running') return null
+  return state === 'running' ? 'Working' : null
+}
+
+/** What the agent shows as work, so a result followed by it means the agent picked the work up again by itself. */
+const OUTPUT = new Set<AgentEvent['kind']>(['thinking', 'text', 'content', 'tool-use'])
+
+/**
+ * When the stretch of work now running began, so its timer agrees with the turn the transcript draws. A message
+ * steered in continues its turn. One steered in too late for the answer heads the work done for it, so that work starts
+ * with it. Work the agent picks up by itself after a result, such as a sub-agent reporting back or a goal continuing,
+ * starts where it resumed. A result with nothing after it leaves the clock on the turn it closed, which sub-agents may
+ * still be working under.
+ */
+export function turnStartedAt(events: readonly AgentEvent[]): number | null {
+  let resumed: number | null = null
   for (let index = events.length - 1; index >= 0; index--) {
     const event = events[index]!
     if (event.agentId) continue
-    switch (event.kind) {
-      case 'user':
-      case 'result':
-      case 'content':
-      case 'plan':
-      case 'tool-use':
-      case 'tool-result':
-      case 'error':
-      case 'permission-request':
-      case 'question':
-      case 'elicitation':
-      case 'secret-request':
-        return 'Working'
-      case 'thinking':
-        if (event.text.trim()) return 'Thinking'
-        break
-      case 'text':
-        if (event.text.trim()) return 'Writing…'
-        break
-    }
+    if (event.kind === 'user' && !event.steered) return event.at ?? resumed
+    if (event.kind === 'result' && resumed !== null) return lateSteerAt(events, index) ?? resumed
+    if (OUTPUT.has(event.kind) && event.at !== undefined) resumed = event.at
   }
-  return 'Working'
+  return resumed
 }
 
-/**
- * When the running turn began: the person's latest message that started a turn, so its timer counts the whole turn. A
- * message steered in continues the turn, so the timer keeps going through it.
- */
-export function turnStartedAt(events: readonly AgentEvent[]): number | null {
-  for (let index = events.length - 1; index >= 0; index--) {
+/** The steered message a result's answer was written without: nothing the agent ran came between it and the result. */
+function lateSteerAt(events: readonly AgentEvent[], result: number): number | null {
+  for (let index = result - 1; index >= 0; index--) {
     const event = events[index]!
-    if (!event.agentId && event.kind === 'user' && !event.steered) return event.at ?? null
+    if (event.agentId) continue
+    if (event.kind === 'user') return event.steered ? (event.at ?? null) : null
+    if (event.kind === 'tool-use' || event.kind === 'result') return null
   }
   return null
 }
@@ -112,7 +112,7 @@ export function elapsedText(ms: number): string {
   return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m`
 }
 
-/** What the agent is doing now, for the line above the composer: "Running" + "pnpm test", "Thinking", "Writing…". */
+/** What the agent is doing now, for the line above the composer: "Running" + "pnpm test", or "Working". */
 export interface AgentStep {
   label: string
   /** The command, file or query of the running tool. */
@@ -132,6 +132,5 @@ export function currentStep(state: AgentSessionState | undefined, events: readon
       return { label: toolVerb(KIND_VERB[toolKind(event)], true), ...(detail ? { detail } : {}) }
     } else if (event.kind === 'user' || event.kind === 'result') break
   }
-  const label = agentActivityLabel(state, events as AgentEvent[])
-  return label ? { label } : { label: 'Working' }
+  return { label: agentActivityLabel(state) ?? 'Working' }
 }

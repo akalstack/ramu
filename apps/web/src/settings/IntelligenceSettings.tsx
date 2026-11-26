@@ -9,7 +9,7 @@ import { Dropdown } from '../Menu'
 import { t } from '../i18n'
 import { notifyError } from '../chat/Notifications'
 import { errorText } from '../lib/errors'
-import { ModelChoice } from './ModelChoice'
+import { WorkModelNote } from './WorkModels'
 import { type IntelligencePreferences, type MemoryPreferences, type LearningSnapshot } from '@ramu/shared/types'
 
 type Props = { value: IntelligencePreferences; onChange: (value: IntelligencePreferences) => void }
@@ -36,24 +36,16 @@ export function EfficiencySettings({ value, onChange }: Props) {
   )
 }
 
-/** One model for the background work of both memory cleanup and learning reviews. */
-export function MaintenanceModelSettings({ value, onChange, cleanup }: Props & { cleanup: boolean }) {
+/** The Memory page says which model its background work runs on, while cleanup or learning reviews are on. */
+export function MaintenanceModelSettings({
+  value,
+  cleanup,
+  onOpenModels,
+}: Pick<Props, 'value'> & { cleanup: boolean; onOpenModels: () => void }) {
   if (value.learning === 'off' && !cleanup) return null
   return (
     <div className="settings-form flex flex-col gap-0 mt-6">
-      <SettingsGroupTitle>{t('Background model')}</SettingsGroupTitle>
-      <SettingsRow setting="intelligence.maintenanceModel">
-        <SettingsLabel
-          title={t('Model for background maintenance')}
-          help={t('Used for learning reviews and memory cleanup. A cheaper model keeps token use low.')}
-        />
-        <ModelChoice
-          label={t('Model for background maintenance')}
-          value={value.maintenanceModel}
-          emptyLabel={t('Same as thread')}
-          onChange={(maintenanceModel) => onChange({ ...value, maintenanceModel })}
-        />
-      </SettingsRow>
+      <WorkModelNote title="Background model" value={value.maintenanceModel} onOpen={onOpenModels} />
     </div>
   )
 }

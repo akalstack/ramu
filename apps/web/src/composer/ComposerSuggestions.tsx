@@ -125,7 +125,7 @@ export function useComposerSuggestions(
         .map((model) => ({
           id: `model:${model.provider}:${model.id}`,
           label: `@${modelHandle(model)}`,
-          description: t('A helper on {0} reviews this', {
+          description: t('A helper on {0}: reads only unless you ask for changes', {
             0: `${model.name || model.id} · ${providerName(model.provider)}`,
           }),
           kind: 'Model' as const,

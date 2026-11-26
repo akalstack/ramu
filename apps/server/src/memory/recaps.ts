@@ -182,11 +182,11 @@ export class RecapService {
       const latestSettings = chosen
         .flatMap((task) => this.agents.list(task.id))
         .sort((a, b) => b.createdAt - a.createdAt)[0]?.settings
-      const settings = {
-        ...DEFAULT_AGENT_SETTINGS,
-        ...latestSettings,
-        ...(step ? { provider: step.provider, model: step.model, effort: step.effort } : {}),
-      }
+      // The background model when one is chosen, as learning reviews and memory cleanup use; else the default model.
+      const selected =
+        this.preferences().intelligence?.maintenanceModel ??
+        (step ? { provider: step.provider, model: step.model, effort: step.effort } : {})
+      const settings = { ...DEFAULT_AGENT_SETTINGS, ...latestSettings, ...selected }
       // Bound every event separately and select a bounded source set. Never grant execution tools.
       let budget = 180000
       const bounded: {

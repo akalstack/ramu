@@ -1165,7 +1165,8 @@ export function NewThread({
                     searchPlaceholder={t('Search issues…')}
                     value={issue ? issueValue(issue) : ''}
                     icon={<CircleDot size={13} />}
-                    className="h-7 min-h-7 p-[0_10px] rounded-full bg-transparent text-soft text-control max-w-[260px]"
+                    bare
+                    className={`${CHIP} max-w-[260px]`}
                     title={issue?.title}
                     disabled={busy}
                     options={[

@@ -17,12 +17,14 @@ export type Turn = {
   items: Block[]
   ended: boolean
   interrupted?: boolean
+  /** Work the agent picked up by itself after the turn before it ended, with no message from the person. */
+  continues?: boolean
   startedAt?: number
   endedAt?: number
 }
 
-/** An open aside: an existing one, or a new one carrying its quote. keepFocus leaves the caret in the chat's composer. */
-export type AsideTarget = { id: string | null; quote: string; from: 'assistant' | 'user'; keepFocus?: boolean }
+/** The open aside: the passage the next question is about, if any. keepFocus leaves the caret in the chat's composer. */
+export type AsideTarget = { quote: string; from: 'assistant' | 'user'; keepFocus?: boolean }
 
 /** The sent message being edited in place: its sequence number, text and attachments. */
 export type MessageEdit = { seq: number; text: string; files: Attachment[] }
@@ -50,8 +52,8 @@ export interface TranscriptContext {
   statusGroup: Block | undefined
   /** Whether the last turn was stopped by you or reported as interrupted. */
   stopped: boolean
-  /** Time since the last message, while the agent works. */
-  elapsed: number | null
+  /** Sub-agents are still at work, which keeps the thread working after the main agent's result. */
+  helpersWorking: boolean
   /** The newest assistant message, which keeps its hover actions visible. */
   latestAssistant: Block | undefined
   /** Whether a source message was requested, so folded work keeps its block indexes for navigation. */

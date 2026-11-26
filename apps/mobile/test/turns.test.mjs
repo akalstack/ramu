@@ -404,6 +404,26 @@ test('a steered message stays in its turn: one "Worked for" for the whole turn a
   assert.equal(rows[3].label, 'Continued for 31s')
 })
 
+test('a message steered in too late for its turn heads the work done for it', () => {
+  const rows = foldTurns(
+    transcript([
+      { kind: 'user', text: 'where do things stand?', at: 1_000 },
+      { kind: 'user', text: 'fix the header', steered: true, at: 2_000 },
+      { kind: 'text', text: 'Everything is in place.', at: 3_000 },
+      { kind: 'result', isError: false, text: '', costUsd: null, at: 4_000 },
+      ...tool('a', 5_000),
+      { kind: 'text', text: 'Fixed.', at: 9_000 },
+      { kind: 'result', isError: false, text: '', costUsd: null, at: 10_000 },
+    ]),
+    false,
+    false,
+  )
+  assert.deepEqual(
+    rows.map((r) => (r.kind === 'user' || r.kind === 'text' ? `${r.kind}:${r.text}` : r.kind)),
+    ['user:where do things stand?', 'text:Everything is in place.', 'user:fix the header', 'summary', 'text:Fixed.'],
+  )
+})
+
 test('the same error or notice back to back reads once with its count, as on the desktop', () => {
   const items = transcript([
     { kind: 'user', text: 'go', at: 1_000 },
@@ -451,4 +471,75 @@ test('goal notes with no work between read as their net change', () => {
     notes.map((note) => [note.goalNote, note.objective]),
     [['set', 'Ship it today']],
   )
+})
+
+const helper = (status, patch = {}) => ({ kind: 'agent', agentId: 'reviewer', name: 'Reviewer', status, ...patch })
+const summaries = (rows) => rows.filter((r) => r.kind === 'summary')
+
+test('"Worked for" waits until the thread has stopped: a turn with its result in keeps counting while work goes on', () => {
+  const settled = summaries(foldTurns(transcript(finished), false, false))[0]
+  assert.equal(settled.label, 'Worked for 1m 5s')
+  assert.equal(settled.running, undefined)
+  // The agent picked the work up again and has shown nothing new yet.
+  assert.deepEqual(summaries(foldTurns(transcript(finished), true, false))[0].running, {
+    since: 1_000,
+    text: 'Working for {0}',
+  })
+  // Sub-agents the turn started are still running after the main agent's result.
+  const waiting = [finished[0], helper('running', { startedAt: 1_500 }), ...finished.slice(1)]
+  assert.deepEqual(summaries(foldTurns(transcript(waiting), false, false))[0].running, {
+    since: 1_000,
+    text: 'Working for {0}',
+  })
+  // A background command or an advisor does not hold the turn open.
+  for (const taskType of ['local_bash', 'advisor']) {
+    const beside = [finished[0], helper('running', { taskType, background: true }), ...finished.slice(1)]
+    assert.equal(summaries(foldTurns(transcript(beside), false, false))[0].running, undefined)
+  }
+  // A stopped turn stays stopped, and an earlier turn is done whatever the thread does next.
+  const stopped = [...finished.slice(0, -1), { kind: 'result', isError: false, text: 'interrupted', costUsd: null }]
+  assert.equal(summaries(foldTurns(transcript(stopped), true, false))[0].running, undefined)
+  const next = [...waiting, { kind: 'user', text: 'next', at: 70_000 }, { kind: 'text', text: 'ok', at: 71_000 }]
+  assert.equal(summaries(foldTurns(transcript(next), true, false))[0].running, undefined)
+})
+
+test('a background command the agent is waiting on keeps the last turn working until it ends', () => {
+  const command = { agentId: 'tests', name: 'pnpm test', taskType: 'local_bash', background: true, startedAt: 1_500 }
+  const fold = (events, awaited) => summaries(foldTurns(transcript(events), false, false, undefined, awaited))[0]
+  assert.deepEqual(fold(finished, [{ ...command, status: 'running', awaited: true }]).running, {
+    since: 1_000,
+    text: 'Working for {0}',
+  })
+  // One left running beside the turn, or restored without a process, does not hold it.
+  assert.equal(fold(finished, [{ ...command, status: 'running' }]).running, undefined)
+  assert.equal(fold(finished, [{ ...command, status: 'running', awaited: true, recovered: true }]).running, undefined)
+  // Once it ends the turn settles, and lasted until then.
+  const ended = fold(finished, [{ ...command, status: 'completed', awaited: true, endedAt: 301_000 }])
+  assert.equal(ended.running, undefined)
+  assert.equal(ended.label, 'Worked for 5m 0s')
+})
+
+test('a turn lasted until the sub-agents it started were done, never past the turn after it', () => {
+  const reviewed = [finished[0], helper('completed', { startedAt: 1_500, endedAt: 301_000 }), ...finished.slice(1)]
+  assert.equal(summaries(foldTurns(transcript(reviewed), false, false))[0].label, 'Worked for 5m 0s')
+  const next = [...reviewed, { kind: 'user', text: 'next', at: 121_000 }, { kind: 'text', text: 'ok', at: 122_000 }]
+  assert.equal(summaries(foldTurns(transcript(next), false, false))[0].label, 'Worked for 2m 0s')
+})
+
+test('work the agent picked up by itself reads as more of the turn above, not a second "Worked for"', () => {
+  const events = [
+    ...finished,
+    { kind: 'thinking', text: 'The checks finished', at: 70_000 },
+    ...tool('b', 72_000),
+    { kind: 'text', text: 'They passed.', at: 90_000 },
+    { kind: 'result', isError: false, text: '', costUsd: null, at: 91_000 },
+  ]
+  assert.deepEqual(
+    summaries(foldTurns(transcript(events), false, false)).map((r) => r.label),
+    ['Worked for 1m 5s', 'Continued for 21s'],
+  )
+  assert.deepEqual(summaries(foldTurns(transcript(events), true, false))[1].running, {
+    since: 70_000,
+    text: 'Continuing for {0}',
+  })
 })

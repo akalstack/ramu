@@ -37,7 +37,6 @@ export function AgentHeader({
   showQuestions,
   onToggleQuestions,
   asideOpen,
-  asideCount,
   onToggleAside,
   readOnly = false,
   agentCount,
@@ -58,7 +57,6 @@ export function AgentHeader({
   showQuestions: boolean
   onToggleQuestions: () => void
   asideOpen: boolean
-  asideCount: number
   onToggleAside: () => void
   readOnly?: boolean
   /** Every helper the thread has had; the live ones are in the composer tray. */
@@ -149,21 +147,13 @@ export function AgentHeader({
       <Button
         variant="ghost"
         size="icon-xs"
-        className={`${ICON_BUTTON_CLASS} asides-chip relative aria-pressed:bg-hover aria-pressed:text-foreground`}
+        className={`${ICON_BUTTON_CLASS} asides-chip aria-pressed:bg-hover aria-pressed:text-foreground`}
         aria-pressed={asideOpen}
-        aria-label={asideCount > 0 ? translate('Asides · {0}', { 0: asideCount }) : translate('Aside')}
+        aria-label={translate('Aside')}
         title={`${translate('Side questions about this thread')} (${formatKeys('mod+shift+a')})`}
         onClick={onToggleAside}
       >
         <MessageCircle size={14} />
-        {asideCount > 0 && (
-          <span
-            aria-hidden
-            className="absolute -top-0.5 -right-0.5 grid min-w-3.5 h-3.5 place-items-center rounded-full bg-fill px-0.5 text-[10px] leading-none tabular-nums text-foreground"
-          >
-            {asideCount}
-          </span>
-        )}
       </Button>
       <Button
         variant="ghost"

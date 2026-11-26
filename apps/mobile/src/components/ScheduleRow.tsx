@@ -6,8 +6,8 @@ import { font, space, useTheme } from '../theme'
 import { useAutomation } from '../runtime/automation'
 import { useStore } from '../runtime/store'
 import { RUN_LABELS, describeRule, nextRunText, runTone, scheduleWriteProblem } from '../runtime/scheduleModel'
-import { ago, useT } from '../i18n'
-import { Divider, Row, T, tap } from './ui'
+import { ago, useSay, useT } from '../i18n'
+import { Divider, ROW_INSET, Row, T, tap } from './ui'
 import { SwipeRow } from './SwipeRow'
 
 export function useScheduleCommands(computerId: string, schedule: Schedule) {
@@ -61,14 +61,21 @@ export function ScheduleRow({
 }) {
   const { c } = useTheme()
   const t = useT()
+  const say = useSay()
   const router = useRouter()
   const { language } = useStore()
   const commands = useScheduleCommands(computerId, schedule)
   const dot = schedule.state === 'active' ? c.ok : c.placeholder
+  const upcoming = schedule.state === 'active' && schedule.nextRunAt !== null
+  const next =
+    upcoming && schedule.rule.kind === 'once'
+      ? null
+      : upcoming
+        ? say('Next {0}', { 0: nextRunText(schedule, language) })
+        : nextRunText(schedule, language)
   return (
     <>
-      {/* Inset to the name, past the 8pt state dot. */}
-      {divider ? <Divider inset={space.l + 8 + space.m} /> : null}
+      {divider ? <Divider inset={ROW_INSET} /> : null}
       <SwipeRow
         background={c.window}
         fullSwipe
@@ -97,26 +104,35 @@ export function ScheduleRow({
             paddingVertical: 11,
           }}
         >
-          <View style={{ paddingTop: 6 }}>
+          <View style={{ width: 16, height: 20, alignItems: 'center', justifyContent: 'center' }}>
             <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: dot }} />
           </View>
-          <View style={{ flex: 1, gap: 2 }}>
-            <T weight="500" numberOfLines={1} tone={schedule.state === 'active' ? 'text' : 'muted'}>
-              {schedule.name}
-            </T>
-            <T size={font.control} tone="soft" numberOfLines={1}>
-              {[host, describeRule(schedule.rule, language, schedule.timezone)].filter(Boolean).join(' · ')}
-            </T>
-            <View style={{ flexDirection: 'row', gap: 6 }}>
-              <T size={font.control} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
-                {nextRunText(schedule, language)}
+          <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+            {/* How the last run went sits on the name's line, where the other lists keep a row's age. */}
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space.s }}>
+              <T
+                weight="500"
+                numberOfLines={1}
+                tone={schedule.state === 'active' ? 'text' : 'muted'}
+                style={{ flex: 1 }}
+              >
+                {schedule.name}
               </T>
               {lastRun ? (
-                <T size={font.control} tone={runTone(lastRun.status)} numberOfLines={1}>
-                  {`· ${RUN_LABELS[lastRun.status][language]} ${ago(lastRun.dueAt)}`}
+                <T size={font.caption} tone={runTone(lastRun.status)} style={{ fontVariant: ['tabular-nums'] }}>
+                  {`${RUN_LABELS[lastRun.status][language]} ${ago(lastRun.dueAt)}`}
                 </T>
               ) : null}
             </View>
+            <T size={font.control} tone="muted" numberOfLines={1}>
+              {[host, describeRule(schedule.rule, language, schedule.timezone)].filter(Boolean).join(' · ')}
+            </T>
+            {/* A one-time schedule already names its moment in the line above. */}
+            {next ? (
+              <T size={font.control} tone="muted" numberOfLines={1}>
+                {next}
+              </T>
+            ) : null}
           </View>
         </Row>
       </SwipeRow>

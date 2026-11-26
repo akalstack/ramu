@@ -8,10 +8,5 @@ import { cn } from 'cn'
 export const DIALOG_SCROLLS = 'flex max-h-[calc(100vh-48px)] flex-col overflow-hidden'
 
 export function DialogScrollBody({ className, ...props }: ComponentProps<'div'>) {
-  return (
-    <div
-      className={cn('-mx-4 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 [scrollbar-width:thin]', className)}
-      {...props}
-    />
-  )
+  return <div className={cn('-mx-4 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4', className)} {...props} />
 }

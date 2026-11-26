@@ -77,6 +77,7 @@ export function toBlocks(events: AgentEvent[]): Block[] {
     if (
       event.kind === 'goal' ||
       event.kind === 'queue' ||
+      event.kind === 'settings-waiting' ||
       event.kind === 'tool-result' ||
       event.kind === 'state' ||
       event.kind === 'request-resolved' ||

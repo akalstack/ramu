@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Linking, RefreshControl, ScrollView, TextInput, View } from 'react-native'
+import { Linking, RefreshControl, ScrollView, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import * as Clipboard from 'expo-clipboard'
-import { Copy, ExternalLink, FolderGit2, GitPullRequest, Layers, MessageSquare, Search, X } from 'lucide-react-native'
+import { Copy, ExternalLink, FolderGit2, GitPullRequest, Layers, MessageSquare } from 'lucide-react-native'
 import type { ForgeService, RepositoryPullRequests } from '@ramu/shared/types'
 import {
   FORGE_NAMES,
@@ -19,13 +19,15 @@ import {
   type PullRequestSort,
 } from '@ramu/shared/pullRequests'
 import { needsAccess } from '@ramu/shared/pullRequestAccess'
-import { font, radius, space, useTheme } from '../theme'
+import { shortHostName } from '@ramu/shared/hostLabel'
+import { space, useTheme } from '../theme'
 import { useSay } from '../i18n'
 import { useStore } from '../runtime/store'
 import { Header, LargeTitle, PageScrollView, Screen, useScrolledUnderBar } from './Screen'
 import { useTabActions } from './Overlays'
 import { Nothing } from './InboxParts'
-import { Chip, Divider, IconButton, SectionLabel, Sheet, tap } from './ui'
+import { Chip, Divider, SectionLabel, Sheet, tap } from './ui'
+import { ListSearch } from './ListSearch'
 import { SheetGroup, SheetOption } from './SheetOptions'
 import { PullRequestListNotices } from './PullRequestListNotices'
 import { offlineHosts, pullRequestRepoLabel as repoLabel } from '../runtime/pullRequestList'
@@ -129,7 +131,7 @@ export function PullRequestList({ pane }: { pane?: { openUrl: string; open(targe
   )
 
   const multi = store.computers.length > 1
-  const name = (computerId: string) => store.computers.find((pc) => pc.id === computerId)?.name ?? ''
+  const name = (computerId: string) => shortHostName(store.computers.find((pc) => pc.id === computerId)?.name ?? '')
   const inScope = (entry: { service?: ForgeService; projectName: string; repoName: string; repoId: string }) =>
     scope.kind === 'all' ||
     (scope.kind === 'service' ? (entry.service ?? 'github') === scope.service : pullRequestRepoKey(entry) === scope.key)
@@ -219,36 +221,7 @@ export function PullRequestList({ pane }: { pane?: { openUrl: string; open(targe
   ) : undefined
   const content = (
     <>
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: space.s,
-          marginHorizontal: space.l,
-          marginTop: space.m,
-          height: 44,
-          paddingLeft: space.m,
-          paddingRight: search ? 4 : space.m,
-          borderRadius: radius.m,
-          backgroundColor: c.raised2,
-        }}
-      >
-        <Search size={16} color={c.muted} />
-        <TextInput
-          accessibilityLabel={say('Search pull requests')}
-          placeholder={say('Search pull requests')}
-          placeholderTextColor={c.placeholder}
-          value={search}
-          onChangeText={setSearch}
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="search"
-          style={{ flex: 1, alignSelf: 'stretch', color: c.text, fontSize: font.body }}
-        />
-        {search ? (
-          <IconButton icon={X} label={say('Clear search')} size={36} tone="muted" onPress={() => setSearch('')} />
-        ) : null}
-      </View>
+      <ListSearch value={search} onChangeText={setSearch} label={say('Search pull requests')} />
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}

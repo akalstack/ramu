@@ -63,15 +63,22 @@ async function readEnvironmentOwners(pids: number[]): Promise<Map<number, string
   return owners
 }
 
-/** Whether something answers HTTP there; any status counts, since a dev server may answer 404 at its root. */
-async function answersHttp(server: Pick<ThreadServer, 'port' | 'host'>): Promise<boolean> {
+/** Statuses that say "not for a browser": the listener wants a credential or another protocol, so a tab shows nothing. */
+const NOT_A_PAGE = new Set([401, 403, 407, 426])
+
+/**
+ * Whether a browser would get something there. A dev server may answer 404 at its root, so most statuses count; a
+ * listener that asks for a credential or a protocol upgrade (an agent's own service, a debugger port, an API behind a
+ * token) is not a page, and its row offers Stop without pretending it opens.
+ */
+export async function answersHttp(server: Pick<ThreadServer, 'port' | 'host'>): Promise<boolean> {
   try {
-    await fetch(`${serverUrl(server).replace('localhost', '127.0.0.1')}/`, {
+    const response = await fetch(`${serverUrl(server).replace('localhost', '127.0.0.1')}/`, {
       method: 'HEAD',
       redirect: 'manual',
       signal: AbortSignal.timeout(800),
     })
-    return true
+    return !NOT_A_PAGE.has(response.status)
   } catch {
     return false
   }

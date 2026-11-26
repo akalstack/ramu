@@ -85,6 +85,7 @@ export const TRANSFER_GROUPS = [
       'defaultCommitAction',
       'defaultCommitBranch',
       'commitModel',
+      'asideModel',
     ],
   },
   { id: 'notifications', label: 'Notifications', keys: ['notifyAgentDone', 'recapsEnabled', 'recapTime'] },

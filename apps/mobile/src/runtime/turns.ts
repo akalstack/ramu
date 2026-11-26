@@ -1,4 +1,6 @@
 import type { TranslationValues } from '@ramu/shared/i18n'
+import type { AgentTask } from '@ramu/shared/types'
+import { holdsTurn, turnWorkEnd } from '@ramu/shared/chat/helperPresentation'
 
 /** Translates English catalog copy; the caller passes the app's translator. */
 type Say = (text: string, values?: TranslationValues) => string
@@ -35,15 +37,18 @@ const settled = (item: TranscriptItem) =>
   (item.kind === 'question' && item.answers !== undefined)
 
 /**
- * Mirrors the desktop's per-turn layout. The running turn gets a live "Working for …" rule above its steps.
- * Once a turn is done its routine steps fold into one "Worked for …" row; the answer, failed or open
- * steps, and unanswered prompts stay visible.
+ * Mirrors the desktop's per-turn layout. The running turn shows its steps as they come. Once a turn is done its routine
+ * steps fold into one "Worked for …" row; the answer, failed or open steps, and unanswered prompts stay visible. That
+ * row keeps counting as "Working for …" while the thread is still at work under it, and work the agent picks up by
+ * itself after a clean result reads "Continued for …", as more of the turn above.
  */
 export function foldTurns(
   items: TranscriptItem[],
   live: boolean,
   waiting: boolean,
   say: Say = english,
+  /** Background commands the agent said it was waiting on; they are not transcript items. */
+  awaited: readonly AgentTask[] = [],
 ): TranscriptItem[] {
   const turns: TranscriptItem[][] = []
   // Work after a turn's end opens a turn too: a goal continuing on its own must not fold into the turn that finished.
@@ -53,12 +58,25 @@ export function foldTurns(
     // A message steered into a running turn continues it: one start, one timer, one "Worked for".
     const opens = item.kind === 'user' && !(item.steered && turns.length)
     if (opens || !turns.length || (ended && output)) {
-      turns.push([])
+      // A message steered in while the answer was already being written: no step followed it, so the provider ran it as
+      // this next turn. It heads that turn, as on the desktop, instead of sitting above an answer that never saw it.
+      const before = !opens && turns.length ? turns.at(-1)! : []
+      const at = before.findLastIndex((entry) => entry.kind === 'user' && entry.steered)
+      const late = at > 0 && !before.slice(at + 1).some((entry) => entry.kind === 'tool') ? before.splice(at, 1) : []
+      turns.push(late)
       ended = false
     }
     turns.at(-1)!.push(item)
     if (item.kind === 'end') ended = true
   }
+  const helpersOf = (turn: TranscriptItem[]) =>
+    turn.flatMap((item) => (item.kind === 'agents' && !item.advisor ? item.agents : []))
+  const cleanEnd = (turn: TranscriptItem[] | undefined) =>
+    !!turn?.some((item) => item.kind === 'end' && item.ended && !item.interrupted)
+  const startOf = (turn: TranscriptItem[] | undefined) => turn?.find((item) => item.at !== undefined)?.at
+  // Sub-agents and awaited commands still running keep the thread working after the main agent's result.
+  const helpersWorking =
+    awaited.some(holdsTurn) || items.some((item) => item.kind === 'agents' && item.agents.some(holdsTurn))
   return groupTools(
     turns.flatMap((turn, index) => {
       const user = turn[0]?.kind === 'user' ? turn[0] : undefined
@@ -76,16 +94,23 @@ export function foldTurns(
       const startedAt = user?.at ?? body.find((item) => item.kind !== 'note' && item.at !== undefined)?.at
       // A running turn shows its steps as they come; the status line above the composer says it is working.
       if (!finished) return [...(user ? [user] : []), ...body, ...notes]
-      const endedAt =
-        (result ?? ends[0])?.at ?? body.findLast((item) => item.kind !== 'note' && item.at !== undefined)?.at
+      const clean = !!result && !result.interrupted
+      // A clean result's turn lasted until the sub-agents it started and the commands it waited on were done, since the
+      // person watched them under it.
+      const endedAt = clean
+        ? turnWorkEnd(result.at, [...helpersOf(turn), ...awaited], startOf(turns[index + 1]))
+        : ((result ?? ends[0])?.at ?? body.findLast((item) => item.kind !== 'note' && item.at !== undefined)?.at)
+      // The result is in, yet the thread is still at work under this turn: its clock keeps running until the thread stops.
+      const resumed = isLast && clean && !waiting && (live || helpersWorking)
+      const continues = !user && cleanEnd(turns[index - 1])
       // A message steered into a running turn starts the next turn before the result; with no stop, failure or idle
       // in between, the agent carried on rather than stopped.
       const done = result ? !result.interrupted : !isLast && !ends.length
       const duration = startedAt !== undefined && endedAt !== undefined ? Math.max(0, endedAt - startedAt) : undefined
       const total = done
         ? duration !== undefined
-          ? say('Worked for {0}', { 0: formatDuration(duration) })
-          : say('Worked')
+          ? say(continues ? 'Continued for {0}' : 'Worked for {0}', { 0: formatDuration(duration) })
+          : say(continues ? 'Continued' : 'Worked')
         : duration !== undefined
           ? say('Stopped after {0}', { 0: formatDuration(duration) })
           : say('Stopped')
@@ -112,6 +137,11 @@ export function foldTurns(
           : span !== undefined
             ? say('Continued for {0}', { 0: formatDuration(span) })
             : say('Continued')
+        const since = first ? startedAt : from
+        const running =
+          resumed && since !== undefined && (first || last)
+            ? { since, text: first && !continues ? ('Working for {0}' as const) : ('Continuing for {0}' as const) }
+            : undefined
         if (folded.length) first = false
         return [
           ...(part.steer ? [part.steer] : []),
@@ -121,6 +151,7 @@ export function foldTurns(
                   kind: 'summary' as const,
                   id: `summary-${part.steer?.id ?? user?.id ?? index}`,
                   label,
+                  ...(running ? { running } : {}),
                   items: folded,
                 },
               ]

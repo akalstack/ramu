@@ -14,6 +14,13 @@ import {
   type PermissionGrant,
   type PermissionSetting,
 } from '@ramu/shared/devicePermissions'
+import {
+  PROOF_WINDOW_MS,
+  isDevicePublicKey,
+  verifyProof,
+  type ProofCheck,
+  type ProofPurpose,
+} from '@ramu/shared/deviceProof'
 
 export const PAIRING_TTL_MS = 10 * 60_000
 /** Used by software moments after it is made, so it need not last as long as a code a person reads out. */
@@ -22,7 +29,7 @@ const MAX_PENDING = 5
 const MAX_NAME = 60
 // No 0/O/1/I/L, so a code read aloud or off a screen is not mistyped.
 const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
-export const DEVICE_TTL_MS = 90 * 24 * 60 * 60_000
+export const DEVICE_TTL_MS = 30 * 24 * 60 * 60_000
 export type DeviceRole = 'owner' | 'viewer'
 const LAST_SEEN_WRITE_MS = 5 * 60_000
 
@@ -77,7 +84,24 @@ interface DeviceRecord extends DeviceInfo {
   /** The token a promotion replaced, valid until `previousUntil`. */
   previousTokenHash?: string
   previousUntil?: number
+  /**
+   * The public key the current token is bound to: requests with it need a proof signed by that key. Absent on a device
+   * paired before keys, which uses its token alone until its next renewal binds one.
+   */
+  key?: string
+  /** The key the renewed token will be bound to, when the renewal is what binds one. */
+  nextKey?: string
+  /** The key the replaced token was bound to, for its overlap. */
+  previousKey?: string
 }
+
+/**
+ * The proof sent with a token and what it is for. `'proven'` re-checks a connection that already proved itself when it
+ * opened, such as a stream still open when its device is looked up again.
+ */
+export type TokenProof = { header: string | undefined; purpose: ProofPurpose } | 'proven'
+/** Why a token was refused, when the token itself was right: the device can tell a clock problem from a lost key. */
+export type ProofRefusal = Exclude<ProofCheck, { ok: true }>['reason'] | 'replayed'
 interface PendingCode {
   /** Non-secret handle for listing, cancelling and following one offer. */
   id: string
@@ -108,7 +132,7 @@ interface DeviceFile {
   devices: DeviceRecord[]
   pending: PendingCode[]
   settled?: SettledOffer[]
-  /** Chosen on the host in Settings. Absent means the server default (`RAMU_DEVICE_TOKEN_DAYS`, else 90 days). */
+  /** Chosen on the host in Settings. Absent means the server default (`RAMU_DEVICE_TOKEN_DAYS`, else 30 days). */
   lifetimeDays?: number | 'never'
   /** What a newly paired full-access device holds. Absent means every permission. */
   defaultPermissions?: DevicePermission[]
@@ -130,6 +154,31 @@ const cleanName = (name: string | undefined) =>
 
 export class DeviceStore {
   private readonly seen = new Map<string, number>()
+  /** Proofs already accepted, by device and nonce, until they could no longer pass the time check. */
+  private readonly usedProofs = new Map<string, number>()
+  /** Why the last `authenticate` or `renew` refused a token that was itself valid; null otherwise. */
+  lastProofRefusal: ProofRefusal | null = null
+
+  /** Checks the proof a bound token needs. A token with no key needs none. */
+  private proves(record: DeviceRecord, key: string | undefined, token: string, proof: TokenProof, now: number) {
+    this.lastProofRefusal = null
+    if (!key || proof === 'proven') return true
+    const check = verifyProof(key, token, proof.purpose, proof.header, now)
+    if (!check.ok) {
+      this.lastProofRefusal = check.reason
+      return false
+    }
+    for (const [used, at] of this.usedProofs) if (now - at > 2 * PROOF_WINDOW_MS) this.usedProofs.delete(used)
+    const id = `${record.id}:${check.nonce}`
+    if (this.usedProofs.has(id)) {
+      this.lastProofRefusal = 'replayed'
+      return false
+    }
+    // Bounded, so a flood of valid proofs from one device cannot grow it without limit.
+    if (this.usedProofs.size >= 10_000) this.usedProofs.delete(this.usedProofs.keys().next().value!)
+    this.usedProofs.set(id, check.at)
+    return true
+  }
   constructor(
     private readonly path: string,
     private readonly lifetimeMs: number | null = DEVICE_TTL_MS,
@@ -540,10 +589,19 @@ export class DeviceStore {
     return strip(record)
   }
 
-  /** The device that owns this Authorization header, or null. */
-  authenticate(header: string | undefined, now = Date.now()): DeviceInfo | null {
+  /**
+   * The device that owns this Authorization header, or null. A token bound to a key also needs `proof`; without one
+   * (the default) only a token that was never bound is accepted.
+   */
+  authenticate(
+    header: string | undefined,
+    now = Date.now(),
+    proof: TokenProof = { header: undefined, purpose: 'request' },
+  ): DeviceInfo | null {
+    this.lastProofRefusal = null
     if (!header?.startsWith(`${AUTH_SCHEME} `)) return null
-    const hash = sha256(header.slice(AUTH_SCHEME.length + 1))
+    const token = header.slice(AUTH_SCHEME.length + 1)
+    const hash = sha256(token)
     const file = this.dropOrphans(this.read(), now),
       record = file.devices.find(
         (d) =>
@@ -552,6 +610,13 @@ export class DeviceStore {
           (d.previousTokenHash === hash && (d.previousUntil ?? 0) > now),
       )
     if (!record) return null
+    const bound =
+      record.tokenHash === hash
+        ? record.key
+        : record.nextTokenHash === hash
+          ? (record.nextKey ?? record.key)
+          : record.previousKey
+    if (!this.proves(record, bound, token, proof, now)) return null
     const lifetime = this.lifetimeFor(file, record)
     // The first request that carries the token proves the device saved it.
     const claimed = record.unclaimed === true
@@ -566,6 +631,11 @@ export class DeviceStore {
       record.tokenHash = hash
       delete record.nextTokenHash
       delete record.nextIssuedAt
+      // The replaced token keeps the key it had (or none) for its overlap; the new one takes the key it was issued for.
+      if (record.key) record.previousKey = record.key
+      else delete record.previousKey
+      if (record.nextKey) record.key = record.nextKey
+      delete record.nextKey
     }
     // Remembered in memory and written rarely, so a busy client does not rewrite the file the CLI also edits.
     const lastWrite = this.seen.get(record.id) ?? 0
@@ -582,13 +652,24 @@ export class DeviceStore {
    * Issues a fresh token to the device that holds the current one. The current token keeps working until the new one
    * is used once, so a lost response only means asking again (a repeat replaces the unused token). A replaced token
    * is not accepted for renewal, and a revoked device cannot renew.
+   *
+   * `key` binds the new token to the device's public key when the device has none yet: from the new token's first use
+   * on, the device must prove it holds that key. A device already bound proves it here and keeps its key, so a copied
+   * token can neither renew nor swap the key for its own.
    */
-  renew(header: string | undefined, now = Date.now()): { token: string; expiresAt: number | null } | null {
+  renew(
+    header: string | undefined,
+    now = Date.now(),
+    binding: { key?: unknown; proof?: string } = {},
+  ): { token: string; expiresAt: number | null; bound: boolean } | null {
+    this.lastProofRefusal = null
     if (!header?.startsWith(`${AUTH_SCHEME} `)) return null
-    const hash = sha256(header.slice(AUTH_SCHEME.length + 1))
+    const current = header.slice(AUTH_SCHEME.length + 1)
+    const hash = sha256(current)
     const file = this.read()
     const record = file.devices.find((d) => d.tokenHash === hash)
     if (!record) return null
+    if (!this.proves(record, record.key, current, { header: binding.proof, purpose: 'renew' }, now)) return null
     const lifetime = this.lifetimeFor(file, record)
     const expiry = record.expiresAt
     if (expiry !== null && expiry <= now) return null
@@ -596,8 +677,11 @@ export class DeviceStore {
     record.nextTokenHash = sha256(token)
     record.nextIssuedAt = now
     record.expiresAt = lifetime === null ? null : now + lifetime
+    // A repeated renewal replaces the unused token, and with it the key that token was to be bound to.
+    if (!record.key && isDevicePublicKey(binding.key)) record.nextKey = binding.key
+    else delete record.nextKey
     this.write(file)
-    return { token, expiresAt: record.expiresAt }
+    return { token, expiresAt: record.expiresAt, bound: !!(record.key ?? record.nextKey) }
   }
 
   list(now = Date.now()): DeviceInfo[] {

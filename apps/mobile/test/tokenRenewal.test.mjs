@@ -9,7 +9,7 @@ const client = () => {
 }
 const reply = (status, body) => async () => new Response(JSON.stringify(body), { status })
 
-test('renews monthly, and when the stored time is missing or in the future', () => {
+test('renews weekly, and when the stored time is missing or in the future', () => {
   assert.equal(renewalDue(1000, null), true)
   assert.equal(renewalDue(1000 + RENEW_EVERY_MS - 1, 1000), false)
   assert.equal(renewalDue(1000 + RENEW_EVERY_MS, 1000), true)
@@ -68,4 +68,47 @@ test('a failed save leaves the old token in use', async () => {
     ),
   )
   assert.equal(c.current(), 'o'.repeat(64))
+})
+
+test('renews within a day, not a week, while a host has not bound this phone’s key', () => {
+  const day = 24 * 60 * 60_000
+  assert.equal(renewalDue(1000 + day - 1, 1000, true), false)
+  assert.equal(renewalDue(1000 + day, 1000, true), true)
+  assert.equal(renewalDue(1000 + day, 1000, false), false)
+})
+
+test('names its key and proves it when renewing, and records whether the host bound the token', async () => {
+  const c = client()
+  let sent
+  const marks = []
+  const prover = { publicKey: 'k'.repeat(64), header: (token, purpose) => `proof:${purpose}:${token.slice(0, 2)}` }
+  const ok = await renewCredential(
+    c,
+    async (url, init) => {
+      sent = { url, init }
+      return new Response(JSON.stringify({ token: fresh, expiresAt: 1, bound: true }), { status: 200 })
+    },
+    async () => {},
+    async (at, bound) => marks.push([at, bound]),
+    5000,
+    prover,
+  )
+  assert.equal(ok, true)
+  assert.equal(sent.url, 'https://host/renew')
+  assert.equal(sent.init.headers['x-ramu-proof'], 'proof:renew:oo')
+  assert.deepEqual(JSON.parse(sent.init.body), { key: 'k'.repeat(64) })
+  assert.deepEqual(marks, [[5000, true]])
+})
+
+test('an older host that binds nothing is recorded as unbound', async () => {
+  const marks = []
+  await renewCredential(
+    client(),
+    reply(200, { token: fresh, expiresAt: 1 }),
+    async () => {},
+    async (at, bound) => marks.push(bound),
+    5000,
+    { publicKey: 'k'.repeat(64), header: () => 'proof' },
+  )
+  assert.deepEqual(marks, [false])
 })

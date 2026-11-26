@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { helperWork } from '../src/chat/agentTasks'
-import { draftMentions, mentionInstruction, resolveMention } from '../src/chat/helperMentions'
+import { draftMentions, mentionInstruction, mentionRole, resolveMention } from '../src/chat/helperMentions'
 import { composerDraft } from '../src/chat/composerDraft'
 import type { AgentEvent, AgentModel } from '../src/types'
 import type { CustomAgent } from '../src/customAgents'
@@ -106,4 +106,31 @@ it("sums a helper's edits, writes, turns and cost, skipping reads and failed cal
     costUsd: 0.05,
   })
   expect(helperWork([]).costUsd).toBeNull()
+})
+
+it('gives a model the work when the request asks for a change, and a read-only look otherwise', () => {
+  for (const body of [
+    'fix the failing test',
+    'take over and finish the migration',
+    'add a retry to the uploader',
+    'rename the helper and update its callers',
+    'perbaiki tes yang gagal',
+    'ambil alih pekerjaan ini',
+  ])
+    expect(mentionRole(body), body).toBe('implementation')
+  for (const body of [
+    'review the last commit',
+    'check this too, only 1 time',
+    'why does the upload fail?',
+    'what would you change here?',
+    'is this safe to merge',
+    'review and fix nothing yet',
+    'tinjau perubahan terakhir',
+    'second opinion on the plan',
+  ])
+    expect(mentionRole(body), body).toBe('review')
+  const opus = model({ provider: 'claude-code', id: 'opus', name: 'Opus 5.5' })
+  expect(mentionInstruction({ kind: 'model', model: opus, body: 'fix the failing test' })).toContain(
+    'model "opus-5.5" and role "implementation",',
+  )
 })

@@ -3,7 +3,7 @@ import { Server, Square, Unplug } from 'lucide-react'
 import { serverUrl, type ThreadServer } from '@ramu/shared/servers'
 import { Button } from '@/components/desktop-button'
 import { RowButton } from '@/components/row-button'
-import { ComposerTraySection } from '../composer/ComposerTraySection'
+import { ComposerTraySection, TRAY_LIST_CLASS } from '../composer/ComposerTraySection'
 import { ramu } from '../ipc'
 import { errorText } from '../lib/errors'
 import { t, useLanguage } from '../i18n'
@@ -117,7 +117,7 @@ export function ThreadServersSection({ state }: { state: ReturnType<typeof useTh
   const { local, open } = useOpenServer(state.hostId)
   return (
     <ComposerTraySection aria-label={t('Servers')} title={t('Servers')} count={state.servers.length} icon={<Server />}>
-      <ul className="my-0 -mx-1.5 flex max-h-40 list-none flex-col overflow-y-auto overscroll-contain p-0">
+      <ul className={TRAY_LIST_CLASS}>
         {state.servers.map((server) => (
           <ServerRow
             key={`${server.pid}:${server.port}`}

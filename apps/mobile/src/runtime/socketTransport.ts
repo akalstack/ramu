@@ -1,6 +1,7 @@
 import { RuntimeSocket, type SocketFactory } from '@ramu/client-runtime/socket'
 import { hostSubscription, type Interest } from './hostSubscription'
-import { registerSocketProvider, type HostSocket } from './transport'
+import { registerRequestProof, registerSocketProvider, type HostSocket } from './transport'
+import { phoneProver } from './deviceKey'
 
 /**
  * React Native's WebSocket accepts request headers as a third argument (a React Native extension), which the host's
@@ -63,6 +64,7 @@ export function socketFor(address: string, token: string): HostSocket {
       url: address,
       token,
       factory: nativeSocketFactory,
+      prover: phoneProver() ?? undefined,
       // A phone changes networks frequently; detect a silent old route within about 30 seconds.
       heartbeatMs: 10_000,
       onEvent: (channel, payload) => {
@@ -116,6 +118,7 @@ registerSocketProvider(
       url: address,
       token,
       factory: nativeSocketFactory,
+      prover: phoneProver() ?? undefined,
       events: false,
       connectTimeoutMs: 3000,
       onEvent() {},
@@ -136,3 +139,8 @@ registerSocketProvider(
     }
   },
 )
+
+registerRequestProof({
+  sign: (token) => phoneProver()?.header(token, 'request') ?? null,
+  sync: async (address) => phoneProver()?.sync(address),
+})

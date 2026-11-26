@@ -106,6 +106,11 @@ export interface NativeFeatures {
   /** Abilities other providers' threads can borrow through Ramu's ability tools, and that this provider's own threads have. */
   abilities?: AbilityDeclaration[]
   /**
+   * The runtime runs shell commands in the background itself and reports each as a task Ramu tracks (Claude's
+   * `local_bash` tasks). Ramu then offers `background_wait`, which marks the ones the agent is waiting on.
+   */
+  backgroundCommands?: boolean
+  /**
    * The runtime runs code that calls MCP tools itself (OpenCode's `execute`). Ramu's `run_script` would only run nested
    * inside it, so the thread keeps its own.
    */

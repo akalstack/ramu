@@ -16,6 +16,7 @@ import { effortDisplayName, modelDisplayName, useModelSets } from './ModelSets'
 import { modelLabel } from '@ramu/shared/providers/modelLabel'
 import { notifyError } from '../chat/Notifications'
 import { errorText } from '../lib/errors'
+import { peakUsage, resetText, useUsage } from '../settings/Usage'
 
 /** `current` is what the chat runs now; a different choice waiting for the next send shows in the transcript. */
 export function ModelBar({
@@ -97,6 +98,18 @@ export function ModelBar({
 
   const [picker, setPicker] = useState<'bar' | 'model' | 'effort' | 'account'>('bar')
   const logins = useLoginChoices(value)
+  // The login this thread uses is at its usage limit: the chip marks it, as the phone's does, before a message is sent
+  // into the wait. With several logins only the chosen one counts; another login's limit says nothing about this one.
+  const provider = peakUsage(useUsage(), settings.provider)
+  const own = logins?.usage(logins.current)
+  const limited = logins
+    ? own?.limited
+      ? own.reading
+      : undefined
+    : provider?.status === 'limited'
+      ? provider
+      : undefined
+  const limit = limited ? [t('Limit reached'), resetText(limited.resetsAt)].filter(Boolean).join(' · ') : null
   const [setId, setSetId] = useState(preferences.defaultSetId)
   // While the slider is held, the bar previews the step under the thumb; the choice is applied when it is released.
   const [drag, setDrag] = useState<AgentSettings | null>(null)
@@ -207,15 +220,18 @@ export function ModelBar({
               title={
                 pending
                   ? t('Applying model in {0}s', { 0: seconds })
-                  : logins
-                    ? `${modelName} · ${logins.name(logins.current)}`
-                    : modelName
+                  : limit
+                    ? `${modelName} · ${limit}`
+                    : logins
+                      ? `${modelName} · ${logins.name(logins.current)}`
+                      : modelName
               }
             >
               {/* A long model id (an OpenCode route) is cut short so the effort and the rest of the bar stay visible. */}
-              <span className="max-w-[180px] truncate">{modelName}</span>
+              <span className={`max-w-[180px] truncate ${limit ? 'text-warn' : ''}`}>{modelName}</span>
               <span className="muted flex-none text-muted-foreground">{effortName}</span>
             </span>
+            {limit && <Clock3 size={12} className="flex-none text-warn" role="img" aria-label={limit} />}
             <ChevronDown size={12} />
           </>
         }

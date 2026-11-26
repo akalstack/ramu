@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { CHALLENGE_PATTERN, IDENTITY_PATH, PAIR_PATH, PROTOCOL_VERSION, RENEW_PATH } from '@ramu/contracts'
+import { CHALLENGE_PATTERN, IDENTITY_PATH, PAIR_PATH, PROTOCOL_VERSION, RENEW_PATH, SOCKET_PATH } from '@ramu/contracts'
+import { PROOF_HEADER } from '@ramu/shared/deviceProof'
 import { viewerMayInvoke } from '@ramu/shared/viewerAccess'
 import { permissionFor, permissionRefusal, type DevicePermission } from '@ramu/shared/devicePermissions'
 import { hostProof } from '@ramu/shared/hostProof'
@@ -75,8 +76,9 @@ export class RemoteAccess {
     },
   ) {}
 
+  /** Whether a connection that proved itself when it opened still belongs to a paired device. */
   authorized(header: string | undefined): boolean {
-    return this.options.devices.authenticate(header) !== null
+    return this.options.devices.authenticate(header, this.options.now?.() ?? Date.now(), 'proven') !== null
   }
 
   /** undefined means this response has already been sent. */
@@ -89,7 +91,7 @@ export class RemoteAccess {
       }
       res.setHeader('Access-Control-Allow-Origin', origin)
       res.setHeader('Vary', 'Origin')
-      res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Ramu-Protocol')
+      res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Ramu-Protocol, X-Ramu-Proof')
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
     }
     if (req.method === 'OPTIONS') {
@@ -233,10 +235,21 @@ export class RemoteAccess {
       )
       return
     }
+    const proofHeader = typeof req.headers[PROOF_HEADER] === 'string' ? req.headers[PROOF_HEADER] : undefined
+    // A right token with a wrong proof says why, so a device whose clock is off corrects for it instead of giving up.
+    const refused = () => {
+      const reason = this.options.devices.lastProofRefusal
+      rejected(reason ? `proof-${reason}` : undefined)
+    }
     if (path === RENEW_PATH && req.method === 'POST') {
-      const renewed = this.options.devices.renew(req.headers.authorization, now)
+      // The body is optional: a device that binds its token to a key names the key there.
+      const body = (await readJson(req)) as { key?: unknown } | undefined
+      const renewed = this.options.devices.renew(req.headers.authorization, now, {
+        key: body?.key,
+        proof: proofHeader,
+      })
       if (!renewed) {
-        rejected()
+        refused()
         return
       }
       this.failures.delete(peer)
@@ -245,9 +258,12 @@ export class RemoteAccess {
         .end(JSON.stringify(renewed))
       return
     }
-    const device = this.options.devices.authenticate(req.headers.authorization, now)
+    const device = this.options.devices.authenticate(req.headers.authorization, now, {
+      header: proofHeader,
+      purpose: path === SOCKET_PATH ? 'socket' : 'request',
+    })
     if (!device) {
-      rejected()
+      refused()
       return
     }
     this.failures.delete(peer)

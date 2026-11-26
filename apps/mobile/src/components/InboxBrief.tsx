@@ -1,4 +1,5 @@
 import { pullRequestRowDetail } from '@ramu/shared/pullRequests'
+import { shortHostName } from '@ramu/shared/hostLabel'
 import { useRouter } from 'expo-router'
 import { useState } from 'react'
 import { Pressable, View } from 'react-native'
@@ -99,7 +100,7 @@ function BriefRowView({ row, divider, where }: { row: BriefRow; divider: boolean
     row.kind === 'recap'
       ? row.recap.item.title
       : row.kind === 'low-memory'
-        ? say('{0} is low on memory', { 0: computer?.name ?? '' })
+        ? say('{0} is low on memory', { 0: shortHostName(computer?.name ?? '') })
         : (chat?.title ?? '')
   const detail =
     row.kind === 'recap'
@@ -217,8 +218,8 @@ function BriefRowView({ row, divider, where }: { row: BriefRow; divider: boolean
           <T weight="500" numberOfLines={1}>
             {title}
           </T>
-          <T size={font.caption} tone="muted" numberOfLines={2}>
-            <T size={font.caption} tone={look.tone === 'neutral' ? 'muted' : look.tone}>
+          <T size={font.control} tone="muted" numberOfLines={2}>
+            <T size={font.control} tone={look.tone === 'neutral' ? 'muted' : look.tone}>
               {detail}
             </T>
             {row.more ? ` · ${say('+{0} more', { 0: row.more })}` : ''}

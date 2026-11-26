@@ -22,6 +22,7 @@ import {
 import { StatusBar } from 'expo-status-bar'
 import { arrivalAnimation } from '../runtime/navigation'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { KeyboardMotion } from '../components/Keyboard'
 import { ThemeProvider, useTheme } from '../theme'
 import { useEffect, useMemo, useRef } from 'react'
@@ -155,18 +156,21 @@ if (__DEV__)
 
 export default function RootLayout() {
   return (
-    <SafeAreaProvider>
-      <KeyboardMotion>
-        <ThemeProvider>
-          <StoreProvider>
-            <AutomationProvider>
-              <ComputerUseProvider>
-                <Navigator />
-              </ComputerUseProvider>
-            </AutomationProvider>
-          </StoreProvider>
-        </ThemeProvider>
-      </KeyboardMotion>
-    </SafeAreaProvider>
+    // Native tap and pan gestures (the composer's Send) are recognised from this root down.
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <KeyboardMotion>
+          <ThemeProvider>
+            <StoreProvider>
+              <AutomationProvider>
+                <ComputerUseProvider>
+                  <Navigator />
+                </ComputerUseProvider>
+              </AutomationProvider>
+            </StoreProvider>
+          </ThemeProvider>
+        </KeyboardMotion>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   )
 }

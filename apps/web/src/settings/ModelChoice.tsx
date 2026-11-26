@@ -24,7 +24,7 @@ export function ModelChoice({
 }: {
   label: string
   value: ModelChoiceValue
-  /** What no choice means for this setting, such as "Same as thread". */
+  /** What no choice means for this setting, such as "Default model". */
   emptyLabel: string
   onChange: (value: ModelChoiceValue) => void
 }) {
@@ -66,7 +66,7 @@ export function ModelChoice({
             label: effortDisplayName(effort, chosen.provider),
           }))}
           onChange={(effort) => onChange({ ...value, effort: effort as ReasoningEffort })}
-          className="max-w-[110px] flex-none"
+          className="w-[110px]! min-w-0! flex-none"
         />
       )}
     </span>

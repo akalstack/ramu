@@ -143,9 +143,4 @@ export class ContextUsageTracker {
   claudeAccountUsage(account: string): Promise<UsageReading[]> {
     return this.usageReader.account(account)
   }
-
-  /** Reads Claude's plan usage now with a throwaway process, when the stored reading is old or missing. */
-  readClaudeUsage(): Promise<void> {
-    return this.usageReader.read()
-  }
 }

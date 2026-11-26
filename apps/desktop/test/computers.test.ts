@@ -510,3 +510,40 @@ it('recognizes a nearby result by the host id bound at pairing', () => {
   expect(registry.byHostId(HOST)).toBe(saved.id)
   expect(registry.byHostId('e'.repeat(32))).toBeNull()
 })
+
+it('renews at once to bind a token to this computer’s key, and asks a host that binds nothing only once a day', async () => {
+  const flush = () => vi.advanceTimersByTimeAsync(0)
+  const { servers, streams, deps, registry } = setup()
+  deps.holdsKey = () => true
+  const saved = servers.add('10.0.0.2:7788', 'Studio', 'old')
+  // Renewed a moment ago, before this computer had a key: not due by time, due because nothing is bound.
+  servers.rotate(saved.id, 'a'.repeat(64))
+  vi.mocked(deps.renew).mockResolvedValue({ token: 'b'.repeat(64), bound: true })
+  registry.start()
+  const connect = async () => {
+    streams.get('http://10.0.0.2:7788')!('background:connection', { connected: true })
+    await flush()
+  }
+  await vi.advanceTimersByTimeAsync(25 * 60 * 60_000)
+  await connect()
+  expect(deps.renew).toHaveBeenCalledTimes(1)
+  expect(servers.keyBound(saved.id)).toBe(true)
+  // Bound now, so the weekly rhythm applies again.
+  await connect()
+  expect(deps.renew).toHaveBeenCalledTimes(1)
+
+  // An older host renews without binding: it is not asked again at every connection.
+  const older = setup()
+  older.deps.holdsKey = () => true
+  const other = older.servers.add('10.0.0.3:7788', 'Old host', 'old')
+  vi.mocked(older.deps.renew).mockResolvedValue({ token: 'c'.repeat(64) })
+  older.registry.start()
+  const again = async () => {
+    older.streams.get('http://10.0.0.3:7788')!('background:connection', { connected: true })
+    await flush()
+  }
+  await again()
+  await again()
+  expect(older.deps.renew).toHaveBeenCalledTimes(1)
+  expect(older.servers.keyBound(other.id)).toBe(false)
+})

@@ -21,6 +21,7 @@ import { bridge } from './ipc'
 import { ownHostId } from './hosts'
 import { pruneDrafts } from './composer/drafts'
 import { installAppearance } from './appearance'
+import { installFloatingScrollbars } from './lib/floatingScrollbars'
 import { installTheme } from './theme/themes'
 import { installEditorTheme } from './editor/customEditorTheme'
 import { App } from './App'
@@ -95,6 +96,7 @@ function Startup() {
 installAppearance()
 installTheme()
 installEditorTheme()
+installFloatingScrollbars()
 
 // A call made in the background to a host that went offline (lost, timed out, never sent) is expected, not a crash:
 // the views show the host as offline and read again on reconnect. Anything else stays an unhandled rejection.

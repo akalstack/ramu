@@ -5,6 +5,7 @@ import { SvgXml } from 'react-native-svg'
 import QRCode from 'qrcode'
 import { ChevronDown, Link2 } from 'lucide-react-native'
 import { osLine } from '@ramu/shared/deviceOs'
+import { deviceLimited, type DevicePermission } from '@ramu/shared/devicePermissions'
 import { countdown, defaultPairUrl, pairQrText } from '@ramu/shared/pairingOffer'
 import type { NetworkStatus, PairingOffer } from '@ramu/shared/types'
 import { DeviceIcon } from '../components/DeviceIcon'
@@ -173,6 +174,7 @@ export default function Devices() {
                     row={row}
                     open={open === row.device.id}
                     onToggle={() => setOpen(open === row.device.id ? null : row.device.id)}
+                    defaults={status.defaultPermissions}
                   />
                   {open === row.device.id ? (
                     <>
@@ -217,12 +219,29 @@ export default function Devices() {
   )
 }
 
-function DeviceLine({ row, open, onToggle }: { row: DeviceRow; open: boolean; onToggle: () => void }) {
+function DeviceLine({
+  row,
+  open,
+  onToggle,
+  defaults,
+}: {
+  row: DeviceRow
+  open: boolean
+  onToggle: () => void
+  /** What the host gives a new device, which a device marked Limited holds less than. */
+  defaults?: readonly DevicePermission[]
+}) {
   const say = useSay()
   const { c } = useTheme()
   const { device } = row
   const seen = device.lastSeenAt ? say('last seen {0}', { 0: ago(device.lastSeenAt) }) : say('never seen')
-  const detail = [osLine(device.os), device.role === 'viewer' ? say('View only') : say('Full access'), seen]
+  const detail = [
+    osLine(device.os),
+    device.role === 'viewer' ? say('View only') : say('Full access'),
+    // Cut back on the host from what a new device gets; the host's own Settings say how.
+    deviceLimited(device, Date.now(), defaults) ? say('Limited') : '',
+    seen,
+  ]
     .filter(Boolean)
     .join(' · ')
   const name = row.self ? say('{0} (this phone)', { 0: device.name }) : device.name

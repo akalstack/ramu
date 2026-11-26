@@ -19,7 +19,7 @@ import { TaskRow } from './projects/TaskRow'
 import { BulkThreadActionsContext, ThreadSelectionBar, useBulkThreadActions } from './projects/ThreadSelectionBar'
 import { SidebarDisclosureButton } from '@/components/sidebar-disclosure-button'
 import { archivedThreads, openArchivedThreads, sidebarThreads, threadProjectName } from './projects/threadLists'
-import { useSidebarExpansion } from './projects/sidebarExpansion'
+import { useSharedSidebarSection, useSidebarExpansion } from './projects/sidebarExpansion'
 import { EMBEDDED_THREAD_LIMIT, ThreadPreviewList, useThreadPreview } from './projects/ThreadPreviewList'
 
 export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
@@ -31,7 +31,8 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
   const host = useHost()
   const identityView = useIdentityView(host.id)
   const tree = useSidebarExpansion(host.id)
-  const showDone = tree.isExpanded('section:done')
+  const doneSection = useSharedSidebarSection('section:done')
+  const showDone = doneSection.open
   // Pinned chats from every project gather in one section above the projects.
   const showPinned = tree.isExpanded('section:pinned'),
     showProjects = embedded || tree.isExpanded('section:projects'),
@@ -185,7 +186,7 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
               icon={CheckCheck}
               count={done.length}
               open={showDone}
-              onToggle={() => tree.setExpanded('section:done', !showDone)}
+              onToggle={() => doneSection.setOpen(!showDone)}
               controls="done-chats"
             />
             <Collapse open={showDone} id="done-chats" className="task-list flex flex-col gap-0.5">

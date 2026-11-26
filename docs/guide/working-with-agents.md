@@ -99,7 +99,7 @@ Start a message with `@` to ask for a particular helper (desktop and phone):
 - One of your **custom agents**, such as `@security-reviewer`.
 - An **ability**: `@images`, `@search` or `@long` ([Abilities](#abilities)).
 
-The mention shows as that model's icon and name. The message goes to the main agent, which starts that helper with your request, read-only unless you ask for changes (a custom agent keeps its own read-only switch), and passes on its report. The helper's card works like any other: open it to read, message or stop it.
+The mention shows as that model's icon and name. The message goes to the main agent, which starts that helper with your request and passes on its report. A request that asks for a change (`@opus-5.5 fix the failing test`, `@gpt-5.5 take over and finish this`) starts a helper that does the work and may edit; one that asks for a look (`review`, `check`, `why…`) starts a read-only one. A custom agent keeps its own read-only switch. The helper's card works like any other: open it to read, message or stop it.
 
 On the desktop, live work above the message box is one row of chips: **Agents**, **Browser**, **Computer**, **Servers**, **Terminals**, **Goal** and **Queued**. A chip opens its card above the row, one at a time, and chips that don't fit move into **⋯ +N**. Things that need you, such as a question or a usage-limit wait, stay full rows above the chips. **Auto-resume** sits beside the model and access pickers until a limit is near, when the chip above the message box says so.
 
@@ -107,7 +107,7 @@ On the desktop, live work above the message box is one row of chips: **Agents**,
 
 ## Custom agents
 
-**Settings → Goals & delegation → Custom agents** keeps reusable agents: a name, when to use it, instructions, an optional model and a read-only switch. A new host starts with four you can use right away, edit or delete: `@security-reviewer`, `@test-writer` (may edit), `@second-opinion` and `@simplifier`. Give `second-opinion` a model from another provider for an independent look. **New agent** drafts one from a sentence for you to edit. The thread's agent uses one when a task fits, and its helper card shows **custom: ‹name›**. Start a message with `@name` to ask for one directly.
+**Settings → Goals & delegation → Custom agents** keeps reusable agents: a name, when to use it, instructions, an optional model and a read-only switch. A new host starts with four you can use right away, edit or delete: `@security-reviewer`, `@test-writer` (may edit), `@second-opinion` and `@simplifier`. Give `second-opinion` a model from another provider for an independent look. **New agent** opens an empty one to fill in. A custom agent is for work that needs its own context, model or read-only switch; instructions any agent should follow belong in a skill. The thread's agent uses one when a task fits, and its helper card shows **custom: ‹name›**. Start a message with `@name` to ask for one directly.
 
 ## Threads started by agents
 
@@ -147,7 +147,7 @@ With **Auto** as the destination, Home also weighs the projects on your other co
 Threads on the same checkout work at the same time, and each thread's **Changes** shows only what it wrote:
 
 - Ramu reads which files each agent edits from its edit tools. A command's writes (a formatter, a code generator, an install) belong to the thread that ran it: while two threads' turns overlap, Ramu watches the checkout, or, where the system can't watch a folder that large, reads its changed files before and after each command.
-- Claude Code's commands in one checkout take turns, so whatever a command writes has one author. A command held this way shows **Held a command until "…" finished its own** in the thread. It waits at most two minutes, and a command moved to the background no longer holds others back.
+- Claude Code's commands that can change files take turns in one checkout, so whatever a command writes has one author. Commands that only read, such as `ls`, `grep` or `git status`, never wait and never hold another thread back. A command held for more than a few seconds shows **Held a command until "…" finished its own** in the thread. It waits at most two minutes, and a command moved to the background no longer holds others back.
 - What another thread wrote shows below this thread's diff, folded, as **Changed by "…"** with **Open thread**. What you saved in Ramu's editor shows as **Changed by you**. A change nobody can be credited with, such as an edit in another app or a background command, shows as **Changed outside this thread**. None of them is undone, restored or committed with this thread's changes. **Add to this thread's changes** moves a **Changed by you** or **Changed outside this thread** group into the thread's own.
 - A file both threads edited stays in each thread's changes, marked **Also changed by "…"**, and one you also saved during the turn is marked **Also edited by you**. Undo and restore leave such a file for you to settle, so nobody's edits are thrown away.
 - When two threads edit the same file at once, both threads say so with **Open thread** and **Move to a new worktree**, which continues this thread in its own worktree.
@@ -242,4 +242,4 @@ A thread is named from its first message, then once more after the first reply. 
 
 ## Asides and advice
 
-Select text in a thread to quote it or ask a read-only Aside, or type `/aside` (or `/btw`) and a question in the message box to ask about the whole thread; the agent keeps working and never sees it. The optional advisor asks a second model for an opinion ([Providers](providers.md#advisor)).
+Select text in a thread to quote it or ask a read-only Aside, or type `/aside` (or `/btw`) and a question in the message box to ask about the whole thread; the agent keeps working and never sees it. A thread has one aside: every question, with the passage it was about, continues the same side conversation until you delete it. It is answered by the model chosen in that thread, or by one model for every aside when you pick it under **Settings → Models → Models for Ramu’s own work**. **Continue in a new thread** opens a new thread with the aside in its message box. The optional advisor asks a second model for an opinion ([Providers](providers.md#advisor)).

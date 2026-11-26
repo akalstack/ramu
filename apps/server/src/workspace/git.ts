@@ -5,7 +5,7 @@ import { isProtectedBranch, syncConfirmationMessage, type SyncApproval } from '@
 import { existsSync } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import { execFile } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { environmentFor } from '../userEnvironment'
 import type {
   DiffContents,
@@ -39,12 +39,11 @@ const MAX_BUFFER = 64 * 1024 * 1024
 const LOCKED = /Unable to create '[^']*\.lock': File exists|Another git process seems to be running/
 
 /** Retries a briefly locked repository with quadratic backoff, like VS Code, instead of failing the action. */
-/** `env` adds variables for this one command, such as a throwaway GIT_INDEX_FILE. */
-export async function git(
-  cwd: string,
-  args: string[],
-  opts: { input?: string; env?: Record<string, string> } = {},
-): Promise<string> {
+/**
+ * `env` adds variables for this one command, such as a throwaway GIT_INDEX_FILE. `timeoutMs` replaces the network
+ * limit below.
+ */
+export async function git(cwd: string, args: string[], opts: GitOptions = {}): Promise<string> {
   for (let attempt = 1; ; attempt++) {
     try {
       return await gitOnce(cwd, args, opts)
@@ -55,35 +54,88 @@ export async function git(
   }
 }
 
-function gitOnce(cwd: string, args: string[], opts: { input?: string; env?: Record<string, string> }): Promise<string> {
+type GitOptions = { input?: string; env?: Record<string, string>; timeoutMs?: number }
+
+/**
+ * A command that talks to a remote can stall on a dead connection while it holds the repository lock, which leaves
+ * every later fetch, commit and push waiting behind it. Push and pull also run hooks, so they get longer, but still
+ * end before a client's request gives up, so the person sees why it failed.
+ */
+const NETWORK_LIMIT_MS: Record<string, number> = { fetch: 90_000, 'ls-remote': 90_000, push: 170_000, pull: 170_000 }
+
+function gitOnce(cwd: string, args: string[], opts: GitOptions): Promise<string> {
+  const limit = opts.timeoutMs ?? NETWORK_LIMIT_MS[args[0] ?? '']
+  // Its own process group, so stopping it also ends the ssh, credential helper or hook it started.
+  const group = limit !== undefined && process.platform !== 'win32'
   return new Promise((resolve, reject) => {
-    const child = execFile(
-      'git',
-      args,
-      {
-        cwd,
-        maxBuffer: MAX_BUFFER,
-        encoding: 'utf8',
-        // Never let Git block on an interactive prompt or open an editor.
-        env: {
-          ...process.env,
-          ...environmentFor(cwd),
-          ...opts.env,
-          GIT_TERMINAL_PROMPT: '0',
-          GIT_EDITOR: 'true',
-          LC_ALL: 'C',
-        },
+    const child = spawn('git', args, {
+      cwd,
+      detached: group,
+      // Never let Git block on an interactive prompt or open an editor.
+      env: {
+        ...process.env,
+        ...environmentFor(cwd),
+        ...opts.env,
+        GIT_TERMINAL_PROMPT: '0',
+        GIT_EDITOR: 'true',
+        LC_ALL: 'C',
       },
-      (err, stdout, stderr) => {
-        if (err) {
-          const code = typeof err.code === 'number' ? err.code : null
-          reject(new GitError(`git ${args[0]} failed: ${stderr.trim() || err.message}`, args, cwd, code, stderr))
-        } else {
-          resolve(stdout)
-        }
-      },
-    )
-    if (opts.input !== undefined) child.stdin?.end(opts.input)
+    })
+    let settled = false
+    let size = 0
+    const out: Buffer[] = []
+    const err: Buffer[] = []
+    const stop = () => {
+      try {
+        if (group && child.pid) process.kill(-child.pid, 'SIGTERM')
+        else child.kill('SIGTERM')
+      } catch {
+        // Already gone.
+      }
+    }
+    const fail = (message: string, code: number | null, stderr: string) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      reject(new GitError(message, args, cwd, code, stderr))
+    }
+    const collect = (into: Buffer[]) => (chunk: Buffer) => {
+      size += chunk.length
+      if (size > MAX_BUFFER) {
+        stop()
+        fail(`git ${args[0]} failed: output exceeded ${MAX_BUFFER} bytes`, null, '')
+      } else into.push(chunk)
+    }
+    child.stdout.on('data', collect(out))
+    child.stderr.on('data', collect(err))
+    child.on('error', (error) => fail(`git ${args[0]} failed: ${error.message}`, null, ''))
+    child.on('close', (code, signal) => {
+      if (settled) return
+      const stdout = Buffer.concat(out).toString('utf8')
+      const stderr = Buffer.concat(err).toString('utf8')
+      if (code === 0) {
+        settled = true
+        clearTimeout(timer)
+        resolve(stdout)
+      } else fail(`git ${args[0]} failed: ${stderr.trim() || `exited with ${code ?? signal}`}`, code, stderr)
+    })
+    // A child that inherited git's output can keep it open after git exits, so the limit rejects without waiting for it.
+    const timer =
+      limit === undefined
+        ? undefined
+        : setTimeout(() => {
+            stop()
+            const seconds = Math.round(limit / 1000)
+            fail(
+              `git ${args[0]} did not finish within ${seconds} seconds and was stopped. Check the network connection and the remote, then try again.`,
+              null,
+              '',
+            )
+          }, limit)
+    child.stdin.on('error', () => {
+      // Git may exit before reading its input; the exit status reports why.
+    })
+    child.stdin.end(opts.input)
   })
 }
 
