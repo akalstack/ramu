@@ -285,7 +285,12 @@ export function Helpers({
         <Bot size={16} color={c.soft} />
         <View style={{ flex: 1 }}>
           <T weight="600">
-            {item.advisor ? say('Advisor') : say('{0} agents', { 0: counts.total })}
+            {/* One sub-agent is named, as its card is on the desktop; a count is only for a group. */}
+            {item.advisor
+              ? say('Advisor')
+              : agents.length === 1
+                ? agents[0]!.name
+                : say('{0} agents', { 0: counts.total })}
             {item.earlier ? ` · ${say('Earlier activity')}` : ''}
           </T>
           <T size={font.caption} tone="muted">

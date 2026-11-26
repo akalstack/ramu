@@ -14,6 +14,8 @@ Enter uses your Steer or Queue choice, and Cmd/Ctrl+Enter uses the other. **Stee
 
 A steered message stays part of the turn it joined: the turn keeps one timer and folds under one **Worked for** with its whole time, and the work after each steer folds under **Continued for** below that message. A turn folds only once it has finished. A stopped turn says **Stopped after**.
 
+Sub-agents started together read as one row, such as **3 agents** with how many are done and running, that opens to each agent; it starts open while any of them is working. The same error or notice back to back shows once with its count, such as **×3**.
+
 Threads in the same checkout work at the same time. A message waits only for the few seconds an undo or restore rewrites that checkout's files. See [Threads sharing a checkout](working-with-agents.md#threads-sharing-a-checkout) for how each thread keeps its own changes apart.
 
 On the phone, **Settings → Threads** sets the choice, and the warning before changing model, for **All devices** (the host's own setting), **All mobile devices** (every phone paired with that host) or **This phone**. The narrowest one set wins, and the page shows where the current value comes from.

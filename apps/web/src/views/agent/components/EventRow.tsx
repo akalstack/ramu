@@ -33,6 +33,7 @@ import { PlanCard } from './PlanCard'
 import { PermissionRequestCard } from './PermissionRequestCard'
 import { CONVERSATION_SEPARATOR_CLASS, GHOST_TEXT_BUTTON_CLASS, TURN_END_CLASS } from '../styles'
 import { ErrorNote } from './ErrorNote'
+import { RepeatCount } from './RepeatCount'
 import { handoffLine } from '../handoffLine'
 import { canReviewAccess, omissionsLine } from '../setupOmissions'
 
@@ -63,6 +64,7 @@ export function EventRow({
   onReviewAccess,
   onRetry,
   readOnly = false,
+  repeats,
 }: {
   event: AgentEvent
   sessionId: string
@@ -86,6 +88,8 @@ export function EventRow({
   onRetry?: () => void
   /** A view-only device reads cards but cannot press their buttons. */
   readOnly?: boolean
+  /** How many times this notice happened back to back, shown once. */
+  repeats?: number
 }) {
   useLanguage()
   const { invoke } = useHost()
@@ -96,6 +100,7 @@ export function EventRow({
           <span className="inline-flex items-center gap-2">
             <RotateCcw size={14} aria-hidden="true" />
             {translate('Resumed after restart')}
+            <RepeatCount count={repeats} />
           </span>
           {omissionsLine(e.setupOmissions, 'resume') && <small>{omissionsLine(e.setupOmissions, 'resume')}</small>}
         </div>
@@ -112,6 +117,7 @@ export function EventRow({
           <span className="inline-flex min-w-0 flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center">
             <Minimize2 size={14} className="flex-none" aria-hidden="true" />
             {e.state === 'completed' ? translate('Context compacted') : compactionLabel(e)}
+            <RepeatCount count={repeats} />
             {e.state === 'completed' && (
               <span
                 className="text-caption tabular-nums"
@@ -297,12 +303,14 @@ export function EventRow({
         <div className={`${TURN_END_CLASS} error text-bad`}>
           <CircleAlert size={13} />
           {translate('Agent failed')}
+          <RepeatCount count={repeats} />
         </div>
       ) : null
     case 'background-terminal-stop':
       return (
         <div className={TURN_END_CLASS} role="status">
           {translate('You requested a stop for {0}', { 0: e.command })}
+          <RepeatCount count={repeats} />
         </div>
       )
     case 'continued':
@@ -322,7 +330,7 @@ export function EventRow({
         </div>
       )
     case 'error':
-      return <ErrorNote message={e.message} onRetry={onRetry} />
+      return <ErrorNote message={e.message} onRetry={onRetry} repeats={repeats} />
     default:
       return null
   }

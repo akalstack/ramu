@@ -2,7 +2,8 @@ import type { AgentEvent } from '../types'
 import { isTurnFooter } from './compaction'
 export type ToolUse = Extract<AgentEvent, { kind: 'tool-use' }>
 export type ToolResult = Extract<AgentEvent, { kind: 'tool-result' }>
-export type ChatBlock = { kind: 'event'; event: AgentEvent } | { kind: 'tools'; tools: ToolUse[] }
+/** `repeats` counts an event shown once for a run of the same notice back to back (see `foldRepeats`). */
+export type ChatBlock = { kind: 'event'; event: AgentEvent; repeats?: number } | { kind: 'tools'; tools: ToolUse[] }
 
 /** Failures and unfinished calls must remain discoverable outside completed work. */
 export function toolNeedsAttention(result: ToolResult | undefined) {

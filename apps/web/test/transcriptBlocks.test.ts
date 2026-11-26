@@ -6,11 +6,18 @@ describe('transcript blocks', () => {
   it('keeps the same error from each automatic try at a limit as one card', () => {
     const tryAgain = (n: number): AgentEvent[] => [
       { kind: 'error', message: 'Claude usage limit reached.', at: n } as AgentEvent,
-      { kind: 'result', isError: true } as AgentEvent,
+      {
+        kind: 'provider-wait',
+        retryAt: 10_000,
+        updatedAt: n,
+        guessed: false,
+        provider: 'claude-code',
+      } as AgentEvent,
     ]
     const blocks = toBlocks([...tryAgain(1), ...tryAgain(2), ...tryAgain(3)])
     const errors = blocks.filter((block) => block.kind === 'event' && block.event.kind === 'error')
     expect(errors).toHaveLength(1)
+    expect(errors[0]).toMatchObject({ repeats: 3 })
   })
 
   it('gives bookkeeping events no row, so repeated limit retries leave no blank space', () => {
@@ -59,5 +66,41 @@ describe('transcript blocks', () => {
     expect(toBlocks(events).map((block) => (block.kind === 'event' ? block.event.kind : block.kind))).toEqual([
       'ability',
     ])
+  })
+
+  it('shows the same error back to back once, with its count, and keeps different ones apart', () => {
+    const events: AgentEvent[] = [
+      { kind: 'user', text: 'hi', at: 1 },
+      { kind: 'error', message: 'Overloaded', at: 2 },
+      { kind: 'state', state: 'failed', at: 3 },
+      { kind: 'error', message: 'Overloaded', at: 4 },
+      { kind: 'error', message: 'Overloaded', at: 5 },
+      { kind: 'error', message: 'Invalid key', at: 6 },
+      { kind: 'text', text: 'Back again', at: 7 },
+      { kind: 'error', message: 'Overloaded', at: 8 },
+    ]
+    const blocks = toBlocks(events)
+    expect(
+      blocks.map((block) =>
+        block.kind === 'event' ? [block.event.kind, block.event.at, block.repeats ?? 1] : [block.kind],
+      ),
+    ).toEqual([
+      ['user', 1, 1],
+      // The first keeps its place, so the row on screen stays put while repeats arrive.
+      ['error', 2, 3],
+      ['error', 6, 1],
+      ['text', 7, 1],
+      ['error', 8, 1],
+    ])
+  })
+
+  it('folds a thread resuming after restarts with nothing between them', () => {
+    const blocks = toBlocks([
+      { kind: 'recovery', state: 'resumed', at: 1 },
+      { kind: 'recovery', state: 'resumed', at: 2 },
+      { kind: 'user', text: 'hi', at: 3 },
+      { kind: 'recovery', state: 'resumed', at: 4 },
+    ])
+    expect(blocks.map((block) => (block.kind === 'event' ? (block.repeats ?? 1) : 0))).toEqual([2, 1, 1])
   })
 })

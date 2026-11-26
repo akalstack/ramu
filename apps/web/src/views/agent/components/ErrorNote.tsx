@@ -5,6 +5,7 @@ import { Button } from '@/components/desktop-button'
 import { t, useLanguage } from '../../../i18n'
 import { openModelList } from '../../../models/modelPickerRequest'
 import { CopyButton } from './CopyButton'
+import { RepeatCount } from './RepeatCount'
 
 const LONG = 240
 
@@ -16,12 +17,15 @@ export function ErrorNote({
   message,
   title: heading,
   onRetry,
+  repeats,
 }: {
   message: string
   /** Replaces the title read from the message, for failures that are not the agent's. */
   title?: string
   /** Offered while the error is the thread's latest word and the thread can continue. */
   onRetry?: () => void
+  /** The same error back to back reads once, with its count. */
+  repeats?: number
 }) {
   useLanguage()
   const card = useRef<HTMLDivElement>(null)
@@ -37,7 +41,10 @@ export function ErrorNote({
     <div ref={card} role="alert" className="my-2 flex items-start gap-2.5 rounded-(--radius-m) bg-fill p-[10px_12px]">
       <CircleAlert size={15} aria-hidden="true" className="mt-0.5 flex-none text-bad" />
       <div className="min-w-0 flex-1">
-        <div className="text-control font-medium text-foreground">{heading ?? t(title)}</div>
+        <div className="flex items-center gap-2 text-control font-medium text-foreground">
+          {heading ?? t(title)}
+          <RepeatCount count={repeats} />
+        </div>
         <p
           className={`m-0 mt-0.5 text-control leading-[1.5] text-muted-foreground break-words ${expanded ? 'whitespace-pre-wrap' : 'line-clamp-3'}`}
         >

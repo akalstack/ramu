@@ -3717,6 +3717,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   Question: 'Pertanyaan',
   Answer: 'Jawab',
   '{0} agents': '{0} agent',
+  'Happened {0} times in a row': 'Terjadi {0} kali berturut-turut',
+  '×{0}': '×{0}',
   'Asking a question': 'Mengajukan pertanyaan',
   'Checked a question': 'Memeriksa pertanyaan',
   'Checking a question': 'Memeriksa pertanyaan',

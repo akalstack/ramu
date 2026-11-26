@@ -47,7 +47,13 @@ export interface TranscriptTool {
 }
 
 export type TranscriptItem = (
-  | { kind: 'error'; id: string; message: string }
+  | {
+      kind: 'error'
+      id: string
+      message: string
+      /** How many times this same error happened back to back, shown once. */
+      repeats?: number
+    }
   /** What a sub-agent sent back to the thread: who, how it ended (finished, failed, says…), and its words. */
   | { kind: 'report'; id: string; name: string; verb: string; body: string }
   | {
@@ -198,6 +204,8 @@ export type TranscriptItem = (
       previous?: import('@ramu/shared/types').AgentSettings
       /** A model change waiting for the next send: shown at the end of the chat, with no switch-back action. */
       pending?: boolean
+      /** How many times this same note happened back to back, shown once. */
+      repeats?: number
     }
   /** A finished turn's routine steps folded under "Worked for 12m 48s". */
   | { kind: 'summary'; id: string; label: string; items: TranscriptItem[] }
