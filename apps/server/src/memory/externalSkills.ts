@@ -17,7 +17,7 @@ import type { ToolAuditFile } from '@ramu/shared/toolAudit'
 import type { LearningService } from './learning'
 import type { Workspace } from '../workspace/workspace'
 import type { AgentService } from '../agent'
-import { findExecutable } from '../providers/providerBinaries'
+import { ensureNodeOnPath, findExecutable } from '../providers/providerBinaries'
 import { readSkillFolder, skillMetadata } from './skillFiles'
 import { toolKey } from '@ramu/shared/toolSync'
 import { setToolAvailability } from '../toolSync'
@@ -69,6 +69,7 @@ export class ExternalSkills {
   private run(args: string[], cwd: string): Promise<string> {
     const npx = findExecutable('npx')
     if (!npx) throw new Error('Install Node.js to get npx: https://nodejs.org/en/download')
+    ensureNodeOnPath()
     const entry =
       process.platform === 'win32' && /\.cmd$/i.test(npx)
         ? join(dirname(npx), 'node_modules', 'npm', 'bin', 'npx-cli.js')

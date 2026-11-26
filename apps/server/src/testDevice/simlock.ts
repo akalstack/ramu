@@ -6,7 +6,7 @@ import { chmod, mkdir, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { ocuToolsDir } from '../computer/ocu'
-import { findExecutable } from '../providers/providerBinaries'
+import { ensureNodeOnPath, findExecutable } from '../providers/providerBinaries'
 
 /** The releases Ramu installs and was checked against; the pin moves only after the plan's checks pass again. */
 export const SIMLOCK_VERSION = '0.6.0'
@@ -165,6 +165,7 @@ export function lastJson<T>(stdout: string): T {
  */
 export async function installSimlock(exec: Exec = execute, npm: string | null = findExecutable('npm')): Promise<void> {
   if (!npm) throw new Error('Install Node.js (npm) first, then try again.')
+  ensureNodeOnPath()
   const dir = simlockToolDir()
   await mkdir(join(dir, 'bin'), { recursive: true })
   await exec(npm, [

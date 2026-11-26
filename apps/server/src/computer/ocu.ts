@@ -13,7 +13,7 @@ import type {
   ComputerTarget,
 } from '@ramu/shared/computerBridge'
 import { MAX_COMPUTER_TREE_TEXT } from '@ramu/shared/computerBridge'
-import { findExecutable } from '../providers/providerBinaries'
+import { ensureNodeOnPath, findExecutable } from '../providers/providerBinaries'
 
 /** The part of an MCP client this backend uses, so a fake can stand in for the native process in tests. */
 export interface OcuClient {
@@ -149,6 +149,7 @@ const execute: Exec = (file, args) =>
 export async function installOcu(exec: Exec = execute, npm: string | null = findExecutable('npm')): Promise<string> {
   if (process.platform !== 'darwin') throw new Error('App-scoped computer use currently supports macOS.')
   if (!npm) throw new Error('Install Node.js (npm) first, then try again.')
+  ensureNodeOnPath()
   const dir = join(ocuToolsDir(), `ocu-${OCU_VERSION}`)
   await exec(npm, ['install', '--prefix', dir, '--no-audit', '--no-fund', `open-computer-use@${OCU_VERSION}`])
   const installed = join(dir, 'node_modules/.bin/ocu')

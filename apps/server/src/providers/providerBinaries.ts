@@ -157,6 +157,20 @@ export function findExecutable(command: string): string | null {
     }) ?? null
   )
 }
+/**
+ * Makes `node` reachable for the tools Ramu starts. A tool installed with npm (and npm itself) begins with
+ * `#!/usr/bin/env node`; a service started by the system, not from a shell, has no version manager's folder on its
+ * PATH, so those tools failed with "env: node: No such file or directory" even though `findExecutable` had found them.
+ * The folder goes last, so a `node` already on PATH keeps winning. Safe to call again once Node is installed.
+ */
+export function ensureNodeOnPath(): void {
+  if (process.platform === 'win32') return
+  const dirs = (process.env.PATH ?? '').split(delimiter).filter(Boolean)
+  const node = findExecutable('node')
+  if (!node || dirs.includes(dirname(node))) return
+  process.env.PATH = [...dirs, dirname(node)].join(delimiter)
+}
+
 export function providerBinary(provider: AgentProvider, overrides = configuration): string {
   const custom = overrides[provider]?.binary?.trim()
   if (custom) return expand(custom)
