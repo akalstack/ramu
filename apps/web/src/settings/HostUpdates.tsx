@@ -52,7 +52,7 @@ const confirmText = (computer: Computer, version: string) =>
     .join(' ')
 
 /**
- * One host's line in Remote access: its Ramu version and provider CLIs, with Update for each when something is newer.
+ * One host's line under Hosts you use: its Ramu version and provider CLIs, with Update for each when something is newer.
  * Works the same for this computer and any connected host; the host itself decides how it can install Ramu.
  */
 export function HostUpdateLine({ computer, onChanged }: { computer: Computer; onChanged?: () => void }) {

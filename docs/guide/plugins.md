@@ -56,7 +56,7 @@ For a service no index lists ("connect Rodin for 3D models"), the agent offers `
 
 A plugin, skill or MCP server can be on every host you use. **Available on** in its details (**Customize → Plugins**, **Skills** or **MCP servers**) lists your other connected hosts and whether each has it (**Installed**, **Waiting for review there**, **Not there**). Ticking a host sends it the setup. **All your hosts** also reaches hosts you connect later, including those in your [Ramu account](account.md#your-hosts). Paired hosts work the same without an account. A plugin kept for an identity, such as Work, goes through **All your hosts** only to hosts with that identity, but a host you tick gets it either way. A wiped host that comes back under the same name counts as the one you ticked.
 
-Tools travel through a desktop app connected to both hosts, or without one: a host offers its tools to the hosts its agents may use (**Agents** on a host's row in **Settings → Remote access**, or `ramu hosts add`) when they change and every 30 minutes. That pairing only offers tools for review, never installs them.
+Tools travel through a desktop app connected to both hosts, or without one: a host offers its tools to the hosts its agents may use (**Linked hosts** in **Settings → Devices & access**, or `ramu hosts add`) when they change and every 30 minutes. That pairing only offers tools for review, never installs them.
 
 What travels is the setup: a plugin's source and pinned commit, an installed skill's source (or the text of one you wrote), a server's address or command, and which tools are on and which ask before they run. Keys, sign-ins, header and variable values, and folders never travel. A plugin from a folder stays on its host and says so.
 

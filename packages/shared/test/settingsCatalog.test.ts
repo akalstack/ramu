@@ -13,6 +13,6 @@ it('names each setting on one row only, so a change card and search point at the
 it('finds rows by every word of the query, title matches first', () => {
   expect(findSettingsEntries('warn model', label)[0]).toMatchObject({ path: 'warnModelChange' })
   expect(findSettingsEntries('commit style', label)[0]).toMatchObject({ path: 'commitStyle' })
-  expect(findSettingsEntries('remote pair', label).map((entry) => entry.title)).toContain('Pair a device')
+  expect(findSettingsEntries('remote pair', label).map((entry) => entry.title)).toContain('Connect a device')
   expect(findSettingsEntries('   ', label)).toEqual([])
 })

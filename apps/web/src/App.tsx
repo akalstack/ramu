@@ -49,7 +49,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { buildCommands, formatKeys, useKeybindings } from './commands'
 import { AccountMenuButton } from './sidebar/AccountMenuButton'
 import { ConnectPhoneButton } from './sidebar/ConnectPhoneButton'
-import { PairDialog } from './settings/RemoteAccess'
+import { PairDialog } from './settings/access/ConnectDevice'
 import { Palette } from './palette/Palette'
 import type { PaletteMode } from './palette/sources'
 import { copyText, invoke, invokerFor, ramu } from './ipc'

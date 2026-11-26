@@ -18,7 +18,7 @@ On the phone, the Browser pill opens a full-screen viewer. **Open on this phone*
 
 ## Computer use
 
-**Settings → Computer** is off by default. Once on, each thread still needs a screen or app grant, and paired devices need the host's **Computer use** permission. The Computer tray lists your paired devices and whether each can watch and control. **Allow** grants that permission there, and Remote access takes it back or blocks it.
+**Settings → Computer** is off by default. Once on, each thread still needs a screen or app grant, and paired devices need the host's **Computer use** permission. The Computer tray lists your paired devices and whether each can watch and control. **Allow** grants that permission there, and **Devices & access** takes it back or blocks it.
 
 - The agent calls `computer_open`, optionally naming one app. Main threads open automatically once computer use is on. Helpers ask.
 - On desktop, the header's **Computer** button (⌘⌥M) opens the viewer. While you control the screen, your clicks and keys go to it. Escape returns the keyboard to Ramu.

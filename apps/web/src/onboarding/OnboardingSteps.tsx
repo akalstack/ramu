@@ -659,7 +659,7 @@ export function ReachStep({ onError }: { onError(message: string): void }) {
                   {t('{0} is paired', { 0: pairing.joined.name })}
                 </>
               }
-              help={t('It can use this host now. Manage it in Settings › Remote access.')}
+              help={t('It can use this host now. Manage it in Settings › Devices & access.')}
             >
               <Button onClick={pairing.renew}>{t('Pair another')}</Button>
             </Row>

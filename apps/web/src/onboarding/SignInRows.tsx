@@ -50,7 +50,7 @@ export function AccountSignIn({ onError }: { onError(message: string): void }) {
         <Row
           title={t('Let my signed-in devices connect')}
           help={t(
-            'Your phone and other computers signed in to this account connect with full access, without a code. Change the access in Settings › Remote access.',
+            'Your phone and other computers signed in to this account connect with full access, without a code. Change the access in Settings › Devices & access.',
           )}
         >
           <Switch

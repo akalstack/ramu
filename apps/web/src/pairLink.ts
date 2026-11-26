@@ -1,4 +1,4 @@
-// A pairing link opened from outside the app waits here until the Remote access screen is showing.
+// A pairing link opened from outside the app waits here until the Devices & access screen is showing.
 let pending: string | null = null
 const EVENT = 'ramu:pair-link'
 

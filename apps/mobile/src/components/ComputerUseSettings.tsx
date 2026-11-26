@@ -22,7 +22,7 @@ type Status = ReturnType<RamuMethods['computer.status']>
 
 /**
  * Settings → Computer for the selected computer: whether agents may use its screen and real-pointer drags. Which
- * paired devices share their screen with it is a permission, so it lives in Remote access. Installing the helper and granting macOS permissions need someone at that Mac, so
+ * paired devices share their screen with it is a permission, so it lives in Devices & access. Installing the helper and granting macOS permissions need someone at that Mac, so
  * this page reports their state and leaves the steps to Ramu on the host.
  */
 export function ComputerUseSettings({ hostId }: { hostId: string }) {

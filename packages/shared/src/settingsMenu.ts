@@ -27,7 +27,7 @@ export const SETTINGS_MENU = [
   { id: 'git', label: 'Git', group: 'Agent tools', phone: true },
   { id: 'access', label: 'Permissions', group: 'Access & host', phone: true },
   { id: 'identities', label: 'Identities', group: 'Access & host', phone: true },
-  { id: 'remote', label: 'Remote access', group: 'Access & host', phone: true },
+  { id: 'remote', label: 'Devices & access', group: 'Access & host', phone: true },
   { id: 'account', label: 'Account', group: 'Access & host', phone: true },
   { id: 'system', label: 'Background', group: 'Access & host', phone: true },
   // The phone has its own About page, about the phone, so the host's never shows there.

@@ -53,7 +53,7 @@ const SINGLE_ENVIRONMENT_SECTIONS: readonly string[] = [
   'about',
   'remote',
 ]
-/** Remote access describes the current environment; it is not selectable. */
+/** Devices & access describes the current environment; it is not selectable. */
 const CURRENT_ENVIRONMENT_SECTIONS: readonly string[] = ['remote']
 export const isSingleEnvironmentSection = (section: string) => SINGLE_ENVIRONMENT_SECTIONS.includes(section)
 export const isCurrentEnvironmentSection = (section: string) => CURRENT_ENVIRONMENT_SECTIONS.includes(section)

@@ -6,13 +6,13 @@ The iOS and Android app for a Ramu host. The host runs your agents, providers, G
 
 ## Connect a phone
 
-1. Start Ramu on the host (`pnpm build`, then the desktop app or `ramu serve`). Its setup shows a pairing QR code; later, **Settings → Remote access → Pair a device** shows one. Headless: `ramu serve --listen 0.0.0.0:7788 --private-network`, then `ramu pair`. Read [remote access](../../docs/security-model.md#remote-access) first.
+1. Start Ramu on the host (`pnpm build`, then the desktop app or `ramu serve`). Its setup shows a pairing QR code; later, **Settings → Devices & access → Connect a device…** shows one. Headless: `ramu serve --listen 0.0.0.0:7788 --private-network`, then `ramu pair`. Read [remote access](../../docs/security-model.md#remote-access) first.
 2. Install the app from a store. From source, install a development build once (`pnpm --filter @ramu/mobile eas:ios`, `eas:android`, or locally `build:ios`, `build:android`) and run `pnpm dev:mobile` first.
 3. Open it. A phone with no host starts a short setup, one step per screen. **Look around first** (or **Skip** once paired) leaves it, and the **Pair a host** chip brings it back. A reopened app resumes at the step it left.
    1. **Welcome:** what the phone is for, and the language.
    2. **Connect:** says where the code is on the computer (the phone button at the foot of Ramu's sidebar) and that a computer signed in to the same Ramu account connects on its own.
       - **Scan QR code** pairs the moment it reads the host's code. The phone's own camera works too: the code opens getramu.dev, which opens the app (or its store page first). The host's address and code stay after `#` in that link, so the site never receives them.
-      - **Sign in with your Ramu account** adds the hosts that let your account's devices in, from anywhere, and returns to the setup once one is added. A host that can't be added says why, such as turning on **Allow other devices** or Ramu Link there.
+      - **Sign in with your Ramu account** adds the hosts that let your account's devices in, from anywhere, and returns to the setup once one is added. A host that can't be added says why, such as choosing **This network** or **Anywhere** there.
       - **Find a computer nearby** lists hosts on the same network. Allow the phone on the host when both screens show the same six-digit number.
       - **Enter address and code** types them by hand.
       - **No Ramu on a computer yet?** shares the download link.

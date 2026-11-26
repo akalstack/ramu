@@ -324,7 +324,7 @@ async function main() {
     }
     return { firstInstall }
   }
-  // Starting at login is the person's choice (Background, or Stay reachable in Remote access); a login item they chose
+  // Starting at login is the person's choice (Background, or Stay reachable in Devices & access); a login item they chose
   // that has gone missing, as after the app moved, is put back.
   if (
     app.isPackaged &&
@@ -1277,7 +1277,7 @@ async function main() {
     const remote = settingsComputer !== LOCAL
     const target = method.startsWith('computers.') ? runtime : computers.endpoint(settingsComputer)
     if (remote && computers.status(settingsComputer) === 'paused' && !method.startsWith('computers.'))
-      throw new Error(t('This connection is paused. Resume it in Remote access.'))
+      throw new Error(t('This connection is paused. Resume it in Devices & access.'))
     if (isBrowserMethod(method)) {
       if (method === 'browser.runtimeStatus')
         return args[0] === LOCAL && browserToken

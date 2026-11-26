@@ -112,7 +112,7 @@ function LinkHolders({
     return (
       <p className={line} role="status">
         {t(
-          'Your Ramu account’s link is used by {0}. Give it back there (Settings → Remote access), or use another way here.',
+          'Your Ramu account’s link is used by {0}. Give it back there (Settings → Devices & access), or use another way here.',
           { 0: link.takenBy ?? t('another computer') },
         )}
       </p>
@@ -191,7 +191,7 @@ export function RamuLinkState({
   if (!link || (link.state === 'unavailable' && !link.reason && tunnel.state === 'starting'))
     return (
       <p className={line} role="status">
-        {status.enabled ? t('Asking Ramu Link for an address…') : t('Starts once Allow other devices is on.')}
+        {t('Asking Ramu Link for an address…')}
       </p>
     )
   if (link.state === 'signed-out')

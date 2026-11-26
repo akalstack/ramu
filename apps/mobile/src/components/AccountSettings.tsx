@@ -330,7 +330,7 @@ export function AccountSettings({ onConnected }: { onConnected?: () => void } = 
                 <RowLabel
                   title={t('No listed hosts')}
                   help={t(
-                    'On a host, choose who connects under Settings → Remote access → Devices on your Ramu account.',
+                    'On a host, choose who connects under Settings → Devices & access → Devices on your Ramu account.',
                   )}
                 />
               </Row>

@@ -9,7 +9,7 @@ import { useHost } from '../workspace/HostProvider'
 
 /**
  * Which of this computer's paired devices can watch and control it from Ramu: those holding the Computer use permission,
- * the same one Remote access manages. A device without it can be allowed here; Remote access takes it back or blocks it.
+ * the same one Devices & access manages. A device without it can be allowed here; Devices & access takes it back or blocks it.
  * Viewer devices hold no permissions, so they are not listed.
  */
 export function ComputerSharing() {
@@ -70,7 +70,7 @@ export function ComputerSharing() {
                   window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'remote' } }))
                 }
               >
-                {t('Remote access')}
+                {t('Devices & access')}
               </Button>
             )}
           </div>

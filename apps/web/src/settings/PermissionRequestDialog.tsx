@@ -18,7 +18,7 @@ type Request = NetworkStatus['permissionRequests'][number]
 
 /**
  * A paired device asking this host for a permission (Computer use, Browser, Terminals…), answered where the person is
- * instead of only in Settings. Closing it is not an answer: the request waits in Remote access until it lapses.
+ * instead of only in Settings. Closing it is not an answer: the request waits in Devices & access until it lapses.
  * Shown for this window's own host only, which is the only place the decision can be made.
  */
 export function PermissionRequestDialog() {

@@ -31,14 +31,16 @@ import { sameAddress } from './agentHostLinks'
 import { useStagedValue } from './stagedChanges'
 import { t } from '../i18n'
 
-/** Runs one host-only permission change and shows the host's updated status. */
+/** Runs one host-only change to paired devices and shows the host's updated status. */
 export type PermissionInvoke = (
   method:
     | 'network.setDevicePermission'
     | 'network.decidePermission'
     | 'network.setDefaultPermissions'
     | 'network.setHostAccess'
-    | 'network.setDeviceExpiry',
+    | 'network.setDeviceExpiry'
+    | 'network.setDeviceLifetime'
+    | 'network.revoke',
   ...args: unknown[]
 ) => Promise<void>
 
@@ -174,16 +176,10 @@ function PermissionLine({
 export function DevicePermissionList({ device, invoke }: { device: NetworkDevice; invoke: PermissionInvoke }) {
   if (device.role === 'viewer') return null
   return (
-    <div className="mt-2 flex flex-col gap-2 border-t border-border pt-3">
+    <div className="flex flex-col gap-2">
       {permissionsFor(device.os).map((permission) => (
         <PermissionLine key={permission} device={device} permission={permission} invoke={invoke} />
       ))}
-      {device.agentHost && (
-        <div className={SETTINGS_CARD_LINE}>
-          <span className="min-w-0 flex-1 truncate text-control">{t('Most access for its threads')}</span>
-          <HostCeiling deviceId={device.agentHost.id} value={device.agentHost.maxAccess} invoke={invoke} />
-        </div>
-      )}
     </div>
   )
 }
@@ -274,10 +270,10 @@ const labels = (permissions: DevicePermission[]) =>
   permissions.map((permission) => t(PERMISSION_LABEL[permission])).join(', ')
 
 /**
- * On a host's row: whether agents here may start threads there, and what this device still lacks there with one tap to
- * ask for all of it. A device holding everything sees no permission line at all.
+ * On a host's row: what this device still lacks there, with one tap to ask for all of it. A device holding everything
+ * sees no permission line at all. Agents are switched on under Linked hosts.
  */
-export function HostAccess({ computer, agents }: { computer: Computer; agents: AgentHostsControl }) {
+export function HostAccess({ computer }: { computer: Computer }) {
   const { view, error, request } = useHostPermissions(computer.id)
   if (!view) return error ? <p className="m-0 text-caption text-muted-foreground">{error}</p> : null
   const now = Date.now()
@@ -292,16 +288,6 @@ export function HostAccess({ computer, agents }: { computer: Computer; agents: A
   ].filter(Boolean)
   return (
     <>
-      {computer.url && !computer.ssh && (
-        <AgentsSwitch
-          computer={{ ...computer, url: computer.url }}
-          agents={agents}
-          held={!!view.permissions.agents}
-          asked={view.pending.includes('agents')}
-          declined={!view.permissions.agents && !!view.blocked?.includes('agents')}
-          onRequest={() => void request(['agents'])}
-        />
-      )}
       {notes.length > 0 && (
         <div className="flex min-h-7 flex-wrap items-center gap-x-2 gap-y-1 text-caption text-muted-foreground">
           <span className="min-w-0 flex-1">{notes.join(' · ')}</span>
@@ -314,6 +300,28 @@ export function HostAccess({ computer, agents }: { computer: Computer; agents: A
       )}
       {error && <p className="m-0 text-caption text-bad">{error}</p>}
     </>
+  )
+}
+
+/** Under Linked hosts: whether agents here may start threads on one connected host, asking that host when needed. */
+export function AgentsOnHost({
+  computer,
+  agents,
+}: {
+  computer: Computer & { url: string }
+  agents: AgentHostsControl
+}) {
+  const { view, error, request } = useHostPermissions(computer.id)
+  if (!view) return error ? <p className="m-0 text-caption text-muted-foreground">{error}</p> : null
+  return (
+    <AgentsSwitch
+      computer={computer}
+      agents={agents}
+      held={!!view.permissions.agents}
+      asked={view.pending.includes('agents')}
+      declined={!view.permissions.agents && !!view.blocked?.includes('agents')}
+      onRequest={() => void request(['agents'])}
+    />
   )
 }
 

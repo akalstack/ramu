@@ -1898,7 +1898,7 @@ async function performInvoke(
     dropRevoked()
   } else if (method === 'device.rename') {
     // A paired device names itself as this host lists it; this computer has its own name instead.
-    if (!device) throw new Error('Rename this host under Settings → Remote access.')
+    if (!device) throw new Error('Rename this host under Settings → Devices & access.')
     devices.rename(device.id, hostNameInput.parse(args?.[0] ?? null))
     value = undefined
   } else if (method === 'host.name') {
@@ -1914,7 +1914,7 @@ async function performInvoke(
     if (devices.allows(device.id, args[0])) throw new Error('This device already has that permission.')
     if (devices.blocked(device.id).includes(args[0]))
       throw new Error(
-        'The host declined this permission. Ask the person there to allow it in Settings → Remote access.',
+        'The host declined this permission. Ask the person there to allow it in Settings → Devices & access.',
       )
     permissionRequests.ask(device, args[0])
   } else if (method === 'device.inviteBack') {

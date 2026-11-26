@@ -8,9 +8,9 @@ import { errorText } from '../lib/errors'
 import { useSettingsInvoke } from './SettingsScope'
 
 /**
- * Once other devices may use this host, the one thing that keeps them able to after a restart: the background service
- * starting at login. Ramu no longer installs it on its own, so it is offered here, where it matters, with one click.
- * Nothing shows where it cannot be (another host, a system without login items) or once it is on.
+ * Once a device pairs during setup, the one thing that keeps it able to reach this host after a restart: the background
+ * service starting at login, offered with one click. Nothing shows where it cannot be (another host, a system without
+ * login items) or once it is on.
  */
 export function StayReachable() {
   const invoke = useSettingsInvoke()

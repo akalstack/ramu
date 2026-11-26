@@ -27,7 +27,7 @@ function linkLine(link: LinkStatus): string {
     return `Ramu Link reached this month's traffic limit and is paused until ${new Date(link.until ?? 0).toLocaleDateString()}.`
   if (link.state === 'taken') {
     const holders = link.holders?.length ? link.holders.map((held) => held.name).join(', ') : link.takenBy
-    return `Your Ramu account's links are all in use (${holders ?? 'another host'}). Run ramu tunnel release on one of them, or give one back in Settings → Remote access on a desktop.`
+    return `Your Ramu account's links are all in use (${holders ?? 'another host'}). Run ramu tunnel release on one of them, or give one back in Settings → Devices & access on a desktop.`
   }
   if (link.state === 'signed-out')
     return 'Ramu Link needs the Ramu account. Run ramu account login, then ramu tunnel link.'
@@ -393,7 +393,7 @@ if (command === 'start') {
     if (!revoked.length) fail(`No paired device matches "${positional[2]}". Run ramu devices.`)
     for (const device of revoked) console.log(`Revoked ${device.id}  ${device.name}`)
   } else if (positional[1] === 'allow' || positional[1] === 'ask' || positional[1] === 'block') {
-    // Headless hosts set permissions here; Settings → Remote access does the same on a desktop.
+    // Headless hosts set permissions here; Settings → Devices & access does the same on a desktop.
     const [, action, deviceId, permission] = positional
     if (!deviceId || !isDevicePermission(permission))
       fail(`Usage: ramu devices ${action} <id> <${DEVICE_PERMISSIONS.join('|')}>`)
@@ -751,7 +751,7 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-/** Guided setup for a command-line host, like the desktop's Remote access section in one command. */
+/** Guided setup for a command-line host, like the desktop's Devices & access page in one command. */
 async function up() {
   const interactive = process.stdin.isTTY && process.stdout.isTTY && !flags.has('yes')
   const ask = async (question: string, fallback: boolean): Promise<boolean> => {

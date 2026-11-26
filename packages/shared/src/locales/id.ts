@@ -84,7 +84,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Connect a phone': 'Hubungkan ponsel',
   'Connect a phone or computer': 'Hubungkan ponsel atau komputer',
   'Getting this host ready for your phone…': 'Menyiapkan host ini untuk ponselmu…',
-  'It can use this host now. Manage it in Settings › Remote access.': 'Sekarang bisa memakai host ini. Kelola di Pengaturan › Akses jarak jauh.',
+  'It can use this host now. Manage it in Settings › Devices & access.': 'Sekarang bisa memakai host ini. Kelola di Pengaturan › Perangkat & akses.',
   'Making the code…': 'Membuat kode…',
   'No address yet': 'Belum ada alamat',
   'Or sign in to your Ramu account on both devices to connect from anywhere.': 'Atau masuk ke akun Ramu di kedua perangkat untuk terhubung dari mana saja.',
@@ -95,7 +95,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Pairing QR code. Scan it with your phone’s camera.': 'Kode QR pemasangan. Pindai dengan kamera ponselmu.',
   'Scan with your phone’s camera. It opens Ramu, or the App Store or Google Play first.': 'Pindai dengan kamera ponselmu. Ramu akan terbuka, atau App Store atau Google Play dulu.',
   'Show pairing code': 'Tampilkan kode pemasangan',
-  'Shows a QR code your phone’s camera opens, and a one-time code. With Discoverable on, nearby devices can ask instead, and you allow them here.': 'Menampilkan kode QR yang bisa dibuka kamera ponselmu, dan kode sekali pakai. Dengan Bisa ditemukan aktif, perangkat terdekat juga bisa meminta, dan kamu mengizinkannya di sini.',
+  'Shows a QR code your phone’s camera opens, a link and a one-time code. With Discoverable on, nearby devices can ask instead, and you allow them here.': 'Menampilkan kode QR yang bisa dibuka kamera ponselmu, tautan, dan kode sekali pakai. Dengan Bisa ditemukan aktif, perangkat terdekat juga bisa meminta, dan kamu mengizinkannya di sini.',
   'This host is starting to listen for other devices. The code appears in a moment.': 'Host ini mulai menerima perangkat lain. Kodenya muncul sebentar lagi.',
   'Waiting for your phone…': 'Menunggu ponselmu…',
   'Your phone': 'Ponselmu',
@@ -2627,7 +2627,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Agent bisa memulai thread di proyek ini, proyek lain, dan host yang ditambahkan untuk agent. Agent dari host yang dipasangkan juga bisa memulai thread di sini. Sub-agent tidak terpengaruh. Matikan agar hanya kamu yang memulai thread.',
   'Agents here stop using it. Threads already started there keep running. Revoke device {0} on that host to end the pairing there too.':
     'Agent di sini berhenti memakainya. Thread yang sudah dimulai di sana tetap berjalan. Cabut perangkat {0} di host itu untuk mengakhiri pemasangan di sana juga.',
-  'Another host’s agents: start and follow threads only': 'Agent host lain: hanya memulai dan mengikuti thread',
   'Most access for its threads': 'Akses maksimal untuk thread-nya',
   'Threads this host’s agents start here never get more access, whatever they ask for.':
     'Thread yang dimulai agent host ini di sini tidak pernah mendapat akses lebih, apa pun permintaannya.',
@@ -3767,8 +3766,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Add a host': 'Tambah host',
   Address: 'Alamat',
   'All networks': 'Semua jaringan',
-  'Allow other devices': 'Izinkan perangkat lain',
-  'Allow other devices?': 'Izinkan perangkat lain?',
   'Cannot listen on {0}:{1} ({2}). Local use still works, and Ramu keeps retrying.':
     'Tidak bisa listen di {0}:{1} ({2}). Pemakaian lokal tetap jalan, dan Ramu terus mencoba lagi.',
   'Connect to a host': 'Sambungkan ke host',
@@ -3776,11 +3773,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Copy code': 'Salin kode',
   'Creates a one-time code for a phone or another host. Enter it on that device.':
     'Membuat kode sekali pakai untuk ponsel atau host lain. Masukkan di perangkat itu.',
-  'Devices that can use this host': 'Perangkat yang bisa memakai host ini',
   Forget: 'Lupakan',
   'Forget {0}?': 'Lupakan {0}?',
-  'It can now use this host. You can revoke it any time under Devices that can use this host.':
-    'Perangkat ini sekarang bisa memakai host ini. Kamu bisa mencabutnya kapan saja di Perangkat yang bisa memakai host ini.',
+  'It can now use this host. You can remove it any time under Devices in Settings → Devices & access.': 'Sekarang perangkat ini bisa memakai host ini. Kamu bisa menghapusnya kapan saja di Perangkat, di Pengaturan → Perangkat & akses.',
   'It stops working right away and must be paired again to reconnect.':
     'Langsung berhenti berfungsi dan harus dipasangkan lagi agar bisa tersambung.',
   SSH: 'SSH',
@@ -3805,13 +3800,10 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Name (optional)': 'Nama (opsional)',
   Network: 'Jaringan',
   Access: 'Akses',
-  'How devices reach it': 'Cara perangkat terhubung',
   'Tunnel address': 'Alamat tunnel',
-  'From anywhere': 'Dari mana saja',
   'Hosts added for agents': 'Host yang ditambahkan untuk agent',
   'They stay connected together while Ramu is open.': 'Semua tetap terhubung selama Ramu terbuka.',
-  'No devices paired yet. Pair a phone or another computer above.':
-    'Belum ada perangkat yang dipasangkan. Pasangkan ponsel atau komputer lain di atas.',
+  'No devices paired yet. Connect a phone or another computer above.': 'Belum ada perangkat yang dipasangkan. Hubungkan ponsel atau komputer lain di atas.',
   'No custom agents yet. Describe one above and Ramu drafts it for you to edit.':
     'Belum ada agent kustom. Jelaskan satu di atas, lalu Ramu membuat drafnya untuk kamu edit.',
   'No skills of your own yet. Create one to give agents instructions they can reuse.':
@@ -3822,8 +3814,7 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Tidak ada thread terarsip. Arsipkan thread dari menunya di sidebar untuk menyembunyikannya.',
   'No saved memories yet. Agents save them as they work, or you can use Add.':
     'Belum ada memori tersimpan. Agent menyimpannya saat bekerja, atau kamu bisa pakai Tambah.',
-  'Agents here can start threads on these hosts. They were added with ramu hosts add, so they have no row above.':
-    'Agent di sini bisa memulai thread di host ini. Host ini ditambahkan lewat ramu hosts add, jadi tidak punya baris di atas.',
+  'Agents here can start threads on these hosts. They were added with ramu hosts add, so they have no row under Hosts you use.': 'Agent di sini bisa memulai thread di host ini. Host ini ditambahkan dengan ramu hosts add, jadi tidak punya baris di Host yang kamu pakai.',
   '{0} · this computer is device {1} there': '{0} · komputer ini adalah perangkat {1} di sana',
   'No other hosts yet. Add a laptop, workstation or server to work on it from here.':
     'Belum ada host lain. Tambahkan laptop, workstation, atau server untuk mengerjakannya dari sini.',
@@ -3846,7 +3837,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Ramu Link needs the Ramu account on this computer.': 'Ramu Link butuh akun Ramu di komputer ini.',
   'Ramu Link used this month’s {0} and is paused until {1}. Your network and VPN still work.': 'Ramu Link sudah memakai jatah {0} bulan ini dan dijeda sampai {1}. Jaringan dan VPN-mu tetap jalan.',
   'Use this': 'Pakai ini',
-  'Your Ramu account’s link is used by {0}. Give it back there (Settings → Remote access), or use another way here.': 'Link akun Ramu-mu sedang dipakai {0}. Kembalikan di sana (Pengaturan → Akses jarak jauh), atau pakai cara lain di sini.',
+  'Your Ramu account’s link is used by {0}. Give it back there (Settings → Devices & access), or use another way here.': 'Link akun Ramu-mu sedang dipakai {0}. Kembalikan di sana (Pengaturan → Perangkat & akses), atau pakai cara lain di sini.',
   'Your own relay': 'Relay milikmu',
   'another computer': 'komputer lain',
   '{0} free slots. Save to take one.': '{0} slot kosong. Simpan untuk mengambil satu.',
@@ -3897,23 +3888,15 @@ export const indonesian: Readonly<Record<string, string>> = {
   'The tunnel stopped: {0}. Ramu will try again shortly.':
     'Tunnel berhenti: {0}. Ramu akan mencoba lagi sebentar lagi.',
   'Starting {0}…': 'Memulai {0}…',
-  'Starts once Allow other devices is on.': 'Dimulai setelah Izinkan perangkat lain aktif.',
-  'Paired phones and computers can use this host’s threads, files and terminals. Then choose how they reach it: your network, a VPN or your own tunnel.':
-    'Ponsel dan komputer yang dipasangkan bisa memakai thread, file, dan terminal host ini. Lalu pilih cara mereka terhubung: jaringanmu, VPN, atau tunnel sendiri.',
   'Nearby devices or devices on your VPN connect on this network. Choose your VPN to keep Ramu off other networks.':
     'Perangkat di dekatmu atau di VPN-mu terhubung lewat jaringan ini. Pilih VPN-mu agar Ramu tidak terbuka di jaringan lain.',
   'Devices on the same network see this host as {0} and can ask to pair. Seeing it gives no access. Off by default.':
     'Perangkat di jaringan yang sama melihat host ini sebagai {0} dan bisa meminta untuk dipasangkan. Itu tidak memberi akses. Mati secara default.',
-  'Turn on Allow other devices first.': 'Aktifkan Izinkan perangkat lain dulu.',
-  'Phones and your other computers connect once paired: on your network, over a VPN, or from anywhere through your own tunnel.':
-    'Ponsel dan komputermu yang lain terhubung setelah dipasangkan, lewat jaringanmu, VPN, atau dari mana saja lewat tunnel sendiri.',
   'No network address found. Connect this host to a network or VPN.':
     'Alamat jaringan tidak ditemukan. Sambungkan host ini ke jaringan atau VPN.',
   'Open Remote access on that host, choose Pair a device, then enter what it shows. Projects live on that host, so add them there.':
     'Buka Akses jarak jauh di host itu, pilih Pasangkan perangkat, lalu masukkan yang tampil. Project ada di host itu, jadi tambahkan di sana.',
   Pair: 'Pasangkan',
-  'Pair a device': 'Pasangkan perangkat',
-  'Pair a device…': 'Pasangkan perangkat…',
   'Paired devices': 'Perangkat terpasang',
   'Paired {0} · last seen {1}': 'Dipasangkan {0} · terakhir terlihat {1}',
   'Pairing code': 'Kode pemasangan',
@@ -3923,9 +3906,7 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Ramu tidak mengenkripsi koneksi ini. Siapa pun di jaringan itu bisa membaca yang dikirim perangkat terpasang. Aktifkan hanya untuk VPN seperti Tailscale, NetBird, atau ZeroTier, atau jaringan yang kamu percaya. Perangkat tetap butuh kode pemasangan.',
   'Ramu does not encrypt this connection. Use it on a VPN or a network you trust.':
     'Ramu tidak mengenkripsi koneksi ini. Pakai di VPN atau jaringan yang kamu percaya.',
-  'Remote access': 'Akses jarak jauh',
   Revoke: 'Cabut',
-  'Revoke {0}?': 'Cabut {0}?',
   'Set when Ramu was started with --listen. Change it there.':
     'Diatur saat Ramu dijalankan dengan --listen. Ubah di sana.',
   'Show {0} more (Docker, VM and other virtual networks)': 'Tampilkan {0} lagi (Docker, VM, dan jaringan virtual lain)',
@@ -3978,7 +3959,7 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Menunggu jaringan berubah, perangkat bangun dari tidur, pengumuman host bertanda tangan, atau Coba lagi. Tanpa pemeriksaan berkala.',
   'Uses the same signals, plus a quiet check every five minutes in case announcements cannot reach this device.':
     'Memakai sinyal yang sama, ditambah pemeriksaan senyap setiap lima menit jika pengumuman tidak sampai ke perangkat ini.',
-  'This connection is paused. Resume it in Remote access.': 'Koneksi ini dijeda. Lanjutkan di Akses jarak jauh.',
+  'This connection is paused. Resume it in Devices & access.': 'Koneksi ini dijeda. Lanjutkan di Perangkat & akses.',
   'Switch host': 'Ganti host',
   'Older terminal output was truncated while this workspace was hidden.':
     'Output terminal lama dipotong saat workspace ini tersembunyi.',
@@ -4282,7 +4263,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Using current checkout': 'Menggunakan checkout saat ini',
   'Device access': 'Akses perangkat',
   'View threads and answer requests': 'Lihat thread dan jawab permintaan',
-  Viewer: 'Peninjau',
   'This device can view threads and answer requests, but not send messages. Ask the host owner to pair it with full access.':
     'Perangkat ini bisa melihat thread dan menjawab permintaan, tapi tidak bisa mengirim pesan. Minta pemilik host memasangkannya dengan akses penuh.',
   'Expires {0}': 'Kedaluwarsa {0}',
@@ -5618,15 +5598,13 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Hosts you use': 'Host yang kamu pakai',
   'Its projects, agents and terminals stay on that host. This computer opens and controls them.':
     'Proyek, agent, dan terminalnya tetap di host itu. Komputer ini membuka dan mengendalikannya.',
-  'Let other devices use this host': 'Biarkan perangkat lain memakai host ini',
   'Link, address or SSH': 'Tautan, alamat, atau SSH',
   'Link, address or SSH host': 'Tautan, alamat, atau host SSH',
   'Local network or VPN': 'Jaringan lokal atau VPN',
   'More for {0}': 'Lainnya untuk {0}',
   Nearby: 'Terdekat',
   'Not allowed: {0}': 'Belum diizinkan: {0}',
-  'On that host, open Remote access and choose Pair a device. Paste its link, or type its address and code.':
-    'Di host itu, buka Akses jarak jauh lalu pilih Pasangkan perangkat. Tempel tautannya, atau ketik alamat dan kodenya.',
+  'On that host, open Devices & access and choose Connect a device. Paste its link, or type its address and code.': 'Di host itu, buka Perangkat & akses lalu pilih Hubungkan perangkat. Tempel tautannya, atau ketik alamat dan kodenya.',
   'Pair {0} again': 'Pasangkan {0} lagi',
   'Pairing link, 100.64.0.7:7788 or user@host': 'Tautan pemasangan, 100.64.0.7:7788, atau user@host',
   'Pause connection': 'Jeda koneksi',
@@ -5639,8 +5617,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Let {0} connect here?': 'Izinkan {0} tersambung ke sini?',
   'Let {0} connect here…': 'Izinkan {0} tersambung ke sini…',
   'Not now': 'Nanti saja',
-  'Ramu asks on {0}. Once its owner connects, it appears under Devices that can use this host, where you can revoke it.':
-    'Ramu bertanya di {0}. Setelah pemiliknya menyambung, host itu muncul di Perangkat yang bisa memakai host ini, tempat kamu bisa mencabutnya.',
+  'Ramu asks on {0}. Once its owner connects, it appears under Devices, where you can remove it.': 'Ramu bertanya di {0}. Setelah pemiliknya terhubung, komputer itu muncul di Perangkat, tempat kamu bisa menghapusnya.',
   'Send invitation': 'Kirim undangan',
   'This computer has no address another host can reach yet.':
     'Komputer ini belum punya alamat yang bisa dijangkau host lain.',
@@ -5680,10 +5657,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'idb installation is already running.': 'Pemasangan idb sedang berjalan.',
   'Install idb on the owning host.': 'Pasang idb di host pemilik.',
   'idb installed without its executables. Try again.': 'idb terpasang tanpa file yang bisa dijalankan. Coba lagi.',
-  'Nothing outside this computer can reach it yet. Turn on Allow other devices in Settings → Remote access, and the address appears here.':
-    'Belum ada yang bisa menjangkaunya dari luar komputer ini. Nyalakan Izinkan perangkat lain di Pengaturan → Akses jarak jauh, lalu alamatnya tampil di sini.',
-  'Turn on Local network or VPN below first, so {0} can reach this computer.':
-    'Nyalakan dulu Jaringan lokal atau VPN di bawah, supaya {0} bisa menjangkau komputer ini.',
+  'Nothing outside this computer can reach it yet. Choose Anywhere under Reachable from in Settings → Devices & access, and the address appears here.': 'Belum ada yang bisa menjangkaunya dari luar komputer ini. Pilih Di mana saja di Bisa dijangkau dari, di Pengaturan → Perangkat & akses, lalu alamatnya tampil di sini.',
   'Saved for this thread': 'Tersimpan untuk thread ini',
   'Saved and kept as {0}': 'Tersimpan dan diingat sebagai {0}',
   'Keep as {0} for later threads': 'Simpan sebagai {0} untuk thread berikutnya',
@@ -7616,7 +7590,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'When a device signed in to {0} asks': 'Saat perangkat yang masuk ke {0} meminta',
   'Connect it with full access': 'Hubungkan dengan akses penuh',
   'Connect it with view-only access': 'Hubungkan dengan akses hanya lihat',
-  'Ask me here first': 'Tanya saya di sini dulu',
   'Last seen {time} · asks before connecting': 'Terakhir terlihat {time} · bertanya sebelum terhubung',
   'Last seen {time} · connects without asking': 'Terakhir terlihat {time} · terhubung tanpa bertanya',
   'Optional. It keeps settings backups that only your devices can open, and lists your hosts so your signed-in devices connect without a code. The account is run by Akalstack; only a host you list lets your devices in, with the access you choose there.':
@@ -8106,8 +8079,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Signed in to your Ramu account. Turn on backups in Settings › Account.':
     'Sudah masuk ke Akun Ramu-mu. Nyalakan cadangan di Pengaturan › Akun.',
   'Let my signed-in devices connect': 'Izinkan perangkat yang masuk ke akunku terhubung',
-  'Your phone and other computers signed in to this account connect with full access, without a code. Change the access in Settings › Remote access.':
-    'Ponsel dan komputer lain yang masuk ke akun ini terhubung dengan akses penuh, tanpa kode. Ubah aksesnya di Pengaturan › Akses jarak jauh.',
+  'Your phone and other computers signed in to this account connect with full access, without a code. Change the access in Settings › Devices & access.': 'Ponsel dan komputer lain yang masuk ke akun ini terhubung dengan akses penuh, tanpa kode. Ubah aksesnya di Pengaturan › Perangkat & akses.',
   'Optional and free. Sign in so your signed-in phone and computers connect without a code, and to back up your settings.':
     'Opsional dan gratis. Masuk agar ponsel dan komputer yang masuk ke akunmu terhubung tanpa kode, dan untuk mencadangkan pengaturanmu.',
   'Pull requests, issues and reviews need it; commits work without it.':
@@ -8157,9 +8129,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Backed up": "Sudah dicadangkan",
   "Backups are sealed with a key only your devices hold. Get it onto this host first.": "Cadangan dikunci dengan kunci yang hanya dimiliki perangkatmu. Dapatkan kunci itu di host ini dulu.",
   "Backups in the account": "Cadangan di akun",
-  "Change in Remote access": "Ubah di Akses jarak jauh",
-  "Connect view-only": "Hubungkan hanya-lihat",
-  "Connect with full access": "Hubungkan dengan akses penuh",
+  'Change in Devices & access': 'Ubah di Perangkat & akses',
   "Delete account…": "Hapus akun…",
   "Deletes every backup, listed host and sign-in in the account. Settings on your hosts stay.": "Menghapus semua cadangan, host terdaftar, dan sesi masuk di akun. Pengaturan di host-mu tetap ada.",
   "Deletes every version kept in the Ramu account. Backups on GitHub stay.": "Menghapus semua versi yang disimpan di akun Ramu. Cadangan di GitHub tetap ada.",
@@ -8175,7 +8145,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Listed. Devices on your account connect with view-only access.": "Terdaftar. Perangkat di akunmu terhubung dengan akses hanya-lihat.",
   "No Ramu account needed. Uses the GitHub account signed in on this host.": "Tidak perlu akun Ramu. Memakai akun GitHub yang masuk di host ini.",
   "Not listed. Your other devices pair with a code.": "Tidak terdaftar. Perangkatmu yang lain dipasangkan dengan kode.",
-  "Off: pair with a code": "Mati: pasangkan dengan kode",
   "On your Ramu account": "Di akun Ramu-mu",
   "Opens your backups on a new machine when no other device is around. A new one replaces the old.": "Membuka cadanganmu di mesin baru saat tidak ada perangkat lain. Kode baru menggantikan yang lama.",
   "Optional, and free. Sign in with GitHub, Google or a passkey.": "Opsional dan gratis. Masuk dengan GitHub, Google, atau passkey.",
@@ -8197,8 +8166,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Back up settings so only your devices can open them": "Cadangkan pengaturan agar hanya perangkatmu yang bisa membukanya",
   "Your phone and other computers connect to your hosts without a code": "Ponsel dan komputer lainmu terhubung ke host-mu tanpa kode",
   "A free Ramu Link address that reaches this host from anywhere": "Alamat Ramu Link gratis yang menjangkau host ini dari mana saja",
-  'On a host, choose who connects under Settings → Remote access → Devices on your Ramu account.':
-    'Di host, pilih siapa yang terhubung di Pengaturan → Akses jarak jauh → Perangkat di akun Ramu-mu.',
+  'On a host, choose who connects under Settings → Devices & access → Devices on your Ramu account.': 'Di host, pilih siapa yang terhubung di Pengaturan → Perangkat & akses → Perangkat di akun Ramu-mu.',
   "Alpha": "Alfa",
   "Diagnostics": "Diagnostik",
   "Documentation": "Dokumentasi",
@@ -8385,4 +8353,39 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Undone. {0} items changed since, so they were kept.': 'Dibatalkan. {0} item sudah berubah sejak itu, jadi dibiarkan.',
   '{0} goes back to this revision. The current one stays in its history, so you can restore it later.': '{0} kembali ke revisi ini. Versi saat ini tetap ada di riwayatnya, jadi kamu bisa memulihkannya nanti.',
   'Ramu adds them here when it learns a skill worth repeating.': 'Ramu menambahkannya di sini saat mempelajari skill yang layak diulang.',
+  'Start Ramu’s background service when you sign in, so your devices reach this host after a restart.': 'Mulai layanan latar Ramu saat kamu masuk, agar perangkatmu bisa menjangkau host ini setelah restart.',
+  'Keep the background service running when Ramu closes and start it when you sign in, so your devices reach this host.': 'Biarkan layanan latar tetap berjalan saat Ramu ditutup dan mulai saat kamu masuk, agar perangkatmu bisa menjangkau host ini.',
+  'Devices & access': 'Perangkat & akses',
+  'Reachable from': 'Bisa dijangkau dari',
+  'This network': 'Jaringan ini',
+  'Anywhere': 'Di mana saja',
+  'your own tunnel': 'tunnel milikmu sendiri',
+  'Only this computer uses this host. Choose This network or Anywhere to let your paired phones and computers in.': 'Hanya komputer ini yang memakai host ini. Pilih Jaringan ini atau Di mana saja agar ponsel dan komputer yang dipasangkan bisa masuk.',
+  'Paired phones and computers connect on your network or VPN.': 'Ponsel dan komputer yang dipasangkan terhubung lewat jaringan atau VPN-mu.',
+  'Paired devices connect from anywhere through {0}.': 'Perangkat yang dipasangkan terhubung dari mana saja lewat {0}.',
+  'Paired devices connect on your network, and from anywhere through {0}.': 'Perangkat yang dipasangkan terhubung lewat jaringanmu, dan dari mana saja lewat {0}.',
+  'Choose This network or Anywhere first.': 'Pilih Jaringan ini atau Di mana saja dulu.',
+  'Let other devices reach this host?': 'Izinkan perangkat lain menjangkau host ini?',
+  'Connect a device': 'Hubungkan perangkat',
+  'Connect a device…': 'Hubungkan perangkat…',
+  'Devices': 'Perangkat',
+  'Phones and computers paired with this host. Remove one and it must pair again to reconnect.': 'Ponsel dan komputer yang dipasangkan dengan host ini. Yang dihapus harus dipasangkan lagi untuk terhubung kembali.',
+  'Remove others': 'Hapus yang lain',
+  'Remove all': 'Hapus semua',
+  'Remove {0} devices?': 'Hapus {0} perangkat?',
+  'Every phone and computer paired here stops working right away and must pair again. This computer keeps working, and so do linked hosts.': 'Setiap ponsel dan komputer yang dipasangkan di sini langsung berhenti bekerja dan harus dipasangkan lagi. Komputer ini tetap bekerja, begitu juga host yang ditautkan.',
+  'Limit this device…': 'Batasi perangkat ini…',
+  'Connect devices on my Ramu account': 'Hubungkan perangkat di akun Ramu-ku',
+  'Each new device waits until you allow it here and both screens show the same number. Use it when this host holds anything sensitive.': 'Setiap perangkat baru menunggu sampai kamu mengizinkannya di sini dan kedua layar menampilkan angka yang sama. Pakai ini jika host ini menyimpan hal yang sensitif.',
+  'Connect them view-only': 'Hubungkan dengan akses hanya lihat',
+  'They read threads and answer requests, but can’t start threads, change files or run commands.': 'Perangkat itu bisa membaca thread dan menjawab permintaan, tapi tidak bisa memulai thread, mengubah file, atau menjalankan perintah.',
+  'Devices signed in to {0} find this host and connect view-only. The account learns its name, never its address.': 'Perangkat yang masuk ke {0} menemukan host ini dan terhubung dengan akses hanya lihat. Akun hanya tahu namanya, tidak pernah alamatnya.',
+  'Linked hosts': 'Host yang ditautkan',
+  'Agents on one host can start and follow threads on another. Every start asks you on the host that sends it.': 'Agent di satu host bisa memulai dan mengikuti thread di host lain. Setiap mulai ditanyakan padamu di host yang mengirimnya.',
+  'No linked hosts. Add another host under Hosts you use, then let agents here start threads on it.': 'Belum ada host yang ditautkan. Tambahkan host lain di Host yang kamu pakai, lalu izinkan agent di sini memulai thread di sana.',
+  'Hosts whose agents start threads here': 'Host yang agent-nya memulai thread di sini',
+  'Threads they start here never get more access than you allow, whatever they ask for.': 'Thread yang mereka mulai di sini tidak pernah mendapat akses melebihi yang kamu izinkan, apa pun yang diminta.',
+  'A paired computer allowed Agents': 'Komputer terpasang dengan izin Agent',
+  'Another host’s agents: start and follow threads only · last seen {0}': 'Agent host lain: hanya memulai dan mengikuti thread · terakhir terlihat {0}',
+  'Choose This network or Anywhere under Reachable from first, so {0} can reach this computer.': 'Pilih Jaringan ini atau Di mana saja di Bisa dijangkau dari dulu, agar {0} bisa menjangkau komputer ini.',
 }

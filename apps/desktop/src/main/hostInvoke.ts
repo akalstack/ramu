@@ -115,7 +115,7 @@ export function routeInvoke(requested: unknown, method: string, routing: HostRou
   const status = routing.status(requested)
   if (status === 'rejected')
     throw new Error(say('That host no longer accepts this device. Forget it, then pair again.'))
-  if (status === 'paused') throw new Error(say('This connection is paused. Resume it in Remote access.'))
+  if (status === 'paused') throw new Error(say('This connection is paused. Resume it in Devices & access.'))
   if (status !== 'connected') throw new Error(say('That host is not reachable right now.'))
   if (!isHostInvokeAllowed(method)) throw new Error(say('That action is not available on another host'))
   return { host: requested, direct: true }

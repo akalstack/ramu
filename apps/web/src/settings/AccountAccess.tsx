@@ -1,98 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { AccountStatus, AccountTrust, ListedHostInfo } from '@ramu/shared/account'
+import type { ListedHostInfo } from '@ramu/shared/account'
 import type { Computer } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
-import { SettingsLabel, SettingsRow } from '@/components/settings-row'
-import { Dropdown } from '../Menu'
 import { notifyError } from '../chat/Notifications'
-import { useViewOnly } from '../composer/useViewOnly'
 import { t } from '../i18n'
 import { invoke as onThisComputer, ramu } from '../ipc'
 import { errorText } from '../lib/errors'
 import { SettingsCard, SettingsCardList } from './cards'
-import { useSettingsEvents, useSettingsInvoke } from './SettingsScope'
 
-type AccountAccess = 'off' | AccountTrust
-
-const openAccount = () => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'account' } }))
 const when = (time: number) => new Date(time).toLocaleString()
-
-/**
- * Whether devices signed in to this host's Ramu account may connect without a code, and with what access, as one
- * choice beside Pair a device. Listing the host is what lets them find it, so Off unlists it. Nothing for a host too
- * old to have the account.
- */
-export function AccountDevicesRow() {
-  const invoke = useSettingsInvoke()
-  const on = useSettingsEvents()
-  const viewOnly = useViewOnly()
-  const [status, setStatus] = useState<AccountStatus | null>(null)
-  const [choosing, setChoosing] = useState<AccountAccess | null>(null)
-  const reload = useCallback(() => invoke('account.status').then(setStatus, () => setStatus(null)), [invoke])
-  useEffect(() => {
-    void reload()
-    return on('account:changed', () => void reload())
-  }, [on, reload])
-  if (!status) return null
-  if (!status.signedIn)
-    return (
-      <SettingsRow>
-        <SettingsLabel
-          title={t('Devices on your Ramu account')}
-          help={t(
-            'Sign in to your Ramu account and your phone and other computers signed in to it connect without a code.',
-          )}
-        />
-        <Button variant="secondary" size="sm" onClick={openAccount}>
-          {t('Sign in…')}
-        </Button>
-      </SettingsRow>
-    )
-  const current: AccountAccess = status.listed ? status.trust : 'off'
-  const choose = (next: AccountAccess) => {
-    setChoosing(next)
-    const change =
-      next === 'off'
-        ? invoke('account.setListed', false)
-        : status.listed
-          ? invoke('account.setTrust', next)
-          : invoke('account.setListed', true, next)
-    void change
-      .then(reload, (cause) => notifyError(errorText(cause), t('Ramu account')))
-      .finally(() => setChoosing(null))
-  }
-  return (
-    <SettingsRow>
-      <SettingsLabel
-        title={t('Devices on your Ramu account')}
-        help={
-          current === 'off'
-            ? t('Your phone and other computers signed in to {0} pair with a code, like any device.', {
-                0: status.user?.email ?? '',
-              })
-            : t(
-                'Devices signed in to {0} find this host and connect. The account learns its name, never its address.',
-                {
-                  0: status.user?.email ?? '',
-                },
-              )
-        }
-      />
-      <Dropdown
-        label={t('Devices on your Ramu account')}
-        value={choosing ?? current}
-        disabled={viewOnly || choosing !== null}
-        options={[
-          { value: 'owner', label: t('Connect with full access') },
-          { value: 'viewer', label: t('Connect view-only') },
-          { value: 'ask', label: t('Ask me here first') },
-          { value: 'off', label: t('Off: pair with a code') },
-        ]}
-        onChange={(value) => choose(value as AccountAccess)}
-      />
-    </SettingsRow>
-  )
-}
 
 /**
  * Hosts listed on this device's Ramu account that it does not use yet, under Hosts you use. Ones that let the account

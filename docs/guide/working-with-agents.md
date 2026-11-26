@@ -124,7 +124,7 @@ An agent can start separate threads you own: a follow-up, the matching change in
 
 ### On another host
 
-From a host's row in **Settings → Remote access**, request **Agents** to let this host's agents start threads there. Every such start asks you first, needs an exact project name, and gets at most that host's access ceiling for the pairing (default **Allow edits**). The agent sees each host's platform and architecture next to its projects, so it can pick a host that can build the task, such as a Mac for an iOS build. See [Security](../security-model.md#host-pairing).
+Under **Linked hosts** in **Settings → Devices & access**, turn on **Agents here can start threads on** a host to let this host's agents start threads there. Every such start asks you first, needs an exact project name, and gets at most that host's access ceiling for the pairing (default **Allow edits**). The agent sees each host's platform and architecture next to its projects, so it can pick a host that can build the task, such as a Mac for an iOS build. See [Security](../security-model.md#host-pairing).
 
 ## Acting on several threads
 

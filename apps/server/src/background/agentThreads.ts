@@ -254,7 +254,7 @@ export class AgentThreadService {
     const found = this.remote?.hosts.find(named)
     if (found) return found
     throw new Error(
-      `"${named}" is not a host this host's agents can use${hosts.length ? ` (added: ${hosts.map((host) => host.name).join(', ')})` : ''}. To add it, the person runs \`ramu pair\` on that host, then on this host runs \`ramu hosts add <address> <code> --name ${named}\` or uses Settings → Remote access → Hosts for agents. Only the person can add a host.`,
+      `"${named}" is not a host this host's agents can use${hosts.length ? ` (added: ${hosts.map((host) => host.name).join(', ')})` : ''}. To add it, the person runs \`ramu pair\` on that host, then on this host runs \`ramu hosts add <address> <code> --name ${named}\` or uses Settings → Devices & access → Linked hosts. Only the person can add a host.`,
     )
   }
 

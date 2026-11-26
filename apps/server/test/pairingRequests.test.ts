@@ -247,7 +247,7 @@ it('refuses a relayed request while no other device can reach this host, so no p
     })
     const keys = pairKeys(random)
     expect(() => pairing.begin('account:phone', { name: 'Phone', commit: pairCommit(keys.publicKey) })).toThrow(
-      /Allow other devices or Ramu Link/,
+      /This network or Anywhere/,
     )
     expect(devices.list()).toEqual([])
   } finally {

@@ -607,8 +607,9 @@ export const SETTINGS_CATALOG: SettingsCatalogEntry[] = [
   { section: 'shortcuts', title: 'Keyboard shortcuts', words: 'keys commands bindings' },
   {
     section: 'remote',
-    title: 'Allow other devices',
-    words: 'remote access network listen phone tablet vpn tailscale netbird zerotier wireguard lan server',
+    title: 'Reachable from',
+    words:
+      'remote access allow other devices this computer this network anywhere listen phone tablet vpn tailscale netbird zerotier wireguard lan server tunnel ramu link',
   },
   {
     section: 'remote',
@@ -616,12 +617,18 @@ export const SETTINGS_CATALOG: SettingsCatalogEntry[] = [
     words: 'nearby discovery bonjour mdns advertise visible host name find automatic lan',
   },
   { section: 'remote', title: 'Network', words: 'choose select wifi lan vpn tailscale address interface listen' },
-  { section: 'remote', title: 'Pair a device', words: 'pairing code link phone another host connect add' },
-  { section: 'remote', title: 'Paired devices', words: 'revoke remove devices access token' },
+  { section: 'remote', title: 'Connect a device', words: 'remote access pair a device pairing code qr link phone add' },
+  { section: 'remote', title: 'Devices', words: 'paired devices revoke remove others access token permissions limit' },
   {
     section: 'remote',
-    title: 'Connect to a host',
-    words: 'remote server use another host switch host pair address link ssh alias',
+    title: 'Devices on your Ramu account',
+    words: 'account signed in connect without a code ask me first view only trust',
+  },
+  { section: 'remote', title: 'Linked hosts', words: 'agents host pairing start threads on another host' },
+  {
+    section: 'remote',
+    title: 'Hosts you use',
+    words: 'remote server use another host switch host pair address link ssh alias connect to a host',
   },
   {
     section: 'account',

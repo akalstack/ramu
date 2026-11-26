@@ -136,7 +136,7 @@ function PendingSignIn({
   )
 }
 
-/** Where this host stands for the account's other devices; the setting itself is with the others in Remote access. */
+/** Where this host stands for the account's other devices; the setting itself is with the others in Devices & access. */
 function HostOnAccount({ status }: { status: AccountStatus }) {
   const summary = !status.listed
     ? t('Not listed. Your other devices pair with a code.')
@@ -149,7 +149,7 @@ function HostOnAccount({ status }: { status: AccountStatus }) {
     <SettingsRow>
       <SettingsLabel title={t('This host on your account')} help={summary} />
       <Button variant="secondary" size="sm" onClick={() => openSection('remote')}>
-        {t('Change in Remote access')}
+        {t('Change in Devices & access')}
       </Button>
     </SettingsRow>
   )
@@ -313,7 +313,7 @@ function RestoreDialog({
 /**
  * Settings › Account: the optional Ramu account and settings backups. Who is signed in comes first, then backups and
  * restore; rare and destructive actions wait under Advanced. Whether the account's devices may connect to this host is
- * set in Remote access with the other ways in, and the hosts listed on the account are under Hosts you use there.
+ * set in Devices & access with the other ways in, and the hosts listed on the account are under Hosts you use there.
  */
 export function AccountSettings() {
   useLanguage()

@@ -19,7 +19,7 @@ import { AdvisorSettings, SubagentSettings } from './FallbackSettings'
 import { AbilitySettings } from './AbilitySettings'
 import { MediaSettings } from './MediaSettings'
 import { CustomAgentSettings } from './CustomAgents'
-import { RemoteAccessSettings } from './RemoteAccess'
+import { DevicesAccessSettings } from './access/DevicesAccess'
 import { modelStepName, recommendedSets, useModelSets, ModelSetsOverride } from '../models/ModelSets'
 import { useAppSettings, AppSettingsOverride } from './AppSettings'
 import { SettingsPage, type SettingsSection } from './SettingsPage'
@@ -243,7 +243,7 @@ export function SettingsPanel({
                     </div>
                   </>
                 )}
-                {page === 'remote' && <RemoteAccessSettings />}
+                {page === 'remote' && <DevicesAccessSettings {...draftProps} />}
                 {page === 'agent-setup' && (
                   <AgentSetup
                     show={setupTab}

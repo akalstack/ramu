@@ -47,7 +47,7 @@ export class PublicPages {
       )
     if (choice.kind === 'tailscale')
       throw new Error(
-        'Tailscale Funnel would serve the artifact on this host’s own name. Choose Cloudflare or ngrok in Remote access.',
+        'Tailscale Funnel would serve the artifact on this host’s own name. Choose Cloudflare or ngrok in Devices & access.',
       )
     if (choice.kind === 'ngrok' && choice.domain)
       throw new Error('A fixed ngrok domain belongs to this host. Use ngrok without a domain or Cloudflare.')
