@@ -18,12 +18,17 @@ import type {
   ModelPreferences,
   NetworkStatus,
   Project,
+  ReasoningEffort,
 } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { RowButton } from '@/components/row-button'
 import { StepSlider } from '@/components/step-slider'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { modelSearchText } from '@ramu/shared/providers/modelLabel'
+import { matchesWords } from '@ramu/shared/search/matchWords'
+import { SearchInput } from '../SearchInput'
 import { accessModes } from '../chat/AgentControls'
 import { invoke, ramu } from '../ipc'
 import { t } from '../i18n'
@@ -44,6 +49,9 @@ import { StayReachable } from '../settings/StayReachable'
 import { TerminalCommandButton, terminalCommandHelp, useTerminalCommand } from '../settings/TerminalCommand'
 import { AntigravitySignIn } from '../settings/AntigravitySignIn'
 import { antigravityKeyName } from '@ramu/shared/providers/environment'
+
+/** Past this many models a provider's list gets a search field. */
+const SEARCH_FROM = 8
 
 export function AgentsStep({
   statuses,
@@ -113,9 +121,14 @@ export function AgentsStep({
       )}
       {/* The choice comes first; the list below is where an agent is signed in or turned on to join it. */}
       {leads.length > 0 && (
+        <h3 id="onboarding-default-agent" className="m-0 text-caption font-medium text-muted-foreground">
+          {t('Default agent')}
+        </h3>
+      )}
+      {leads.length > 0 && (
         <div
           role="radiogroup"
-          aria-label={t('Default agent')}
+          aria-labelledby="onboarding-default-agent"
           className="overflow-hidden rounded-(--radius-m) bg-fill [&>*+*]:border-t [&>*+*]:border-(--line)"
         >
           {leads.map((provider) => (
@@ -398,18 +411,36 @@ export function ModelChoiceStep({
   const { catalogs, reload } = useModelSets()
   const { visibleModels } = useAppSettings().preferences
   const [checking, setChecking] = useState(false)
+  const [query, setQuery] = useState('')
   const all = catalogs.flatMap((catalog) => catalog.models)
   const models = provider ? onboardingModels(all, provider, visibleModels) : []
+  // A provider that offers many models (OpenCode, Cursor) is found by name instead of by scrolling.
+  const searchable = models.length > SEARCH_FROM
+  const q = searchable ? query.trim().toLowerCase() : ''
+  const shown = q ? models.filter((model) => matchesWords(modelSearchText(model), q)) : models
   return (
-    <div className="flex flex-col gap-3">
-      {models.length ? (
+    <div className="flex flex-col gap-2">
+      {searchable && (
+        <SearchInput
+          aria-label={t('Search models')}
+          placeholder={t('Search models…')}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          onClear={() => setQuery('')}
+        />
+      )}
+      {models.length && !shown.length ? (
+        <p className="m-0 py-2 text-caption text-muted-foreground" role="status">
+          {t('No matching models')}
+        </p>
+      ) : models.length ? (
         <div
           role="radiogroup"
           aria-label={t('Default model')}
           // A provider with many models scrolls inside its own list, so the effort choice under it stays in view.
-          className="max-h-[min(310px,_38vh)] overflow-y-auto rounded-(--radius-m) bg-fill [&>*+*]:border-t [&>*+*]:border-(--line)"
+          className="max-h-[min(246px,_32vh)] overflow-y-auto rounded-(--radius-m) bg-fill [&>*+*]:border-t [&>*+*]:border-(--line)"
         >
-          {models.map((model) => (
+          {shown.map((model) => (
             <Choice
               key={model.id}
               selected={model.id === choice.model}
@@ -455,7 +486,10 @@ export function ModelChoiceStep({
   )
 }
 
-/** How hard the chosen model thinks by default; only the efforts it supports. */
+/**
+ * How hard the chosen model thinks by default; only the efforts it supports. One compact row, so it stays in view
+ * under the model list however many models the provider has.
+ */
 export function EffortStep({
   model,
   choice,
@@ -465,32 +499,26 @@ export function EffortStep({
   choice: DefaultModelChoice
   onChoice(choice: DefaultModelChoice): void
 }) {
+  const recommended = model.defaultEffort && choosableEfforts(model).includes(model.defaultEffort)
   return (
-    <div className="flex flex-col gap-3">
-      <div
-        role="radiogroup"
+    <div className="flex flex-col gap-2">
+      <ToggleGroup
+        size="sm"
+        variant="outline"
+        spacing={2}
+        className="flex-wrap gap-1.5"
         aria-label={t('Effort for {0}', { 0: modelDisplayName(model.name) })}
-        className="overflow-hidden rounded-(--radius-m) bg-fill [&>*+*]:border-t [&>*+*]:border-(--line)"
+        value={choice.effort ? [choice.effort] : []}
+        onValueChange={(values) => values[0] && onChoice({ ...choice, effort: values[0] as ReasoningEffort })}
       >
         {choosableEfforts(model).map((effort) => (
-          <Choice
-            key={effort}
-            selected={effort === choice.effort}
-            title={
-              <>
-                {effortDisplayName(effort, model.provider)}
-                {effort === model.defaultEffort && (
-                  <Badge variant="secondary" className="font-normal">
-                    {t('Recommended')}
-                  </Badge>
-                )}
-              </>
-            }
-            onSelect={() => onChoice({ ...choice, effort })}
-          />
+          <ToggleGroupItem key={effort} value={effort} className="px-2.5">
+            {effortDisplayName(effort, model.provider)}
+          </ToggleGroupItem>
         ))}
-      </div>
+      </ToggleGroup>
       <p className="m-0 text-caption text-muted-foreground">
+        {recommended && `${t('Recommended')}: ${effortDisplayName(model.defaultEffort!, model.provider)}. `}
         {t('Higher steps and effort give better answers on hard work but use more tokens and take longer.')}
       </p>
     </div>
