@@ -48,6 +48,10 @@ export interface GitCommit {
   refs: string
   /** Not yet on the branch's upstream. */
   outgoing?: boolean
+  /** On the branch's upstream, as last fetched, and not here yet. */
+  incoming?: boolean
+  /** Its page on the hosting service, for a commit that is there. */
+  url?: string
 }
 export interface GitBranchInfo {
   name: string

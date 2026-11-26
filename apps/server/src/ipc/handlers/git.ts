@@ -3,6 +3,9 @@ import { guardForge } from '../identityGuard'
 import { rm } from 'node:fs/promises'
 import type { SyncApproval } from '@ramu/shared/protectedBranch'
 import { z } from 'zod'
+import { commitWebUrl } from '@ramu/shared/forgeHosts'
+import { parseForgeRemote } from '@ramu/shared/forgeRemote'
+import { kindOfOrigin } from '../../workspace/forge/route'
 import { DEFAULT_APP_PREFERENCES } from '@ramu/shared/types'
 import type { AgentSettings, CommitBranchOptions, DiffContents, PullMode } from '@ramu/shared/types'
 import { discardPreview } from '../../workspace/discardPreview'
@@ -238,7 +241,27 @@ export const registerGitHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id, id, gitOid]),
       run: (t: string, r: string, oid: string) => lockRepo(ctx, r, () => git.dropStash(gitCwdOf(t, r), oid)),
     },
-    'git.history': { args: z.tuple([id, id]), run: (t: string, r: string) => git.history(gitCwdOf(t, r)) },
+    'git.history': {
+      args: z.tuple([id, id]),
+      run: async (t: string, r: string) => {
+        const cwd = gitCwdOf(t, r)
+        const [commits, origin] = await Promise.all([
+          git.history(cwd),
+          git.git(cwd, ['remote', 'get-url', 'origin']).then(
+            (url) => url.trim(),
+            () => '',
+          ),
+        ])
+        const remote = parseForgeRemote(origin)
+        if (!remote) return commits
+        const kind = await kindOfOrigin(remote.origin)
+        // Only a commit the service has can be opened there: one not pushed yet has no page.
+        return commits.map((commit) => {
+          const url = commit.outgoing ? null : commitWebUrl(origin, kind, commit.oid)
+          return url ? { ...commit, url } : commit
+        })
+      },
+    },
     'git.branches': { args: z.tuple([id, id]), run: (t: string, r: string) => git.branches(gitCwdOf(t, r)) },
     'git.commitFiles': {
       args: z.tuple([id, id, gitOid]),

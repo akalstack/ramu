@@ -203,7 +203,7 @@ export function ProviderLoginRow({
       <span className="ml-auto flex flex-none items-center gap-1.5">
         {peak && (
           <span
-            className={`w-9 flex-none text-right tabular-nums text-caption ${usageTone(peak) === 'bad' ? 'text-bad' : usageTone(peak) === 'warn' ? 'text-warn' : 'text-soft'}`}
+            className={`min-w-9 flex-none whitespace-nowrap text-right tabular-nums text-caption ${usageTone(peak) === 'bad' ? 'text-bad' : usageTone(peak) === 'warn' ? 'text-warn' : 'text-soft'}`}
             title={t('Highest usage window for {0}', { '0': row.name })}
           >
             {peak.status === 'limited' ? t('Limited') : `${peak.usedPercent}%`}

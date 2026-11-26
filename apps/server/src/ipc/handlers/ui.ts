@@ -49,6 +49,11 @@ const viewSchema = z.discriminatedUnion('kind', [
       .string()
       .regex(/^[a-f0-9]{40,64}$/)
       .optional(),
+    url: z
+      .string()
+      .max(2000)
+      .regex(/^https:\/\//)
+      .optional(),
   }),
   z.object({
     kind: z.literal('review'),

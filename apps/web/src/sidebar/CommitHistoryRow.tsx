@@ -2,6 +2,8 @@ import { ContentSkeleton } from '@/components/content-skeleton'
 import { t, useLanguage } from './../i18n'
 import { Button } from '@/components/desktop-button'
 import {
+  ArrowDown,
+  ExternalLink,
   ArrowUp,
   ChevronRight,
   Copy,
@@ -73,6 +75,7 @@ export function CommitHistoryRow({
       kind: 'git',
       repoId: binding.repoId,
       oid: commit.oid,
+      ...(commit.url ? { url: commit.url } : {}),
       title: `${commit.shortOid} · ${commit.subject}`,
     })
   const diff = (file: GitCommitFile, preview?: false) =>
@@ -133,6 +136,20 @@ export function CommitHistoryRow({
         )
       },
     },
+    ...(commit.url
+      ? [
+          {
+            key: 'web',
+            label: (
+              <>
+                <ExternalLink size={13} />
+                {t('Open on the hosting service')}
+              </>
+            ),
+            onSelect: () => void window.open(commit.url, '_blank', 'noopener,noreferrer'),
+          },
+        ]
+      : []),
     { key: 'separator', separator: true },
     {
       key: 'hash',
@@ -248,7 +265,7 @@ export function CommitHistoryRow({
           className="git-commit-row w-full p-1"
           aria-expanded={expanded}
           onKeyDown={context.onKeyDown}
-          title={`${commit.subject}\n${commit.author} · ${commit.shortOid} · ${new Date(commit.timestamp).toLocaleString()}${commit.refs ? `\n${commit.refs}` : ''}${commit.outgoing ? `\n${t('Not pushed yet')}` : ''}`}
+          title={`${commit.subject}\n${commit.author} · ${commit.shortOid} · ${new Date(commit.timestamp).toLocaleString()}${commit.refs ? `\n${commit.refs}` : ''}${commit.outgoing ? `\n${t('Not pushed yet')}` : ''}${commit.incoming ? `\n${t('Not pulled yet')}` : ''}`}
           onClick={() => setExpanded((value) => !value)}
           onDoubleClick={details}
         >
@@ -274,6 +291,12 @@ export function CommitHistoryRow({
             >
               <ArrowUp size={11} aria-hidden="true" />
               <span className="sr-only">{t('Not pushed yet')}</span>
+            </span>
+          )}
+          {commit.incoming && (
+            <span className="commit-incoming flex-none inline-flex items-center text-ok" title={t('Not pulled yet')}>
+              <ArrowDown size={11} aria-hidden="true" />
+              <span className="sr-only">{t('Not pulled yet')}</span>
             </span>
           )}
           {/* The subject comes first in a narrow panel: one ref shrinks before it does, and the rest count as +N. */}

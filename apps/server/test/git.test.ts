@@ -124,7 +124,8 @@ describe('Git management', () => {
     sh(other, 'push', '-q')
     await git.fetch(repo)
     expect((await git.status(repo)).behind).toBe(1)
-    expect(await git.compareUpstream(repo)).toContain('hello.txt')
+    // Only behind: the comparison shows what a pull would bring.
+    expect(await git.compareUpstream(repo)).toContain('+two')
     await git.pull(repo)
     expect(readFileSync(join(repo, 'hello.txt'), 'utf8')).toBe('two\n')
     expect((await git.history(repo))[0]!.subject).toBe('Remote edit')
@@ -178,6 +179,28 @@ describe('commits not pushed yet', () => {
     writeFileSync(join(repo, 'hello.txt'), 'two\n')
     sh(repo, 'commit', '-q', '-am', 'Second')
     expect((await git.history(repo)).map((commit) => commit.outgoing)).toEqual([true, false])
+  })
+})
+
+describe('commits not pulled yet', () => {
+  it('lists what the upstream has and this branch does not first, marked incoming, after a fetch', async () => {
+    const remote = join(tmp, 'remote.git')
+    sh(tmp, 'init', '-q', '--bare', '-b', 'main', remote)
+    sh(repo, 'remote', 'add', 'origin', remote)
+    sh(repo, 'push', '-q', '--set-upstream', 'origin', 'main')
+    const other = join(tmp, 'other')
+    sh(tmp, 'clone', '-q', remote, other)
+    sh(other, 'config', 'user.email', 'other@example.com')
+    sh(other, 'config', 'user.name', 'Other')
+    writeFileSync(join(other, 'theirs.txt'), 'theirs\n')
+    sh(other, 'add', 'theirs.txt')
+    sh(other, 'commit', '-q', '-m', 'Their change')
+    sh(other, 'push', '-q')
+    expect((await git.history(repo)).some((commit) => commit.incoming)).toBe(false)
+    sh(repo, 'fetch', '-q')
+    const commits = await git.history(repo)
+    expect(commits[0]).toMatchObject({ subject: 'Their change', incoming: true, outgoing: false })
+    expect(commits.slice(1).some((commit) => commit.incoming)).toBe(false)
   })
 })
 

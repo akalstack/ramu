@@ -3441,6 +3441,12 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Ask a second model before key decisions or when the agent is stuck.':
     'Tanya model kedua sebelum keputusan penting atau saat agent buntu.',
   'Sends the thread transcript to the advisor model and uses model tokens. Applies when a thread starts or restarts.':
+  'Not pulled yet': 'Belum di-pull',
+  '{0} of {1} viewed': '{0} dari {1} sudah dilihat',
+  'This commit changes no files.': 'Commit ini tidak mengubah file apa pun.',
+  'No differences with upstream.': 'Tidak ada perbedaan dengan upstream.',
+  'No text changes to show: a binary file, a rename or a mode change.':
+    'Tidak ada perubahan teks untuk ditampilkan: file biner, ganti nama, atau perubahan mode.',
     'Mengirim transkrip thread ke model advisor dan memakai token model. Berlaku saat thread dimulai atau dimulai ulang.',
   'Choose the model used for advice.': 'Pilih model untuk memberi saran.',
   'Pause until advice arrives. When off, the agent keeps working on other things.':
@@ -5297,6 +5303,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   '{0} account · {1}': 'Akun {0} · {1}',
   'Manage logins…': 'Kelola login…',
   'Show accounts': 'Tampilkan akun',
+  'not pulled': 'belum di-pull',
   'Hide accounts': 'Sembunyikan akun',
   'Show account names and emails': 'Tampilkan nama dan email akun',
   'Hide account names and emails': 'Sembunyikan nama dan email akun',

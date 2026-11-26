@@ -1,5 +1,5 @@
 // Which hosting service a remote belongs to, from its address alone. Pure: no network, no file access.
-import { normalizeOrigin } from './forgeRemote'
+import { normalizeOrigin, parseForgeRemote } from './forgeRemote'
 
 export type ForgeKind = 'github' | 'gitlab' | 'bitbucket' | 'azure'
 
@@ -107,4 +107,19 @@ export function glabHosts(config: string): Map<string, GlabHost> {
     })
   }
   return hosts
+}
+
+/**
+ * Where a commit is shown on its hosting service, from the repository's remote. Null for a remote that is not on a
+ * service, and for Azure DevOps, whose address names a project the remote alone does not give reliably.
+ */
+export function commitWebUrl(remoteUrl: string, kind: ForgeKind, oid: string): string | null {
+  if (kind === 'gitlab') {
+    const project = parseGitlabRemote(remoteUrl)
+    return project ? `https://${project.origin}/${project.path}/-/commit/${oid}` : null
+  }
+  const remote = parseForgeRemote(remoteUrl)
+  if (!remote || kind === 'azure') return null
+  const base = `https://${remote.origin}/${remote.owner}/${remote.repo}`
+  return kind === 'bitbucket' ? `${base}/commits/${oid}` : `${base}/commit/${oid}`
 }

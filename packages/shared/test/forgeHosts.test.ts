@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { forgeKind, glabHosts, parseGitlabRemote } from '../src/forgeHosts'
+import { commitWebUrl, forgeKind, glabHosts, parseGitlabRemote } from '../src/forgeHosts'
 
 it('recognises each hosting service and keeps unknown servers on GitHub', () => {
   expect(forgeKind('github.com')).toBe('github')
@@ -55,4 +55,16 @@ it('reads only host sign-ins from a glab config, including OAuth ones kept in th
     ['code.example.com', { token: 'glpat-two', oauth: false, expiresAt: null }],
     ['oauth.example.com', { token: null, oauth: true, expiresAt: Date.parse('2026-11-09T15:03:42Z') }],
   ])
+})
+
+it('builds a commit’s page on each service from the remote, nested GitLab groups included', () => {
+  expect(commitWebUrl('git@github.com:ana/shop.git', 'github', 'abc')).toBe('https://github.com/ana/shop/commit/abc')
+  expect(commitWebUrl('https://gitlab.com/team/web/shop.git', 'gitlab', 'abc')).toBe(
+    'https://gitlab.com/team/web/shop/-/commit/abc',
+  )
+  expect(commitWebUrl('git@bitbucket.org:team/shop.git', 'bitbucket', 'abc')).toBe(
+    'https://bitbucket.org/team/shop/commits/abc',
+  )
+  expect(commitWebUrl('https://dev.azure.com/org/project/_git/shop', 'azure', 'abc')).toBeNull()
+  expect(commitWebUrl('/srv/git/shop.git', 'github', 'abc')).toBeNull()
 })

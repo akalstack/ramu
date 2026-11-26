@@ -52,6 +52,8 @@ interface GitCommitInfo {
   subject: string
   author: string
   at: number
+  /** On the upstream and not pulled here yet. */
+  incoming: boolean
   pushed: boolean
 }
 type GitStashInfo = GitStash
@@ -393,7 +395,14 @@ export default function SourceControl() {
     setPublished(Boolean(status.upstream))
     setBranchList(branchInfo)
     setCommits(
-      history.map((h) => ({ oid: h.oid, subject: h.subject, author: h.author, at: h.timestamp, pushed: !h.outgoing })),
+      history.map((h) => ({
+        oid: h.oid,
+        subject: h.subject,
+        author: h.author,
+        at: h.timestamp,
+        pushed: !h.outgoing,
+        incoming: h.incoming === true,
+      })),
     )
     setStashes(stashList)
     setFiles(
@@ -1288,8 +1297,8 @@ export default function SourceControl() {
                             height: 8,
                             borderRadius: 4,
                             borderWidth: 1.5,
-                            borderColor: x.pushed ? c.muted : c.accent,
-                            backgroundColor: x.pushed ? 'transparent' : c.accent,
+                            borderColor: x.incoming ? c.ok : x.pushed ? c.muted : c.accent,
+                            backgroundColor: x.incoming ? c.ok : x.pushed ? 'transparent' : c.accent,
                           }}
                         />
                         <View style={{ flex: 1, gap: 2 }}>
@@ -1298,7 +1307,7 @@ export default function SourceControl() {
                           </T>
                           <T size={font.caption} tone="muted" numberOfLines={1}>
                             {x.author} · {ago(x.at)}
-                            {x.pushed ? '' : ` · ${tr('not pushed')}`}
+                            {x.incoming ? ` · ${tr('not pulled')}` : x.pushed ? '' : ` · ${tr('not pushed')}`}
                           </T>
                         </View>
                         <T size={font.caption} mono tone="muted" numberOfLines={1} style={{ flexShrink: 0 }}>

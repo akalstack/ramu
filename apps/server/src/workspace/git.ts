@@ -563,30 +563,37 @@ export async function history(cwd: string): Promise<GitCommit[]> {
   if (!(await headOid(cwd))) return []
   // Commits not yet on the upstream. A branch without one is compared with every remote branch instead, so a
   // never-published branch is marked; a repository with no remote has nothing to push to and marks nothing.
-  const [raw, ahead] = await Promise.all([
-    git(cwd, ['log', '--max-count=30', '--format=%H%x00%h%x00%an%x00%at%x00%s%x00%D']),
+  const format = '--format=%H%x00%h%x00%an%x00%at%x00%s%x00%D'
+  const [raw, ahead, behind] = await Promise.all([
+    git(cwd, ['log', '--max-count=30', format]),
     git(cwd, ['rev-list', '--max-count=30', '@{upstream}..HEAD']).catch(async () =>
       (await git(cwd, ['remote'])).trim()
         ? git(cwd, ['rev-list', '--max-count=30', 'HEAD', '--not', '--remotes']).catch(() => '')
         : '',
     ),
+    // What the upstream has that this branch does not, as of the last fetch: listed first, as a pull would add them.
+    git(cwd, ['log', '--max-count=30', format, 'HEAD..@{upstream}']).catch(() => ''),
   ])
   const outgoing = new Set(ahead.split('\n').filter(Boolean))
-  return raw
-    .trimEnd()
-    .split('\n')
-    .map((line) => {
-      const [oid, shortOid, author, timestamp, subject, refs] = line.split('\0')
-      return {
-        oid: oid!,
-        shortOid: shortOid!,
-        author: author!,
-        timestamp: Number(timestamp) * 1000,
-        subject: subject!,
-        refs: refs ?? '',
-        outgoing: outgoing.has(oid!),
-      }
-    })
+  const parse = (text: string, incoming: boolean): GitCommit[] =>
+    text
+      .trimEnd()
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => {
+        const [oid, shortOid, author, timestamp, subject, refs] = line.split('\0')
+        return {
+          oid: oid!,
+          shortOid: shortOid!,
+          author: author!,
+          timestamp: Number(timestamp) * 1000,
+          subject: subject!,
+          refs: refs ?? '',
+          outgoing: !incoming && outgoing.has(oid!),
+          ...(incoming ? { incoming } : {}),
+        }
+      })
+  return [...parse(behind, true), ...parse(raw, false)]
 }
 export async function branches(cwd: string): Promise<GitBranchInfo[]> {
   const raw = await git(cwd, [
@@ -897,7 +904,10 @@ export async function commitDetails(cwd: string, oid: string): Promise<string> {
 export async function compareUpstream(cwd: string): Promise<string> {
   const s = await status(cwd)
   if (!s.upstream) throw new Error('This branch has no upstream. Set one in your terminal before comparing.')
-  return git(cwd, ['diff', '--no-ext-diff', '--no-textconv', '--stat', '--patch', '@{upstream}', 'HEAD', '--'])
+  // From where the two parted: what this branch adds, not the upstream's own new commits undone. A branch that is
+  // only behind has nothing of its own to show, so it shows what a pull would bring.
+  const range = s.ahead === 0 && s.behind > 0 ? 'HEAD...@{upstream}' : '@{upstream}...HEAD'
+  return git(cwd, ['diff', '--no-ext-diff', '--no-textconv', '--stat', '--patch', range, '--'])
 }
 export async function stagedPatch(cwd: string): Promise<{ patch: string; fingerprint: string }> {
   const patch = await git(cwd, ['diff', '--cached', '--no-ext-diff', '--no-textconv', '--'])

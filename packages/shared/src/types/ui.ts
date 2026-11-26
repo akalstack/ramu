@@ -28,7 +28,8 @@ export type ViewDescriptor =
       oid?: string
       preview?: boolean
     }
-  | { kind: 'git'; id: string; repoId: string; title: string; oid?: string; preview?: boolean }
+  /** A commit in full (`oid`), or the branch compared with its upstream; `url` is the commit's page on its service. */
+  | { kind: 'git'; id: string; repoId: string; title: string; oid?: string; url?: string; preview?: boolean }
   /** A conflicted file, one conflict at a time, with a side to keep for each. */
   | { kind: 'conflict'; id: string; repoId: string; path: string }
   /** A pull request of the repository: its state, checks, review threads, drafted replies and actions. */

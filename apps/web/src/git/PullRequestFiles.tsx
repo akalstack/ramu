@@ -35,7 +35,7 @@ import { queryInvokerFor } from './hostQuery'
 const OPEN_AT_FIRST = 10
 const WRAP_KEY = 'ramu.pull-request-wrap'
 
-const STATUS_LABEL: Partial<Record<PullRequestFile['status'], string>> = {
+export const STATUS_LABEL: Partial<Record<PullRequestFile['status'], string>> = {
   added: 'Added',
   removed: 'Deleted',
   renamed: 'Renamed',
@@ -85,7 +85,7 @@ export function usePullRequestFiles(taskId: string, repoId: string, url: string)
 }
 
 /** A file's path as the services show it: the folder quiet and cut first, the file name whole. */
-function FilePath({ file }: { file: PullRequestFile }) {
+export function FilePath({ file }: { file: PullRequestFile }) {
   const slash = file.path.lastIndexOf('/')
   const folder = slash >= 0 ? file.path.slice(0, slash + 1) : ''
   const name = file.path.slice(slash + 1)
@@ -110,7 +110,7 @@ interface Range {
   end: number
 }
 
-function FileDiff({
+export function FileDiff({
   file,
   threads,
   pending,
@@ -396,7 +396,7 @@ function FileDiff({
 }
 
 /** A file's diff, built once it nears the screen and kept after, so a long list opens fast and keeps its drafts. */
-function NearFileDiff({ lines, children }: { lines: number; children: React.ReactNode }) {
+export function NearFileDiff({ lines, children }: { lines: number; children: React.ReactNode }) {
   const root = useRef<HTMLDivElement>(null)
   const near = useNearViewport(root)
   const [seen, setSeen] = useState(false)
