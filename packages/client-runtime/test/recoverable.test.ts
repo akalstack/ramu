@@ -34,6 +34,18 @@ describe('runtimeInvokeRecoverable', () => {
     expect(seen().map((entry) => entry.key)).toEqual(['operation-key-1', 'operation-key-1'])
   })
 
+  it('retries under the key the caller keeps, and covers a follow-up message', async () => {
+    const { target, seen } = await host({ dropFirst: 1 })
+    await runtimeInvokeRecoverable(target, 'agent.submit', ['s', 'hi', 'queue'], {
+      backoffMs: 1,
+      operationKey: 'outbox-item-1',
+    })
+    expect(seen()).toEqual([
+      { method: 'agent.submit', key: 'outbox-item-1' },
+      { method: 'agent.submit', key: 'outbox-item-1' },
+    ])
+  })
+
   it('leaves unlisted methods alone', async () => {
     const { target, seen } = await host({ dropFirst: 1 })
     await expect(runtimeInvokeRecoverable(target, 'tasks.list', [], { backoffMs: 1 })).rejects.toThrow()

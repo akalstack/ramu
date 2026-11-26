@@ -734,6 +734,10 @@ const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: 
         pending = setTimeout(() => void refresh().catch(() => {}), 60)
       }),
     )
+    // Threads and projects changed while this host was out of reach announced nothing; read them again once it is back.
+    const reconnected = runtime.on('background:connection', ({ connected }) => {
+      if (connected) runtime.deliver('refresh', () => void refresh().catch(() => {}))
+    })
     const off = runtime.on('agent:event', ({ event }) => {
       if (!changesThreadSummary(event)) return
       runtime.deliver('tasks', () => {
@@ -752,6 +756,7 @@ const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: 
     return () => {
       disposed = true
       off()
+      reconnected()
       automation()
       changed()
       clearTimeout(timer)

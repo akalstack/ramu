@@ -5,10 +5,13 @@ import { pushMessage, type PushArgs } from '@ramu/shared/pushChannels'
 export class HostError extends Error {
   status: number
   ambiguous: boolean
-  constructor(message: string, status = 0, ambiguous = false) {
+  /** The host answered and did not do it, so the action is known not to have happened. */
+  refused: boolean
+  constructor(message: string, status = 0, ambiguous = false, refused = false) {
     super(message)
     this.status = status
     this.ambiguous = ambiguous
+    this.refused = refused
   }
 }
 /**
@@ -248,7 +251,7 @@ export class HostClient {
             0,
             true,
           )
-        throw new HostError(error.message, failure.status ?? 0)
+        throw new HostError(error.message, failure.status ?? 0, false, true)
       }
     }
   }

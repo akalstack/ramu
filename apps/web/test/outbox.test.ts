@@ -131,7 +131,7 @@ it('keeps equal session IDs on separate hosts and reconnects only the host whose
   const { outbox } = await import('../src/composer/outbox')
   const entries = new Map<string, string>()
   const listeners = new Map<string, ((payload: any, host?: string) => void)[]>()
-  const invokeOn = vi.fn(async () => undefined)
+  const invokeOnce = vi.fn(async (..._call: unknown[]) => undefined)
   vi.stubGlobal('localStorage', {
     getItem: (key: string) => entries.get(key) ?? null,
     setItem: (key: string, value: string) => entries.set(key, value),
@@ -144,7 +144,7 @@ it('keeps equal session IDs on separate hosts and reconnects only the host whose
   vi.stubGlobal('window', {
     ramu: {
       hostId: 'local',
-      invokeOn,
+      invokeOnce,
       invoke: async () => ({
         current: 'local',
         computers: [
@@ -166,7 +166,10 @@ it('keeps equal session IDs on separate hosts and reconnects only the host whose
     laptop.add('same', 'laptop message')
     for (const receive of listeners.get('background:connection') ?? []) receive({ connected: true }, 'studio-queue')
     await studio.flush()
-    expect(invokeOn).toHaveBeenCalledWith('studio-queue', 'agent.submit', 'same', 'studio message', 'queue', [], [])
+    // The message's own id is its operation key, so a send repeated after a lost connection is taken once.
+    const [key, ...sent] = invokeOnce.mock.calls[0]!
+    expect(key).toMatch(/^[A-Za-z0-9_-]{8,128}$/)
+    expect(sent).toEqual(['studio-queue', 'agent.submit', 'same', 'studio message', 'queue', [], []])
     expect(studio.list('same')).toEqual([])
     expect(laptop.list('same')).toHaveLength(1)
     expect([...entries.keys()]).toContain('host:laptop-queue:ramu.outbox')

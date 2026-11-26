@@ -49,7 +49,7 @@ test('delivery shows the complete submitted text immediately without offering an
 })
 
 test('offline and uncertain messages remain available to review or cancel', () => {
-  for (const tree of [bubble(false, 'waiting'), bubble(true, 'uncertain')]) {
+  for (const tree of [bubble(false, 'waiting'), bubble(true, 'uncertain'), bubble(true, 'refused')]) {
     assert.equal(tree.props.disabled, false)
     assert.equal(tree.props.accessibilityRole, 'button')
   }

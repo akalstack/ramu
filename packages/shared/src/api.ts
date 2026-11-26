@@ -2265,6 +2265,17 @@ export interface RamuBridge {
   on<E extends keyof PushEvents>(event: E, listener: (payload: PushEvents[E], hostId?: string) => void): () => void
   /** Device-wide UI state (panel widths and the like) shared by every window, loaded synchronously at startup. */
   readonly deviceState: Readonly<Record<string, string>>
+  /**
+   * Like `invokeOn`, for a mutation the caller may send again after a lost connection (a message kept in an outbox):
+   * every attempt carries `operationKey`, so a host that already ran it answers with the first result instead of
+   * running it twice.
+   */
+  invokeOnce<M extends keyof RamuMethods>(
+    operationKey: string,
+    host: string,
+    method: M,
+    ...args: Parameters<RamuMethods[M]>
+  ): Promise<Awaited<ReturnType<RamuMethods[M]>>>
   setDeviceState(key: string, value: string | null): void
   /** The on-disk path of a file or folder dropped onto the window ('' when it has none). */
   pathForFile(file: File): string

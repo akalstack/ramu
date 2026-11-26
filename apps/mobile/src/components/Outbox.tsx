@@ -23,9 +23,11 @@ export function confirmCancel(
       ? say(
           'Delivery is uncertain. Check the host conversation before sending again. Removing this entry does not undo an action the host already received.',
         )
-      : first
-        ? say("It hasn't reached the host yet, so the thread is discarded.")
-        : say("It hasn't been sent yet.")
+      : item.state === 'refused'
+        ? say('The host did not take it, so nothing was sent. Removing it discards the text.')
+        : first
+          ? say("It hasn't reached the host yet, so the thread is discarded.")
+          : say("It hasn't been sent yet.")
   const remove = () => cancel?.(item.id)
   const edit = () => {
     const text = cancel?.(item.id)
@@ -143,17 +145,19 @@ export function PendingBubble({
                 ? t.branchReviewBases
                 : item.state === 'uncertain'
                   ? say('Check delivery on host')
-                  : item.state === 'sending'
-                    ? say('Sending')
-                    : item.mode === 'steer'
-                      ? say('Steer')
-                      : item.mode === 'queue'
-                        ? say('Queued')
-                        : say('Waiting')}{' '}
+                  : item.state === 'refused'
+                    ? say('Not sent')
+                    : item.state === 'sending'
+                      ? say('Sending')
+                      : item.mode === 'steer'
+                        ? say('Steer')
+                        : item.mode === 'queue'
+                          ? say('Queued')
+                          : say('Waiting')}{' '}
               ·{' '}
               {viewOnly
                 ? VIEW_ONLY_WRITE_NOTICE[store.language]
-                : item.state === 'uncertain' || item.state === 'review'
+                : item.state === 'uncertain' || item.state === 'refused' || item.state === 'review'
                   ? item.error && say(item.error)
                   : say('sends when {0} is back', { 0: computer })}{' '}
               ·{' '}

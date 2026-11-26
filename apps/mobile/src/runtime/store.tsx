@@ -131,7 +131,7 @@ export interface OutboxItem {
   issue?: import('@ramu/shared/types').IssueLink
   mode: 'send' | 'queue' | 'steer'
   createdAt: number
-  state?: 'waiting' | 'sending' | 'accepted' | 'uncertain' | 'review'
+  state?: 'waiting' | 'sending' | 'accepted' | 'uncertain' | 'refused' | 'review'
   /** When the host acknowledged it; an accepted message stops holding the queue after ACCEPTED_HOLD_MS. */
   acceptedAt?: number
   deliveryBaseline?: { userCount: number; queueIds: string[] }
@@ -1191,7 +1191,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               o.id === item.id
                 ? {
                     ...o,
-                    state: review ? 'review' : 'uncertain',
+                    // A host that answered no is not in doubt: nothing was sent, and checking the host finds nothing.
+                    state: review ? 'review' : error instanceof HostError && error.refused ? 'refused' : 'uncertain',
                     error: error instanceof Error ? error.message : String(error),
                   }
                 : o,

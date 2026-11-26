@@ -4220,6 +4220,10 @@ export const indonesian: Readonly<Record<string, string>> = {
   'This pull request is not open.': 'Pull request ini tidak terbuka.',
   'It is a draft. Mark it ready for review first.': 'Ini masih draf. Tandai siap direview dulu.',
   'It has conflicts with its base branch.': 'Ada konflik dengan branch dasarnya.',
+  'The host did not take it, so nothing was sent. Removing it discards the text.':
+    'Host tidak menerimanya, jadi tidak ada yang terkirim. Menghapusnya membuang teksnya.',
+  'The connection dropped before the host answered. It may have done this already, so check before trying again.':
+    'Koneksi terputus sebelum host menjawab. Mungkin sudah dijalankan, jadi periksa dulu sebelum mencoba lagi.',
   'It is behind its base branch, and this repository requires it to be up to date.':
     'Branch ini tertinggal dari branch dasarnya, dan repositori ini mewajibkannya selalu terbaru.',
   'Branch protection is blocking it. Required reviews or checks are missing.':

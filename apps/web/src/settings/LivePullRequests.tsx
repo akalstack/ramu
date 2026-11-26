@@ -59,7 +59,15 @@ export function LivePullRequestsSetting() {
     if (!single) return
     load()
     // The host announces deliveries and webhook changes with the pull request reads.
-    return bridge.on('forge:changed', load)
+    const changed = bridge.on('forge:changed', load)
+    // A change made while the host was out of reach announced nothing.
+    const reconnected = bridge.on('background:connection', ({ connected }) => {
+      if (connected) load()
+    })
+    return () => {
+      changed()
+      reconnected()
+    }
   }, [single, load])
   if (!single || !status) return null
   const toggle = async (enabled: boolean) => {

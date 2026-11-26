@@ -84,6 +84,7 @@ export const RECOVERABLE_MUTATIONS: ReadonlySet<string> = new Set([
   'thread.start',
   'agent.start',
   'agent.send',
+  'agent.submit',
   'agent.sendQueuedNow',
 ])
 

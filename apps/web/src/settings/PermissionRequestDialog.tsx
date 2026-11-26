@@ -29,14 +29,21 @@ export function PermissionRequestDialog() {
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
     let alive = true
-    void Promise.resolve(invoke('network.status')).then(
-      (status) => alive && setRequests(status.permissionRequests ?? []),
-      () => {},
-    )
+    const load = () =>
+      void Promise.resolve(invoke('network.status')).then(
+        (status) => alive && setRequests(status.permissionRequests ?? []),
+        () => {},
+      )
+    load()
     const off = ramu.on('permission:requests', ({ requests: next }) => setRequests(next))
+    // A request made, answered or lapsed while the service was out of reach announced nothing.
+    const reconnected = ramu.on('background:connection', ({ connected }) => {
+      if (connected) load()
+    })
     return () => {
       alive = false
       off()
+      reconnected()
     }
   }, [])
   const request = requests.find((entry) => !later.includes(entry.id))

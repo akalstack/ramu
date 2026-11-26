@@ -98,5 +98,12 @@ export function invalidateDataOn(host: string, ...domains: string[]) {
     refetchType: 'none',
   })
 }
+/**
+ * A host is back after a gap in which its events were lost: everything read from it is stale, and what is on screen is
+ * read again now, since no later event will say what changed meanwhile.
+ */
+export function recoverDataOn(host: string) {
+  return queryClient.invalidateQueries({ queryKey: ['ipc', host], refetchType: 'active' })
+}
 /** Same, for this window's own host. */
 export const invalidateData = (...domains: string[]) => invalidateDataOn(ownHostId(), ...domains)

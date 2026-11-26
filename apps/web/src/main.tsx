@@ -16,7 +16,7 @@ import { createRoot } from 'react-dom/client'
 import { errorText, isOfflineError } from './lib/errors'
 import { useCallback, useEffect, useState } from 'react'
 import { QueryClientProvider } from '@tanstack/react-query'
-import { queryClient, invalidateDataOn } from './dataQueries'
+import { queryClient, invalidateDataOn, recoverDataOn } from './dataQueries'
 import { bridge } from './ipc'
 import { ownHostId } from './hosts'
 import { pruneDrafts } from './composer/drafts'
@@ -75,7 +75,7 @@ function Startup() {
         void invalidateDataOn(host(from), 'agent')
       }),
       bridge.on('background:connection', ({ connected }, from) => {
-        if (connected) void invalidateDataOn(host(from))
+        if (connected) void recoverDataOn(host(from))
       }),
     ]
     return () => offs.forEach((off) => off())

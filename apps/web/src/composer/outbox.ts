@@ -161,10 +161,12 @@ export function outbox(host = ownHostId()): Outbox {
       }
     })(),
     connected: () => online,
+    // The item's own id is its operation key: a send cut off by a lost connection goes out again on reconnect, and a
+    // host that already took it answers with the first result instead of queueing the message twice.
     submit: (item) =>
-      (host === ownHostId()
-        ? ramu.invoke
-        : (((method, ...args) => ramu.invokeOn(host, method, ...args)) as typeof ramu.invoke))(
+      ramu.invokeOnce(
+        item.id,
+        host,
         'agent.submit',
         item.sessionId,
         item.text,

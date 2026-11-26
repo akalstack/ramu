@@ -25,10 +25,12 @@ const deviceState = (() => {
 })()
 
 // Electron wraps handler failures as "Error invoking remote method '...': Error: <message>"; people should only see the message.
-const call = (method: string, args: unknown[], host?: string): Promise<unknown> =>
-  (host === undefined
-    ? ipcRenderer.invoke('ramu:invoke', method, args)
-    : ipcRenderer.invoke('ramu:invoke', method, args, host)
+const call = (method: string, args: unknown[], host?: string, operationKey?: string): Promise<unknown> =>
+  (operationKey !== undefined
+    ? ipcRenderer.invoke('ramu:invoke', method, args, host, operationKey)
+    : host === undefined
+      ? ipcRenderer.invoke('ramu:invoke', method, args)
+      : ipcRenderer.invoke('ramu:invoke', method, args, host)
   ).catch((error: unknown) => {
     throw new Error(
       (error instanceof Error ? error.message : String(error)).replace(
@@ -39,13 +41,14 @@ const call = (method: string, args: unknown[], host?: string): Promise<unknown> 
   })
 
 /** The one place a host's answer takes its method's declared type; the host validated the call and built the result. */
-const typed = <M extends keyof RamuMethods>(method: M, args: unknown[], host?: string) =>
-  call(method, args, host) as Promise<Awaited<ReturnType<RamuMethods[M]>>>
+const typed = <M extends keyof RamuMethods>(method: M, args: unknown[], host?: string, operationKey?: string) =>
+  call(method, args, host, operationKey) as Promise<Awaited<ReturnType<RamuMethods[M]>>>
 
 const bridge: RamuBridge = {
   hostId: 'local',
   invoke: (method, ...args) => typed(method, args),
   invokeOn: (host, method, ...args) => typed(method, args, host),
+  invokeOnce: (operationKey, host, method, ...args) => typed(method, args, host, operationKey),
   on(event, listener) {
     if (!PUSH_EVENTS.has(event)) throw new Error(`Unknown event ${event}`)
     // The host follows the payload so one shell can route every host independently.

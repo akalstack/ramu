@@ -94,7 +94,9 @@ export default function Threads() {
     (o) =>
       o.state !== 'accepted' &&
       (merged || o.computerId === selected) &&
-      (o.state === 'uncertain' || computers.find((x) => x.id === o.computerId)?.status !== 'online'),
+      (o.state === 'uncertain' ||
+        o.state === 'refused' ||
+        computers.find((x) => x.id === o.computerId)?.status !== 'online'),
   )
   const [historyLimit, setHistoryLimit] = useState(20)
   const pc = computers.find((x) => x.id === selected)

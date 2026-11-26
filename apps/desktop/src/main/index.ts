@@ -102,6 +102,7 @@ import {
   PresenceListener,
   hostSocket,
 } from '@ramu/client-runtime'
+import { OPERATION_KEY_PATTERN } from '@ramu/contracts'
 import { HOST_PUSH_CHANNELS, STREAMING_KINDS, pushMessage, type PushArgs } from '@ramu/shared/pushChannels'
 import type { PushEvents } from '@ramu/shared/api'
 import { SshComputers } from './sshComputers'
@@ -1197,8 +1198,8 @@ async function main() {
     text: (message: string) => t(message),
   })
   /** Runs a call on another host's server and nudges overviews when it changed threads or projects. */
-  const runOnHost = async (id: string, method: string, args: unknown[]) => {
-    const result = await runtimeInvokeRecoverable(computers.endpoint(id), method, args)
+  const runOnHost = async (id: string, method: string, args: unknown[], keyed: { operationKey?: string } = {}) => {
+    const result = await runtimeInvokeRecoverable(computers.endpoint(id), method, args, keyed)
     const channel = activityChannel(method)
     if (channel) observeHostActivity(id, channel, {})
     return result
@@ -1248,6 +1249,7 @@ async function main() {
     requestMethod: unknown,
     requestArgs: unknown,
     requestHost?: unknown,
+    requestKey?: unknown,
   ) => {
     // Only our windows may invoke IPC. Normal calls reach their owning computer; explicit computer management validates its target below.
     // The live view window is trusted only for watching and stopping.
@@ -1256,6 +1258,9 @@ async function main() {
     const self = event.sender === win.webContents || fromLive || fromArtifact ? LOCAL : undefined
     if (!self || event.senderFrame !== event.sender.mainFrame) throw new Error('Untrusted IPC sender')
     if (typeof requestMethod !== 'string' || !Array.isArray(requestArgs)) throw new Error('Invalid request')
+    if (requestKey !== undefined && !(typeof requestKey === 'string' && OPERATION_KEY_PATTERN.test(requestKey)))
+      throw new Error('Invalid request')
+    const keyed = requestKey === undefined ? {} : { operationKey: requestKey }
     if (fromLive && !liveMethodAllowed(requestMethod)) throw new Error('That is not available in the live view.')
     // The main window's own state (threads it streams, its host filter) stays its own; the artifact window's store
     // asks for them too and is answered without changing them.
@@ -1280,7 +1285,7 @@ async function main() {
     }
     // A call may name its host. Another host is reached directly, for allow-listed methods only; the window's own host (or none) takes the path below.
     const route = routeInvoke(requestHost, requestMethod, routing(self))
-    if (route.direct) return runOnHost(route.host, requestMethod, requestArgs)
+    if (route.direct) return runOnHost(route.host, requestMethod, requestArgs, keyed)
     let method: string = requestMethod,
       args: unknown[] = requestArgs
     let settingsComputer = self
@@ -1833,16 +1838,19 @@ async function main() {
       await desktopUpdater.prepare(updateStatus!)
       return updateView(updateStatus!)
     }
-    return runtimeInvokeRecoverable(target, method, args)
+    return runtimeInvokeRecoverable(target, method, args, keyed)
   }
-  ipcMain.handle('ramu:invoke', async (event, requestMethod: unknown, requestArgs: unknown, requestHost?: unknown) => {
-    try {
-      return await handleInvoke(event, requestMethod, requestArgs, requestHost)
-    } catch (error) {
-      invokeLog.record(requestMethod, requestHost, error)
-      throw error
-    }
-  })
+  ipcMain.handle(
+    'ramu:invoke',
+    async (event, requestMethod: unknown, requestArgs: unknown, requestHost?: unknown, requestKey?: unknown) => {
+      try {
+        return await handleInvoke(event, requestMethod, requestArgs, requestHost, requestKey)
+      } catch (error) {
+        invokeLog.record(requestMethod, requestHost, error)
+        throw error
+      }
+    },
+  )
 
   // Dictation bridge. Only the shell window's own main frame; audio and the lease never reach a guest page or a host.
   const voiceSender = (event: Electron.IpcMainInvokeEvent) => {

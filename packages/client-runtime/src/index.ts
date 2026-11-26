@@ -116,13 +116,14 @@ export interface RecoverableInvokeOptions extends InvokeOptions {
   /** Retries after a lost connection; each waits `backoffMs * 3 ** attempt`. */
   retries?: number
   backoffMs?: number
-  /** Supplies the operation key; defaults to a random UUID. */
+  /** Supplies the operation key when `operationKey` names none; defaults to a random UUID. */
   newKey?: () => string
 }
 
 /**
  * Like `runtimeInvoke`, and for a listed mutation, retries a lost connection under one operation key so the host returns
- * the first result instead of running it again. A method outside the list and an answer from the host (an error reply)
+ * the first result instead of running it again. A caller that keeps the key (a message waiting in an outbox) passes
+ * its own, so a later attempt of its own is covered too. A method outside the list and an answer from the host (an error reply)
  * are never retried: the outcome stays the caller's to reconcile.
  */
 export async function runtimeInvokeRecoverable<M extends string>(
@@ -131,8 +132,8 @@ export async function runtimeInvokeRecoverable<M extends string>(
   args: unknown[] = [],
   policy: RecoverableInvokeOptions = {},
 ): Promise<RuntimeResult<M>> {
-  if (policy.operationKey || !RECOVERABLE_MUTATIONS.has(method)) return runtimeInvoke(target, method, args, policy)
-  const operationKey = (policy.newKey ?? (() => randomUUID()))()
+  if (!RECOVERABLE_MUTATIONS.has(method)) return runtimeInvoke(target, method, args, policy)
+  const operationKey = policy.operationKey ?? (policy.newKey ?? (() => randomUUID()))()
   const retries = policy.retries ?? 2
   const backoffMs = policy.backoffMs ?? 500
   for (let attempt = 0; ; attempt++) {
