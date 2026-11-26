@@ -59,6 +59,13 @@ export const isSingleEnvironmentSection = (section: string) => SINGLE_ENVIRONMEN
 export const isCurrentEnvironmentSection = (section: string) => CURRENT_ENVIRONMENT_SECTIONS.includes(section)
 
 /** `host` opens on that host, such as the one whose project asked for an account; otherwise on all hosts. */
+/**
+ * What each choice of host last read, for this window. A page of Settings reads from this computer, the chosen host or
+ * every host, so moving between pages changes where it reads; shown from here at once and refreshed behind, the page
+ * does not blank to "loading" on each change, which on another host lasted a network round trip.
+ */
+const lastRead = new Map<string, Target[]>()
+
 export function useSettingsScope(section: string, host?: string) {
   const computers = useComputers()
   const [requested, setTarget] = useState(host ?? 'all')
@@ -92,9 +99,17 @@ export function useSettingsScope(section: string, host?: string) {
   useEffect(() => {
     if (dirty.current && loadedTarget.current === target) return
     let active = true
-    // Any reload keeps showing the current values until the new ones arrive; only the very first load shows loading.
+    // Any reload keeps showing the current values until the new ones arrive, and a host read before shows what it last
+    // read; only a host never read in this window shows loading.
+    const remembered = loadedTarget.current === target ? undefined : lastRead.get(target)
+    if (remembered) {
+      loadedTarget.current = target
+      setTargets(remembered)
+      setEdited(new Set())
+      setLoading(false)
+    }
     const refreshing = loadedTarget.current === target
-    if (!loadedTarget.current || !refreshing) setLoading(true)
+    if (!refreshing) setLoading(true)
     else setStale(true)
     setError(null)
     setMessage(null)
@@ -135,13 +150,15 @@ export function useSettingsScope(section: string, host?: string) {
       if (active) {
         loadedTarget.current = target
         setStale(false)
-        setTargets((previous) =>
-          refreshing
+        setTargets((previous) => {
+          const merged = refreshing
             ? next.map((entry) =>
                 entry.error ? (previous.find((old) => old.id === entry.id && old.snapshot) ?? entry) : entry,
               )
-            : next,
-        )
+            : next
+          lastRead.set(target, merged)
+          return merged
+        })
         setLoading(false)
         setEdited(new Set())
       }
@@ -271,6 +288,9 @@ export function useSettingsScope(section: string, host?: string) {
       }),
     )
     setTargets(results)
+    // What other choices of host last read is older than this save: they read again when shown.
+    lastRead.clear()
+    lastRead.set(target, results)
     const failed = results.filter((entry) => entry.error)
     setMessage(t('Settings saved on {0} hosts.', { 0: results.length - failed.length }))
     setError(failed.length ? failed.map((entry) => `${entry.name}: ${entry.error}`).join('\n') : null)
