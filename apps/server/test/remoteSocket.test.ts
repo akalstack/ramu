@@ -71,11 +71,11 @@ async function start(overrides: Partial<SocketHost> = {}, options = {}) {
 }
 
 it('answers several large calls at once instead of dropping the connection', async () => {
-  const big = 'x'.repeat(3_000_000)
+  const big = 'x'.repeat(600_000)
   const { connect } = await start(
     { invoke: async () => ({ ok: true, value: big }) },
     // Smaller than the answers together, as a long thread opened from several places is to the real limit.
-    { maxBuffered: 4_000_000 },
+    { maxBuffered: 1_000_000 },
   )
   const { ws, frames, until } = connect()
   await until(() => frames.some((frame) => frame.t === 'ready'))

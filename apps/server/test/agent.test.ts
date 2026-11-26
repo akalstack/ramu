@@ -701,9 +701,9 @@ describe('AgentService', () => {
         .filter((event) => event.kind === 'text')
         .map((event) => [event.text, event.agentId]),
     ).toEqual([
-      // A reply goes out a whole block at a time: the line still being written waits.
-      ['Main partial\n\n', undefined],
-      ['Helper partial\n\n', 'helper'],
+      // A reply goes out a whole word at a time: the word still being written waits.
+      ['Main partial\n\nMain', undefined],
+      ['Helper partial\n\nHelper', 'helper'],
     ])
     expect(
       svc
