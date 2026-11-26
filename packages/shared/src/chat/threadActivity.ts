@@ -44,8 +44,9 @@ export function threadActivity(input: {
 export function goalActivityLabel(state: GoalActivityState | null): string {
   if (state === 'verifying') return 'Verifying goal'
   if (state === 'turn-limit') return 'Goal turn limit reached'
+  // An active goal's pill is just "Goal", as the desktop's chip; only a state that needs a look says more.
   return state === 'active'
-    ? 'Goal active'
+    ? 'Goal'
     : state === 'provider'
       ? 'Goal waiting for provider'
       : state === 'blocked'

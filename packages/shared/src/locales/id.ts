@@ -4286,7 +4286,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Waiting for limit reset': 'Menunggu reset batas',
   'Advisor reviewing': 'Penasihat meninjau',
   'Advisor waiting for provider': 'Penasihat menunggu provider',
-  'Goal active': 'Goal aktif',
   'Goal blocked': 'Goal terhambat',
   'Goal waiting for provider': 'Tujuan menunggu provider',
   'More activity': 'Aktivitas lainnya',
