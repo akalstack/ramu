@@ -3490,6 +3490,11 @@ export const indonesian: Readonly<Record<string, string>> = {
   '{0} questions': '{0} pertanyaan',
   'Question {0} of {1}': 'Pertanyaan {0} dari {1}',
   'Answer later': 'Jawab nanti',
+  'Question for you': 'Pertanyaan untukmu',
+  '{0} questions for you': '{0} pertanyaan untukmu',
+  'Continue answering': 'Lanjutkan menjawab',
+  'Your answer…': 'Jawabanmu…',
+  'Already submitted: {0}': 'Sudah dikirim: {0}',
   'These questions are related. Send their answers together.':
     'Pertanyaan ini saling terkait. Kirim jawabannya sekaligus.',
   'Each answer can be sent separately.': 'Setiap jawaban bisa dikirim terpisah.',

@@ -749,7 +749,12 @@ function FloatingSheet({ open, onClose, title, children, scroll, search }: Sheet
             transform: [{ translateY }],
           }}
         >
-          <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'flex-end' }}>
+          {/* Fills the screen to lift the panel over the keyboard; taps above the panel pass through to the backdrop. */}
+          <KeyboardAvoidingView
+            behavior="padding"
+            pointerEvents="box-none"
+            style={{ flex: 1, justifyContent: 'flex-end' }}
+          >
             <SheetPanel>{body}</SheetPanel>
           </KeyboardAvoidingView>
         </Animated.View>

@@ -4517,6 +4517,145 @@ test('mobile answered questions keep the bold answer outside the collapsed origi
   assert.equal(find(history, 'Pressable').props.accessibilityState.expanded, true)
 })
 
+function questionView({ inline = false } = {}) {
+  let states = []
+  const componentStates = new Map()
+  let cursor = 0
+  const sent = []
+  const store = {
+    language: 'en',
+    drafts: {},
+    chats: [{ id: 'chat', computerId: 'host', sessionId: 's' }],
+    setDraft() {},
+    answer: (chat, request, answers) => sent.push({ chat, request, answers }),
+  }
+  const react = require('react')
+  const component = load('components/Transcript.tsx', 'ios', {
+    react: {
+      ...react,
+      memo: (component) => component,
+      useState(initial) {
+        // The setter writes to the component that owns the state, even when a child calls it later.
+        const own = states
+        const at = cursor++
+        if (!(at in own)) own[at] = typeof initial === 'function' ? initial() : initial
+        return [
+          own[at],
+          (next) => {
+            own[at] = typeof next === 'function' ? next(own[at]) : next
+          },
+        ]
+      },
+      useRef(initial) {
+        const at = cursor++
+        if (!(at in states)) states[at] = { current: initial }
+        return states[at]
+      },
+      useEffect() {},
+      useCallback: (callback) => callback,
+      useSyncExternalStore: (_subscribe, snapshot) => snapshot(),
+      // Only the request surface is set here; every other context reads as its default.
+      useContext: (context) => (context === component.InlineRequests ? inline : (context._currentValue ?? (() => {}))),
+    },
+    '../runtime/store': { useStore: () => store },
+    '../i18n': { useT: () => ({}), useSay: () => (text) => text, fill: (text) => text },
+    './ui': { ...components, tap() {}, T: 'T', Card: 'Card', Button: 'Button', Sheet: 'Sheet' },
+    './Motion': { Collapse: 'Collapse', Disclosure: 'Disclosure', Breathe: 'Breathe', Arrive: 'Arrive' },
+    './ChoiceOption': { Option: 'Option' },
+    './heldHeight': { useHeldHeight: () => ({ minHeight: undefined, onLayout() {}, release() {} }) },
+  })
+  const invoke = (node) => {
+    states = componentStates.get(node.type) ?? []
+    componentStates.set(node.type, states)
+    cursor = 0
+    return node.type(node.props)
+  }
+  return {
+    sent,
+    invoke,
+    card(item) {
+      const root = component.TranscriptItemView({ item, chat: { id: 'chat' } })
+      const block = nodes(root).find((node) => node.type?.name === 'TranscriptBlock')
+      return invoke(invoke(block))
+    },
+  }
+}
+
+const waitingQuestion = {
+  kind: 'question',
+  id: 'q',
+  questions: [{ id: 'name', header: 'Name', question: 'What should it be called?', multiSelect: false, options: [] }],
+}
+
+test('a waiting question in the transcript is answered in a sheet that sends the answer and closes', () => {
+  const view = questionView()
+  const prompt = view.card(waitingQuestion)
+  assert.equal(prompt.type.name, 'QuestionPrompt')
+  let tree = view.invoke(prompt)
+  const sheet = () => find(tree, 'Sheet')
+  // The transcript keeps only the question and a way to answer; the field lives in the sheet.
+  assert.equal(sheet().props.open, false)
+  assert.equal(
+    nodes(tree).filter((node) => node.type?.name === 'QuestionForm' && !nodes(sheet()).includes(node)).length,
+    0,
+  )
+  find(tree, 'Button').props.onPress()
+  tree = view.invoke(prompt)
+  assert.equal(sheet().props.open, true)
+  const formOf = () => view.invoke(nodes(sheet()).find((node) => node.type?.name === 'QuestionForm'))
+  const actionsOf = () => view.invoke(nodes(sheet()).find((node) => node.type?.name === 'QuestionActions'))
+  const submit = () => nodes(actionsOf()).find((node) => node.props?.title === 'Submit')
+  assert.equal(submit().props.disabled, true)
+  // A question with no options takes a typed answer.
+  const field = find(formOf(), 'TextInput')
+  assert.equal(field.props.placeholder, 'Your answer…')
+  field.props.onChangeText('orbit')
+  tree = view.invoke(prompt)
+  assert.equal(submit().props.disabled, false)
+  submit().props.onPress()
+  assert.deepEqual(JSON.parse(JSON.stringify(view.sent)), [{ chat: 'chat', request: 'q', answers: { name: 'orbit' } }])
+  tree = view.invoke(prompt)
+  assert.equal(sheet().props.open, false)
+})
+
+test('questions the agent marked as separate each send their own answer from the sheet', () => {
+  const view = questionView()
+  const prompt = view.card({
+    kind: 'question',
+    id: 'q',
+    grouping: 'independent',
+    questions: [
+      {
+        id: 'db',
+        question: 'Which database?',
+        multiSelect: false,
+        options: [{ label: 'SQLite' }, { label: 'Postgres' }],
+      },
+      { id: 'name', question: 'What name?', multiSelect: false, options: [] },
+    ],
+  })
+  let tree = view.invoke(prompt)
+  find(tree, 'Button').props.onPress()
+  tree = view.invoke(prompt)
+  const form = () => view.invoke(nodes(find(tree, 'Sheet')).find((node) => node.type?.name === 'QuestionForm'))
+  const sendButtons = () => nodes(form()).filter((node) => node.props?.title === 'Send answer')
+  assert.equal(sendButtons().length, 0)
+  find(form(), 'Option').props.onPress()
+  tree = view.invoke(prompt)
+  assert.equal(sendButtons().length, 1)
+  sendButtons()[0].props.onPress()
+  assert.deepEqual(JSON.parse(JSON.stringify(view.sent)), [{ chat: 'chat', request: 'q', answers: { db: 'SQLite' } }])
+})
+
+test('the activity sheet and Inbox answer a waiting question in place, without opening another sheet', () => {
+  const view = questionView({ inline: true })
+  const inline = view.card(waitingQuestion)
+  assert.equal(inline.type.name, 'QuestionInline')
+  const tree = view.invoke(inline)
+  assert.equal(find(tree, 'Sheet'), undefined)
+  assert.ok(nodes(tree).some((node) => node.type?.name === 'QuestionForm'))
+})
+
 test('mobile grouped tool rows open at once, without a height animation, and preserve every tool', () => {
   const view = chatView()
   const tools = [

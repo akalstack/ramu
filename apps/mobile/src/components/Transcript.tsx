@@ -18,11 +18,33 @@ import { DiffLines } from './DiffLines'
 import { changedFile } from '../runtime/diff'
 import { Helpers, ReportCard } from './Helpers'
 import { InteractiveContent, InteractiveOlderVersion } from './InteractiveContent'
-import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { ActionSheetIOS, Alert, Image, Linking, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native'
+import {
+  createContext,
+  memo,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react'
+import {
+  ActionSheetIOS,
+  Alert,
+  Image,
+  Keyboard,
+  Linking,
+  Platform,
+  Pressable,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native'
 import * as Clipboard from 'expo-clipboard'
-import type { Attachment } from '@ramu/shared/types'
-import { useRouter } from 'expo-router'
+import type { AgentQuestion, Attachment } from '@ramu/shared/types'
+import { useFocusEffect, useRouter } from 'expo-router'
 import { ABILITY_DONE, ABILITY_LABELS, isMediaAbility, type AbilityCall } from '@ramu/shared/providers/abilities'
 import { providerName } from '@ramu/shared/providers/providers'
 import {
@@ -50,6 +72,7 @@ import {
   CircleX,
   AppWindow,
   FolderOpen,
+  MessageCircleQuestion,
 } from 'lucide-react-native'
 import { pickFolder } from '../runtime/folderPick'
 import { font, radius, space, useTheme } from '../theme'
@@ -68,7 +91,7 @@ import { hasSentContext, sentContext, type SentReviewComment } from '@ramu/share
 import { terminalAttachmentLabel } from '@ramu/shared/chat/terminalContext'
 import { composerDraft, type DraftMention } from '@ramu/shared/chat/composerDraft'
 import { useOpenFile } from '../runtime/openFile'
-import { Button, Card, Chip, Sheet, T, tap, type Icon } from './ui'
+import { Button, Card, Chip, Sheet, SheetScrollView, T, tap, type Icon } from './ui'
 import type { ElicitationField } from '@ramu/shared/types'
 import { ActivityText, Arrive, Breathe, Collapse, Disclosure, Shimmer } from './Motion'
 import { Glow } from './Glow'
@@ -1801,7 +1824,7 @@ function AgentsGroup({ item, chat }: { item: Extract<TranscriptItem, { kind: 'ag
   return <Helpers item={item} chat={chat} onToggle={onToggle} />
 }
 
-function QuestionHistory({ item }: { item: Extract<TranscriptItem, { kind: 'question' }> }) {
+function QuestionHistory({ item }: { item: QuestionItem }) {
   const { c } = useTheme()
   const { language } = useStore()
   const t = (text: string) => translate(language, text)
@@ -1830,13 +1853,7 @@ function QuestionHistory({ item }: { item: Extract<TranscriptItem, { kind: 'ques
   )
 }
 
-function QuestionHistoryEntry({
-  question,
-  answer,
-}: {
-  question: import('@ramu/shared/types').AgentQuestion
-  answer?: string
-}) {
+function QuestionHistoryEntry({ question, answer }: { question: AgentQuestion; answer?: string }) {
   const { c } = useTheme()
   const { language } = useStore()
   const [open, setOpen] = useState(false)
@@ -1891,11 +1908,46 @@ function QuestionHistoryEntry({
   )
 }
 
-function QuestionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: 'question' }>; chatId: string }) {
-  const say = useSay()
-  const { c } = useTheme()
+type QuestionItem = Extract<TranscriptItem, { kind: 'question' }>
+
+/**
+ * Set where a request is answered in place (the activity sheet, the Inbox): there is no message box to compete with, and
+ * a sheet would open over a sheet.
+ */
+export const InlineRequests = createContext(false)
+
+/** Questions that already opened their sheet by themselves, so closing one never brings it back on its own. */
+const autoOpenedQuestions = new Set<string>()
+
+/**
+ * The question whose sheet is open. Several waiting questions open one at a time: the next opens by itself once the
+ * person closes or answers the one before.
+ */
+let openQuestion: string | null = null
+const openQuestionListeners = new Set<() => void>()
+function setOpenQuestion(key: string | null) {
+  openQuestion = key
+  for (const listener of openQuestionListeners) listener()
+}
+function useOpenQuestion() {
+  return useSyncExternalStore(
+    (listener) => {
+      openQuestionListeners.add(listener)
+      return () => openQuestionListeners.delete(listener)
+    },
+    () => openQuestion,
+  )
+}
+
+function QuestionCard({ item, chatId }: { item: QuestionItem; chatId: string }) {
+  const inline = useContext(InlineRequests)
+  if (item.answers) return <QuestionHistory item={item} />
+  return inline ? <QuestionInline item={item} chatId={chatId} /> : <QuestionPrompt item={item} chatId={chatId} />
+}
+
+/** The picks and typed answers for one request, kept as a draft until it is answered. */
+function useQuestionAnswer(item: QuestionItem, chatId: string) {
   const store = useStore()
-  const { answer } = store
   const chat = store.chats.find((c) => c.id === chatId)
   const draftKey = `${chat?.computerId}:input:${chat?.sessionId}:${item.id}`
   let draft: { picked?: Record<string, string[]>; other?: Record<string, string> } = {}
@@ -1908,90 +1960,237 @@ function QuestionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: 
     store.setDraft(draftKey, JSON.stringify({ picked, other }))
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [draftKey, picked, other] by design; the values it reads beyond these are current as of that run
   }, [draftKey, picked, other])
-  if (item.answers) return <QuestionHistory item={item} />
-  const ready = item.questions.every(
-    (q) => (picked[q.id ?? q.question]?.length ?? 0) > 0 || other[q.id ?? q.question]?.trim(),
+  const key = (q: AgentQuestion) => q.id ?? q.question
+  const answered = (q: AgentQuestion) => (picked[key(q)]?.length ?? 0) > 0 || Boolean(other[key(q)]?.trim())
+  const value = (q: AgentQuestion) => [...(picked[key(q)] ?? []), other[key(q)]?.trim()].filter(Boolean).join(', ')
+  return {
+    picked,
+    other,
+    started: item.questions.some(answered),
+    ready: item.questions.every(answered),
+    pick(q: AgentQuestion, label: string) {
+      const selected = picked[key(q)]?.includes(label) ?? false
+      setOther((old) => ({ ...old, [key(q)]: '' }))
+      setPicked((old) => {
+        const current = old[key(q)] ?? []
+        const next = q.multiSelect
+          ? selected
+            ? current.filter((x) => x !== label)
+            : [...current, label]
+          : selected
+            ? []
+            : [label]
+        return { ...old, [key(q)]: next }
+      })
+    },
+    type(q: AgentQuestion, value: string) {
+      setPicked((old) => ({ ...old, [key(q)]: [] }))
+      setOther((old) => ({ ...old, [key(q)]: value }))
+    },
+    answered,
+    submit() {
+      store.answer(chatId, item.id, Object.fromEntries(item.questions.map((q) => [key(q), value(q)])))
+    },
+    /** Questions the agent marked as separate can each be sent on their own, as on the desktop. */
+    sendOne(q: AgentQuestion) {
+      store.answer(chatId, item.id, { [key(q)]: value(q) })
+    },
+    dismiss() {
+      store.answer(chatId, item.id, { _: 'Dismissed' })
+    },
+  }
+}
+
+type QuestionAnswer = ReturnType<typeof useQuestionAnswer>
+
+/**
+ * A waiting question in the transcript: what is asked and one way to answer it. The answer is written in a sheet, which
+ * covers the thread's message box, so only one field takes the keyboard and Submit clearly sends the answer.
+ */
+function QuestionPrompt({ item, chatId }: { item: QuestionItem; chatId: string }) {
+  const say = useSay()
+  const { c } = useTheme()
+  const state = useQuestionAnswer(item, chatId)
+  const autoKey = `${chatId}:${item.id}`
+  const openNow = useOpenQuestion()
+  const open = openNow === autoKey
+  const close = () => {
+    if (openQuestion === autoKey) setOpenQuestion(null)
+  }
+  // An answered or vanished question frees the sheet for the next one.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- releases only on unmount
+  useEffect(() => close, [autoKey])
+  const [focused, setFocused] = useState(false)
+  useFocusEffect(
+    useCallback(() => {
+      setFocused(true)
+      return () => {
+        setFocused(false)
+        // Leaving the thread takes its question sheet with it.
+        if (openQuestion === autoKey) setOpenQuestion(null)
+      }
+    }, [autoKey]),
   )
+  const show = () => {
+    // The message box may hold the keyboard; the sheet's field takes it instead.
+    Keyboard.dismiss()
+    setOpenQuestion(autoKey)
+  }
+  // A question waiting while its thread is on screen opens once by itself, so answering takes no extra tap.
+  useEffect(() => {
+    // Read live: questions arriving together run this in the same commit, and the first one takes the sheet.
+    if (!focused || openQuestion !== null || autoOpenedQuestions.has(autoKey)) return
+    autoOpenedQuestions.add(autoKey)
+    show()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- show reads only autoKey; openNow re-runs it when a sheet closes
+  }, [focused, openNow, autoKey])
+  const [first, ...rest] = item.questions
+  const many = item.questions.length > 1
+  return (
+    <>
+      <Card style={{ padding: space.m, gap: space.s, backgroundColor: c.raised2 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+          <MessageCircleQuestion size={14} color={c.warn} />
+          <T size={font.caption} weight="600" tone="warn" style={{ flex: 1 }}>
+            {many ? say('{0} questions for you', { 0: item.questions.length }) : say('Question for you')}
+          </T>
+        </View>
+        <T size={font.body} weight="600" numberOfLines={3} style={{ lineHeight: 21 }}>
+          {first?.question}
+        </T>
+        {rest.length ? (
+          <T size={font.control} tone="muted" numberOfLines={2}>
+            {rest.map((q) => q.question).join(' · ')}
+          </T>
+        ) : null}
+        <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+          <Button
+            title={say(state.started ? 'Continue answering' : 'Answer')}
+            accessibilityLabel={`${say(state.started ? 'Continue answering' : 'Answer')}: ${first?.question ?? ''}`}
+            onPress={show}
+          />
+        </View>
+      </Card>
+      <Sheet
+        open={open}
+        onClose={close}
+        title={
+          many ? say('{0} questions for you', { 0: item.questions.length }) : first?.header || say('Question for you')
+        }
+        scroll={false}
+      >
+        <SheetScrollView style={{ flexGrow: 0 }}>
+          <View style={{ paddingHorizontal: space.l, gap: space.l }}>
+            <QuestionForm item={item} state={state} headers={many} />
+            <QuestionActions state={state} onDone={close} />
+          </View>
+        </SheetScrollView>
+      </Sheet>
+    </>
+  )
+}
+
+/** The whole form in place, where nothing else on screen takes typing. */
+function QuestionInline({ item, chatId }: { item: QuestionItem; chatId: string }) {
+  const { c } = useTheme()
+  const state = useQuestionAnswer(item, chatId)
   return (
     <Card style={{ padding: space.m, gap: space.m, backgroundColor: c.raised2 }}>
+      <QuestionForm item={item} state={state} headers />
+      <QuestionActions state={state} />
+    </Card>
+  )
+}
+
+function QuestionForm({ item, state, headers }: { item: QuestionItem; state: QuestionAnswer; headers: boolean }) {
+  const say = useSay()
+  const { c } = useTheme()
+  // The last question left is sent with Submit, so it needs no button of its own.
+  const separate = item.grouping === 'independent' && item.questions.length > 1
+  return (
+    <>
       {item.submitted ? (
         <T tone="muted" size={font.caption}>
-          Already submitted: {Object.values(item.submitted).join(' · ')}
+          {say('Already submitted: {0}', { 0: Object.values(item.submitted).join(' · ') })}
         </T>
       ) : null}
-      {item.questions.map((q) => (
-        <View key={q.id ?? q.question} style={{ gap: space.s }}>
-          <T size={font.caption} weight="600" tone="warn" style={{ textTransform: 'uppercase', letterSpacing: 0.4 }}>
-            {q.header}
-          </T>
-          <T size={font.body} weight="600" style={{ lineHeight: 21, marginBottom: 2 }}>
-            {q.question}
-          </T>
-          {q.options.map((o) => {
-            const sel = picked[q.id ?? q.question]?.includes(o.label) ?? false
-            return (
+      {item.questions.map((q) => {
+        const key = q.id ?? q.question
+        return (
+          <View key={key} style={{ gap: space.s }}>
+            {headers && q.header ? (
+              <T
+                size={font.caption}
+                weight="600"
+                tone="warn"
+                style={{ textTransform: 'uppercase', letterSpacing: 0.4 }}
+              >
+                {q.header}
+              </T>
+            ) : null}
+            <T size={font.body} weight="600" style={{ lineHeight: 21, marginBottom: 2 }}>
+              {q.question}
+            </T>
+            {q.options.map((o) => (
               <Option
                 key={o.label}
                 label={o.label}
                 description={o.description}
                 multi={q.multiSelect}
-                selected={sel}
-                onPress={() => {
-                  setOther((old) => ({ ...old, [q.id ?? q.question]: '' }))
-                  setPicked((p) => {
-                    const cur = p[q.id ?? q.question] ?? []
-                    const next = q.multiSelect
-                      ? sel
-                        ? cur.filter((x) => x !== o.label)
-                        : [...cur, o.label]
-                      : sel
-                        ? []
-                        : [o.label]
-                    return { ...p, [q.id ?? q.question]: next }
-                  })
-                }}
+                selected={state.picked[key]?.includes(o.label) ?? false}
+                onPress={() => state.pick(q, o.label)}
               />
-            )
-          })}
-          <TextInput
-            placeholder={say('Other answer…')}
-            placeholderTextColor={c.placeholder}
-            value={other[q.id ?? q.question] ?? ''}
-            accessibilityLabel={q.question}
-            onChangeText={(v) => {
-              setPicked((old) => ({ ...old, [q.id ?? q.question]: [] }))
-              setOther((o) => ({ ...o, [q.id ?? q.question]: v }))
-            }}
-            style={{
-              color: c.text,
-              fontSize: font.body - 1,
-              padding: space.m,
-              borderRadius: radius.s + 2,
-              backgroundColor: c.fill,
-            }}
-          />
-        </View>
-      ))}
-      <View style={{ flexDirection: 'row', gap: space.s, justifyContent: 'flex-end' }}>
-        <Button kind="ghost" title={say('Dismiss')} onPress={() => answer(chatId, item.id, { _: 'Dismissed' })} />
-        <Button
-          title={say('Submit')}
-          disabled={!ready}
-          onPress={() =>
-            answer(
-              chatId,
-              item.id,
-              Object.fromEntries(
-                item.questions.map((q) => [
-                  q.id ?? q.question,
-                  [...(picked[q.id ?? q.question] ?? []), other[q.id ?? q.question]?.trim()].filter(Boolean).join(', '),
-                ]),
-              ),
-            )
-          }
-        />
-      </View>
-    </Card>
+            ))}
+            <TextInput
+              placeholder={say(q.options.length ? 'Other answer…' : 'Your answer…')}
+              placeholderTextColor={c.placeholder}
+              value={state.other[key] ?? ''}
+              accessibilityLabel={q.question}
+              multiline
+              onChangeText={(value) => state.type(q, value)}
+              style={{
+                color: c.text,
+                fontSize: font.body - 1,
+                padding: space.m,
+                paddingTop: space.m,
+                maxHeight: 160,
+                borderRadius: radius.s + 2,
+                backgroundColor: c.fill,
+              }}
+            />
+            {separate && state.answered(q) ? (
+              <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+                <Button kind="secondary" title={say('Send answer')} onPress={() => state.sendOne(q)} />
+              </View>
+            ) : null}
+          </View>
+        )
+      })}
+    </>
+  )
+}
+
+function QuestionActions({ state, onDone }: { state: QuestionAnswer; onDone?: () => void }) {
+  const say = useSay()
+  return (
+    <View style={{ flexDirection: 'row', gap: space.s, justifyContent: 'flex-end' }}>
+      <Button
+        kind="ghost"
+        title={say('Dismiss')}
+        onPress={() => {
+          state.dismiss()
+          onDone?.()
+        }}
+      />
+      <Button
+        title={say('Submit')}
+        disabled={!state.ready}
+        onPress={() => {
+          state.submit()
+          onDone?.()
+        }}
+      />
+    </View>
   )
 }
 

@@ -7,27 +7,29 @@ import { useSay } from '../i18n'
 import { font, space } from '../theme'
 import { Button, ROW_INSET, T } from './ui'
 import { ChatRow } from './ChatRow'
-import { TranscriptItemView } from './Transcript'
+import { InlineRequests, TranscriptItemView } from './Transcript'
 /** The same request IDs and draft keys back the transcript, activity sheet and Inbox. */
 export function InputRequests({ chat }: { chat: Chat }) {
   const store = useStore()
   const say = useSay()
   const online = store.isOnline(chat.computerId)
   return (
-    <View style={{ padding: space.m, gap: space.m }}>
-      {chat.items.filter(pendingRequest).map((request) => (
-        <View key={request.id}>
-          <T size={font.caption} tone="muted">
-            {request.requestSource?.name ?? say('Main thread')}
-          </T>
-          {online ? (
-            <TranscriptItemView item={request} chat={chat} />
-          ) : (
-            <T tone="muted">{say('Reconnect to answer this request.')}</T>
-          )}
-        </View>
-      ))}
-    </View>
+    <InlineRequests.Provider value>
+      <View style={{ padding: space.m, gap: space.m }}>
+        {chat.items.filter(pendingRequest).map((request) => (
+          <View key={request.id}>
+            <T size={font.caption} tone="muted">
+              {request.requestSource?.name ?? say('Main thread')}
+            </T>
+            {online ? (
+              <TranscriptItemView item={request} chat={chat} />
+            ) : (
+              <T tone="muted">{say('Reconnect to answer this request.')}</T>
+            )}
+          </View>
+        ))}
+      </View>
+    </InlineRequests.Provider>
   )
 }
 export function InboxThread({ chat, project, divider }: { chat: Chat; project?: string; divider?: boolean }) {
