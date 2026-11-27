@@ -391,6 +391,19 @@ describe('pushes from a thread', () => {
     expect(enqueue).toHaveBeenCalledOnce()
   })
 
+  it('takes no turn when only CI passes, with no deploy among the checks', async () => {
+    vi.mocked(commitChecks).mockResolvedValue([
+      { name: 'Check (macos-15)', state: 'success', url: 'https://github.com/o/r/actions/runs/1/job/2' },
+      { name: 'Check (ubuntu-24.04)', state: 'success', url: 'https://github.com/o/r/actions/runs/1/job/3' },
+    ])
+    await push()
+    await service.tick(0)
+    expect(enqueue).not.toHaveBeenCalled()
+    vi.mocked(commitChecks).mockResolvedValue(failing)
+    await service.tick(60_000)
+    expect(enqueue).not.toHaveBeenCalled()
+  })
+
   it('follows pushes of other branches too, unless their pull request is watched', async () => {
     vi.mocked(commitBranchInfo).mockResolvedValue({ branch: 'feature', defaultBranch: 'main' })
     vi.mocked(currentBranch).mockResolvedValue('feature')

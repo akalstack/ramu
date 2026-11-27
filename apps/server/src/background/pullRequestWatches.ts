@@ -91,6 +91,11 @@ function checksSignature(pr: PullRequestInfo): string {
 }
 
 /** The short note a thread gets when every check on its push finished without a failure. */
+/** A check a hosting platform reports for a deploy, read from its name or its link. */
+const DEPLOY_CHECK =
+  /deploy|vercel|netlify|render\.com|railway|cloudflare pages|pages\.dev|fly\.io|github pages|preview|production|staging/i
+const isDeployCheck = (check: ForgeCheck) => DEPLOY_CHECK.test(check.name) || DEPLOY_CHECK.test(check.url ?? '')
+
 function passedChecksNote(branch: string, sha: string, checks: readonly ForgeCheck[]): string {
   const shown = checks.slice(0, PASSED_LIMIT).map((check) => {
     const name = check.name.replace(/\s+/g, ' ').slice(0, 120)
@@ -342,8 +347,9 @@ export class PullRequestWatchService {
   }
 
   /**
-   * A push's checks: nothing until a check fails or all finish. A failure hands over the failing checks' logs, a pass
-   * the checks and their links (where a deploy's address is), once, and the push is forgotten.
+   * A push's checks: nothing until a check fails or all finish. A failure hands over the failing checks' logs, once,
+   * and the push is forgotten. A pass wakes the thread only when a deploy is among the checks, for its address: CI
+   * passing alone needs no turn, and Source Control and the pull request already show it.
    */
   private async pollPush(push: PushWatch, now: number): Promise<void> {
     const checks = await commitChecks(push.cwd, push.sha)
@@ -353,6 +359,10 @@ export class PullRequestWatchService {
     }
     const failed = checks.some((check) => check.state === 'failure')
     if (!failed && (!checks.length || checks.some((check) => check.state === 'pending'))) return
+    if (!failed && !checks.some(isDeployCheck)) {
+      this.removePush((entry) => entry.id === push.id)
+      return
+    }
     if (this.suspended(push)) return
     const prompt = failed
       ? await commitChecksFeedback(push.cwd, push.sha, push.branch)
