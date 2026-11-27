@@ -13,3 +13,18 @@ export function keepAttachmentPreview(id: string, uri: string) {
 }
 
 export const attachmentPreview = (id: string): string | null => previews.get(id) ?? null
+
+/**
+ * What each file this phone just uploaded is (name and type), by the id the host gave it, so a message still on its
+ * way shows its files as the host's copy will. The message keeps them, so they show again after a restart.
+ */
+const files = new Map<string, import('@ramu/shared/types').Attachment>()
+
+export function keepAttachment(file: import('@ramu/shared/types').Attachment) {
+  files.delete(file.id)
+  files.set(file.id, file)
+  while (files.size > KEEP) files.delete(files.keys().next().value!)
+}
+
+export const attachmentsOf = (ids: readonly string[] | undefined) =>
+  (ids ?? []).flatMap((id) => (files.has(id) ? [files.get(id)!] : []))

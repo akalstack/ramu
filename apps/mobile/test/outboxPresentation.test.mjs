@@ -75,6 +75,11 @@ test('a message on its way is the sent message’s own bubble and footer, with t
   // The bubble the host's copy is drawn with, given the words that copy will show, so the swap changes nothing.
   assert.equal(sent.type, 'UserBubble')
   assert.equal(sent.props.text, 'Hello')
+  // The files sent with it show at once, from this phone's own copy, as the host's copy will draw them.
+  const photo = { id: 'a1', name: 'photo.jpg', mimeType: 'image/jpeg', size: 10 }
+  const withFile = load().SentBubble({ text: '', files: [photo], computerId: 'host' })
+  assert.deepEqual(withFile.props.attachments, [photo])
+  assert.equal(withFile.props.computerId, 'host')
   const footer = pending(true)[1]
   assert.equal(footer.props.at, 1_700_000_000_000)
   assert.equal(footer.props.status, undefined)

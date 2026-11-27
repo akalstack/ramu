@@ -1,5 +1,6 @@
 import { VIEW_ONLY_WRITE_NOTICE } from '../runtime/viewerAccess'
 import { useState } from 'react'
+import type { Attachment } from '@ramu/shared/types'
 import { useSay, useT } from '../i18n'
 import { WorktreeBaseReview } from './WorktreeBaseReview'
 import { ActionSheetIOS, Alert, Platform, Pressable, View } from 'react-native'
@@ -68,8 +69,19 @@ export const SENT_ROW = { alignSelf: 'stretch', alignItems: 'flex-end', gap: 4 }
  * The bubble of a message sent from here before the host has it: the sent message's own bubble, given the words the
  * host's copy will show, so the swap changes nothing on screen.
  */
-export function SentBubble({ text, waiting = false }: { text: string; waiting?: boolean }) {
-  return <UserBubble text={visibleText(text)} waiting={waiting} />
+export function SentBubble({
+  text,
+  waiting = false,
+  files,
+  computerId,
+}: {
+  text: string
+  waiting?: boolean
+  /** The files sent with it, drawn from this phone's own copy, as the host's copy will show them. */
+  files?: Attachment[]
+  computerId?: string
+}) {
+  return <UserBubble text={visibleText(text)} waiting={waiting} attachments={files} computerId={computerId} />
 }
 
 /**
@@ -112,7 +124,7 @@ export function PendingBubble({
         }}
         style={SENT_ROW}
       >
-        <SentBubble text={item.text} waiting={!delivering} />
+        <SentBubble text={item.text} waiting={!delivering} files={item.files} computerId={item.computerId} />
         {delivering ? null : (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingRight: 4, maxWidth: '86%' }}>
             <ModeIcon size={12} color={c.muted} />

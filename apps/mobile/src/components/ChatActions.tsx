@@ -182,12 +182,16 @@ export function useChatCommands(chat: Chat) {
   const writable = () =>
     latestStore.current.isOnline(chat.computerId) &&
     latestStore.current.computers?.find((host) => host.id === chat.computerId)?.access !== 'viewer'
-  const run = async (fn: () => Promise<unknown>) => {
+  // A change shows on the row at once (`shown`); the host's answer and the read after it confirm it, or a refusal reads
+  // the thread back as it was.
+  const run = async (fn: () => Promise<unknown>, shown?: Parameters<typeof store.patchChat>[1]) => {
     if (!writable()) return
+    if (shown) store.patchChat(chat.id, shown)
     try {
       await fn()
       await store.refresh(chat.computerId)
     } catch (error) {
+      if (shown) void latestStore.current.refresh(chat.computerId).catch(() => {})
       Alert.alert(say('Could not update thread'), error instanceof Error ? error.message : String(error))
     }
   }
@@ -196,19 +200,31 @@ export function useChatCommands(chat: Chat) {
     pinned: chat.pinnedAt !== null,
     archived: chat.status === 'archived',
     done: !!chat.doneAt,
-    togglePin: () => run(() => store.invoke(chat.computerId, 'tasks.pin', chat.taskId, chat.pinnedAt === null)),
-    toggleDone: () =>
-      run(async () => {
-        if (!chat.doneAt && !(await confirmDone(store.invoke, say, [chat]))) return
-        await store.invoke(chat.computerId, 'tasks.done', chat.taskId, !chat.doneAt)
-        if (!chat.doneAt) offerThreadUndo(latestStore.current, chat, 'done')
+    togglePin: () =>
+      run(() => store.invoke(chat.computerId, 'tasks.pin', chat.taskId, chat.pinnedAt === null), {
+        pinnedAt: chat.pinnedAt === null ? Date.now() : null,
       }),
-    toggleArchive: () =>
-      run(async () => {
-        const archiving = chat.status !== 'archived'
-        await store.invoke(chat.computerId, 'tasks.archive', chat.taskId, archiving)
-        if (archiving) offerThreadUndo(latestStore.current, chat, 'archived')
-      }),
+    toggleDone: async () => {
+      if (!writable()) return
+      if (!chat.doneAt && !(await confirmDone(store.invoke, say, [chat]))) return
+      await run(
+        async () => {
+          await store.invoke(chat.computerId, 'tasks.done', chat.taskId, !chat.doneAt)
+          if (!chat.doneAt) offerThreadUndo(latestStore.current, chat, 'done')
+        },
+        { doneAt: chat.doneAt ? null : Date.now() },
+      )
+    },
+    toggleArchive: () => {
+      const archiving = chat.status !== 'archived'
+      return run(
+        async () => {
+          await store.invoke(chat.computerId, 'tasks.archive', chat.taskId, archiving)
+          if (archiving) offerThreadUndo(latestStore.current, chat, 'archived')
+        },
+        { status: archiving ? 'archived' : 'idle' },
+      )
+    },
     /** Asks first; `done` runs after the chat is gone (a chat screen leaves itself). */
     confirmDelete: (done?: () => void, presented?: () => void) => {
       if (!writable() || loading.current) return
@@ -265,13 +281,15 @@ export function ChatActionsSheet({
   const say = (text: string, values?: Record<string, string | number>) => translate(store.language, text, values)
   const archived = chat.status === 'archived'
   const pinned = chat.pinnedAt !== null
-  const run = async (fn: () => Promise<unknown>) => {
+  const run = async (fn: () => Promise<unknown>, shown?: Parameters<typeof store.patchChat>[1]) => {
     if (!writable()) return
     onClose()
+    if (shown) store.patchChat(chat.id, shown)
     try {
       await fn()
       await store.refresh(chat.computerId)
     } catch (error) {
+      if (shown) void store.refresh(chat.computerId).catch(() => {})
       Alert.alert(say('Could not update thread'), error instanceof Error ? error.message : String(error))
     }
   }
@@ -382,7 +400,10 @@ export function ChatActionsSheet({
             placeholderTextColor={c.placeholder}
             returnKeyType="done"
             onSubmitEditing={() =>
-              title.trim() && void run(() => store.invoke(chat.computerId, 'tasks.rename', chat.taskId, title.trim()))
+              title.trim() &&
+              void run(() => store.invoke(chat.computerId, 'tasks.rename', chat.taskId, title.trim()), {
+                title: title.trim(),
+              })
             }
             style={{
               color: c.text,
@@ -402,7 +423,11 @@ export function ChatActionsSheet({
             <Button
               title={say('Save')}
               disabled={viewOnly || !title.trim() || title.trim() === chat.title}
-              onPress={() => void run(() => store.invoke(chat.computerId, 'tasks.rename', chat.taskId, title.trim()))}
+              onPress={() =>
+                void run(() => store.invoke(chat.computerId, 'tasks.rename', chat.taskId, title.trim()), {
+                  title: title.trim(),
+                })
+              }
             />
           </View>
         </View>

@@ -109,6 +109,7 @@ import { GOAL_VERIFY_METHOD } from './goalVerify'
 import { mergeTranscript, transcriptRows, updateThreadMetadata, readTranscriptBundle } from './transcriptChanges'
 import { STANDALONE, type Chat, type Computer, type MobileProject } from './types'
 import type { Task } from '@ramu/shared/types'
+import { attachmentsOf } from './attachmentPreviews'
 import { DONE_PAGE, doneCursor, isDoneThread, readOlderDone, readThreadList } from '@ramu/shared/doneThreads'
 
 const expoFetch = nativeFetch as unknown as typeof globalThis.fetch
@@ -148,6 +149,8 @@ export interface OutboxItem {
   reviewedPlan?: WorktreePlanEntry[]
   branchPrefix?: string
   attachments?: string[]
+  /** What those files are, for drawing them before the host has the message. */
+  files?: import('@ramu/shared/types').Attachment[]
   context?: FileContext[]
 }
 interface State {
@@ -305,6 +308,11 @@ interface Store extends State {
   ): Promise<void>
   isOnline(id: string): boolean
   setDraft(key: string, text: string): void
+  /**
+   * Shows a change to a thread at once (pinned, done, archived, renamed) while the host makes it. The next read from the
+   * host replaces it, so a change the host refused goes back by itself.
+   */
+  patchChat(id: string, patch: Partial<Pick<Chat, 'pinnedAt' | 'doneAt' | 'status' | 'title'>>): void
   rememberExplorer(host: string, context: string, navigation: Omit<ExplorerNavigation, 'at'>): void
   addExplorerFile(input: ExplorerFileInput): Promise<ExplorerDestination>
   clearComposerDraft(key: string, expected: Partial<ComposerSnapshot>): boolean
@@ -2113,6 +2121,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         for (const sessionId of shown) shownSessions.current.delete(scoped(id, sessionId))
       }
     },
+    patchChat: (id, patch) =>
+      change((s) => ({ ...s, chats: s.chats.map((chat) => (chat.id === id ? { ...chat, ...patch } : chat)) })),
     caughtUp: (id, sessionId) => catchUps.current.get(scoped(id, sessionId)) ?? Promise.resolve(),
     subscribe: (id, listener) => {
       const set = listeners.current.get(id) ?? new Set()
@@ -2139,6 +2149,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         mode,
         createdAt: Date.now(),
         attachments,
+        ...(attachmentsOf(attachments).length ? { files: attachmentsOf(attachments) } : {}),
         context,
         state: 'waiting',
         deliveryBaseline: deliveryBaseline(chat, text),
@@ -2215,6 +2226,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             : undefined,
         settings: { ...settingsFor(input.provider, input.model, input.effort), ...input.settings },
         attachments: input.attachments,
+        ...(attachmentsOf(input.attachments).length ? { files: attachmentsOf(input.attachments) } : {}),
         context: input.context,
         state: 'waiting',
       }

@@ -61,6 +61,7 @@ import { KeyboardPadding } from '../components/Keyboard'
 import { AnimatedMark } from '../components/AnimatedMark'
 import { SentArrive, Shimmer } from '../components/Motion'
 import { SENT_ROW, SentBubble } from '../components/Outbox'
+import { attachmentsOf } from '../runtime/attachmentPreviews'
 import { ChatDateLabel } from '../components/Transcript'
 import { formatChatDate } from '@ramu/shared/chat/chatDates'
 import { Composer, type ModelChoice } from '../components/Composer'
@@ -164,7 +165,12 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
   const routeRevision = useRef(0)
   const routingStart = useRef(false)
   // The message being routed, drawn as the thread it starts while a project is chosen.
-  const [routing, setRouting] = useState<{ text: string; status: string; sentAt: number } | null>(null)
+  const [routing, setRouting] = useState<{
+    text: string
+    status: string
+    sentAt: number
+    attachments?: string[]
+  } | null>(null)
   // Auto also weighs projects on the other online hosts; a prompt that needs several projects is reviewed as a list,
   // kept on the phone until it is started or cancelled.
   const others = otherHostTargets(selected, computers, projects)
@@ -433,7 +439,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
         setPicker('project')
         throw new Error(say('Choose a project to start while this host is offline.'))
       }
-      setRouting({ text, status: say('Choosing a project…'), sentAt: Date.now() })
+      setRouting({ text, status: say('Choosing a project…'), sentAt: Date.now(), attachments })
       const revision = ++routeRevision.current
       const verified = await agentDraft.verify()
       if (revision !== routeRevision.current)
@@ -729,9 +735,9 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
             <View style={{ paddingBottom: space.m }} />
             <SentArrive identity={`routing:${routing.sentAt}`} start>
               <ChatDateLabel date={formatChatDate(routing.sentAt, Date.now(), store.language)} />
-              {routing.text ? (
+              {routing.text || routing.attachments?.length ? (
                 <View style={SENT_ROW}>
-                  <SentBubble text={routing.text} />
+                  <SentBubble text={routing.text} files={attachmentsOf(routing.attachments)} computerId={pc?.id} />
                 </View>
               ) : null}
             </SentArrive>

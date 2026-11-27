@@ -19,7 +19,7 @@ import {
   View,
 } from 'react-native'
 import { Pressable as NativePressable } from 'react-native-gesture-handler'
-import { attachmentPreview, keepAttachmentPreview } from '../runtime/attachmentPreviews'
+import { attachmentPreview, keepAttachment, keepAttachmentPreview } from '../runtime/attachmentPreviews'
 import { usePastedFiles, type PastedFile } from '../runtime/paste'
 import { MenuView } from '@react-native-menu/menu'
 import { markdownRuns, type MarkdownMark } from '@ramu/shared/chat/markdownRuns'
@@ -1949,6 +1949,7 @@ async function pickAttachment(
     const added = await store.invoke(computerId, 'attachments.add', asset.name, base64)
     // The phone's own copy of a picture stands in as its thumbnail, here and in the sent message.
     if (added.mimeType.startsWith('image/')) keepAttachmentPreview(added.id, asset.uri)
+    keepAttachment(added)
     add(added)
   } catch (error) {
     Alert.alert(say('Attachment failed'), error instanceof Error ? error.message : String(error))

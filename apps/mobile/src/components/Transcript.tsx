@@ -332,7 +332,7 @@ function ImageBlock({ uri, alt, size }: { uri: string; alt?: string; size?: numb
 }
 
 /** A file you attached: images show as thumbnails (fetched from the computer), other files as a chip. */
-function AttachmentTile({ file, chat }: { file: Attachment; chat: Chat }) {
+function AttachmentTile({ file, computerId }: { file: Attachment; computerId: string }) {
   const { c } = useTheme()
   const store = useStore()
   const say = useSay()
@@ -341,9 +341,9 @@ function AttachmentTile({ file, chat }: { file: Attachment; chat: Chat }) {
   // A picture this phone just sent shows from its own copy, without waiting for the host's thumbnail.
   const [uri, setUri] = useState<string | null>(() => attachmentPreview(file.id))
   useEffect(() => {
-    if (!image || uri || !store.isOnline(chat.computerId)) return
+    if (!image || uri || !store.isOnline(computerId)) return
     let alive = true
-    void store.invoke(chat.computerId, 'attachments.preview', file.id).then(
+    void store.invoke(computerId, 'attachments.preview', file.id).then(
       (value) => {
         if (alive) setUri(value)
       },
@@ -352,10 +352,10 @@ function AttachmentTile({ file, chat }: { file: Attachment; chat: Chat }) {
     return () => {
       alive = false
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [file.id, image, chat.computerId] by design; the values it reads beyond these are current as of that run
-  }, [file.id, image, chat.computerId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [file.id, image, computerId] by design; the values it reads beyond these are current as of that run
+  }, [file.id, image, computerId])
   if (image && uri) return <ImageBlock uri={uri} alt={file.name} size={88} />
-  if (isModelFile(file)) return <ModelTile file={file} computerId={chat.computerId} />
+  if (isModelFile(file)) return <ModelTile file={file} computerId={computerId} />
   // Any other file opens its text, as the desktop's preview does.
   return (
     <>
@@ -381,11 +381,7 @@ function AttachmentTile({ file, chat }: { file: Attachment; chat: Chat }) {
       >
         <T size={font.caption + 1} tone="soft" numberOfLines={1}>{`📎 ${file.name}`}</T>
       </Pressable>
-      <AttachmentTextSheet
-        computerId={chat.computerId}
-        file={reading ? file : null}
-        onClose={() => setReading(false)}
-      />
+      <AttachmentTextSheet computerId={computerId} file={reading ? file : null} onClose={() => setReading(false)} />
     </>
   )
 }
@@ -442,7 +438,7 @@ function AbilityCard({ call, chat }: { call: AbilityCall; chat: Chat }) {
       {call.attachments?.length ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
           {call.attachments.map((file) => (
-            <AttachmentTile key={file.id} file={file} chat={chat} />
+            <AttachmentTile key={file.id} file={file} computerId={chat.computerId} />
           ))}
         </View>
       ) : null}
@@ -1303,11 +1299,14 @@ export function UserBubble({
   text,
   attachments,
   chat,
+  computerId,
   waiting = false,
 }: {
   text: string
   attachments?: Attachment[]
   chat?: Chat
+  /** The host of a message still on its way, which has no thread item yet. */
+  computerId?: string
   waiting?: boolean
 }) {
   const { c } = useTheme()
@@ -1354,10 +1353,10 @@ export function UserBubble({
         alignItems: wide ? 'stretch' : 'flex-end',
       }}
     >
-      {attachments?.length && chat ? (
+      {attachments?.length && (chat?.computerId ?? computerId) ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'flex-end' }}>
           {attachments.map((file) => (
-            <AttachmentTile key={file.id} file={file} chat={chat} />
+            <AttachmentTile key={file.id} file={file} computerId={(chat?.computerId ?? computerId)!} />
           ))}
         </View>
       ) : null}
