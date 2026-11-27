@@ -163,3 +163,21 @@ it('names the command itself, not a count of one, while it runs and once the gro
   )
   expect(single).toContain('Ran pnpm lint')
 })
+
+it('keeps a live group to one line under its headline, its latest thought cut to that line', () => {
+  const second = { ...tool, toolUseId: 'grep', name: 'Grep', summary: 'TODO' }
+  const done = new Map<string, ToolResult>([
+    ['read', { kind: 'tool-result', toolUseId: 'read', summary: '', isError: false }],
+    ['grep', { kind: 'tool-result', toolUseId: 'grep', summary: '', isError: false }],
+  ])
+  const live = (entries: ToolEntry[]) =>
+    renderToStaticMarkup(
+      createElement(ToolGroup, { tools: [tool, second], entries, results: done, cwd: '', active: true, live: true }),
+    )
+  const thought = 'First I will read the file.\n\nThen I will check every place that calls it, one by one, and note each.'
+  const withThought = live([tool, { kind: 'thinking', text: thought }, second])
+  expect(withThought).toContain('min-h-[1lh]')
+  expect(withThought).not.toContain('line-clamp-3')
+  // With no thought yet, the line is still there, so the first thought does not move the end of the chat.
+  expect(live([tool, second])).toContain('min-h-[1lh]')
+})

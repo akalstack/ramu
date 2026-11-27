@@ -4530,7 +4530,6 @@ function chatView() {
     './ui': { ...components, tap() {}, T: 'T', Card: 'Card' },
     './Motion': { Collapse: 'Collapse', Disclosure: 'Disclosure', Breathe: 'Breathe', Arrive: 'Arrive' },
     './ChoiceOption': { Option: function Option() {} },
-    './heldHeight': { useHeldHeight: () => ({ minHeight: undefined, onLayout() {}, release() {} }) },
   })
   const invoke = (node) => {
     states = componentStates.get(node.type) ?? []
@@ -4634,7 +4633,6 @@ function questionView({ inline = false } = {}) {
     './ui': { ...components, tap() {}, T: 'T', Card: 'Card', Button: 'Button', Sheet: 'Sheet' },
     './Motion': { Collapse: 'Collapse', Disclosure: 'Disclosure', Breathe: 'Breathe', Arrive: 'Arrive' },
     './ChoiceOption': { Option: 'Option' },
-    './heldHeight': { useHeldHeight: () => ({ minHeight: undefined, onLayout() {}, release() {} }) },
   })
   const invoke = (node) => {
     states = componentStates.get(node.type) ?? []

@@ -19,7 +19,6 @@ import { toolIsRunning, toolVerb } from '@ramu/shared/chat/toolStatus'
 import { type ToolResult, type ToolUse } from '../types'
 import { describeTools, toolFallbackTitle } from '../lib/toolSummary'
 import { useScrollFade } from '../hooks/useScrollFade'
-import { useHeldHeight } from '../hooks/useHeldHeight'
 import { ShadowPre } from './ShadowPre'
 import { ToolIcon } from './ToolIcon'
 import { ThinkingRow } from './ThinkingRow'
@@ -139,9 +138,6 @@ export function ToolGroup({
   useLanguage()
   const [open, setOpen] = useState(false)
   const bodyRef = useScrollFade<HTMLDivElement>()
-  // Only the folded live row holds its height: that is where lines come and go as calls start and finish. Opened, the
-  // group reads as the person left it.
-  const held = useHeldHeight<HTMLDivElement>(live && active && !open, tools[0]?.toolUseId)
   const status = toolActivity(tools, (tool) => {
     const result = results.get(tool.toolUseId)
     return failedResult(tool, result) || tool.status === 'failed'
@@ -175,8 +171,7 @@ export function ToolGroup({
   )
   const thoughtFade = useChatFade<HTMLSpanElement>(lastThought ? String(thoughtBlock(lastThought.text)) : '')
   return (
-    // Any click inside is the person opening or folding something, which the hold must let show.
-    <div ref={held.ref} onClickCapture={held.release}>
+    <div>
       {/* Keyed by whether it is a group, so a lone row becoming one switches at once instead of animating shut. */}
       <Collapsible
         key={entries.length > 1 ? 'group' : 'single'}
@@ -220,21 +215,27 @@ export function ToolGroup({
             <ChevronRight size={13} className={CARET_CLASS} />
           </CollapsibleTrigger>
         )}
-        {entries.length > 1 && !open && !running && lastFailed && (
-          // A closed group names its latest failure and what it said, so a failed step is never hidden behind "Ran 5 commands".
+        {/* One line under the headline: a closed group's latest failure, so a failed step is never hidden behind "Ran 5
+            commands", or while the group is live its latest thought. The live group keeps that line even when it is
+            empty, as T3 Code's work rows keep one height, so the end of the chat does not move as thoughts and steps
+            come and go; it leaves with the newer row that ends the group's turn. */}
+        {entries.length > 1 && !open && !running && lastFailed ? (
           <div className="ml-[22px] min-w-0 truncate pb-1 text-caption text-muted-foreground">
             {toolRow(lastFailed, results.get(lastFailed.toolUseId), cwd, active).line}
             {lastFailedLine ? `: ${lastFailedLine}` : null}
           </div>
-        )}
-        {entries.length > 1 && !open && lastThought && thoughtEnding(lastThought.text) && (
-          <div className="flex min-w-0 items-start gap-2 pb-1 text-caption text-muted-foreground">
-            <Brain size={12} className="mt-[3px] flex-none opacity-70" />
-            <span ref={thoughtFade} className="line-clamp-3 min-w-0">
-              {thoughtEnding(lastThought.text)}
-            </span>
+        ) : entries.length > 1 && !open && live && active ? (
+          <div className="flex min-h-[1lh] min-w-0 items-center gap-2 pb-1 text-caption text-muted-foreground">
+            {lastThought && thoughtEnding(lastThought.text) ? (
+              <>
+                <Brain size={12} className="flex-none opacity-70" />
+                <span ref={thoughtFade} className="min-w-0 truncate">
+                  {thoughtEnding(lastThought.text)}
+                </span>
+              </>
+            ) : null}
           </div>
-        )}
+        ) : null}
         <CollapsibleContent className={TOOL_DISCLOSURE_PANEL_CLASS}>
           <div
             ref={bodyRef}

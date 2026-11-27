@@ -9,7 +9,6 @@ import { summarizeTools, toolRowWords } from '@ramu/shared/chat/toolSummary'
 import { attachmentPreview } from '../runtime/attachmentPreviews'
 import { GOAL_NOTE_LABELS } from '@ramu/shared/chat/goalHistory'
 import { NEW_THOUGHT, thoughtEnding, thoughtLine, thoughtTitle, tickThought } from '@ramu/shared/chat/thoughtLine'
-import { useHeldHeight } from './heldHeight'
 import { FileIcon } from './FileIcon'
 import { isModelFile, ModelTile } from './ModelViewer'
 import { translate, type Language } from '@ramu/shared/i18n'
@@ -1498,22 +1497,14 @@ function ToolGroup({ item, live }: { item: Extract<TranscriptItem, { kind: 'tool
   const Icon = shown ? toolIcons[shown.tool] : Wrench
   // While working, only the words shimmer; the icon stays still, as on the desktop.
   const tint = failed ? c.bad : c.muted
-  // Only the folded live row holds its height: that is where lines come and go as calls start and finish. Opened, the
-  // group reads as the person left it.
-  const held = useHeldHeight(live && !open, item.id)
-  // Opening or folding the group, or a row inside it, lets the hold go, so the person's change shows.
-  const toggledInside = () => {
-    toggled()
-    held.release()
-  }
   return (
-    <View style={{ gap: space.xs, minHeight: held.minHeight }} onLayout={held.onLayout}>
+    <View style={{ gap: space.xs }}>
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
         onPress={() => {
           tap()
-          toggledInside()
+          toggled()
           setOpen((value) => !value)
         }}
         style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}
@@ -1546,26 +1537,27 @@ function ToolGroup({ item, live }: { item: Extract<TranscriptItem, { kind: 'tool
         ) : null}
         <Disclosure open={open} color={c.muted} />
       </Pressable>
-      {!open && !running && lastFailed && lastFailedLine ? (
-        // A closed group still says why its latest step failed, in one plain line; the full output is a tap away.
+      {/* One line under the headline: why the latest step failed, or while the group is live its latest thought. The
+          live group keeps that line even when it is empty, as T3 Code's work rows keep one height, so the end of the
+          chat does not move as thoughts and steps come and go; it leaves with the newer row that ends the group's turn. */}
+      {open ? null : !running && lastFailed && lastFailedLine ? (
         <T size={font.caption} tone="muted" numberOfLines={1} style={{ marginLeft: 22 }}>
           {lastFailed === shown
             ? lastFailedLine
             : `${`${lastFailedWords.verb} ${lastFailedWords.subject}`.trim()}: ${lastFailedLine}`}
         </T>
-      ) : null}
-      {!open && lastThoughtLine ? (
-        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.s }}>
-          <Brain size={12} color={c.muted} style={{ marginTop: 3 }} />
-          <T size={font.caption} tone="muted" numberOfLines={3} style={{ flex: 1, minWidth: 0 }}>
-            {lastThoughtLine}
+      ) : live ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, marginLeft: 1 }}>
+          {lastThoughtLine ? <Brain size={12} color={c.muted} /> : null}
+          <T size={font.caption} tone="muted" numberOfLines={1} style={{ flex: 1, minWidth: 0 }}>
+            {lastThoughtLine || ' '}
           </T>
         </View>
       ) : null}
       {/* Opens and closes at once, as T3 Code's work log does, and rows that arrive while it is open simply appear: a
           height animation here would replay with every new call and move the reply below while the person reads. */}
       {open ? (
-        <RowToggle.Provider value={toggledInside}>
+        <RowToggle.Provider value={toggled}>
           <View style={{ gap: space.xs }}>
             {item.entries.map((entry, index) =>
               entry.kind === 'thinking' ? (
