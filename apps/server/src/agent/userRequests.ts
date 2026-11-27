@@ -2,7 +2,7 @@ import type { ForwardedRequest } from './childRequests'
 import { randomUUID } from 'node:crypto'
 import { rm } from 'node:fs/promises'
 import { matchesCommand, PermissionApprovals } from './permissionApprovals'
-import type { AgentEvent, AgentSessionInfo, PermissionScope, AppPreferences } from '@ramu/shared/types'
+import type { AgentEvent, AgentQuestion, AgentSessionInfo, PermissionScope, AppPreferences } from '@ramu/shared/types'
 import {
   answerMessage,
   questionKey,
@@ -376,11 +376,31 @@ export class UserRequests {
     if (child && child.childId !== id) return this.closeQuestion(child.childId, child.requestId, outcome, reason)
     const state = this.questionStatus(id, requestId)
     if (state.outcome) throw new Error('This question is already closed.')
-    if (state.request.responseMode !== 'message')
+    if (!state.request.responseMode) {
+      if (outcome !== 'dismissed') throw new Error('Only you can dismiss a question the agent waits on.')
+      return this.dismissProviderQuestion(id, requestId, state.request.questions)
+    }
+    if (outcome === 'obsolete' && state.request.responseMode !== 'message')
       throw new Error('This question needs an answer. Answer it or stop the thread.')
     if (outcome === 'obsolete' && !reason?.trim()) throw new Error('Explain why this question is no longer needed.')
     this.host.record(id, { kind: 'question-state', requestId, reason })
     this.host.record(id, { kind: 'request-resolved', requestId, outcome })
+  }
+
+  /**
+   * The provider's own question tool waits for an answer, so a dismissal is its answer: Claude Code's tool is refused
+   * with the reason, and another provider is told the same in place of each answer.
+   */
+  private dismissProviderQuestion(id: string, requestId: string, questions: AgentQuestion[]): void {
+    const said =
+      'The person dismissed this question without answering. Do not assume an answer: go on with what does not depend on it, or ask again later.'
+    if (this.host.runners.has(id)) {
+      this.host.runners.get(id)!.replyQuestion(requestId, Object.fromEntries(questions.map((q) => [q.question, said])))
+      return this.host.record(id, { kind: 'request-resolved', requestId, outcome: 'dismissed' })
+    }
+    this.takePending(id, requestId, 'question').resolve({ behavior: 'deny', message: said })
+    this.host.record(id, { kind: 'request-resolved', requestId, outcome: 'dismissed' })
+    this.afterRequest(id)
   }
 
   private permissionRequest(id: string, requestId: string) {

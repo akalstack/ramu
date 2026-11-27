@@ -1967,9 +1967,7 @@ function QuestionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: 
         </View>
       ))}
       <View style={{ flexDirection: 'row', gap: space.s, justifyContent: 'flex-end' }}>
-        {item.responseMode === 'message' ? (
-          <Button kind="ghost" title={say('Dismiss')} onPress={() => answer(chatId, item.id, { _: 'Dismissed' })} />
-        ) : null}
+        <Button kind="ghost" title={say('Dismiss')} onPress={() => answer(chatId, item.id, { _: 'Dismissed' })} />
         <Button
           title={say('Submit')}
           disabled={!ready}

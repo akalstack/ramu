@@ -25,7 +25,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-const watching = (answers: (ProviderSignIn | undefined)[]) => {
+const useWatching = (answers: (ProviderSignIn | undefined)[]) => {
   let index = 0
   const signedIn = vi.fn()
   const check = vi.fn(async () => answers[Math.min(index++, answers.length - 1)])
@@ -35,14 +35,18 @@ const watching = (answers: (ProviderSignIn | undefined)[]) => {
 
 it('leaves the terminal open while a login that was already there is signed in again', async () => {
   const same = { signedIn: true, email: 'me@example.com' }
-  const { signedIn } = watching([same, same, same, same])
+  const { signedIn } = useWatching([same, same, same, same])
   await vi.advanceTimersByTimeAsync(12_000)
   expect(closes).toBe(0)
   expect(signedIn).not.toHaveBeenCalled()
 })
 
 it('closes the terminal once the login is new, and shows it', async () => {
-  const { signedIn } = watching([{ signedIn: false }, { signedIn: false }, { signedIn: true, email: 'me@example.com' }])
+  const { signedIn } = useWatching([
+    { signedIn: false },
+    { signedIn: false },
+    { signedIn: true, email: 'me@example.com' },
+  ])
   await vi.advanceTimersByTimeAsync(3_000)
   expect(closes).toBe(0)
   await vi.advanceTimersByTimeAsync(3_000)
@@ -51,7 +55,7 @@ it('closes the terminal once the login is new, and shows it', async () => {
 })
 
 it('closes when another account replaces the one signed in', async () => {
-  watching([
+  useWatching([
     { signedIn: true, email: 'old@example.com' },
     { signedIn: true, email: 'new@example.com' },
   ])

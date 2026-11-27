@@ -698,7 +698,7 @@ const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: 
       clearTimeout(slow)
     }
     // `restoreAttempt` re-runs the restore after a failed attempt.
-  }, [refresh, refreshBindings, invoke, storage, persistence, restoreAttempt, hostId, openOfflineCopy])
+  }, [refresh, refreshBindings, invoke, storage, persistence, restoreAttempt, hostId, openOfflineCopy, listThreads])
   useEffect(
     () =>
       onWorkspaceVisibility(() => {

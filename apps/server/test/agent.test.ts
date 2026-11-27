@@ -4010,10 +4010,22 @@ describe('questions while work continues', () => {
     const event = svc.events(chat.id).findLast((e) => e.kind === 'question')!
     expect(event).toMatchObject({ responseMode: 'ramu' })
     expect(svc.get(chat.id).state).toBe('needs-input')
-    expect(() => svc.closeQuestion(chat.id, event.requestId, 'dismissed')).toThrow('needs an answer')
+    expect(() => svc.closeQuestion(chat.id, event.requestId, 'obsolete', 'Not needed')).toThrow('needs an answer')
     svc.replyQuestion(chat.id, event.requestId, { db: 'SQLite', region: 'Jakarta' })
     expect((await waiting).answers).toEqual({ db: 'SQLite', region: 'Jakarta' })
     expect(svc.questionStatus(chat.id, existing.request.requestId).request.responseMode).toBe('message')
+    svc.stopAll()
+  })
+
+  it('lets the person dismiss a question the agent waits on, and the wait ends with no answer', async () => {
+    const { svc, start } = fixture(),
+      chat = start()
+    svc.preferences = () => ({ ...DEFAULT_APP_PREFERENCES, asyncQuestions: false })
+    const waiting = svc.askQuestion(chat.id, { questions })
+    const event = svc.events(chat.id).findLast((e) => e.kind === 'question')!
+    svc.closeQuestion(chat.id, event.requestId, 'dismissed')
+    expect(await waiting).toMatchObject({ outcome: 'dismissed' })
+    expect((await waiting).answers).toEqual({})
     svc.stopAll()
   })
 

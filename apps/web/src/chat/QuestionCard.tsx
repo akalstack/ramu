@@ -120,7 +120,6 @@ function QuestionForm({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const together = request.grouping !== 'independent'
-  const async = request.responseMode === 'message'
   const questions = request.questions
   const firstOpen = Math.max(
     0,
@@ -306,7 +305,7 @@ function QuestionForm({
         )}
       </div>
       <div className="question-dock-actions flex flex-wrap items-center gap-2 pt-1">
-        {async && (
+        {!answered && (
           <Button
             variant="ghost"
             className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover"
