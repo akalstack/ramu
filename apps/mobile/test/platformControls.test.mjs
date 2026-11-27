@@ -152,6 +152,7 @@ function load(file, os, overrides = {}, globals = {}) {
       resolveBusyMode: () => ({ mode: 'steer', source: 'default' }),
     },
     '../runtime/computerUse': { useComputerUse: () => ({ session: undefined, refresh() {} }) },
+    './AttachmentTextSheet': { AttachmentTextSheet: 'AttachmentTextSheet' },
     // The system paste needs the native module; the composer's other behaviour does not.
     '../runtime/paste': { usePastedFiles() {} },
     '../runtime/threadSelection': threadSelectionStub,
@@ -9970,5 +9971,41 @@ test('the phone goal sheet sets this goal’s own turn limit, and offers none on
   assert.equal(find(render({ goal: { ...goal, maxTurns: null } }), 'ChoiceRow').props.value, 'none')
   // A view-only device cannot change it, so the control is not offered.
   assert.equal(find(render({ onLimit: undefined }), 'ChoiceRow'), undefined)
+  hooks.dispose()
+})
+
+test('a file attached to a message opens its text in a sheet, and a file that is not text says so', async () => {
+  const hooks = hookHarness()
+  const asked = []
+  let answer = 'line one\nline two'
+  const { AttachmentTextSheet } = load('components/AttachmentTextSheet.tsx', 'ios', {
+    react: hooks.react,
+    '../runtime/store': {
+      useStore: () => ({
+        invoke: async (...args) => {
+          asked.push(args)
+          return answer
+        },
+      }),
+    },
+    './ui': { Card: 'Card', Sheet: 'Sheet', T: 'T' },
+  })
+  const file = { id: 'att-1', name: 'build.log', mimeType: 'text/plain', size: 17 }
+  const render = (props) => hooks.render(() => AttachmentTextSheet({ computerId: 'a', file, onClose() {}, ...props }))
+  render()
+  await settle()
+  let tree = render()
+  assert.equal(find(tree, 'Sheet').props.open, true)
+  assert.equal(find(tree, 'Sheet').props.title, 'build.log')
+  assert.ok(nodes(tree).some((node) => node.type === 'T' && node.props.children === 'line one\nline two'))
+  assert.deepEqual(JSON.parse(JSON.stringify(asked)), [['a', 'attachments.text', 'att-1']])
+  // A PDF or an archive has no text to show.
+  answer = null
+  render({ file: { ...file, id: 'att-2', name: 'report.pdf' } })
+  await settle()
+  tree = render({ file: { ...file, id: 'att-2', name: 'report.pdf' } })
+  assert.ok(nodes(tree).some((node) => node.props?.children === 'This file cannot be shown here.'))
+  // Closed, it shows nothing.
+  assert.equal(find(render({ file: null }), 'Sheet').props.open, false)
   hooks.dispose()
 })

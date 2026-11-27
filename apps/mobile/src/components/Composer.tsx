@@ -109,6 +109,7 @@ import {
   useVoiceCapability,
   useVoiceSettings,
 } from '../runtime/useDictation'
+import { AttachmentTextSheet } from './AttachmentTextSheet'
 import { NextMessageChips } from './NextMessageChips'
 
 export interface ModelChoice {
@@ -794,6 +795,7 @@ export function Composer({
   extraContent?: boolean
 }) {
   const textInput = useRef<import('react-native').TextInputInstance>(null)
+  const [reading, setReading] = useState<import('@ramu/shared/types').Attachment | null>(null)
   // A picture or file pasted into the field attaches as if chosen from the attach menu.
   usePastedFiles(textInput, (files) => void upload(...files))
   useEffect(() => {
@@ -1291,6 +1293,8 @@ export function Composer({
                 key={a.id}
                 icon={Paperclip}
                 label={a.name}
+                // Read before sending, as on the desktop.
+                open={() => setReading(a)}
                 detail={
                   draftKey && store.drafts[`${draftKey}:restored-attachments`] === 'yes'
                     ? t.attachmentNeedsCheck
@@ -1312,6 +1316,7 @@ export function Composer({
           ))}
         </View>
       ) : null}
+      <AttachmentTextSheet computerId={pc} file={reading} onClose={() => setReading(null)} />
       {uploading ? (
         <T size={font.caption} tone="muted" style={{ padding: space.s }}>
           {say('Uploading to this host…')}

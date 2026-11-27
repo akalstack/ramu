@@ -2181,6 +2181,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Matched by its limits': 'Dicocokkan dari batasnya',
   'Refreshes when this provider next runs.': 'Diperbarui saat provider ini berjalan lagi.',
   Limit: 'Batas',
+  'This file cannot be shown here.': 'Berkas ini tidak bisa ditampilkan di sini.',
+  'Opens the file': 'Membuka berkas',
   'Drop to add to the message': 'Lepas untuk menambahkan ke pesan',
   'Drop to add as a project': 'Lepas untuk menambahkan sebagai proyek',
   '{0} build daemons': '{0} daemon build',
@@ -2193,8 +2195,10 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Stop {0} idle agents · {1}': 'Hentikan {0} agen menganggur · {1}',
   'Each starts again with its thread’s next message. Servers and terminals keep running.':
     'Masing-masing mulai lagi dengan pesan berikutnya di thread-nya. Server dan terminal tetap berjalan.',
-  'Another thread left uncommitted changes in this checkout.': 'Thread lain meninggalkan perubahan yang belum di-commit di checkout ini.',
-  '{0} threads left uncommitted changes in this checkout.': '{0} thread meninggalkan perubahan yang belum di-commit di checkout ini.',
+  'Another thread left uncommitted changes in this checkout.':
+    'Thread lain meninggalkan perubahan yang belum di-commit di checkout ini.',
+  '{0} threads left uncommitted changes in this checkout.':
+    '{0} thread meninggalkan perubahan yang belum di-commit di checkout ini.',
   'Limit reached': 'Batas tercapai',
   'Different in 1 project': 'Berbeda di 1 proyek',
   'Different in {count} projects': 'Berbeda di {count} proyek',

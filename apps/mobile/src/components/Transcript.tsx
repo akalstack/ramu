@@ -119,6 +119,7 @@ import { PullRequestWritesCard } from './PullRequestWritesCard'
 import { TestDeviceWaitCard } from './TestDeviceWaitCard'
 import { SettingsChangeCard } from './SettingsChangeCard'
 import { ToolSuggestionCard } from './ToolSuggestionCard'
+import { AttachmentTextSheet } from './AttachmentTextSheet'
 import { LearningTurnLine } from './LearningReviews'
 
 /** Drops the model change waiting for the next send; set by the chat screen that holds it. */
@@ -328,6 +329,8 @@ function ImageBlock({ uri, alt, size }: { uri: string; alt?: string; size?: numb
 function AttachmentTile({ file, chat }: { file: Attachment; chat: Chat }) {
   const { c } = useTheme()
   const store = useStore()
+  const say = useSay()
+  const [reading, setReading] = useState(false)
   const image = file.mimeType.startsWith('image/')
   // A picture this phone just sent shows from its own copy, without waiting for the host's thumbnail.
   const [uri, setUri] = useState<string | null>(() => attachmentPreview(file.id))
@@ -347,21 +350,37 @@ function AttachmentTile({ file, chat }: { file: Attachment; chat: Chat }) {
   }, [file.id, image, chat.computerId])
   if (image && uri) return <ImageBlock uri={uri} alt={file.name} size={88} />
   if (isModelFile(file)) return <ModelTile file={file} computerId={chat.computerId} />
+  // Any other file opens its text, as the desktop's preview does.
   return (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 5,
-        height: 26,
-        paddingHorizontal: 8,
-        borderRadius: radius.s,
-        backgroundColor: c.fill,
-        maxWidth: 220,
-      }}
-    >
-      <T size={font.caption + 1} tone="soft" numberOfLines={1}>{`📎 ${file.name}`}</T>
-    </View>
+    <>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={file.name}
+        accessibilityHint={say('Opens the file')}
+        onPress={() => {
+          tap()
+          setReading(true)
+        }}
+        style={({ pressed }) => ({
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 5,
+          height: 26,
+          paddingHorizontal: 8,
+          borderRadius: radius.s,
+          backgroundColor: c.fill,
+          opacity: pressed ? 0.6 : 1,
+          maxWidth: 220,
+        })}
+      >
+        <T size={font.caption + 1} tone="soft" numberOfLines={1}>{`📎 ${file.name}`}</T>
+      </Pressable>
+      <AttachmentTextSheet
+        computerId={chat.computerId}
+        file={reading ? file : null}
+        onClose={() => setReading(false)}
+      />
+    </>
   )
 }
 
