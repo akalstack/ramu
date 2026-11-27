@@ -4963,7 +4963,11 @@ for (const os of ['ios', 'android']) {
     const { TerminalScreen } = load('components/TerminalScreen.tsx', os, {
       '../runtime/terminalGesture': { terminalFontSize: () => 13 },
       react: hooks.react,
-      'react-native': { Keyboard: { addListener: () => ({ remove() {} }) } },
+      'react-native': {
+        Keyboard: { addListener: () => ({ remove() {} }) },
+        Dimensions: { get: () => ({ width: 390, height: 844 }) },
+        LayoutAnimation: { configureNext() {}, Types: {} },
+      },
       '../runtime/store': { useStore: () => store },
       '../runtime/terminalKeys': terminalKeys,
       './TerminalView': { default: 'TerminalView' },
@@ -7905,7 +7909,11 @@ for (const os of ['ios', 'android']) {
     const { TerminalScreen } = load('components/TerminalScreen.tsx', os, {
       '../runtime/terminalGesture': { terminalFontSize: () => 13 },
       react: hooks.react,
-      'react-native': { Keyboard: { addListener: () => ({ remove() {} }) } },
+      'react-native': {
+        Keyboard: { addListener: () => ({ remove() {} }) },
+        Dimensions: { get: () => ({ width: 390, height: 844 }) },
+        LayoutAnimation: { configureNext() {}, Types: {} },
+      },
       '../runtime/store': { useStore: () => store },
       '../runtime/terminalKeys': terminalKeys,
       './TerminalView': { default: 'TerminalView' },
@@ -7926,6 +7934,69 @@ for (const os of ['ios', 'android']) {
     hooks.dispose()
   })
 }
+
+test('the terminal keys take the keyboard’s place at its height, so switching never moves the terminal', async () => {
+  const hooks = hookHarness()
+  const listeners = {}
+  const store = {
+    mayUse: () => true,
+    computers: [{ id: 'a', status: 'online', name: 'Host' }],
+    chats: [],
+    projects: [],
+    drafts: {},
+    setDraft() {},
+    subscribe: () => () => {},
+    watch: () => () => {},
+    invoke: async (_host, method) => {
+      if (method === 'term.list') return [{ id: 'shell', taskId: 'task', cwd: '/work', exited: false }]
+      if (method === 'term.snapshot') return { output: '', cursor: 0, exited: false }
+      if (method === 'term.resize') return undefined
+      throw new Error(method)
+    },
+  }
+  const { TerminalScreen } = load('components/TerminalScreen.tsx', 'ios', {
+    '../runtime/terminalGesture': { terminalFontSize: () => 13 },
+    react: hooks.react,
+    'react-native': {
+      Keyboard: {
+        dismiss() {},
+        addListener: (name, listener) => {
+          listeners[name] = listener
+          return { remove() {} }
+        },
+      },
+      Dimensions: { get: () => ({ width: 390, height: 844 }) },
+      LayoutAnimation: { configureNext() {}, Types: {} },
+    },
+    '../runtime/store': { useStore: () => store },
+    '../runtime/terminalKeys': terminalKeys,
+    './TerminalView': { default: 'TerminalView' },
+    './TerminalKeyPanel': { TerminalKeyPanel: 'TerminalKeyPanel' },
+  })
+  const render = () => hooks.render(() => TerminalScreen({ computerId: 'a', ctx: 'task', onBack() {} }))
+  render()
+  await settle()
+  const room = (tree) => {
+    const panelOrSpace = nodes(tree).filter(
+      (node) => node.type === 'View' && typeof node.props.style?.height === 'number',
+    )
+    return panelOrSpace.at(-1)?.props.style.height
+  }
+  listeners.keyboardWillShow({ endCoordinates: { screenY: 844 - 336 }, duration: 250 })
+  let tree = render()
+  assert.equal(room(tree), 336)
+  find(tree, 'TerminalDock').props.onMoreKeys()
+  listeners.keyboardWillHide({ duration: 250 })
+  tree = render()
+  assert.equal(find(tree, 'TerminalKeyPanel').props.height, 336)
+  assert.equal(room(tree), 336, 'the panel keeps the room the keyboard left')
+  find(tree, 'TerminalDock').props.onMoreKeys()
+  listeners.keyboardWillShow({ endCoordinates: { screenY: 844 - 336 }, duration: 250 })
+  tree = render()
+  assert.equal(find(tree, 'TerminalKeyPanel'), undefined)
+  assert.equal(room(tree), 336, 'the keyboard rises over the panel into the same room')
+  hooks.dispose()
+})
 
 test('page searches use the native bottom search slot and preserve query, clear and submit actions', () => {
   const hooks = hookHarness()
@@ -8439,7 +8510,11 @@ test('a phone without the Terminals permission is offered a request, never a she
   }
   const { TerminalScreen } = load('components/TerminalScreen.tsx', 'ios', {
     react: hooks.react,
-    'react-native': { Keyboard: { addListener: () => ({ remove() {} }) } },
+    'react-native': {
+      Keyboard: { addListener: () => ({ remove() {} }) },
+      Dimensions: { get: () => ({ width: 390, height: 844 }) },
+      LayoutAnimation: { configureNext() {}, Types: {} },
+    },
     '../runtime/store': { useStore: () => store },
     '../runtime/terminalKeys': terminalKeys,
     './TerminalView': { default: 'TerminalView' },

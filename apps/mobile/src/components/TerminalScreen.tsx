@@ -1,9 +1,9 @@
 import { LiveBuffer } from '@ramu/shared/sync/streamSync'
 import { translate, type TranslationValues } from '@ramu/shared/i18n'
 import { useEffect, useRef, useState } from 'react'
-import { Alert, Keyboard as NativeKeyboard, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native'
+import { Alert, Dimensions, Keyboard as NativeKeyboard, LayoutAnimation, Platform, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { FolderGit2, GitBranch, MessageCircle, RotateCcw, TerminalSquare } from 'lucide-react-native'
+import { FolderGit2, GitBranch, MessageCircle, TerminalSquare } from 'lucide-react-native'
 import { font, space, useTheme } from '../theme'
 import { PermissionNeeded } from './DevicePermissions'
 import { useStore } from '../runtime/store'
@@ -16,14 +16,15 @@ import { captureScreen } from '../runtime/terminalChat'
 import TerminalView from './TerminalView'
 import { terminalFontSize } from '../runtime/terminalGesture'
 import * as Clipboard from 'expo-clipboard'
-import { DEFAULT_RAIL, parseRail, terminalKeyGroups, toggleRailKey } from '../runtime/terminalKeys'
+import { parseRail } from '../runtime/terminalKeys'
+import { TerminalKeyPanel } from './TerminalKeyPanel'
 import { STANDALONE, type Chat } from '../runtime/types'
 import { TerminalDock } from './TerminalDock'
 import { TerminalTabs } from './TerminalTabs'
 import { TerminalCopySheet } from './TerminalCopySheet'
 import type { TerminalCopyChoices } from '../runtime/terminalCopy'
 import { Button, Sheet, T, tap } from './ui'
-import { SheetGroup, SheetOption, SheetPanelGroup } from './SheetOptions'
+import { SheetGroup, SheetOption } from './SheetOptions'
 import { useSay } from '../i18n'
 import { showToast } from '../runtime/toast'
 
@@ -80,13 +81,32 @@ export function TerminalScreen({
   const [keyboardVisible, setKeyboardVisible] = useState(false)
   const [keyAction, setKeyAction] = useState<{ sequence: number; key: string }>()
   const [keyboardAction, setKeyboardAction] = useState({ sequence: 0, visible: false })
+  // The room under the dock: the keyboard's, or the key panel's at the keyboard's last height. Switching between the
+  // two keeps the same room, so the terminal never moves; the keyboard rises over the panel or slides off it.
+  const [keyboardRoom, setKeyboardRoom] = useState(0)
+  const lastKeyboard = useRef(0)
+  // Before the keyboard has shown once, a typical keyboard's height stands in.
+  const keyPanelHeight = lastKeyboard.current || Math.round(Dimensions.get('window').height * 0.38)
   useEffect(() => {
-    const show = NativeKeyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () =>
-      setKeyboardVisible(true),
-    )
-    const hide = NativeKeyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () =>
-      setKeyboardVisible(false),
-    )
+    const ios = Platform.OS === 'ios'
+    const move = (to: number, duration?: number) => {
+      if (duration)
+        LayoutAnimation.configureNext({ duration, update: { duration, type: LayoutAnimation.Types.keyboard } })
+      setKeyboardRoom(to)
+    }
+    const show = NativeKeyboard.addListener(ios ? 'keyboardWillShow' : 'keyboardDidShow', (e) => {
+      const height = ios
+        ? Math.max(0, Dimensions.get('screen').height - e.endCoordinates.screenY)
+        : e.endCoordinates.height
+      if (height) lastKeyboard.current = height
+      setKeyboardVisible(true)
+      setKeysOpen(false)
+      move(height, e.duration)
+    })
+    const hide = NativeKeyboard.addListener(ios ? 'keyboardWillHide' : 'keyboardDidHide', (e) => {
+      setKeyboardVisible(false)
+      move(0, e.duration)
+    })
     return () => {
       show.remove()
       hide.remove()
@@ -357,6 +377,10 @@ export function TerminalScreen({
     )
   }
   const toggleKeyboard = () => {
+    if (keysOpen) {
+      setKeysOpen(false)
+      return
+    }
     const visible = !keyboardVisible
     setKeyboardVisible(visible)
     setKeyboardAction((old) => ({ sequence: old.sequence + 1, visible }))
@@ -376,7 +400,7 @@ export function TerminalScreen({
     >
       <Stack.Screen options={{ headerShown: false }} />
       <StatusBar style="light" />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+      <View style={{ flex: 1 }}>
         {error ? (
           <T tone="bad" style={{ padding: space.m }}>
             {error}
@@ -456,7 +480,7 @@ export function TerminalScreen({
           style={{
             paddingHorizontal: 10,
             paddingTop: 8,
-            paddingBottom: keyboardVisible ? 6 : Math.max(insets.bottom, 10),
+            paddingBottom: keyboardVisible || keysOpen ? 6 : Math.max(insets.bottom, 10),
           }}
         >
           <TerminalDock
@@ -472,7 +496,7 @@ export function TerminalScreen({
             hasShell={tabs.length > 0}
             exited={terminal?.exited}
             connected={connected}
-            keyboardVisible={keyboardVisible}
+            keyboardVisible={keyboardVisible || keysOpen}
             latch={latch}
             rail={rail}
             onBack={onBack}
@@ -492,6 +516,7 @@ export function TerminalScreen({
                 }
               : {})}
             onWorkspace={() => {
+              setKeysOpen(false)
               keyboardBeforeSheet.current = keyboardVisible
               setKeyboardVisible(false)
               NativeKeyboard.dismiss()
@@ -499,6 +524,7 @@ export function TerminalScreen({
               setSessionsOpen(true)
             }}
             onCopy={() => {
+              setKeysOpen(false)
               keyboardBeforeSheet.current = keyboardVisible
               setKeyboardVisible(false)
               NativeKeyboard.dismiss()
@@ -506,10 +532,11 @@ export function TerminalScreen({
               setCaptureAction({ sequence: ++keySequence.current })
             }}
             onMoreKeys={() => {
-              NativeKeyboard.dismiss()
-              setKeyboardVisible(false)
-              setKeyboardAction((old) => ({ sequence: old.sequence + 1, visible: false }))
+              // Open, the same button brings the keyboard back over the panel; the keyboard's rise closes the panel.
+              if (keysOpen) return setKeyboardAction((old) => ({ sequence: old.sequence + 1, visible: true }))
               setKeysOpen(true)
+              NativeKeyboard.dismiss()
+              setKeyboardAction((old) => ({ sequence: old.sequence + 1, visible: false }))
             }}
             onKeyboard={toggleKeyboard}
             onKey={(label) => {
@@ -518,7 +545,20 @@ export function TerminalScreen({
             }}
           />
         </View>
-      </KeyboardAvoidingView>
+        {keysOpen || keyboardRoom ? (
+          <View style={{ height: keysOpen ? Math.max(keyboardRoom, keyPanelHeight) : keyboardRoom }}>
+            {keysOpen ? (
+              <TerminalKeyPanel
+                height={Math.max(keyboardRoom, keyPanelHeight)}
+                rail={rail}
+                disabled={!connected || !!terminal?.exited}
+                onPress={(label) => void press(label)}
+                onRail={(next) => saveRail(next)}
+              />
+            ) : null}
+          </View>
+        ) : null}
+      </View>
       <Sheet
         open={sessionsOpen}
         title={say('Workspace')}
@@ -563,57 +603,6 @@ export function TerminalScreen({
           keepKeyboard(keyboardBeforeSheet.current)
         }}
       />
-      <Sheet open={keysOpen} title={say('Terminal keys')} onClose={() => setKeysOpen(false)}>
-        {rail.join() !== DEFAULT_RAIL.join() ? (
-          <SheetGroup>
-            <SheetOption
-              icon={RotateCcw}
-              title={say('Reset key rail')}
-              help={say('Go back to the default keys on the rail.')}
-              onPress={() => store.setDraft('terminal-rail', '')}
-            />
-          </SheetGroup>
-        ) : null}
-        {terminalKeyGroups.map((group) => (
-          <SheetPanelGroup key={group.title} title={say(group.title)}>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-              {group.keys.map((label) => (
-                <Pressable
-                  key={label}
-                  accessibilityRole="button"
-                  accessibilityLabel={label}
-                  accessibilityHint={
-                    rail.includes(label)
-                      ? say('On the key rail. Long press to remove it.')
-                      : say('Long press to add it to the key rail.')
-                  }
-                  accessibilityState={{ selected: rail.includes(label) }}
-                  onPress={() => void press(label)}
-                  onLongPress={() => saveRail(toggleRailKey(rail, label))}
-                  style={({ pressed }) => ({
-                    minWidth: 52,
-                    height: 44,
-                    paddingHorizontal: 12,
-                    borderRadius: 12,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: pressed ? c.pressed : rail.includes(label) ? c.accentWash : c.fill,
-                  })}
-                >
-                  <T mono size={font.control}>
-                    {label}
-                  </T>
-                </Pressable>
-              ))}
-            </View>
-          </SheetPanelGroup>
-        ))}
-        <T size={font.caption} tone="muted" style={{ paddingHorizontal: space.l + 4, paddingTop: space.s }}>
-          {say(
-            'Press a key to send it. Long press to add or remove it on the key rail; highlighted keys are on the rail.',
-          )}
-        </T>
-      </Sheet>
     </View>
   )
 }
