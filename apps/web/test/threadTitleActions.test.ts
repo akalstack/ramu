@@ -47,7 +47,7 @@ vi.mock('../src/Menu', () => ({
 vi.mock('../src/components/desktop-button', () => ({ Button: () => null }))
 vi.mock('../src/components/ui/checkbox', () => ({ Checkbox: () => null }))
 vi.mock('../src/sidebar/projects/InlineEdit', () => ({ InlineEdit: () => null }))
-vi.mock('../src/sidebar/projects/TaskStateIcon', () => ({ TaskStateIcon: () => null }))
+vi.mock('../src/sidebar/projects/TaskStateIcon', () => ({ TaskStateIcon: () => null, TaskAge: () => null }))
 vi.mock('../src/FadeText', () => ({ FadeText: ({ text }: { text: string }) => text }))
 vi.mock('../src/workspace/TaskPane', () => ({ errorText: String }))
 vi.mock('../src/chat/Notifications', () => ({ notifyError() {} }))

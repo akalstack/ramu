@@ -51,8 +51,8 @@ export function StatusMark({ task, status }: { task: Task; status: ThreadStatus 
 }
 
 /**
- * The trailing status of a chat row: working, needs input, waiting, failed, unread, or its age, at its natural width so
- * a short age leaves the title its room. On hover the row's actions take its place.
+ * A chat row's status, left of its title as on the phone and in Activity: working, needs input, waiting, failed or
+ * unread. The slot keeps its width when there is nothing to show, so every title starts at the same edge.
  */
 export function TaskStateIcon({ task, unread }: { task: Task; unread: boolean }) {
   useLanguage()
@@ -60,14 +60,25 @@ export function TaskStateIcon({ task, unread }: { task: Task; unread: boolean })
   // Anything that needs the person shows at once; only a plain stop waits to see whether the turn carries on.
   const held = useHeld(isWorking(status))
   return (
-    <span className="task-trailing inline-flex min-w-5 flex-none items-center justify-center [&>.task-state]:mr-0">
+    <span className="task-lead inline-flex w-3.5 flex-none items-center justify-center [&>.task-state]:mr-0">
       {held && (!status || status.kind === 'finished') ? (
         <WorkingDot label={t('Agent working')} />
       ) : status ? (
         <StatusMark task={task} status={status} />
-      ) : (
-        <span className="task-time text-caption text-muted-foreground tabular-nums">{timeAgo(task.lastActiveAt)}</span>
-      )}
+      ) : null}
+    </span>
+  )
+}
+
+/** When a row without a status last moved, at the row's right edge; the row's actions take its place on hover. */
+export function TaskAge({ task, unread }: { task: Task; unread: boolean }) {
+  useLanguage()
+  const status = threadStatus(task, unread, task.goalState)
+  const held = useHeld(isWorking(status))
+  if (status || held) return null
+  return (
+    <span className="task-trailing task-time flex-none text-caption text-muted-foreground tabular-nums">
+      {timeAgo(task.lastActiveAt)}
     </span>
   )
 }
