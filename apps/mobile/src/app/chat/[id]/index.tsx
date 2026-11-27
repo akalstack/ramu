@@ -368,8 +368,8 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
     const was = overflowing
     setOverflowing(listFollows)
     if (end === null || followPaused || !following.current || userScrolling.current) return
-    // Lands on the end at once, as T3 Code's list follows its end without motion.
-    if (!listFollows || !was) toEnd(false)
+    // Lands on the end at once, as T3 Code's list follows its end without motion. On iOS nothing else follows it.
+    if (ios || !listFollows || !was) toEnd(false)
   }
   /**
    * Sending closes the keyboard and brings the end into view, as T3 Code does, so the message just sent (a steer
@@ -1736,7 +1736,11 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                 // would read as the transcript scrolling up and down while a reply streams, a tool row grows or a
                 // message is sent. It stops following once the reader scrolls up, and a chat that fits on screen is
                 // left where UIKit rests it.
-                maintainScrollAtEnd={overflowing && !followPaused ? { animated: false } : false}
+                // Not on iOS: there the message box lies over the list's bottom as an inset the list does not count, so
+                // its own end stops short by the box's height. It and the following below then took turns placing the
+                // end, and a finished turn, which changes size several times as it folds, sometimes came to rest with
+                // its last lines under the box. On iOS the following below is the only one.
+                maintainScrollAtEnd={!ios && overflowing && !followPaused ? { animated: false } : false}
                 ItemSeparatorComponent={RowSeparator}
                 refreshControl={
                   chat?.taskId ? (
