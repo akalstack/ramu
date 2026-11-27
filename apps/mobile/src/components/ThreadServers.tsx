@@ -42,6 +42,8 @@ export function ThreadServers({
   const owner = store.computers.find((computer) => computer.id === hostId)?.access !== 'viewer'
   const invoke = useRef(store.invoke)
   invoke.current = store.invoke
+  const sheet = useRef({ open, onClose })
+  sheet.current = { open, onClose }
   const [servers, setServers] = useState<ThreadServer[]>([])
   const [stopping, setStopping] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -54,7 +56,11 @@ export function ThreadServers({
       void invoke.current(hostId, 'servers.list', taskId).then(
         (list) => {
           // Build daemons are not servers to open; Resources lists them, and Ramu stops them once the thread rests.
-          if (active) setServers(list.filter((server) => server.taskId === taskId && !server.daemon))
+          if (!active) return
+          const mine = list.filter((server) => server.taskId === taskId && !server.daemon)
+          setServers(mine)
+          // The last server stopped (here or by the agent): the sheet closes rather than staying open on nothing.
+          if (!mine.length && sheet.current.open) sheet.current.onClose()
         },
         // A host without the call, or a read that failed, shows nothing rather than a stale list.
         () => {

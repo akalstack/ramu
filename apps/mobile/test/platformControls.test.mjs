@@ -5471,6 +5471,48 @@ test('each activity keeps its own pill, and only past four does the rest gather 
   hooks.dispose()
 })
 
+test('an activity sheet closes by itself once its last item is gone, such as a cleared goal', () => {
+  const hooks = hookHarness()
+  let secondary = ['goal', 'queue']
+  const { ThreadActivity } = load('components/ThreadActivity.tsx', 'ios', {
+    react: hooks.react,
+    '../runtime/store': {
+      useStore: () => ({ language: 'en', isOnline: () => true, appPreferences: { a: { goals: { maxTurns: 10 } } } }),
+    },
+    '@ramu/shared/chat/helperPresentation': { helperActive: () => false },
+    '@ramu/shared/chat/threadActivity': { goalActivityLabel: () => 'Goal' },
+    './GoalSheet': { GoalSheet: 'GoalSheet' },
+    '../runtime/threadActivity': {
+      mobileThreadActivity: () => ({
+        model: { primary: 'working', secondary, counts: { active: 0 } },
+        requests: [],
+        groups: [],
+        helpers: [],
+        advisors: [],
+      }),
+    },
+  })
+  let chat = { computerId: 'a', queue: [{ text: 'next' }], goal: { objective: 'Ship' } }
+  const render = () => hooks.render(() => ThreadActivity({ chat }))
+  let tree = render()
+  nodes(tree)
+    .find((node) => node.type === 'ActivityPill' && node.props.label === 'Goal')
+    .props.onPress()
+  tree = render()
+  assert.equal(find(tree, 'Sheet').props.open, true)
+  // The queue going does not close the goal's sheet.
+  chat = { ...chat, queue: [] }
+  secondary = ['goal']
+  tree = render()
+  assert.equal(find(tree, 'Sheet').props.open, true)
+  chat = { ...chat, goal: null }
+  secondary = []
+  render()
+  tree = render()
+  assert.equal(find(tree, 'Sheet')?.props.open ?? false, false)
+  hooks.dispose()
+})
+
 test('compact native headers reserve an opaque surface even when scroll underlap was requested', () => {
   const screen = load('components/Screen.tsx', 'ios')
   const tree = screen.Header({ title: 'Chat', scrollEdge: true })

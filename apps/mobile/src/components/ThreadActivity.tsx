@@ -71,6 +71,29 @@ export function ThreadActivity({
     setAdviceSeen(true)
     void store.invoke(chat.computerId, 'agent.markAdviceRead', chat.sessionId).catch(() => {})
   }, [opened, online, chat.sessionId, chat.computerId, chat.unreadAdvice, settledAdvice, adviceSeen, store])
+  /** Whether a sheet still has something to show: answered questions, a cleared goal or finished agents leave none. */
+  const present = (kind: ActivityKind | 'more'): boolean =>
+    kind === 'working' || kind === 'more'
+      ? true
+      : kind === 'connection'
+        ? !online
+        : kind === 'helpers'
+          ? !!(activity.helpers.length || activity.groups.length)
+          : kind === 'advisor'
+            ? !!activity.advisors.length
+            : kind === 'input'
+              ? !!activity.requests.length
+              : kind === 'goal'
+                ? !!chat.goal
+                : kind === 'queue'
+                  ? !!chat.queue.length
+                  : activity.model.primary === 'provider' || activity.model.secondary.includes('provider')
+  // A sheet whose last item went (the last question answered, the goal cleared, the queue sent) closes by itself,
+  // rather than staying open on nothing.
+  const emptied = opened !== null && !present(opened)
+  useEffect(() => {
+    if (emptied) setOpened(null)
+  }, [emptied])
   const primary = activity.model.primary
   // On the thread screen the row's height stays reserved while it is empty, so a pill appearing or going never moves the
   // conversation above the message box.
@@ -179,30 +202,16 @@ export function ThreadActivity({
         {opened === 'more' ? (
           <View style={{ paddingTop: online ? 0 : space.m }}>
             <ActivityList>
-              {(['input', 'provider', 'goal', 'queue', 'helpers', 'advisor'] as const)
-                .filter((kind) =>
-                  kind === 'helpers'
-                    ? activity.helpers.length || activity.groups.length
-                    : kind === 'advisor'
-                      ? activity.advisors.length
-                      : kind === 'input'
-                        ? activity.requests.length
-                        : kind === 'goal'
-                          ? chat.goal
-                          : kind === 'queue'
-                            ? chat.queue.length
-                            : activity.model.primary === 'provider' || activity.model.secondary.includes('provider'),
-                )
-                .map((kind) => (
-                  <ActivityRow
-                    key={kind}
-                    icon={KIND_ICON[kind]}
-                    tone={kind === 'input' || kind === 'provider' ? 'attention' : 'quiet'}
-                    title={label(kind)}
-                    detail={detailOf(kind)}
-                    onPress={() => setOpened(kind)}
-                  />
-                ))}
+              {(['input', 'provider', 'goal', 'queue', 'helpers', 'advisor'] as const).filter(present).map((kind) => (
+                <ActivityRow
+                  key={kind}
+                  icon={KIND_ICON[kind]}
+                  tone={kind === 'input' || kind === 'provider' ? 'attention' : 'quiet'}
+                  title={label(kind)}
+                  detail={detailOf(kind)}
+                  onPress={() => setOpened(kind)}
+                />
+              ))}
             </ActivityList>
           </View>
         ) : null}
