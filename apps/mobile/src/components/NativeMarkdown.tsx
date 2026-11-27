@@ -1,6 +1,7 @@
 import { createContext, useContext, useMemo, type ComponentProps } from 'react'
 import { Platform, StyleSheet, UIManager, View } from 'react-native'
 import { EnrichedMarkdownText, type MarkdownStyle } from 'react-native-enriched-markdown'
+import * as Clipboard from 'expo-clipboard'
 
 type ContextMenuItem = NonNullable<ComponentProps<typeof EnrichedMarkdownText>['contextMenuItems']>[number]
 import { localFileLink } from '@ramu/shared/workspace/fileLinks'
@@ -171,6 +172,8 @@ export function NativeMarkdown({
     () =>
       menu
         ? [
+            // Copy first, as every iOS selection menu starts; the system's own Copy follows the custom items.
+            { text: say('Copy'), onPress: ({ text }) => void Clipboard.setStringAsync(text) },
             { text: say('Quote'), onPress: ({ text }) => menu.quote(text) },
             { text: say('New thread'), onPress: ({ text }) => menu.quoteNew(text) },
             ...(menu.aside

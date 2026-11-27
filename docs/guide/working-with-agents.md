@@ -134,7 +134,7 @@ A thread marked done leaves its project and moves to **Done** at the bottom of t
 
 On the phone, long-press a thread and choose **Select**, then tap more threads. The header marks them done, archives or deletes them, and **×** cancels. Deleting several at once keeps any thread with a background command for its own review.
 
-In a thread on iPhone, long-press a word to select it and drag the handles to select more, as on the desktop. The bar above the message box quotes, starts a thread with, asks aside about or copies the selection. **More** has the whole message's actions. On Android, long-press a message to select its text.
+In a thread on the phone, long-press a word to select it and drag the handles to select more, as on the desktop. The menu over the selection copies it, quotes it, starts a thread with it or asks aside about it, and **More** has the whole message's actions.
 
 A quote, a tagged file or another reference in the message box opens when you press it. A quote shows in full with **Show in conversation** (which scrolls to the message it came from and marks it) and **Remove**. A file offers **Open** and **Copy path**. On the phone a quote opens from its chip above the message box, and a tagged file offers **Open** while the cursor is in it.
 
