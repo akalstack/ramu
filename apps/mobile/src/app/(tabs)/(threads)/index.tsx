@@ -14,7 +14,7 @@ import { sharedValue } from '@ramu/shared/sharedFields'
 import { shortHostName } from '@ramu/shared/hostLabel'
 import { collapseScheduleRuns } from '@ramu/shared/chat/scheduleRuns'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { BackHandler, Platform, Pressable, ScrollView as HScroll, StyleSheet, View } from 'react-native'
+import { BackHandler, Platform, Pressable, RefreshControl, ScrollView as HScroll, StyleSheet, View } from 'react-native'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import {
   Folder,
@@ -118,6 +118,14 @@ export default function Threads() {
     return () => back.remove()
   }, [selection.on])
   const [usageOpen, setUsageOpen] = useState(false)
+  // Pulling down reads the shown hosts' threads again.
+  const [pulling, setPulling] = useState(false)
+  const pullToRefresh = () => {
+    setPulling(true)
+    void Promise.all(
+      computers.filter((host) => merged || host.id === selected).map((host) => store.refresh(host.id).catch(() => {})),
+    ).finally(() => setPulling(false))
+  }
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [resourcesOpen, setResourcesOpen] = useState(false)
 
@@ -722,6 +730,7 @@ export default function Threads() {
         keyboardDismissMode="on-drag"
         onScroll={edge.onScroll}
         scrollEventThrottle={16}
+        refreshControl={<RefreshControl refreshing={pulling} onRefresh={pullToRefresh} tintColor={c.muted} />}
         initialNumToRender={14}
         windowSize={9}
         ListHeaderComponent={

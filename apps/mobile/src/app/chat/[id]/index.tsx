@@ -11,6 +11,7 @@ import {
   Keyboard as SystemKeyboard,
   Platform,
   Pressable,
+  RefreshControl,
   StyleSheet,
   useWindowDimensions,
   View,
@@ -246,6 +247,16 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
   // iOS: the composer and keyboard cover the list's bottom through UIScrollView.contentInset, which moves no content.
   // The keyboard handler then sets the offset itself: the end when following, else the same lines stay above the keys.
   const ios = Platform.OS === 'ios'
+  // Pulling down at the top reads this thread again from the host, the whole of it, as opening it fresh would.
+  const [pulling, setPulling] = useState(false)
+  const pullToRefresh = () => {
+    if (!chat?.taskId) return
+    setPulling(true)
+    void store
+      .refresh(chat.computerId, new Set([chat.taskId]))
+      .catch(() => {})
+      .finally(() => setPulling(false))
+  }
   const slack = Math.max(0, insets.bottom - space.s)
   const coverFor = (keys: number) => composerHeight + (keys ? keys - slack : 0)
   const metrics = useRef({ offset: 0, content: 0, viewport: 0, cover: 0 })
@@ -1717,6 +1728,11 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                   // left where UIKit rests it.
                   maintainScrollAtEnd={overflowing && !followPaused ? { animated: revealed && !reducedMotion } : false}
                   ItemSeparatorComponent={RowSeparator}
+                  refreshControl={
+                    chat?.taskId ? (
+                      <RefreshControl refreshing={pulling} onRefresh={pullToRefresh} tintColor={c.muted} />
+                    ) : undefined
+                  }
                   style={{ flex: 1 }}
                   contentInset={ios ? { bottom: cover } : undefined}
                   scrollIndicatorInsets={ios ? { bottom: cover } : undefined}
