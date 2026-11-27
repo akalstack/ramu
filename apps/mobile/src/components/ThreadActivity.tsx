@@ -63,6 +63,8 @@ export function ThreadActivity({
   const online = store.isOnline(chat.computerId)
   const activity = mobileThreadActivity(chat, online)
   const [opened, setOpened] = useState<ActivityKind | 'more' | null>(null)
+  // Reached from the "N more" list, so the sheet has a way back to it instead of only closing.
+  const [fromMore, setFromMore] = useState(false)
   const [adviceSeen, setAdviceSeen] = useState(false)
   const unread = adviceSeen ? 0 : (chat.unreadAdvice ?? 0)
   // A fresh host count (new advice arrived, or the host cleared it) replaces the local "seen" mark.
@@ -74,6 +76,7 @@ export function ThreadActivity({
     setAdviceSeen(true)
     void store.invoke(chat.computerId, 'agent.markAdviceRead', chat.sessionId).catch(() => {})
   }, [opened, online, chat.sessionId, chat.computerId, chat.unreadAdvice, settledAdvice, adviceSeen, store])
+  const runningAgents = activity.helpers.filter(helperActive).length
   /** Whether a sheet still has something to show: answered questions, a cleared goal or finished agents leave none. */
   const present = (kind: ActivityKind | 'more'): boolean =>
     kind === 'working' || kind === 'more'
@@ -81,7 +84,7 @@ export function ThreadActivity({
       : kind === 'connection'
         ? !online
         : kind === 'helpers'
-          ? !!(activity.helpers.length || activity.groups.length)
+          ? runningAgents > 0
           : kind === 'advisor'
             ? !!activity.advisors.length
             : kind === 'input'
@@ -114,7 +117,7 @@ export function ThreadActivity({
       working: chat.compacting ? say('Compacting context…') : say('Working'),
       // Fixed names with a count, as the desktop's chips, so the row above the message box holds still as work
       // starts and ends; the sheet each opens says what is going on.
-      helpers: `${say('Agents')} · ${activity.helpers.length || activity.groups.reduce((n, g) => n + g.agents.length, 0)}`,
+      helpers: `${say('Agents')} · ${runningAgents}`,
       advisor: unread ? `${say('Advisor')} · ${say('{0} new', { 0: unread })}` : say('Advisor'),
       goal: say(goalActivityLabel(activity.model.goalState)),
       queue: say('{0} queued', { 0: chat.queue.length }),
@@ -140,9 +143,11 @@ export function ThreadActivity({
     ...new Set<ActivityKind>([
       ...(primary && primary !== 'working' ? [primary] : []),
       ...activity.model.secondary.filter((kind) => kind !== 'working'),
-      ...(activity.groups.length ? ['helpers' as const] : []),
     ]),
-  ].sort((a, b) => PILL_ORDER.indexOf(a) - PILL_ORDER.indexOf(b))
+  ]
+    // As the desktop's chip: agents at work. Finished ones are in the conversation, where each was started.
+    .filter((kind) => kind !== 'helpers' || runningAgents > 0)
+    .sort((a, b) => PILL_ORDER.indexOf(a) - PILL_ORDER.indexOf(b))
   const folded = ordered.length > MAX_PILLS ? ordered.length - (MAX_PILLS - 1) : 0
   // The working line before these pills says what the agent is doing, compaction included.
   const kinds: (ActivityKind | 'more')[] = folded ? [...ordered.slice(0, MAX_PILLS - 1), 'more'] : ordered
@@ -153,7 +158,10 @@ export function ThreadActivity({
       label={kind === 'more' ? say('{0} more', { 0: folded }) : label(kind)}
       tone={kind === 'connection' ? 'off' : kind === 'input' || kind === 'provider' ? 'attention' : 'quiet'}
       emphasis={kind === primaryKind}
-      onPress={() => setOpened(kind)}
+      onPress={() => {
+        setFromMore(false)
+        setOpened(kind)
+      }}
     />
   )
   return (
@@ -192,6 +200,7 @@ export function ThreadActivity({
         presentation={opened === 'helpers' || opened === 'advisor' || opened === 'input' ? 'screen' : 'sheet'}
         open={opened !== null}
         onClose={() => setOpened(null)}
+        onBack={fromMore && opened !== null && opened !== 'more' ? () => setOpened('more') : undefined}
         title={
           opened === 'working'
             ? say('Working')
@@ -216,7 +225,10 @@ export function ThreadActivity({
                   tone={kind === 'input' || kind === 'provider' ? 'attention' : 'quiet'}
                   title={label(kind)}
                   detail={detailOf(kind)}
-                  onPress={() => setOpened(kind)}
+                  onPress={() => {
+                    setFromMore(true)
+                    setOpened(kind)
+                  }}
                 />
               ))}
             </ActivityList>
@@ -270,9 +282,35 @@ export function ThreadActivity({
             queue={chat.queue}
             paused={chat.queuePaused}
             onRemove={online ? (message) => store.removeQueued(chat.id, message) : undefined}
-            onSendNow={online ? (message) => store.sendQueuedNow(chat.id, message) : undefined}
-            onSteer={online ? (message) => store.steerQueued(chat.id, message) : undefined}
-            onEdit={online ? onEditQueued : undefined}
+            // Sending, steering and editing take the message out to the thread or the message box, so the sheet steps
+            // aside for it; removing and reordering stay, since several may follow.
+            onSendNow={
+              online
+                ? (message) => {
+                    setOpened(null)
+                    store.sendQueuedNow(chat.id, message)
+                  }
+                : undefined
+            }
+            onSteer={
+              online
+                ? (message) => {
+                    setOpened(null)
+                    store.steerQueued(chat.id, message)
+                  }
+                : undefined
+            }
+            onEdit={
+              online && onEditQueued
+                ? {
+                    ...onEditQueued,
+                    open: (message) => {
+                      setOpened(null)
+                      onEditQueued.open(message)
+                    },
+                  }
+                : undefined
+            }
             onMove={
               online && chat.sessionId
                 ? (id, delta) => {

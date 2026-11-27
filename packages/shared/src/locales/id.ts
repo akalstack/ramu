@@ -7940,6 +7940,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'This host offers no settings here.': 'Host ini tidak punya pengaturan di sini.',
   'Queue paused': 'Antrean dijeda',
   'Uploading to this host…': 'Mengunggah ke host ini…',
+  'Uploading…': 'Mengunggah…',
   'This phone can view threads and answer requests, but not send messages. Ask the host owner to pair it with full access.':
     'Ponsel ini bisa melihat thread dan menjawab permintaan, tapi tidak bisa mengirim pesan. Minta pemilik host memasangkannya dengan akses penuh.',
   'Continue where the agent left off': 'Lanjutkan dari bagian terakhir agent',

@@ -5,6 +5,7 @@ import { REFERENCE_APPEARANCE } from '@ramu/shared/chat/presentation'
 import { isValidElement, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useFocusEffect } from 'expo-router'
 import {
+  ActivityIndicator,
   Image,
   Alert,
   Linking,
@@ -29,7 +30,6 @@ import { SuggestionList, useComposerSuggest, type ComposerMentions } from './Com
 import {
   ArrowUp,
   Pencil,
-  ChevronLeft,
   ChevronRight,
   FileText,
   Paperclip,
@@ -375,13 +375,9 @@ export function ModelChip({
         // Full height, with room for the keyboard while searching: a long model list is a task, not a drawer.
         presentation="screen"
         search={searchProps}
+        // A provider's models are one level down: the back arrow returns to all providers.
+        onBack={back}
       >
-        {back ? (
-          <Row onPress={back}>
-            <ChevronLeft size={18} color={c.soft} />
-            <T tone="soft">{say('All providers')}</T>
-          </Row>
-        ) : null}
         {provider || query.trim() ? (
           <View>
             {shown.slice(0, limit).map(modelRow)}
@@ -630,9 +626,10 @@ export function GoalQueueTray({
         ].map((action) => (Platform.OS === 'ios' ? action : { ...action, image: undefined }))
         const editing = onEdit?.editingId === q.id
         return (
-          <View key={q.id} style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}>
+          <View key={q.id} style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
             <MenuView
-              title={q.text}
+              // A short name for the message: the whole of a long one filled the screen and pushed its actions off it.
+              title={queuedTitle(q.text)}
               actions={actions}
               style={{ flex: 1 }}
               onPressAction={({ nativeEvent }) => {
@@ -650,27 +647,42 @@ export function GoalQueueTray({
                 accessible
                 accessibilityRole="button"
                 accessibilityHint={say('Queued message actions')}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'flex-start',
+                  gap: space.s,
+                  minHeight: 44,
+                  paddingVertical: 6,
+                }}
               >
-                {q.mode === 'steer' ? (
-                  <CornerDownRight size={14} color={c.warn} strokeWidth={1.8} />
-                ) : (
-                  <ListPlus size={14} color={c.muted} strokeWidth={1.8} />
-                )}
-                <T size={font.control} tone="soft" numberOfLines={1} style={{ flex: 1 }}>
-                  {q.text}
-                </T>
-                <T size={font.caption} tone={editing ? 'accent' : 'muted'} numberOfLines={1}>
-                  {editing
-                    ? say('Editing in the message box')
-                    : q.held
-                      ? say('Held')
-                      : q.mode === 'steer'
-                        ? t.steer
-                        : running
-                          ? say('Sends when this turn ends')
-                          : t.queued}
-                </T>
+                <View style={{ paddingTop: 3 }}>
+                  {q.mode === 'steer' ? (
+                    <CornerDownRight size={14} color={c.warn} strokeWidth={1.8} />
+                  ) : (
+                    <ListPlus size={14} color={c.muted} strokeWidth={1.8} />
+                  )}
+                </View>
+                {/* Two lines of the message with its state under it, rather than one line squeezed beside the state. */}
+                <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                  <T size={font.control} tone="soft" numberOfLines={2}>
+                    {q.text.trim()}
+                  </T>
+                  <T
+                    size={font.caption}
+                    tone={editing ? 'accent' : q.mode === 'steer' ? 'warn' : 'muted'}
+                    numberOfLines={1}
+                  >
+                    {editing
+                      ? say('Editing in the message box')
+                      : q.held
+                        ? say('Held')
+                        : q.mode === 'steer'
+                          ? t.steer
+                          : running
+                            ? say('Sends when this turn ends')
+                            : t.queued}
+                  </T>
+                </View>
               </View>
             </MenuView>
             {steerable ? (
@@ -690,6 +702,18 @@ export function GoalQueueTray({
       })}
     </View>
   )
+}
+
+/** A queued message's name in its menu: the first line, clipped, so the actions stay in view. */
+export function queuedTitle(text: string): string {
+  const line =
+    text
+      .trim()
+      .split('\n')
+      .find((part) => part.trim())
+      ?.replace(/\s+/g, ' ')
+      .trim() ?? ''
+  return line.length > 80 ? `${line.slice(0, 79).trimEnd()}…` : line
 }
 
 export function Composer({
@@ -1273,7 +1297,7 @@ export function Composer({
           running={running}
         />
       )}
-      {attachments.length || context.length || split.quotes.length || (fileAtCaret && chatId && taskId) ? (
+      {attachments.length || context.length || split.quotes.length || uploading || (fileAtCaret && chatId && taskId) ? (
         <View
           style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: space.m, paddingTop: space.s }}
         >
@@ -1320,6 +1344,29 @@ export function Composer({
               />
             ),
           )}
+          {/* A file on its way to the host holds its place among the attachments, where it will appear: a chip with a
+              spinner, rather than a line of text under the row. */}
+          {uploading ? (
+            <View
+              accessible
+              accessibilityRole="progressbar"
+              accessibilityLabel={say('Uploading to this host…')}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                height: 26,
+                paddingHorizontal: 10,
+                borderRadius: radius.full,
+                backgroundColor: c.fill,
+              }}
+            >
+              <ActivityIndicator size="small" color={c.muted} style={{ transform: [{ scale: 0.7 }] }} />
+              <T size={font.caption + 1} weight="500" tone="muted">
+                {say('Uploading…')}
+              </T>
+            </View>
+          ) : null}
           {context.map((file) => (
             <ContextChip
               key={`${file.repoId}:${file.path}`}
@@ -1333,11 +1380,6 @@ export function Composer({
         </View>
       ) : null}
       <AttachmentTextSheet computerId={pc} file={reading} onClose={() => setReading(null)} />
-      {uploading ? (
-        <T size={font.caption} tone="muted" style={{ padding: space.s }}>
-          {say('Uploading to this host…')}
-        </T>
-      ) : null}
       {editing ? (
         <View
           style={{

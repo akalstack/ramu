@@ -6,6 +6,8 @@ import * as sendJournal from '../src/runtime/sendJournal.ts'
 import * as sharedOutbox from '../../../packages/shared/src/outbox.ts'
 import * as goalVerify from '../src/runtime/goalVerify.ts'
 import * as threadGroups from '../src/runtime/threadGroups.ts'
+import * as turnsModule from '../src/runtime/turns.ts'
+import * as helperPresentation from '../../../packages/shared/src/chat/helperPresentation.ts'
 import * as threadsSync from '../src/runtime/threadsSync.ts'
 import * as sideChat from '../src/runtime/sideChat.ts'
 import * as scrollSurface from '../src/runtime/scrollSurface.ts'
@@ -107,6 +109,8 @@ function load(file, os, overrides = {}, globals = {}) {
   const routerOf = () => overrides['expo-router'] ?? mocks['expo-router']
   const mocks = {
     '../runtime/scrollSurface': scrollSurface,
+    '../runtime/turns': turnsModule,
+    '@ramu/shared/chat/helperPresentation': helperPresentation,
     // A phone-width view: no gutter, content styles pass through.
     './ReadableColumn': {
       useReadableColumn: () => ({ gutter: 0, onLayout() {}, contentContainerStyle: (style) => style }),
@@ -10095,4 +10099,14 @@ test('a file attached to a message opens its text in a sheet, and a file that is
   // Closed, it shows nothing.
   assert.equal(find(render({ file: null }), 'Sheet').props.open, false)
   hooks.dispose()
+})
+
+test('a queued message is named in its menu by its first line, clipped, so the actions stay in view', () => {
+  const { queuedTitle } = load('components/Composer.tsx', 'ios', {
+    './ui': new Proxy({}, { get: (_, key) => (key === 'tap' ? () => {} : String(key)) }),
+  })
+  assert.equal(queuedTitle('\n  Fix the build\n\nThen run every test and report back'), 'Fix the build')
+  const long = queuedTitle(`Checks failed on main ${'after your push '.repeat(10)}`)
+  assert.ok(long.length <= 80 && long.endsWith('…'))
+  assert.equal(queuedTitle('a   b\tc'), 'a b c')
 })

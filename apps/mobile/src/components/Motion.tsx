@@ -1,14 +1,6 @@
 import { CHAT_MOTION, SENT_MOTION, TOOL_MOTION } from '@ramu/shared/chat/presentation'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import {
-  AccessibilityInfo,
-  LayoutAnimation,
-  PixelRatio,
-  View,
-  type StyleProp,
-  type TextStyle,
-  type ViewStyle,
-} from 'react-native'
+import { AccessibilityInfo, LayoutAnimation, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native'
 import Reanimated, {
   cancelAnimation,
   Easing as ReEasing,
@@ -67,24 +59,17 @@ function sharedLoop(start: (value: SharedValue<number>) => void) {
   }
 }
 
-/** The shimmer's pass, 0 to 1: the highlight crosses the label in the first half and is off its end in the second. */
-const sweep = sharedLoop((value) => {
-  value.value = withRepeat(withTiming(1, { duration: TOOL_MOTION.sweepMs, easing: ReEasing.linear }), -1, false)
+/** The working label's glow, 0 to 1 and back: one slow breath every 2.2 s, on one clock for every label. */
+const glow = sharedLoop((value) => {
+  const half = { duration: TOOL_MOTION.sweepMs / 2, easing: ReEasing.inOut(ReEasing.sin) }
+  value.value = withRepeat(withSequence(withTiming(1, half), withTiming(0, half)), -1)
 })
 
 /**
- * Bright copies of the label in clipped bands centred on the highlight, outermost first. Stacked, they rise from the
- * muted label to full text colour and back, as the desktop's gradient does across 40% of the label each side.
- */
-const SHIMMER_BANDS = [
-  { span: 0.8, opacity: 0.35 },
-  { span: 0.53, opacity: 0.5 },
-  { span: 0.27, opacity: 1 },
-] as const
-
-/**
- * The desktop's working shimmer: a soft highlight sweeps the muted label left to right every 2.2 s, on one clock for
- * every label. Only the bands move, by transform, so it costs the same however long the label is.
+ * A working label: the muted text with a bright copy over it that breathes in and out. A highlight sweeping across, as
+ * the desktop draws with a gradient, needs a mask the phone does not have; built from stacked bands it showed as
+ * steps, and its moving copies sat a little off the text. One still copy that only changes opacity lies exactly on the
+ * label and costs a single animated layer.
  */
 export function Shimmer({
   children,
@@ -96,66 +81,27 @@ export function Shimmer({
   style?: StyleProp<TextStyle>
 }) {
   const reduced = useReducedMotion()
-  // The width belongs to the text it was measured for: a new label (the next tool) gets its bright copies only once
-  // it is laid out, rather than copies cut to the last label's width over it.
-  const [measured, setMeasured] = useState({ text: '', width: 0 })
-  const width = measured.text === children ? measured.width : 0
-  sweep.useRunning(!reduced)
+  glow.useRunning(!reduced)
+  const lit = useAnimatedStyle(() => ({ opacity: glow.value.value }))
   const textStyle = [{ fontVariant: ['tabular-nums' as const] }, style]
   return (
     <View style={{ minWidth: 0 }}>
-      <T
-        size={size}
-        tone="muted"
-        numberOfLines={1}
-        style={textStyle}
-        onLayout={(event) => setMeasured({ text: children, width: event.nativeEvent.layout.width })}
-      >
+      <T size={size} tone="muted" numberOfLines={1} style={textStyle}>
         {children}
       </T>
-      {!reduced && width > 0
-        ? SHIMMER_BANDS.map((band) => (
-            <ShimmerBand key={band.span} span={band.span * width} opacity={band.opacity} width={width}>
-              <T size={size} numberOfLines={1} style={textStyle}>
-                {children}
-              </T>
-            </ShimmerBand>
-          ))
-        : null}
+      {reduced ? null : (
+        <Reanimated.View
+          pointerEvents="none"
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          style={[{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }, lit]}
+        >
+          <T size={size} numberOfLines={1} style={textStyle}>
+            {children}
+          </T>
+        </Reanimated.View>
+      )}
     </View>
-  )
-}
-
-/** A window `span` wide that follows the highlight, showing the bright copy at the same place as the label under it. */
-function ShimmerBand({
-  span,
-  opacity,
-  width,
-  children,
-}: {
-  span: number
-  opacity: number
-  width: number
-  children: ReactNode
-}) {
-  // On whole device pixels: the window and the copy inside it move by the same amount in opposite directions, and a
-  // fractional move rounded differently for each left the bright copy half a pixel off the label, which read as two.
-  const scale = PixelRatio.get()
-  const left = (pass: number) => {
-    'worklet'
-    return Math.round((pass * 2 * width - span / 2) * scale) / scale
-  }
-  const band = useAnimatedStyle(() => ({ transform: [{ translateX: left(sweep.value.value) }] }))
-  const content = useAnimatedStyle(() => ({ transform: [{ translateX: -left(sweep.value.value) }] }))
-  return (
-    <Reanimated.View
-      pointerEvents="none"
-      accessibilityElementsHidden
-      importantForAccessibility="no-hide-descendants"
-      style={[{ position: 'absolute', top: 0, bottom: 0, left: 0, width: span, overflow: 'hidden', opacity }, band]}
-    >
-      <Reanimated.View style={[{ position: 'absolute', top: 0, left: 0, width }, content]}>{children}</Reanimated.View>
-    </Reanimated.View>
   )
 }
 

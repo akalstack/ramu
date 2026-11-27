@@ -8,11 +8,13 @@ import { useStore } from '../runtime/store'
 import { useOpenTerminalLink } from '../runtime/openFile'
 import { providerCommands } from '../runtime/threadActivity'
 import { HelperDetails } from './Helpers'
-import { font, space } from '../theme'
+import { font, space, useTheme } from '../theme'
 import { Button, Card, Divider, Row, Sheet, T } from './ui'
 import TerminalView from './TerminalView'
 import { ActivityPill } from './ActivityPill'
-import { SquareTerminal } from 'lucide-react-native'
+import { ChevronRight, SquareTerminal } from 'lucide-react-native'
+import { formatDuration } from '../runtime/turns'
+import { Breathe } from './Motion'
 
 type Status = 'loading' | 'ready' | 'offline' | 'error'
 type Inspection = BackgroundTerminalInfo & { output: string }
@@ -23,6 +25,60 @@ const clipCommand = (command: string) => {
   return line.length > 28 ? `${line.slice(0, 27)}…` : line
 }
 const live = (command: BackgroundTerminalInfo) => command.state === 'running' || command.state === 'stopping'
+
+/**
+ * One command in the list: a dot that breathes while it runs (in the attention colour when the agent is waiting on it),
+ * what it is, its state, how long it has run, and a chevron to its output.
+ */
+function commandRow(
+  c: ReturnType<typeof useTheme>['c'],
+  {
+    title,
+    mono = false,
+    waiting,
+    detail,
+    since,
+    say,
+    onPress,
+  }: {
+    title: string
+    /** A command line reads in the terminal's type; a command the agent named reads as its name. */
+    mono?: boolean
+    waiting: boolean
+    detail: string
+    since?: number
+    say: (text: string) => string
+    onPress(): void
+  },
+) {
+  const ran = since ? formatDuration(Date.now() - since) : ''
+  const state = waiting ? `${say('Agent is waiting')} · ${detail}` : detail
+  return (
+    <Row
+      accessibilityRole="button"
+      accessibilityLabel={`${title} · ${state}${ran ? ` · ${ran}` : ''}`}
+      onPress={onPress}
+    >
+      <Breathe active>
+        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: waiting ? c.warn : c.ok }} />
+      </Breathe>
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+        <T mono={mono} weight={mono ? '400' : '500'} numberOfLines={2}>
+          {title}
+        </T>
+        <T size={font.caption} tone={waiting ? 'warn' : 'muted'} numberOfLines={2}>
+          {state}
+        </T>
+      </View>
+      {ran ? (
+        <T size={font.caption} tone="muted" style={{ fontVariant: ['tabular-nums'] }}>
+          {ran}
+        </T>
+      ) : null}
+      <ChevronRight size={16} color={c.muted} />
+    </Row>
+  )
+}
 
 /** Inspect existing host-owned commands. This surface never opens, writes to or closes a shell. */
 export function BackgroundTerminals({
@@ -37,6 +93,7 @@ export function BackgroundTerminals({
   onClose(): void
 }) {
   const store = useStore()
+  const { c } = useTheme()
   const { height } = useWindowDimensions()
   const commands = providerCommands(chat)
   // A command the provider runs opens in the helper sheet, which shows its output and stops it through the agent.
@@ -289,21 +346,29 @@ export function BackgroundTerminals({
           onPress={onOpen}
         />
       )}
-      <Sheet open={open} onClose={onClose} title={t('Background terminals')}>
+      <Sheet
+        open={open}
+        onClose={onClose}
+        title={selected ? t('Command') : t('Background terminals')}
+        // A command's output is one level down in this sheet: the back arrow returns to the list.
+        onBack={selected ? () => setSelection(null) : undefined}
+      >
         <View style={{ padding: space.l, gap: space.s }}>
-          <T size={font.caption} tone="muted">
-            {store.computers.find((host) => host.id === hostId)?.name ?? hostId} · {chat.title}
-          </T>
+          {/* The sheet belongs to the thread on screen and follows the host by itself, so it names neither and has no
+              Refresh; a read that failed offers to try again. */}
           {!online && <T tone="muted">{t('Offline · last-known activity')}</T>}
-          {status === 'loading' && <ActivityIndicator accessibilityLabel={t('Loading background commands…')} />}
+          {status === 'loading' && !rows.length && !commands.length && (
+            <ActivityIndicator accessibilityLabel={t('Loading background commands…')} />
+          )}
           {status === 'error' && (
-            <T tone="bad">{t((selected ? detail.error : list.error) ?? 'Could not load background commands.')}</T>
+            <View style={{ gap: space.xs }}>
+              <T tone="bad">{t((selected ? detail.error : list.error) ?? 'Could not load background commands.')}</T>
+              <Button kind="ghost" title={t('Try again')} disabled={!online} onPress={retry} />
+            </View>
           )}
           {actionError && <T tone="bad">{t(actionError)}</T>}
-          <Button kind="ghost" title={t('Refresh')} disabled={!online || status === 'loading'} onPress={retry} />
           {selected ? (
             <>
-              <Button kind="ghost" title={t('All commands')} onPress={() => setSelection(null)} />
               {shown && (
                 <>
                   <T mono copyable={shown.command} numberOfLines={3}>
@@ -367,22 +432,15 @@ export function BackgroundTerminals({
                   {rows.map((command, index) => (
                     <View key={command.id}>
                       {index ? <Divider inset={space.l} /> : null}
-                      <Row
-                        accessibilityRole="button"
-                        accessibilityLabel={`${command.command} · ${stateLabel(command)}${stopLabel(command)}`}
-                        onPress={() => setSelection({ scope, id: command.id })}
-                      >
-                        <View style={{ flex: 1, gap: space.xs }}>
-                          <T mono numberOfLines={2}>
-                            {command.command}
-                          </T>
-                          <T size={font.caption} tone="muted">
-                            {command.agentWaiting ? <T size={font.caption}>{`${t('Agent is waiting')} · `}</T> : null}
-                            {stateLabel(command)}
-                            {stopLabel(command)}
-                          </T>
-                        </View>
-                      </Row>
+                      {commandRow(c, {
+                        title: command.command,
+                        mono: true,
+                        waiting: !!command.agentWaiting,
+                        detail: `${stateLabel(command)}${stopLabel(command)}`,
+                        since: command.startedAt,
+                        say: t,
+                        onPress: () => setSelection({ scope, id: command.id }),
+                      })}
                     </View>
                   ))}
                 </Card>
@@ -392,25 +450,18 @@ export function BackgroundTerminals({
                   {commands.map((task, index) => (
                     <View key={task.agentId}>
                       {index ? <Divider inset={space.l} /> : null}
-                      <Row
-                        accessibilityRole="button"
-                        accessibilityLabel={`${task.name} · ${task.awaited ? `${t('Agent is waiting')} · ` : ''}${t('Running')} · ${t('Moved to the background')}`}
-                        onPress={() => {
+                      {commandRow(c, {
+                        title: task.name,
+                        waiting: !!task.awaited,
+                        detail: `${t('Running')} · ${t('Moved to the background')}`,
+                        since: task.startedAt,
+                        say: t,
+                        onPress: () => {
                           onClose()
                           // iOS presents the next sheet only once this one has gone.
                           setTimeout(() => setCommandId(task.agentId), 300)
-                        }}
-                      >
-                        <View style={{ flex: 1, gap: space.xs }}>
-                          <T mono numberOfLines={2}>
-                            {task.name}
-                          </T>
-                          <T size={font.caption} tone="muted">
-                            {task.awaited ? `${t('Agent is waiting')} · ` : ''}
-                            {t('Running')} · {t('Moved to the background')}
-                          </T>
-                        </View>
-                      </Row>
+                        },
+                      })}
                     </View>
                   ))}
                 </Card>
