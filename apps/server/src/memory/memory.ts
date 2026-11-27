@@ -5,6 +5,7 @@
 // The notes live as markdown files (USER.md, MEMORY.md per scope, ARCHIVE.md) that people can read and edit; the database
 // is the index that adds usage statistics and the audit trail, and a file edit wins over it. See memoryFiles.ts.
 import { randomUUID } from 'node:crypto'
+import { resolveWorkModel, withWorkModel } from '@ramu/shared/providers/workModel'
 import {
   existsSync,
   mkdirSync,
@@ -1184,17 +1185,14 @@ ${JSON.stringify(data)}
   }
 
   private modelSettings() {
-    const modelPrefs = this.workspace.getAppState<ModelPreferences | null>('model-preferences', null)
-    const step = modelPrefs?.sets
-      .find((s) => s.id === modelPrefs.defaultSetId)
-      ?.steps.find((s) => s.id === modelPrefs.defaultStepId)
     const selected = this.workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}).intelligence
       ?.maintenanceModel
-    return {
-      ...DEFAULT_AGENT_SETTINGS,
-      ...(step ? { provider: step.provider, model: step.model, effort: step.effort } : {}),
-      ...(selected ?? {}),
-    }
+    return withWorkModel(
+      DEFAULT_AGENT_SETTINGS,
+      resolveWorkModel(selected ?? null, {
+        models: this.workspace.getAppState<ModelPreferences | null>('model-preferences', null),
+      }),
+    )
   }
 
   /** The protocol plus an index of the strongest memories in scope, appended to every provider's instructions. */

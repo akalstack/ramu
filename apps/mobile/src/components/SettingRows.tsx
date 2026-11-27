@@ -4,7 +4,10 @@ import { useState, type ReactNode } from 'react'
 import { translate } from '@ramu/shared/i18n'
 import { ModelFlowRow } from './ModelFlowRow'
 import { useStore, type Language } from '../runtime/store'
-import { modelStepLabel } from '@ramu/shared/providers/providers'
+import { accountName, modelStepLabel, providerAccountOrder } from '@ramu/shared/providers/providers'
+import { isModelListed } from '@ramu/shared/providers/modelVisibility'
+import type { WorkModel, WorkModelChoice } from '@ramu/shared/providers/workModel'
+import { useAccountLogins } from '../runtime/useAccountLogins'
 import type { AgentProvider, ModelPreferences, ReasoningEffort } from '@ramu/shared/types'
 import { ActivityIndicator, Alert, Pressable, TextInput, View } from 'react-native'
 import { useRouter } from 'expo-router'
@@ -242,6 +245,103 @@ function ModelStepRow({
   )
 }
 
+/**
+ * The model one kind of Ramu's own work runs on, as on the desktop: the thread's own, the default model, or one model the
+ * person keeps visible, then its effort and, for a provider with several logins, which login it runs on.
+ */
+function WorkModelRow({
+  row,
+  host,
+  value,
+  disabled,
+}: {
+  row: Extract<SettingRow, { kind: 'work-model' }>
+  host: Host
+  value: unknown
+  disabled?: boolean
+}) {
+  const store = useStore()
+  const say = useSay()
+  const catalogs = store.catalogs[host.computerId] ?? []
+  const preferences = store.appPreferences[host.computerId]
+  const choice = (value ?? null) as WorkModelChoice
+  const explicit: WorkModel | null = choice && !('use' in choice) ? choice : null
+  const models = catalogs.flatMap((catalog) =>
+    catalog.models
+      .filter(
+        (model) =>
+          (!model.isLegacy &&
+            isModelListed(preferences?.visibleModels, { provider: catalog.provider, id: model.id })) ||
+          (explicit?.provider === catalog.provider && explicit.model === model.id),
+      )
+      .map((model) => ({ ...model, provider: catalog.provider })),
+  )
+  const key = (provider: string, model: string) => `${provider}\n${model}`
+  const chosen = explicit && models.find((model) => model.provider === explicit.provider && model.id === explicit.model)
+  const order = explicit ? providerAccountOrder(preferences?.providerBinaries, explicit.provider) : []
+  const logins = useAccountLogins([host.computerId], order.length > 1)[host.computerId]
+  return (
+    <>
+      <ChoiceRow
+        title={row.title}
+        help={row.help}
+        value={explicit ? key(explicit.provider, explicit.model) : choice && 'use' in choice ? choice.use : 'thread'}
+        options={[
+          { value: 'thread', label: say('Same as thread') },
+          { value: 'default', label: say('Default model') },
+          ...models.map((model) => ({
+            value: key(model.provider, model.id),
+            label: modelStepLabel({ provider: model.provider, model: model.id, effort: null }, catalogs),
+          })),
+        ]}
+        disabled={disabled}
+        onChange={(next) => {
+          if (next === 'thread' || next === 'default') return host.set(row.path, { use: next })
+          const model = models.find((entry) => key(entry.provider, entry.id) === next)
+          if (!model) return
+          const accountId = explicit?.provider === model.provider ? explicit.accountId : undefined
+          host.set(row.path, {
+            provider: model.provider,
+            model: model.id,
+            effort: model.defaultEffort ?? null,
+            ...(accountId ? { accountId } : {}),
+          })
+        }}
+      />
+      {explicit && chosen && chosen.efforts.length > 1 ? (
+        <ChoiceRow
+          title={say('Effort')}
+          value={explicit.effort ?? chosen.defaultEffort ?? chosen.efforts[0]}
+          options={chosen.efforts.map((effort) => ({
+            value: effort,
+            label: modelStepLabel({ provider: explicit.provider, model: explicit.model, effort }, catalogs),
+          }))}
+          disabled={disabled}
+          onChange={(effort) => host.set(row.path, { ...explicit, effort })}
+        />
+      ) : null}
+      {explicit && order.length > 1 ? (
+        <ChoiceRow
+          title={say('Account')}
+          value={explicit.accountId && order.includes(explicit.accountId) ? explicit.accountId : order[0]}
+          options={order.map((id) => ({
+            value: id,
+            label: accountName(
+              preferences?.providerBinaries,
+              explicit.provider,
+              id,
+              logins?.[explicit.provider]?.[id],
+              say,
+            ),
+          }))}
+          disabled={disabled}
+          onChange={(accountId) => host.set(row.path, { ...explicit, accountId })}
+        />
+      ) : null}
+    </>
+  )
+}
+
 /** One computer-side row, drawn from its definition and the live value. */
 function HostRow({ row, host, disabled }: { row: SettingRow; host: Host; disabled?: boolean }) {
   if (row.path === '$models.defaultBarMode' && row.kind === 'choice')
@@ -281,6 +381,7 @@ function HostRow({ row, host, disabled }: { row: SettingRow; host: Host; disable
     )
   }
   if (row.kind === 'model') return <ModelStepRow row={row} host={host} value={value} disabled={disabled} />
+  if (row.kind === 'work-model') return <WorkModelRow row={row} host={host} value={value} disabled={disabled} />
   if (row.kind === 'text')
     return (
       <TextRow

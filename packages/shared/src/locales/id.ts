@@ -1065,14 +1065,22 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Setelah thread, cari catatan penting dan skill yang bisa dipakai ulang. Memakai token model saat idle.',
   'Any number from 1 to 1000.': 'Angka apa pun dari 1 sampai 1000.',
   'Ask me first': 'Tanya dulu',
-  'Writes learning reviews and memory cleanup. A cheaper model keeps token use low.':
-    'Menulis tinjauan pembelajaran dan pembersihan memori. Model yang lebih hemat menjaga pemakaian token tetap rendah.',
   'Models for Ramu’s own work': 'Model untuk pekerjaan Ramu sendiri',
   'Aside model': 'Model sampingan',
   'Continue in a new thread': 'Lanjutkan di thread baru',
   'Continue in a new thread. The aside stays here, and nothing is sent until you send it.':
     'Lanjutkan di thread baru. Pertanyaan sampingan tetap di sini, dan tidak ada yang dikirim sampai Anda mengirimnya.',
   'Same as thread': 'Sama dengan thread',
+  '{0} continuation turns': '{0} giliran lanjutan',
+  'Turn limit for this goal': 'Batas giliran untuk tujuan ini',
+  'Settings default ({0})': 'Bawaan Pengaturan ({0})',
+  'Settings default (no limit)': 'Bawaan Pengaturan (tanpa batas)',
+  'Limit {0}': 'Batas {0}',
+  'No limit': 'Tanpa batas',
+  'Writes learning reviews, memory cleanup, branch names and suggestions. Same as thread uses the thread’s model and account, and the default model for work without a thread.':
+    'Menulis tinjauan pembelajaran, pembersihan memori, nama branch, dan saran. Sama dengan thread memakai model dan akun thread, dan model bawaan untuk pekerjaan tanpa thread.',
+  'Writes commit messages and pull request titles and descriptions. Same as thread uses the thread’s model and account.':
+    'Menulis pesan commit serta judul dan deskripsi pull request. Sama dengan thread memakai model dan akun thread.',
   'Answers side questions about a thread. Same as thread uses the model chosen in that thread.':
     'Menjawab pertanyaan sampingan tentang sebuah thread. Sama dengan thread memakai model yang dipilih di thread itu.',
   'Chosen once in Models, for every feature that uses it.':
@@ -3673,8 +3681,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'via {0}': 'lewat {0}',
   'Generated text': 'Teks yang dibuat',
   'Writing model': 'Model penulis',
-  'Writes commit messages and pull request titles and descriptions. Default uses your default model.':
-    'Menulis pesan commit serta judul dan deskripsi pull request. Default memakai model default-mu.',
   Style: 'Gaya',
   'How commit messages and pull request titles are worded.': 'Cara pesan commit dan judul pull request ditulis.',
   'Writing style': 'Gaya penulisan',
@@ -4332,6 +4338,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   'New worktree': 'Worktree baru',
   'Loading workspace settings…': 'Memuat pengaturan workspace…',
   'Using current checkout': 'Menggunakan checkout saat ini',
+  'Another thread is working in this checkout.': 'Thread lain sedang bekerja di checkout ini.',
+  '{0} threads are working in this checkout.': '{0} thread sedang bekerja di checkout ini.',
+  'Use a new worktree': 'Gunakan worktree baru',
   'Device access': 'Akses perangkat',
   'View threads and answer requests': 'Lihat thread dan jawab permintaan',
   'This device can view threads and answer requests, but not send messages. Ask the host owner to pair it with full access.':

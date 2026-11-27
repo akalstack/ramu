@@ -105,12 +105,7 @@ export function AsidePanel({
       latest ? quotedQuestion(question, passage) : question,
       settings,
       {
-        // "Same as thread" picked over a Settings aside model names the thread's model, so the pick still wins.
-        ...(picked
-          ? { model: picked }
-          : asideModel && settings
-            ? { model: { provider: settings.provider, model: settings.model, effort: settings.effort } }
-            : {}),
+        ...(picked ? { model: picked } : {}),
         ...(files.length ? { attachmentIds: files.map((file) => file.id) } : {}),
       },
     )
@@ -279,14 +274,7 @@ export function AsidePanel({
           attachments={files}
           onAttachmentsChange={readOnly ? undefined : setFiles}
           allowEmpty={files.length > 0}
-          controls={
-            <ModelChoice
-              label={translate('Aside model')}
-              value={picked}
-              emptyLabel={translate('Same as thread')}
-              onChange={setPicked}
-            />
-          }
+          controls={<ModelChoice label={translate('Aside model')} value={picked} onChange={setPicked} />}
         />
       </div>
     </aside>

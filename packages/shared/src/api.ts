@@ -11,6 +11,7 @@ import type { RoutingCandidate, RoutingOutcome } from './workspace/projectRoutin
 import type { HostFolderListing, HostPlace } from './workspace/hostFolders'
 import type { BranchChoice, BranchNamingIntent, BranchNamingStrategy } from './workspaceDefaults'
 import type { AntigravitySignIn, ProviderEnvironmentStatus, ProviderEnvironmentValues } from './providers/environment'
+import type { WorkModel } from './providers/workModel'
 import type { HostOverview, HostDestination, HostTaskMethod } from './hostOverview'
 import type { ThreadDoneImpact } from './chat/threadDone'
 import type { PrivacyPane } from './privacyPanes'
@@ -1314,7 +1315,13 @@ export interface RamuMethods extends ArtifactMethods {
     choice?: BranchChoice,
     naming?: { branchPrefix: string; strategy: BranchNamingStrategy },
   ): WorktreePlanEntry[]
-  'tasks.generateBranch'(projectId: string, title: string, intent: BranchNamingIntent, requestId?: string): BranchChoice
+  'tasks.generateBranch'(
+    projectId: string,
+    title: string,
+    intent: BranchNamingIntent,
+    requestId?: string,
+    thread?: WorkModel,
+  ): BranchChoice
   'tasks.cancelBranch'(requestId: string): void
   'tasks.create'(input: CreateTaskInput, plan?: WorktreePlanEntry[]): Task
   'tasks.setup'(taskId: string): RepositoryBinding[]
@@ -1920,6 +1927,8 @@ export interface RamuMethods extends ArtifactMethods {
    * thread's folder with a ten-minute limit.
    */
   'agent.goal.verify'(sessionId: string, command: string | null): ChatGoal
+  /** This goal's own limit on automatic turns: a number, null for none, or `default` to follow Settings. */
+  'agent.goal.limit'(sessionId: string, limit: number | null | 'default'): ChatGoal
   'agent.events'(sessionId: string): AgentEvent[]
   /** The end of a transcript, bounded and starting at a turn where one fits, to show a long thread while the rest loads. */
   'agent.tail'(sessionId: string): { complete: boolean; events: { seq: number; event: AgentEvent }[] }

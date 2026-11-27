@@ -4,6 +4,7 @@ import { Input } from '@/components/desktop-input'
 import { Button } from '@/components/desktop-button'
 import { t } from '../i18n'
 import { useHost } from './HostProvider'
+import type { WorkModel } from '@ramu/shared/providers/workModel'
 import { errorText } from './TaskPane'
 
 export function BranchNameEditor({
@@ -13,6 +14,7 @@ export function BranchNameEditor({
   choice,
   onChange,
   busy,
+  threadModel,
 }: {
   projectId: string
   title: string
@@ -20,6 +22,8 @@ export function BranchNameEditor({
   choice?: BranchChoice
   onChange: (choice?: BranchChoice) => void
   busy: boolean
+  /** The model and login the thread will run on, which a branch named Same as thread is named with. */
+  threadModel?: WorkModel
 }) {
   const { invoke } = useHost()
   const [generating, setGenerating] = useState(false)
@@ -82,7 +86,7 @@ export function BranchNameEditor({
               setGenerating(true)
               setError(null)
               try {
-                const result = await invoke('tasks.generateBranch', projectScope, title, intent, requestId)
+                const result = await invoke('tasks.generateBranch', projectScope, title, intent, requestId, threadModel)
                 if (token === epoch.current) onChange(result)
               } catch (cause) {
                 if (token === epoch.current) setError(errorText(cause))

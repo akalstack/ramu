@@ -225,8 +225,8 @@ export const SETTINGS_CATALOG: SettingsCatalogEntry[] = [
     section: 'models',
     title: 'Background model',
     path: 'intelligence.maintenanceModel',
-    help: 'Writes learning reviews and memory cleanup. A cheaper model keeps token use low.',
-    words: 'maintenance model cheaper background',
+    help: 'Writes learning reviews, memory cleanup, branch names and suggestions. Same as thread uses the thread’s model and account, and the default model for work without a thread.',
+    words: 'maintenance model cheaper background same as thread account',
   },
   {
     section: 'memory',
@@ -532,8 +532,8 @@ export const SETTINGS_CATALOG: SettingsCatalogEntry[] = [
     section: 'models',
     title: 'Writing model',
     path: 'commitModel',
-    help: 'Writes commit messages and pull request titles and descriptions. Default uses your default model.',
-    words: 'ai draft commit message pull request description default model effort',
+    help: 'Writes commit messages and pull request titles and descriptions. Same as thread uses the thread’s model and account.',
+    words: 'ai draft commit message pull request description default model effort same as thread account',
   },
   {
     section: 'models',

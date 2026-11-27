@@ -1,3 +1,4 @@
+import { resolveWorkModel, withWorkModel } from '@ramu/shared/providers/workModel'
 import { removeAgentCredits } from '@ramu/shared/workspace/agentCredits'
 import type { HandlerContext, MethodTable } from './types'
 import {
@@ -72,26 +73,21 @@ export function withoutAgentCredits(ctx: Pick<HandlerContext, 'storedPreferences
 }
 
 /**
- * The model that writes commit messages and pull request drafts: the one chosen in Settings → Git, else the default
- * step of the default model set, else `base` (the thread's own settings, or the defaults).
+ * The model that writes commit messages and pull request drafts: the one chosen in Settings › Models (Writing model),
+ * which by default is the thread's own model and login, so the work runs where the thread already has room.
  */
 export function writingSettings(
   workspace: Pick<HandlerContext['workspace'], 'getAppState'>,
   prefs: Partial<AppPreferences>,
-  base: AgentSettings = DEFAULT_AGENT_SETTINGS,
+  thread?: AgentSettings | null,
 ): AgentSettings | null {
-  const modelPrefs = workspace.getAppState<ModelPreferences | null>('model-preferences', null)
-  const defaultStep = modelPrefs?.sets
-    .find((set) => set.id === modelPrefs.defaultSetId)
-    ?.steps.find((step) => step.id === modelPrefs.defaultStepId)
-  const chosen = prefs.commitModel ?? defaultStep
-  if (!chosen) return base === DEFAULT_AGENT_SETTINGS ? null : base
-  return {
-    ...base,
-    provider: chosen.provider,
-    model: chosen.model,
-    effort: chosen.effort,
-    accountId: chosen.provider === base.provider ? base.accountId : undefined,
-    serviceTier: undefined,
-  }
+  const models = workspace.getAppState<ModelPreferences | null>('model-preferences', null)
+  const model = resolveWorkModel(prefs.commitModel ?? null, { thread, models })
+  if (!model) return thread ?? null
+  const base = thread ?? DEFAULT_AGENT_SETTINGS
+  const settings = withWorkModel(base, model)
+  // A fast tier belongs to the thread's own model; another model runs at its standard one.
+  return settings.provider === base.provider && settings.model === base.model
+    ? settings
+    : { ...settings, serviceTier: undefined }
 }

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { resolveWorkModel, withWorkModel } from '@ramu/shared/providers/workModel'
 import { z } from 'zod'
 import { DEFAULT_AGENT_SETTINGS, type ModelPreferences } from '@ramu/shared/types'
 import { parseTheme, type ThemeIssue, type RamuTheme } from '@ramu/shared/theme'
@@ -29,17 +30,13 @@ const CANDIDATE_ARGS = z.tuple([brief, z.unknown(), lockedRoles, references])
  * and nothing here touches an installed theme or any file.
  */
 export const registerThemeHandlers: RegisterHandlers = ({ workspace, agents, storedPreferences, attachmentStore }) => {
-  const settings = () => {
-    const modelPrefs = workspace.getAppState<ModelPreferences | null>('model-preferences', null)
-    const step = modelPrefs?.sets
-      .find((set) => set.id === modelPrefs.defaultSetId)
-      ?.steps.find((s) => s.id === modelPrefs.defaultStepId)
-    return {
-      ...DEFAULT_AGENT_SETTINGS,
-      ...(step ? { provider: step.provider, model: step.model, effort: step.effort } : {}),
-      ...(storedPreferences().intelligence?.maintenanceModel ?? {}),
-    }
-  }
+  const settings = () =>
+    withWorkModel(
+      DEFAULT_AGENT_SETTINGS,
+      resolveWorkModel(storedPreferences().intelligence?.maintenanceModel ?? null, {
+        models: workspace.getAppState<ModelPreferences | null>('model-preferences', null),
+      }),
+    )
 
   const draft = async (
     brief: string,

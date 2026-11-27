@@ -647,7 +647,7 @@ export interface AsideMessage {
 /** What a person chose in the aside itself for one question; both are optional, so older clients send neither. */
 export interface AsideAskOptions {
   /** The model picked in the aside, which answers instead of Settings' aside model or the thread's. */
-  model?: { provider: AgentProvider; model: string; effort: ReasoningEffort | null }
+  model?: import('../providers/workModel').WorkModelChoice
   /** Ids from `attachments.add`, read by the answering model together with the question. */
   attachmentIds?: string[]
 }

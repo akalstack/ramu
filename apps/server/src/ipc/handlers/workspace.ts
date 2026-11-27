@@ -1,4 +1,5 @@
 import { mergeInputSummaries } from '@ramu/shared/chat/inputSummary'
+import { resolveWorkModel, withWorkModel, type WorkModel } from '@ramu/shared/providers/workModel'
 import { turnStartedAt } from '@ramu/shared/chat/agentActivity'
 import { threadProviders, type ProviderUse } from '@ramu/shared/chat/threadProviders'
 import { generateBranchName } from '../../workspace/branchNaming'
@@ -33,7 +34,7 @@ import {
 import { routeProject } from '../../workspace/projectRouter'
 import type { RoutingCandidate } from '@ramu/shared/workspace/projectRouting'
 import type { ContinuationRepo, ContinuationStart, ContinuedEvent } from '@ramu/shared/continuation'
-import { agentSettings, id } from '../schemas'
+import { agentSettings, id, workModel } from '../schemas'
 import type { RegisterHandlers } from '../types'
 import { WRITING_STATES } from '../../agent/constants'
 import type { ThreadDoneImpact } from '@ramu/shared/chat/threadDone'
@@ -106,6 +107,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
   testDevices,
   computer,
   browser,
+  hostBrowser,
 }) => {
   const continuations = () => {
     if (!agentThreads) throw new Error('Continuing threads is unavailable on this host.')
@@ -132,19 +134,22 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
     }
   }
   const projectActions = new ProjectActions(workspace, projectConfiguration)
-  const generate = (title: string, intent: BranchNamingIntent, signal?: AbortSignal) => {
+  /** `thread`: the model and login the thread being started will run on, which Same as thread names its branch with. */
+  const generate = (title: string, intent: BranchNamingIntent, signal?: AbortSignal, thread?: WorkModel) => {
     const prefs = loadPreferences()
-    const models = workspace.getAppState<ModelPreferences | null>('model-preferences', null)
-    const step = models?.sets
-      .find((set) => set.id === models.defaultSetId)
-      ?.steps.find((step) => step.id === models.defaultStepId)
-    const chosen = prefs.intelligence.maintenanceModel ?? step
+    const settings = withWorkModel(
+      DEFAULT_AGENT_SETTINGS,
+      resolveWorkModel(prefs.intelligence.maintenanceModel, {
+        thread,
+        models: workspace.getAppState<ModelPreferences | null>('model-preferences', null),
+      }),
+    )
     return generateBranchName(
       title,
       intent,
       async (prompt, signal) =>
         (
-          await agents.analyze(prompt, { ...DEFAULT_AGENT_SETTINGS, ...chosen }, 400, {
+          await agents.analyze(prompt, settings, 400, {
             timeoutMs: 15_000,
             signal,
             defer: false,
@@ -175,6 +180,8 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
     computer?.revoke(taskId)
     void testDevices?.releaseThread(taskId)
     watchers.release(taskId)
+    // The thread's tabs may be in the host's own browser or in the attached desktop's; close them in both.
+    hostBrowser?.closeThread(taskId)
     if (browser?.isReady())
       void browser
         .view(taskId, { kind: 'list' })
@@ -193,12 +200,14 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
     commands: terminals.listBackground(taskId).filter((command) => command.state === 'running').length,
     helpers: agents.list(taskId).filter((session) => session.parentId && WRITING_STATES.includes(session.state)).length,
     computer: !!computer?.session(taskId),
-    browserTabs: browser?.isReady()
-      ? await browser
-          .view(taskId, { kind: 'list' })
-          .then((tabs) => z.array(z.object({ id: z.string() })).parse(tabs).length)
-          .catch(() => 0)
-      : 0,
+    browserTabs:
+      (hostBrowser?.threadTabs(taskId) ?? 0) +
+      (browser?.isReady()
+        ? await browser
+            .view(taskId, { kind: 'list' })
+            .then((tabs) => z.array(z.object({ id: z.string() })).parse(tabs).length)
+            .catch(() => 0)
+        : 0),
   })
   const deleteThread = async (taskId: string, removeWorktrees: boolean, review?: TaskRemovalReview) => {
     const covers = workspace.explorerBindings(taskId).map((binding) => binding.cwd)
@@ -519,8 +528,14 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
       },
     },
     'tasks.generateBranch': {
-      args: z.tuple([id, z.string().max(200), namingIntent, z.string().uuid().optional()]),
-      run: async (projectId: string, title: string, intent: BranchNamingIntent, requestId?: string) => {
+      args: z.tuple([id, z.string().max(200), namingIntent, z.string().uuid().optional(), workModel.optional()]),
+      run: async (
+        projectId: string,
+        title: string,
+        intent: BranchNamingIntent,
+        requestId?: string,
+        thread?: WorkModel,
+      ) => {
         if (pendingNames.size >= 16) throw new Error('Branch naming is busy. Try again shortly.')
         if (requestId && pendingNames.has(requestId)) throw new Error('Branch naming request is already running')
         const key = requestId ?? crypto.randomUUID()
@@ -529,7 +544,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
         try {
           const reason = await workspace.worktreeUnavailable(projectId)
           if (reason) throw new Error(reason)
-          return await generate(title, intent, controller.signal)
+          return await generate(title, intent, controller.signal, thread)
         } finally {
           pendingNames.delete(key)
         }
@@ -563,10 +578,15 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
           title: z.string().max(200),
           mode: z.enum(['current', 'worktree']),
           workspaceId: id.optional(),
+          /** The model and login the thread will run on, for naming its branch. */
+          threadModel: workModel.optional(),
         }),
         planSchema.optional(),
       ]),
-      run: (input: Parameters<Workspace['createTask']>[0], plan?: Parameters<Workspace['createTask']>[1]) => {
+      run: (
+        { threadModel, ...input }: Parameters<Workspace['createTask']>[0],
+        plan?: Parameters<Workspace['createTask']>[1],
+      ) => {
         const prefs = projectPreferences(input.projectId)
         const intent = input.branchNaming ?? {
           strategy: prefs.worktreeBranchNaming,
@@ -584,7 +604,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
             : async () => {
                 const reason = await workspace.worktreeUnavailable(input.projectId)
                 if (reason) throw new Error(reason)
-                return generate(input.title, intent)
+                return generate(input.title, intent, undefined, threadModel)
               },
         )
       },

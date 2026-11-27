@@ -463,3 +463,12 @@ test("a page's Reset defaults puts back only rows that differ from the host's ad
     ['fallback.autoResume', true],
   ])
 })
+
+test('the models Ramu’s own work runs on use the shared choice of thread, default or one model and account', () => {
+  for (const path of ['commitModel', 'intelligence.maintenanceModel']) {
+    const row = Object.values(SETTINGS_ROWS)
+      .flatMap((groups) => groups.flatMap((group) => group.rows))
+      .find((entry) => entry.path === path)
+    assert.equal(row?.kind, 'work-model', path)
+  }
+})

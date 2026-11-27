@@ -1,5 +1,6 @@
 import { DEFAULT_WORKSPACE_PREFERENCES, type WorkspaceDefaults } from '../workspaceDefaults'
 import type { ProviderConfiguration } from '../providers/providers'
+import type { WorkModelChoice } from '../providers/workModel'
 import type { AgentProvider, AgentSettings, ReasoningEffort } from './agent'
 import { DEFAULT_ADVISOR_PREFERENCES, DEFAULT_FALLBACK_PREFERENCES, DEFAULT_SUBAGENT_PREFERENCES } from './fallback'
 import type { AdvisorPreferences, FallbackPreferences, SubagentPreferences } from './fallback'
@@ -61,10 +62,10 @@ export interface AppPreferences extends WorkspaceDefaults {
   defaultCommitAction: CommitAction
   /** Primary choice when committing from the default branch. */
   defaultCommitBranch: 'new-branch' | 'current'
-  /** Model that drafts commit messages; null follows the default model step in Model sets. */
-  commitModel: IntelligencePreferences['maintenanceModel']
+  /** Model that drafts commit messages and pull requests; null follows the thread's model. */
+  commitModel: WorkModelChoice
   /** Model that answers asides; null follows the model chosen in the thread the aside is about. */
-  asideModel: IntelligencePreferences['maintenanceModel']
+  asideModel: WorkModelChoice
   recentChats: number
   /** Archived chats idle this many days are deleted automatically; 0 keeps them forever. */
   cleanupArchivedDays: number

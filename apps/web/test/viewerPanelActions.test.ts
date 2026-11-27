@@ -54,6 +54,7 @@ vi.mock('../src/models/ModelSets', () => ({
 vi.mock('../src/composer/Composer', () => ({ Composer: () => null }))
 vi.mock('../src/composer/ComposerInput', () => ({ focusComposer() {} }))
 vi.mock('../src/settings/AppSettings', () => ({ useAppSettings: () => ({ preferences: { asideModel: null } }) }))
+vi.mock('../src/models/AccountPicker', () => ({ useLoginChoices: () => null }))
 vi.mock('../src/chat/AgentControls', () => ({ providerName: (name: string) => name }))
 vi.mock('../src/components/app-toaster', () => ({ notify: { add: vi.fn() } }))
 const { AgentTaskPanel } = await import('../src/views/agent/components/AgentTaskPanel')

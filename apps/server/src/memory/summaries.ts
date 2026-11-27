@@ -1,6 +1,7 @@
 // "What Ramu learned": a periodic, AI-written, read-only summary of what automatic learning created or changed.
 // The change log comes from history Ramu already keeps (memory events, skill revisions, learning jobs); nothing new is tracked.
 import { randomUUID } from 'node:crypto'
+import { resolveWorkModel, withWorkModel } from '@ramu/shared/providers/workModel'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { basename } from 'node:path'
 import { z } from 'zod'
@@ -494,13 +495,12 @@ export class SummaryService {
       memory: prefs.summaryMemory,
       skills: prefs.summarySkills,
     })
-    const modelPrefs = this.workspace.getAppState<ModelPreferences | null>('model-preferences', null)
-    const step = modelPrefs?.sets
-      .find((set) => set.id === modelPrefs.defaultSetId)
-      ?.steps.find((entry) => entry.id === modelPrefs.defaultStepId)
-    const selected =
-      prefs.maintenanceModel ?? (step ? { provider: step.provider, model: step.model, effort: step.effort } : {})
-    const settings: AgentSettings = { ...DEFAULT_AGENT_SETTINGS, ...selected }
+    const settings: AgentSettings = withWorkModel(
+      DEFAULT_AGENT_SETTINGS,
+      resolveWorkModel(prefs.maintenanceModel, {
+        models: this.workspace.getAppState<ModelPreferences | null>('model-preferences', null),
+      }),
+    )
     // Everything the summary depends on. Empty input never reaches a model, even for Run now; an unchanged one is
     // skipped unless Run now forces it.
     const print = fingerprint({

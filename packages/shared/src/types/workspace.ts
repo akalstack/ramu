@@ -1,5 +1,6 @@
 import type { BranchChoice, BranchNamingIntent } from '../workspaceDefaults'
 import type { ChatGoal } from './goal'
+import type { WorkModel } from '../providers/workModel'
 import type { AgentProvider, AgentSessionState, ThreadHelperSummary, ThreadInputSummary } from './agent'
 export type CheckoutMode = 'current' | 'worktree'
 
@@ -220,6 +221,8 @@ export interface CreateTaskInput {
   projectId: string
   title: string
   mode: CheckoutMode
+  /** The model and login the thread will run on, which a branch named Same as thread is named with. */
+  threadModel?: WorkModel
 }
 
 export interface DirEntry {

@@ -31,6 +31,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   resolveCheckoutMode,
+  checkoutBusyForDefault,
   currentBranchChoice,
   validBranchName,
   type BranchChoice,
@@ -94,6 +95,7 @@ import {
 } from './composer/newProjectDraft'
 import { useProjectParent } from './workspace/ProjectParentField'
 import { hasOfflineCopy } from './workspace/offlineCopy'
+import { threadWorkModel } from '@ramu/shared/providers/workModel'
 import { canOpenOffline } from './workspace/selectionRoute'
 
 /** A task's title is the first line of what you asked for. */
@@ -392,6 +394,14 @@ export function NewThread({
     worktreeUnavailable: options.data?.worktreeUnavailable,
   })
   const mode = resolution.mode
+  const busyInCheckout = general
+    ? 0
+    : checkoutBusyForDefault({
+        resolution,
+        projectId,
+        threads: ws.tasks,
+        worktreeUnavailable: options.data?.worktreeUnavailable,
+      })
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [prompt, setPrompt] = useState(() => loadDraft(draftKey.newChat(projectId), draftStore(host.id)))
   const consumeDraft = useDraftPersistence(draftKey.newChat(projectId), prompt, host.id)
@@ -749,6 +759,7 @@ export function NewThread({
         branchNaming: target.naming,
         branchChoice: target.branch,
         requestId: creationRequest.current.id,
+        threadModel: threadWorkModel(sendSettings),
       })
       created = task.id
       opening = { ...opening, settings: sendSettings }
@@ -1009,6 +1020,21 @@ export function NewThread({
                 : t('Loading workspace settings…')}
             </p>
           )}
+        {!pending && busyInCheckout > 0 && (
+          <p className="m-0 px-3 text-caption leading-[1.45] text-muted-foreground" role="status">
+            {busyInCheckout === 1
+              ? t('Another thread is working in this checkout.')
+              : t('{0} threads are working in this checkout.', { 0: busyInCheckout })}{' '}
+            <Button
+              variant="ghost"
+              size="xs"
+              className="-my-1"
+              onClick={() => workspaceDraft.choose({ mode: 'worktree', branch: workspaceDraft.choice.branch })}
+            >
+              {t('Use a new worktree')}
+            </Button>
+          </p>
+        )}
         {!pending && !general && mode === 'worktree' && !workspaceId && (
           <NewWorktreeSummary
             projectId={projectId}
@@ -1026,6 +1052,7 @@ export function NewThread({
                 intent={namingIntent}
                 choice={branchChoice}
                 busy={busy}
+                threadModel={threadWorkModel(settings)}
                 onChange={(choice) =>
                   workspaceDraft.choose({
                     ...workspaceDraft.choice,

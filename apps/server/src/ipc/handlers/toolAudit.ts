@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { resolveWorkModel, withWorkModel } from '@ramu/shared/providers/workModel'
 import { DEFAULT_AGENT_SETTINGS, type ModelPreferences } from '@ramu/shared/types'
 import {
   auditBudget,
@@ -41,17 +42,13 @@ export const registerToolAuditHandlers: RegisterHandlers = ({
   plugins,
   getSharedMcp,
 }) => {
-  const settings = () => {
-    const models = workspace.getAppState<ModelPreferences | null>('model-preferences', null)
-    const step = models?.sets
-      .find((set) => set.id === models.defaultSetId)
-      ?.steps.find((entry) => entry.id === models.defaultStepId)
-    return {
-      ...DEFAULT_AGENT_SETTINGS,
-      ...(step ? { provider: step.provider, model: step.model, effort: step.effort } : {}),
-      ...(storedPreferences().intelligence?.maintenanceModel ?? {}),
-    }
-  }
+  const settings = () =>
+    withWorkModel(
+      DEFAULT_AGENT_SETTINGS,
+      resolveWorkModel(storedPreferences().intelligence?.maintenanceModel ?? null, {
+        models: workspace.getAppState<ModelPreferences | null>('model-preferences', null),
+      }),
+    )
   const material = (input: ToolAuditTarget): { kind: ToolAuditKind; name: string; files: ToolAuditFile[] } => {
     if (input.kind === 'skill')
       return {

@@ -1,5 +1,6 @@
 import { z } from 'zod'
-import type { AppPreferences } from '@ramu/shared/types'
+import { resolveWorkModel, withWorkModel } from '@ramu/shared/providers/workModel'
+import type { AppPreferences, ModelPreferences } from '@ramu/shared/types'
 import {
   nextMessagePoint,
   nextMessagePrompt,
@@ -38,8 +39,13 @@ export const registerNextMessageHandlers: RegisterHandlers = ({ workspace, agent
       if (forked) return parseNextMessages(forked.text)
       // A provider that cannot fork: the maintenance model reads the end of the visible conversation instead.
       const preferences = workspace.getAppState<Partial<AppPreferences>>('app-preferences', {})
-      const maintenance = preferences.intelligence?.maintenanceModel
-      const settings = maintenance ? { ...session.settings, ...maintenance, accountId: undefined } : session.settings
+      const settings = withWorkModel(
+        session.settings,
+        resolveWorkModel(preferences.intelligence?.maintenanceModel ?? null, {
+          thread: session.settings,
+          models: workspace.getAppState<ModelPreferences | null>('model-preferences', null),
+        }),
+      )
       const reply = await agents.analyze(
         nextMessagePrompt(known, agents.asideContext(sessionId).slice(-12_000)),
         settings,

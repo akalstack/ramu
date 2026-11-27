@@ -1,18 +1,12 @@
 import { z } from 'zod'
 import { DEFAULT_INTELLIGENCE_PREFERENCES } from '@ramu/shared/types'
+import { workModelChoice } from './ipc/schemas'
 
 export const intelligenceSchema = z.object({
   toolSearch: z.boolean().default(true),
   crossThreadRecall: z.boolean().default(DEFAULT_INTELLIGENCE_PREFERENCES.crossThreadRecall),
   learning: z.enum(['off', 'review', 'auto']).default(DEFAULT_INTELLIGENCE_PREFERENCES.learning),
-  maintenanceModel: z
-    .object({
-      provider: z.enum(['claude-code', 'codex', 'opencode', 'cursor', 'antigravity']),
-      model: z.string().max(200),
-      effort: z.enum(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']).nullable(),
-    })
-    .nullable()
-    .default(null),
+  maintenanceModel: workModelChoice.default(null),
   dailyReviews: z.number().int().min(1).max(50).default(5),
   archiveSkillDays: z.number().int().min(7).max(3650).default(90),
   summaryInterval: z.enum(['off', 'daily', 'weekly']).default(DEFAULT_INTELLIGENCE_PREFERENCES.summaryInterval),

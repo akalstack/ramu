@@ -55,7 +55,14 @@ const changed = vi.fn()
 function render(prompt = 'Fix login', busy = false, title = prompt) {
   rig.cursor = 0
   return elements(
-    BranchNameEditor({ projectId: 'project', title, intent: { ...intent, prompt }, onChange: changed, busy }),
+    BranchNameEditor({
+      projectId: 'project',
+      title,
+      intent: { ...intent, prompt },
+      onChange: changed,
+      busy,
+      threadModel: { provider: 'codex', model: 'gpt-thread', effort: 'low' },
+    }),
   )
 }
 beforeEach(() => {
@@ -107,7 +114,7 @@ it('changed task inputs, sending and unmount discard late results', async () => 
     expect(changed).not.toHaveBeenCalled()
   }
 })
-it('generation uses the selected project and bounded intent without creating a workspace', async () => {
+it('generation uses the selected project, bounded intent and the thread’s model without creating a workspace', async () => {
   rig.invoke.mockResolvedValue({ name: 'fix/login', source: 'generated' })
   await render()
     .find((n) => n.type === 'button')!
@@ -118,6 +125,7 @@ it('generation uses the selected project and bounded intent without creating a w
     'Fix login',
     intent,
     expect.any(String),
+    { provider: 'codex', model: 'gpt-thread', effort: 'low' },
   )
   expect(changed).toHaveBeenCalledWith({ name: 'fix/login', source: 'generated' })
 })

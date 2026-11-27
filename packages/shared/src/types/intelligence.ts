@@ -1,10 +1,12 @@
-import type { AgentProvider, ReasoningEffort } from './agent'
+import type { AgentProvider } from './agent'
+import type { WorkModelChoice } from '../providers/workModel'
 
 export interface IntelligencePreferences {
   toolSearch: boolean
   crossThreadRecall: boolean
   learning: 'off' | 'review' | 'auto'
-  maintenanceModel: { provider: AgentProvider; model: string; effort: ReasoningEffort | null } | null
+  /** Writes learning reviews, memory cleanup, branch names and suggestions; null is the default model. */
+  maintenanceModel: WorkModelChoice
   dailyReviews: number
   archiveSkillDays: number
   /** How often "What Ramu learned" is written. */

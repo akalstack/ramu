@@ -262,7 +262,9 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
         // The commit list makes a usable draft on its own; the writing model improves it when it answers.
         const draft = await forge.pullRequestDraft(cwd, issue)
         const prefs = ctx.storedPreferences()
-        const settings = writingSettings(ctx.workspace, prefs)
+        // The thread's main agent: by default its model and login write the draft.
+        const thread = ctx.agents.list(taskId).findLast((entry) => !entry.parentId)?.settings
+        const settings = writingSettings(ctx.workspace, prefs, thread)
         const source = settings ? await forge.pullRequestSource(cwd).catch(() => null) : null
         const clean = (out: typeof draft) => ({ ...out, body: withoutAgentCredits(ctx, out.body) })
         if (!settings || !source) return clean(draft)

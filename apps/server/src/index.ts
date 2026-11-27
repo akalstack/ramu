@@ -1,4 +1,5 @@
 import { MEDIA_SERVICES } from '@ramu/shared/types/media'
+import { resolveWorkModel, withWorkModel } from '@ramu/shared/providers/workModel'
 import { ServiceGrants } from './interactive/serviceGrants'
 import { DASHBOARD_ROWS_MAX } from '@ramu/shared/artifactSource'
 import { LastingAddresses } from './workspace/deploy/namedTunnel'
@@ -1118,11 +1119,8 @@ const interactive = new InteractiveStore(db, (session, ref) => agents.interactiv
 const pageSettings = (quality: 'fast' | 'smart') => {
   const preferences = workspace.getAppState<Partial<AppPreferences>>('app-preferences', {})
   const models = workspace.getAppState<ModelPreferences | null>('model-preferences', null)
-  const step = models?.sets
-    .find((set) => set.id === models.defaultSetId)
-    ?.steps.find((entry) => entry.id === models.defaultStepId)
-  const chosen = quality === 'fast' ? (preferences.intelligence?.maintenanceModel ?? step) : step
-  return { ...DEFAULT_AGENT_SETTINGS, ...chosen }
+  const choice = quality === 'fast' ? (preferences.intelligence?.maintenanceModel ?? null) : { use: 'default' as const }
+  return withWorkModel(DEFAULT_AGENT_SETTINGS, resolveWorkModel(choice, { models }))
 }
 const pages = new PageStore(db, interactive, (artifactId, run) =>
   send('artifacts:changed', { artifactId, ...(run ? { run } : {}) }),

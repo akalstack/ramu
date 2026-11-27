@@ -25,6 +25,15 @@ export const agentSettings = z.object({
   /** Set only through `agent.setAutoResume`; accepted here so a settings object that carries it is not stripped. */
   autoResume: z.boolean().optional(),
 })
+/** A model setting for Ramu's own work: null is the setting's default, `use` names the default or the thread's model. */
+/** One model and the login it runs on. */
+export const workModel = z.object({
+  provider: agentSettings.shape.provider,
+  model: agentSettings.shape.model,
+  effort: agentSettings.shape.effort,
+  accountId: agentSettings.shape.accountId,
+})
+export const workModelChoice = z.union([z.object({ use: z.enum(['default', 'thread']) }), workModel]).nullable()
 
 /** Files and selections the composer attaches to a prompt. */
 export const fileContext = z

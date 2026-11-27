@@ -104,6 +104,8 @@ export type SettingRow =
    * that stores a whole step such as the advisor's); `emptyLabel` names the choice of none.
    */
   | (RowBase & { kind: 'model'; emptyLabel: string; withId?: boolean })
+  /** A model Ramu's own work runs on: Same as thread, the default model, or one model with its effort and account. */
+  | (RowBase & { kind: 'work-model' })
   /** "When a usage limit is reached": one choice stored as two settings, `path` (fallback on or off) and `resumePath`. */
   | (RowBase & { kind: 'limit'; resumePath: string })
 export interface RowGroup {
@@ -233,12 +235,11 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
             'co-author coauthored trailer attribution generated with claude codex commit pull request ai signature',
         },
         {
-          kind: 'model',
+          kind: 'work-model',
           path: 'commitModel',
           title: 'Writing model',
-          help: 'Writes commit messages and pull request titles and descriptions. Default uses your default model.',
-          words: 'commit message pull request model generated writing',
-          emptyLabel: 'Default model',
+          help: 'Writes commit messages and pull request titles and descriptions. Same as thread uses the thread’s model and account.',
+          words: 'commit message pull request model generated writing account',
         },
         {
           kind: 'choice',
@@ -693,12 +694,11 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
           options: choice([1, 3, 5, 10, 20], (n) => count(Number(n))),
         },
         {
-          kind: 'model',
+          kind: 'work-model',
           path: 'intelligence.maintenanceModel',
           title: 'Background model',
-          help: 'Writes learning reviews and memory cleanup. A cheaper model keeps token use low.',
-          words: 'background model cheap tokens learning cleanup maintenance',
-          emptyLabel: 'Default model',
+          help: 'Writes learning reviews, memory cleanup, branch names and suggestions. Same as thread uses the thread’s model and account, and the default model for work without a thread.',
+          words: 'background model cheap tokens learning cleanup maintenance account',
         },
         {
           kind: 'choice',

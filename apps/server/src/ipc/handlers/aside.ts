@@ -1,17 +1,13 @@
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import type { AgentSettings, Aside, AsideAskOptions, AsideMessage, Attachment } from '@ramu/shared/types'
-import { agentSettings, id } from '../schemas'
+import { agentSettings, id, workModelChoice } from '../schemas'
+import type { ModelPreferences } from '@ramu/shared/types'
+import { resolveWorkModel, withWorkModel } from '@ramu/shared/providers/workModel'
 import type { RegisterHandlers } from '../types'
 
 /** As many files as one question carries; the aside reads them, it does not keep a library. */
 const MAX_ASIDE_FILES = 10
-
-const asideModel = z.object({
-  provider: agentSettings.shape.provider,
-  model: agentSettings.shape.model,
-  effort: agentSettings.shape.effort,
-})
 
 /** Side questions asked about a chat, answered on a fork of its session. */
 export const registerAsideHandlers: RegisterHandlers = ({
@@ -43,10 +39,12 @@ export const registerAsideHandlers: RegisterHandlers = ({
     files: Attachment[],
   ) => {
     const session = agents.get(aside.sessionId)
-    const fixed = picked ?? storedPreferences().asideModel
-    const settings = { ...(chosen ?? session.settings), ...(fixed ?? {}) }
-    // Another provider's login is not this thread's: the provider's selected one answers.
-    if (fixed && fixed.provider !== session.settings.provider) delete settings.accountId
+    const thread = chosen ?? session.settings
+    const model = resolveWorkModel(picked ?? storedPreferences().asideModel ?? null, {
+      thread,
+      models: workspace.getAppState<ModelPreferences | null>('model-preferences', null),
+    })
+    const settings = withWorkModel(thread, model)
     const own =
       settings.provider === session.settings.provider &&
       settings.model === session.settings.model &&
@@ -107,7 +105,7 @@ export const registerAsideHandlers: RegisterHandlers = ({
         agentSettings.optional(),
         z
           .object({
-            model: asideModel.optional(),
+            model: workModelChoice.optional(),
             attachmentIds: z.array(id).max(MAX_ASIDE_FILES).optional(),
           })
           .optional(),

@@ -3,10 +3,8 @@ import type { AppPreferences } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { t } from '../i18n'
-import { useModelSets } from '../models/ModelSets'
-import { modelOption } from '../models/modelOptions'
 import { type DraftSetter } from './constants'
-import { ModelChoice, type ModelChoiceValue } from './ModelChoice'
+import { ModelChoice, useModelChoiceName, type ModelChoiceValue } from './ModelChoice'
 
 /** The Models group these settings live in; other pages jump to it by this title. */
 export const WORK_MODELS_TITLE = 'Models for Ramu’s own work'
@@ -22,12 +20,13 @@ export function WorkModelSettings({ draft, onChange }: { draft: AppPreferences; 
       <SettingsRow setting="intelligence.maintenanceModel">
         <SettingsLabel
           title={t('Background model')}
-          help={t('Writes learning reviews and memory cleanup. A cheaper model keeps token use low.')}
+          help={t(
+            'Writes learning reviews, memory cleanup, branch names and suggestions. Same as thread uses the thread’s model and account, and the default model for work without a thread.',
+          )}
         />
         <ModelChoice
           label={t('Background model')}
           value={draft.intelligence.maintenanceModel}
-          emptyLabel={t('Default model')}
           onChange={(maintenanceModel) =>
             onChange({ ...draft, intelligence: { ...draft.intelligence, maintenanceModel } })
           }
@@ -36,12 +35,13 @@ export function WorkModelSettings({ draft, onChange }: { draft: AppPreferences; 
       <SettingsRow setting="commitModel">
         <SettingsLabel
           title={t('Writing model')}
-          help={t('Writes commit messages and pull request titles and descriptions. Default uses your default model.')}
+          help={t(
+            'Writes commit messages and pull request titles and descriptions. Same as thread uses the thread’s model and account.',
+          )}
         />
         <ModelChoice
           label={t('Writing model')}
           value={draft.commitModel}
-          emptyLabel={t('Default model')}
           onChange={(commitModel) => onChange({ ...draft, commitModel })}
         />
       </SettingsRow>
@@ -53,7 +53,6 @@ export function WorkModelSettings({ draft, onChange }: { draft: AppPreferences; 
         <ModelChoice
           label={t('Aside model')}
           value={draft.asideModel}
-          emptyLabel={t('Same as thread')}
           onChange={(asideModel) => onChange({ ...draft, asideModel })}
         />
       </SettingsRow>
@@ -71,11 +70,7 @@ export function WorkModelNote({
   value: ModelChoiceValue
   onOpen: () => void
 }) {
-  const { catalogs } = useModelSets()
-  const model = value
-    ? catalogs.flatMap((catalog) => catalog.models).find((m) => m.provider === value.provider && m.id === value.model)
-    : undefined
-  const name = model ? modelOption(model, model.id).label : (value?.model ?? t('Default model'))
+  const name = useModelChoiceName(value)
   return (
     <SettingsRow>
       <SettingsLabel title={t(title)} help={t('Chosen once in Models, for every feature that uses it.')} />

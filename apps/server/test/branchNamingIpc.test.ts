@@ -62,3 +62,27 @@ it('registers cancellation before async project validation and never creates wor
   expect(analyze).not.toHaveBeenCalled()
   expect(createTask).not.toHaveBeenCalled()
 })
+it('names a branch set to Same as thread with the model and login the new thread will run on', async () => {
+  const analyze = vi.fn(async () => ({ message: 'fix/login' }))
+  const methods = registerWorkspaceHandlers({
+    workspace: { getAppState: () => null, worktreeUnavailable: async () => null },
+    agents: { analyze },
+    loadPreferences: () => ({
+      ...DEFAULT_APP_PREFERENCES,
+      intelligence: { ...DEFAULT_APP_PREFERENCES.intelligence, maintenanceModel: { use: 'thread' } },
+    }),
+  } as unknown as HandlerContext)
+  const thread = { provider: 'codex', model: 'gpt-thread', effort: 'low', accountId: 'work' }
+  const args = methods['tasks.generateBranch']!.args.parse(['project', 'Login', intent, undefined, thread])
+  await methods['tasks.generateBranch']!.run(...args)
+  expect(analyze).toHaveBeenCalledWith(
+    expect.any(String),
+    expect.objectContaining({ provider: 'codex', model: 'gpt-thread', effort: 'low', accountId: 'work' }),
+    400,
+    expect.anything(),
+  )
+  expect(
+    methods['tasks.generateBranch']!.args.safeParse(['project', 'Login', intent, undefined, { provider: 'other' }])
+      .success,
+  ).toBe(false)
+})

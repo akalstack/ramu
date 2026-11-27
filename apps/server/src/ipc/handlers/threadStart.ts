@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { threadWorkModel } from '@ramu/shared/providers/workModel'
+import { agentSettings } from '../schemas'
 import type { MethodTable } from '../types'
 
 /**
@@ -28,7 +30,13 @@ export function registerThreadStartHandlers(table: MethodTable): MethodTable {
       ]),
       run: async (input: { mode: 'current' | 'worktree' }, plan: unknown, ...start: unknown[]) => {
         const created = part('tasks.create')
-        const task = (await created.run(...created.args.parse([input, plan]))) as { id: string }
+        // The agent's settings name the model a branch named Same as thread is named with.
+        const settings = agentSettings.safeParse(start[1])
+        const creation =
+          settings.success && !('threadModel' in input)
+            ? { ...input, threadModel: threadWorkModel(settings.data) }
+            : input
+        const task = (await created.run(...created.args.parse([creation, plan]))) as { id: string }
         try {
           if (input.mode === 'worktree') await part('tasks.setup').run(task.id)
           const begin = part('agent.start')
