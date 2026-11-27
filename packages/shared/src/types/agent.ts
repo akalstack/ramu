@@ -195,6 +195,11 @@ export interface ThreadHelperSummary {
   active: number
   /** Active helpers held on input or a provider limit. */
   waiting: number
+  /**
+   * Of the active ones, commands the agent waits on (a test run, a build): they hold the thread like a helper, but are
+   * shown as terminals, not agents. Absent from hosts before it was counted.
+   */
+  commands?: number
 }
 export interface ThreadInputSummary {
   count: number

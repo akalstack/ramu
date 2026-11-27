@@ -5283,6 +5283,14 @@ for (const os of ['ios', 'android']) {
     tree = ChatRow({ chat: { ...chat, status: 'needs-input', inputSummary: undefined } })
     assert.match(find(tree, 'Row').props.accessibilityLabel, /Waiting for your input/)
     assert.ok(!nodes(tree).some((node) => node.props?.tone === 'warn' && node.props.children === 'Approval'))
+    // Agents and a command the agent waits on hold the thread alike, but each is counted as what it is.
+    host = 'online'
+    tree = ChatRow({
+      chat: { ...chat, inputSummary: undefined, helperSummary: { active: 3, waiting: 0, commands: 1 } },
+    })
+    const labels = nodes(tree).map((node) => node.props?.label)
+    assert.ok(labels.includes('1 command running'), JSON.stringify(labels))
+    assert.ok(nodes(tree).some((node) => node.props?.label === '2 agents at work' && node.props.children === '2'))
   })
 }
 

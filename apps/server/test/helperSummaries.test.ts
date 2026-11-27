@@ -28,8 +28,8 @@ it('counts independently running helpers, not advisors, shell commands, restored
   record({ kind: 'agent', agentId: 'd', name: 'Dev server', status: 'running', taskType: 'local_bash' })
   record({ kind: 'agent', agentId: 'e', name: 'Restored', status: 'running', recovered: true })
   record({ kind: 'agent', agentId: 'f', name: 'Done', status: 'completed' })
-  expect(readHelperSummaries(db).get(task.id)).toEqual({ active: 2, waiting: 1 })
-  expect(store.helperSummary(parent.id)).toEqual({ active: 2, waiting: 1 })
+  expect(readHelperSummaries(db).get(task.id)).toEqual({ active: 2, waiting: 1, commands: 0 })
+  expect(store.helperSummary(parent.id)).toEqual({ active: 2, waiting: 1, commands: 0 })
   // A command the agent said it is waiting on holds the thread; one restored without a process does not.
   record({ kind: 'agent', agentId: 'g', name: 'Tests', status: 'running', taskType: 'local_bash', awaited: true })
   record({
@@ -41,8 +41,9 @@ it('counts independently running helpers, not advisors, shell commands, restored
     awaited: true,
     recovered: true,
   })
-  expect(readHelperSummaries(db).get(task.id)).toEqual({ active: 3, waiting: 1 })
-  expect(store.helperSummary(parent.id)).toEqual({ active: 3, waiting: 1 })
+  // It is a command, not an agent, so lists show it with the terminals.
+  expect(readHelperSummaries(db).get(task.id)).toEqual({ active: 3, waiting: 1, commands: 1 })
+  expect(store.helperSummary(parent.id)).toEqual({ active: 3, waiting: 1, commands: 1 })
   expect(readHelperSummaries(db, 'other').size).toBe(0)
 })
 

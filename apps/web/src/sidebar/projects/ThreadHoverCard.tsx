@@ -159,10 +159,18 @@ function ThreadCardBody({ task, status, hostName, workspaceName, sharedWorkspace
       )}
       {!!task.helperSummary?.active && (
         <span className="text-caption text-muted-foreground">
+          {/* Commands the agent waits on hold the thread too, but are terminals, not helpers. */}
           {[
-            t(task.helperSummary.active === 1 ? '1 helper working' : '{0} helpers working', {
-              0: task.helperSummary.active,
-            }),
+            helpersWorking(task.helperSummary)
+              ? t(helpersWorking(task.helperSummary) === 1 ? '1 helper working' : '{0} helpers working', {
+                  0: helpersWorking(task.helperSummary),
+                })
+              : '',
+            task.helperSummary.commands
+              ? t(task.helperSummary.commands === 1 ? '1 command running' : '{0} commands running', {
+                  0: task.helperSummary.commands,
+                })
+              : '',
             task.helperSummary.waiting ? t('{0} waiting', { 0: task.helperSummary.waiting }) : '',
           ]
             .filter(Boolean)
@@ -282,3 +290,6 @@ function WorkingFor({ since }: { since: number }) {
     </div>
   )
 }
+
+const helpersWorking = (summary: { active: number; commands?: number }) =>
+  Math.max(0, summary.active - (summary.commands ?? 0))

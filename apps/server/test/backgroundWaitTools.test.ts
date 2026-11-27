@@ -112,7 +112,7 @@ it('marks the thread own running commands by task id, address or tool call, and 
   expect(svc.task(session.id, 'reviewer')?.awaited).toBeUndefined()
   // The thread counts as working while the agent waits, as it does for a sub-agent.
   update(session.id, 'reviewer', { status: 'completed' })
-  expect(svc.helperSummaries('t').get('t')).toEqual({ active: 3, waiting: 0 })
+  expect(svc.helperSummaries('t').get('t')).toEqual({ active: 3, waiting: 0, commands: 3 })
 
   expect((await call({ taskIds: ['shell-2', 'toolu_3'], waiting: false })).value).toEqual({
     matched: ['shell-2', 'toolu_3'],
@@ -120,7 +120,7 @@ it('marks the thread own running commands by task id, address or tool call, and 
   })
   expect(svc.task(session.id, 'task-2')?.awaited).toBeUndefined()
   expect(svc.task(session.id, 'task-2')?.status).toBe('running')
-  expect(svc.helperSummaries('t').get('t')).toEqual({ active: 1, waiting: 0 })
+  expect(svc.helperSummaries('t').get('t')).toEqual({ active: 1, waiting: 0, commands: 1 })
 })
 
 it('cannot mark a command that belongs to another thread', async () => {

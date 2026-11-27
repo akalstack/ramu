@@ -14,6 +14,7 @@ import {
   Pin,
   RotateCcw,
   Sparkles,
+  SquareTerminal,
 } from 'lucide-react-native'
 import { threadOriginLabel } from '@ramu/shared/workspace/threadOrigin'
 import { TEXT_SCALE, font, space, useTheme } from '../theme'
@@ -112,7 +113,10 @@ export const ChatRow = memo(function ChatRow({
   const picked = selecting && selection.ids.has(chat.id)
   const [shortKey, fullKey] = status ? SHORT[status.kind] : []
   const working = status?.kind === 'working' || status?.kind === 'goal' || status?.kind === 'verifying'
-  const helpers = chat.helperSummary?.active ?? 0
+  // Agents and the commands the agent waits on (a test run, a build) both hold the thread, but are different things:
+  // the commands are counted with the terminals.
+  const waitedCommands = chat.helperSummary?.commands ?? 0
+  const helpers = Math.max(0, (chat.helperSummary?.active ?? 0) - waitedCommands)
   const blocker = status && WAITING.has(status.kind) ? inboxBlocker(chat) : null
   // What the thread is doing, first on its detail line: the agent's step while it works, what it needs from you, or how
   // its last run ended. A thread that finished and was seen has nothing to report; unread shows in its trailing mark.
@@ -143,10 +147,11 @@ export const ChatRow = memo(function ChatRow({
     inProject && chat.mode !== 'worktree' ? '' : chat.branch || (chat.mode === 'worktree' ? say('Worktree') : '')
   const pr = chat.pullRequest ?? null
   const prLabel = pr ? say('Pull request #{0}: {1}', { 0: pr.number, 1: pullRequestStageDetail(pr, say) }) : null
-  const facts = Boolean(pr || branch || project || helpers || !online)
   // Without a state to report, the reply says what the thread came to, which is what a person scans the list for.
   const reply = state ? '' : (chat.lastReply ?? '')
-  const detail = Boolean(state || reply || facts)
+  // Where the work lands only when there is nothing more telling to say: the line keeps to one, so rows keep to two.
+  const place = state || reply ? '' : branch || project
+  const detail = Boolean(state || reply || place || pr || helpers || waitedCommands || !online)
   // Every agent that has worked here, as T3's rows show them: earlier ones (a handoff) small and grey
   // before the one leading now.
   const agents = providerStack(chat.providers?.length ? chat.providers : chat.provider ? [chat.provider] : [])
@@ -265,63 +270,61 @@ export const ChatRow = memo(function ChatRow({
                 </T>
               )}
             </View>
-            {state || reply ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m }}>
-                {/* The text takes the line; the agents' marks keep their place at its end. */}
+            {/* One line under the title: what the thread is doing (or came to), then small marks for its pull request,
+                the agents and commands still at work and an unreachable host, so every row is two lines. */}
+            {detail ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
                 <View style={{ flex: 1, minWidth: 0, flexDirection: 'row' }}>
                   {state ? (
                     <Fact tone={state.tone} grow>
                       {state.text}
                     </Fact>
-                  ) : (
+                  ) : reply ? (
                     <T size={font.control} tone="muted" numberOfLines={stacked ? 2 : 1} style={{ flex: 1 }}>
                       {reply}
                     </T>
-                  )}
+                  ) : place ? (
+                    <Fact
+                      icon={branch ? <GitBranch size={11} color={c.muted} /> : <Folder size={11} color={c.muted} />}
+                      grow
+                    >
+                      {place}
+                    </Fact>
+                  ) : null}
                 </View>
-                {facts ? null : <AgentStack agents={agents} />}
-              </View>
-            ) : null}
-            {facts ? (
-              <View
-                style={{
-                  flexDirection: 'row',
-                  flexWrap: stacked ? 'wrap' : 'nowrap',
-                  alignItems: 'center',
-                  columnGap: space.m,
-                  rowGap: 2,
-                  overflow: 'hidden',
-                }}
-              >
-                {/* The pull request leads where there is one: its shape and stage say more than the branch's mark. */}
+                {/* The pull request's shape and number, its stage in the glyph's colour and the spoken label. */}
                 {pr ? (
                   <View
                     accessible
                     accessibilityLabel={prLabel ?? undefined}
-                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0 }}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 3, flexShrink: 0 }}
                   >
                     <PullRequestGlyph pr={pr} stage={pr.stage} size={11} />
-                    <T size={font.control} tone="muted" style={{ fontVariant: ['tabular-nums'] }}>
+                    <T
+                      size={font.control}
+                      tone={PULL_REQUEST_STAGE_TONE[pr.stage]}
+                      style={{ fontVariant: ['tabular-nums'] }}
+                    >
                       {`#${pr.number}`}
-                    </T>
-                    <T size={font.control} tone={PULL_REQUEST_STAGE_TONE[pr.stage]} numberOfLines={1}>
-                      {pullRequestStageDetail(pr, say)}
                     </T>
                   </View>
                 ) : null}
-                {branch ? (
-                  <Fact icon={pr ? undefined : <GitBranch size={11} color={c.muted} />} grow>
-                    {branch}
-                  </Fact>
-                ) : null}
-                {project ? (
-                  <Fact icon={<Folder size={11} color={c.muted} />} grow={!branch}>
-                    {project}
-                  </Fact>
-                ) : null}
                 {helpers ? (
-                  <Fact icon={<Bot size={11} color={chat.helperSummary?.waiting ? c.warn : c.muted} />}>
+                  <Fact
+                    icon={<Bot size={11} color={chat.helperSummary?.waiting ? c.warn : c.muted} />}
+                    label={say(helpers === 1 ? '1 agent at work' : '{0} agents at work', { 0: helpers })}
+                  >
                     {String(helpers)}
+                  </Fact>
+                ) : null}
+                {waitedCommands ? (
+                  <Fact
+                    icon={<SquareTerminal size={11} color={c.muted} />}
+                    label={say(waitedCommands === 1 ? '1 command running' : '{0} commands running', {
+                      0: waitedCommands,
+                    })}
+                  >
+                    {String(waitedCommands)}
                   </Fact>
                 ) : null}
                 {!online ? (
@@ -329,7 +332,6 @@ export const ChatRow = memo(function ChatRow({
                     {strings.offline}
                   </Fact>
                 ) : null}
-                <View style={{ flex: 1, minWidth: space.s }} />
                 <AgentStack agents={agents} />
               </View>
             ) : null}

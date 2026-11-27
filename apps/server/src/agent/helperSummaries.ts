@@ -14,7 +14,8 @@ export function readHelperSummaries(db: Db, taskId?: string): Map<string, Thread
   const rows = db
     .prepare(
       `SELECT s.task_id AS taskId, COUNT(*) AS active,
-        SUM(json_extract(e.event, '$.waitingFor') IS NOT NULL AND json_extract(e.event, '$.waitingFor') != '') AS waiting
+        SUM(json_extract(e.event, '$.waitingFor') IS NOT NULL AND json_extract(e.event, '$.waitingFor') != '') AS waiting,
+        SUM(COALESCE(json_extract(e.event, '$.taskType'), '') = 'local_bash') AS commands
       FROM agent_sessions s JOIN agent_events e ON e.session_id = s.id
       WHERE s.parent_session_id IS NULL ${taskId === undefined ? '' : 'AND s.task_id = ?'}
         AND json_extract(e.event, '$.kind') = 'agent'
@@ -23,8 +24,15 @@ export function readHelperSummaries(db: Db, taskId?: string): Map<string, Thread
         AND COALESCE(json_extract(e.event, '$.recovered'), 0) = 0
       GROUP BY s.task_id`,
     )
-    .all(...(taskId === undefined ? [] : [taskId])) as { taskId: string; active: number; waiting: number | null }[]
-  return new Map(rows.map((row) => [row.taskId, { active: row.active, waiting: row.waiting ?? 0 }]))
+    .all(...(taskId === undefined ? [] : [taskId])) as {
+    taskId: string
+    active: number
+    waiting: number | null
+    commands: number | null
+  }[]
+  return new Map(
+    rows.map((row) => [row.taskId, { active: row.active, waiting: row.waiting ?? 0, commands: row.commands ?? 0 }]),
+  )
 }
 
 /** The same count for one session, for the status a task derives from its sessions. */
@@ -32,7 +40,8 @@ export function readSessionHelperSummary(db: Db, sessionId: string): ThreadHelpe
   const row = db
     .prepare(
       `SELECT COUNT(*) AS active,
-        SUM(json_extract(e.event, '$.waitingFor') IS NOT NULL AND json_extract(e.event, '$.waitingFor') != '') AS waiting
+        SUM(json_extract(e.event, '$.waitingFor') IS NOT NULL AND json_extract(e.event, '$.waitingFor') != '') AS waiting,
+        SUM(COALESCE(json_extract(e.event, '$.taskType'), '') = 'local_bash') AS commands
       FROM agent_events e
       WHERE e.session_id = ?
         AND json_extract(e.event, '$.kind') = 'agent'
@@ -40,6 +49,6 @@ export function readSessionHelperSummary(db: Db, sessionId: string): ThreadHelpe
         AND ${HOLDS_THREAD}
         AND COALESCE(json_extract(e.event, '$.recovered'), 0) = 0`,
     )
-    .get(sessionId) as { active: number; waiting: number | null }
-  return { active: row.active, waiting: row.waiting ?? 0 }
+    .get(sessionId) as { active: number; waiting: number | null; commands: number | null }
+  return { active: row.active, waiting: row.waiting ?? 0, commands: row.commands ?? 0 }
 }
