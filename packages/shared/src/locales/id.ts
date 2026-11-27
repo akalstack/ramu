@@ -2181,6 +2181,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Matched by its limits': 'Dicocokkan dari batasnya',
   'Refreshes when this provider next runs.': 'Diperbarui saat provider ini berjalan lagi.',
   Limit: 'Batas',
+  'Another thread left uncommitted changes in this checkout.': 'Thread lain meninggalkan perubahan yang belum di-commit di checkout ini.',
+  '{0} threads left uncommitted changes in this checkout.': '{0} thread meninggalkan perubahan yang belum di-commit di checkout ini.',
   'Limit reached': 'Batas tercapai',
   'Different in 1 project': 'Berbeda di 1 proyek',
   'Different in {count} projects': 'Berbeda di {count} proyek',

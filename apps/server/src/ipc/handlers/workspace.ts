@@ -108,6 +108,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
   computer,
   browser,
   hostBrowser,
+  reviews,
 }) => {
   const continuations = () => {
     if (!agentThreads) throw new Error('Continuing threads is unavailable on this host.')
@@ -480,6 +481,18 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
           branchInstructions: prefs.worktreeBranchInstructions,
           configError: error,
           worktreeUnavailable: await workspace.worktreeUnavailable(projectId),
+          // Threads whose changes are still uncommitted in the project's own checkout, finished or not.
+          uncommittedThreads: [
+            ...new Set(
+              (
+                await Promise.all(
+                  workspace
+                    .listRepositories(projectId)
+                    .map((repo) => reviews.uncommittedThreads(repo.root).catch(() => new Set<string>())),
+                )
+              ).flatMap((owners) => [...owners]),
+            ),
+          ].slice(0, 100),
         }
       },
     },

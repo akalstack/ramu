@@ -1307,6 +1307,8 @@ export interface RamuMethods extends ArtifactMethods {
     configSource?: 'ramu.json' | '.ramu/config.json'
     configError?: string
     worktreeUnavailable: string | null
+    /** Threads whose changes are still uncommitted in the project's own checkout. */
+    uncommittedThreads?: string[]
   }
   'tasks.plan'(
     projectId: string,

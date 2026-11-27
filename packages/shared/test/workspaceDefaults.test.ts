@@ -3,6 +3,7 @@ import {
   branchForTitle,
   resolveCheckoutMode,
   checkoutBusyForDefault,
+  checkoutBusyNote,
   validBranchPrefix,
   validBranchName,
   parseWorkspaceChoice,
@@ -102,13 +103,37 @@ it('counts running threads in the checkout only when the default puts a new thre
     { projectId: 'other', mode: 'current', status: 'running' },
   ] as const
   const byDefault = resolveCheckoutMode({ defaultMode: 'current' })
-  expect(checkoutBusyForDefault({ resolution: byDefault, projectId: 'p', threads })).toBe(2)
+  expect(checkoutBusyForDefault({ resolution: byDefault, projectId: 'p', threads })).toEqual({ working: 2, changed: 0 })
   // The person chose this checkout, or it cannot branch: nothing to suggest.
   const chosen = resolveCheckoutMode({ defaultMode: 'current', manual: 'current' })
-  expect(checkoutBusyForDefault({ resolution: chosen, projectId: 'p', threads })).toBe(0)
+  const none = { working: 0, changed: 0 }
+  expect(checkoutBusyForDefault({ resolution: chosen, projectId: 'p', threads })).toEqual(none)
   expect(
     checkoutBusyForDefault({ resolution: byDefault, projectId: 'p', threads, worktreeUnavailable: 'No commits' }),
-  ).toBe(0)
+  ).toEqual(none)
   const worktree = resolveCheckoutMode({ defaultMode: 'worktree' })
-  expect(checkoutBusyForDefault({ resolution: worktree, projectId: 'p', threads })).toBe(0)
+  expect(checkoutBusyForDefault({ resolution: worktree, projectId: 'p', threads })).toEqual(none)
+})
+
+it('counts a finished thread that left uncommitted changes in the checkout, and says working first', () => {
+  const threads = [
+    { id: 'a', projectId: 'p', mode: 'current', status: 'ready-for-review' },
+    { id: 'b', projectId: 'p', mode: 'current', status: 'idle' },
+    { id: 'c', projectId: 'p', mode: 'current', status: 'archived' },
+  ] as const
+  const byDefault = resolveCheckoutMode({ defaultMode: 'current' })
+  const busy = checkoutBusyForDefault({
+    resolution: byDefault,
+    projectId: 'p',
+    threads,
+    leftChanges: (thread) => thread.id !== 'b',
+  })
+  expect(busy).toEqual({ working: 0, changed: 1 })
+  expect(checkoutBusyNote(busy)?.text).toBe('Another thread left uncommitted changes in this checkout.')
+  expect(checkoutBusyNote({ working: 1, changed: 3 })?.text).toBe('Another thread is working in this checkout.')
+  expect(checkoutBusyNote({ working: 0, changed: 2 })).toEqual({
+    text: '{0} threads left uncommitted changes in this checkout.',
+    values: { 0: 2 },
+  })
+  expect(checkoutBusyNote({ working: 0, changed: 0 })).toBeNull()
 })

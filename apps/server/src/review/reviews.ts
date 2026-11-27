@@ -309,9 +309,22 @@ export class ReviewService {
    * leaves them for that thread. A file this thread also changed since is its own.
    */
   async otherThreadPaths(taskId: string, cwd: string): Promise<string[]> {
+    const { paths, owners } = await this.uncommittedOwners(cwd)
+    return paths.filter((path) => {
+      const tasks = owners.get(path)
+      return !!tasks && !tasks.has(taskId)
+    })
+  }
+  /** The threads whose turns last changed a file still uncommitted in `cwd`. */
+  async uncommittedThreads(cwd: string): Promise<Set<string>> {
+    const { paths, owners } = await this.uncommittedOwners(cwd)
+    return new Set(paths.flatMap((path) => [...(owners.get(path) ?? [])]))
+  }
+  /** `cwd`'s uncommitted files, and for each the threads whose turn changed it last. */
+  private async uncommittedOwners(cwd: string): Promise<{ paths: string[]; owners: Map<string, Set<string>> }> {
     const dirty = await dirtyPaths({ cwd })
-    if (!dirty?.paths.length) return []
     const owners = new Map<string, Set<string>>()
+    if (!dirty?.paths.length) return { paths: [], owners }
     const rows = this.db
       .prepare("SELECT data FROM change_reviews WHERE state='ready' ORDER BY created_at DESC, rowid DESC LIMIT ?")
       .all(OWNER_REVIEWS) as { data: string }[]
@@ -330,10 +343,7 @@ export class ReviewService {
       for (const group of review.elsewhere ?? [])
         if (group.taskId) for (const file of group.files) claim(file, [group.taskId])
     }
-    return dirty.paths.filter((path) => {
-      const tasks = owners.get(path)
-      return !!tasks && !tasks.has(taskId)
-    })
+    return { paths: dirty.paths, owners }
   }
   /** Image bytes by digest, shared by every run that saw the same picture. */
   private imagePath(hash: string): string {

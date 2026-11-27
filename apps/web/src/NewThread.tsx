@@ -32,6 +32,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   resolveCheckoutMode,
   checkoutBusyForDefault,
+  checkoutBusyNote,
   currentBranchChoice,
   validBranchName,
   type BranchChoice,
@@ -394,14 +395,17 @@ export function NewThread({
     worktreeUnavailable: options.data?.worktreeUnavailable,
   })
   const mode = resolution.mode
-  const busyInCheckout = general
-    ? 0
-    : checkoutBusyForDefault({
-        resolution,
-        projectId,
-        threads: ws.tasks,
-        worktreeUnavailable: options.data?.worktreeUnavailable,
-      })
+  const busyNote = general
+    ? null
+    : checkoutBusyNote(
+        checkoutBusyForDefault({
+          resolution,
+          projectId,
+          threads: ws.tasks,
+          worktreeUnavailable: options.data?.worktreeUnavailable,
+          leftChanges: (thread) => !!options.data?.uncommittedThreads?.includes(thread.id),
+        }),
+      )
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [prompt, setPrompt] = useState(() => loadDraft(draftKey.newChat(projectId), draftStore(host.id)))
   const consumeDraft = useDraftPersistence(draftKey.newChat(projectId), prompt, host.id)
@@ -1020,11 +1024,9 @@ export function NewThread({
                 : t('Loading workspace settings…')}
             </p>
           )}
-        {!pending && busyInCheckout > 0 && (
+        {!pending && busyNote && (
           <p className="m-0 px-3 text-caption leading-[1.45] text-muted-foreground" role="status">
-            {busyInCheckout === 1
-              ? t('Another thread is working in this checkout.')
-              : t('{0} threads are working in this checkout.', { 0: busyInCheckout })}{' '}
+            {t(busyNote.text, busyNote.values)}{' '}
             <Button
               variant="ghost"
               size="xs"

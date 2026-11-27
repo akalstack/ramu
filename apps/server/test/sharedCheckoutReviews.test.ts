@@ -171,4 +171,6 @@ it('names the changed files another thread wrote last, so a commit from this thr
   await reviews.complete('b')
   expect(await reviews.otherThreadPaths(tasks.a!, cwd)).toEqual(['b.txt'])
   expect(await reviews.otherThreadPaths(tasks.b!, cwd)).toEqual(['a.txt'])
+  // Both threads finished with their files uncommitted, so New thread can say so; a file written by hand has no owner.
+  expect(await reviews.uncommittedThreads(cwd)).toEqual(new Set([tasks.a, tasks.b]))
 })

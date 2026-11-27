@@ -161,18 +161,38 @@ export function resolveCheckoutMode(input: {
 }
 
 /**
- * How many threads have a turn running in this project's own checkout, when a new thread would join them only because
- * that is the default. A choice the person made, or a worktree that cannot be made, is never second-guessed.
+ * Who else is in this project's own checkout, when a new thread would join them only because that is the default:
+ * threads with a turn running, and threads that finished leaving changes uncommitted there. A choice the person made,
+ * or a worktree that cannot be made, is never second-guessed.
  */
-export function checkoutBusyForDefault(input: {
+export function checkoutBusyForDefault<T extends Pick<Task, 'projectId' | 'mode' | 'status'>>(input: {
   resolution: { mode: CheckoutMode; source: 'default' | 'manual' | 'workspace' }
   projectId: string
-  threads: readonly Pick<Task, 'projectId' | 'mode' | 'status'>[]
+  threads: readonly T[]
   worktreeUnavailable?: string | null
-}): number {
+  /** Whether a thread's changes are still uncommitted in the checkout, as its host reports. */
+  leftChanges?: (thread: T) => boolean
+}): { working: number; changed: number } {
+  const none = { working: 0, changed: 0 }
   if (input.resolution.source !== 'default' || input.resolution.mode !== 'current' || input.worktreeUnavailable)
-    return 0
-  return input.threads.filter(
-    (thread) => thread.projectId === input.projectId && thread.mode === 'current' && thread.status === 'running',
-  ).length
+    return none
+  const here = input.threads.filter(
+    (thread) => thread.projectId === input.projectId && thread.mode === 'current' && thread.status !== 'archived',
+  )
+  const working = here.filter((thread) => thread.status === 'running').length
+  const changed = here.filter((thread) => thread.status !== 'running' && input.leftChanges?.(thread)).length
+  return { working, changed }
+}
+
+/** The line New thread shows about the others in its checkout, or null when there are none. */
+export function checkoutBusyNote(busy: { working: number; changed: number }): {
+  text: string
+  values?: Record<string, number>
+} | null {
+  if (busy.working === 1) return { text: 'Another thread is working in this checkout.' }
+  if (busy.working > 1) return { text: '{0} threads are working in this checkout.', values: { 0: busy.working } }
+  if (busy.changed === 1) return { text: 'Another thread left uncommitted changes in this checkout.' }
+  if (busy.changed > 1)
+    return { text: '{0} threads left uncommitted changes in this checkout.', values: { 0: busy.changed } }
+  return null
 }

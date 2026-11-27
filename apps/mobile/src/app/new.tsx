@@ -12,6 +12,7 @@ import { routedAgentSettings } from '@ramu/shared/workspace/agentDefaults'
 import type { RamuMethods } from '@ramu/shared/api'
 import {
   checkoutBusyForDefault,
+  checkoutBusyNote,
   currentBranchChoice,
   validBranchName,
   resolveCheckoutMode,
@@ -250,19 +251,19 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
     worktreeUnavailable: workspaceOptions?.worktreeUnavailable,
   })
   const mode = resolution.mode
-  const busyInCheckout =
+  const busy =
     projectId && projectId !== STANDALONE
-      ? checkoutBusyForDefault({
-          resolution,
-          projectId,
-          threads: store.chats.filter((chat) => chat.computerId === selected),
-          worktreeUnavailable: workspaceOptions?.worktreeUnavailable,
-        })
-      : 0
-  const busyNote =
-    busyInCheckout === 1
-      ? say('Another thread is working in this checkout.')
-      : say('{0} threads are working in this checkout.', { 0: busyInCheckout })
+      ? checkoutBusyNote(
+          checkoutBusyForDefault({
+            resolution,
+            projectId,
+            threads: store.chats.filter((chat) => chat.computerId === selected),
+            worktreeUnavailable: workspaceOptions?.worktreeUnavailable,
+            leftChanges: (chat) => !!workspaceOptions?.uncommittedThreads?.includes(chat.taskId),
+          }),
+        )
+      : null
+  const busyNote = busy ? say(busy.text, busy.values) : null
   const pickWorktree = () => chooseWorkspace({ mode: 'worktree', branch: choice.branch })
   const draftText = store.drafts[composerKey] ?? ''
   const routeChoiceKey = `${composerKey}:routing-choice`
@@ -755,7 +756,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
               <T size={font.hero - 4} weight="600" style={{ letterSpacing: -0.5, textAlign: 'center' }}>
                 {project ? say('What should we work on in {0}?', { 0: project.name }) : say('What should we work on?')}
               </T>
-              {busyInCheckout > 0 ? (
+              {busyNote ? (
                 <Pressable accessibilityRole="button" onPress={pickWorktree} style={{ paddingTop: space.xs }}>
                   <T tone="muted" style={{ textAlign: 'center' }}>
                     {busyNote} <T tone="accent">{say('Use a new worktree')}</T>
