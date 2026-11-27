@@ -1,4 +1,5 @@
 import { noteCreatedRepository } from '../../workspace/ci/setup'
+import { ADMINISTER_REFUSAL } from '@ramu/shared/devicePermissions'
 import { guardForge } from '../identityGuard'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -189,7 +190,7 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
   const { workspace, gitCwdOf, forgeAccounts, agents } = ctx
   const administrator = () => ctx.host.canAdministerIntegrations?.() === true
   const administrate = () => {
-    if (!administrator()) throw new Error('Change GitHub connections on the host running Ramu')
+    if (!administrator()) throw new Error(ADMINISTER_REFUSAL)
   }
   /** Provider and store errors reach the client only after secrets are stripped. */
   const redacted = async <T>(work: () => Promise<T>): Promise<T> => {

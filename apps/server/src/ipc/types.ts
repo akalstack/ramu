@@ -101,8 +101,13 @@ export interface RuntimeHost {
   /** The name of the device the current call came from: a paired device's own name, or this computer's. */
   callerName?(): string | undefined
   userData: string
-  /** Initial integration/credential administration is local to the execution host. */
+  /**
+   * Setting up providers, accounts, keys and connections: the person here, or a full-access device with the Change
+   * settings permission over an encrypted connection.
+   */
   canAdministerIntegrations?(): boolean
+  /** The current call comes from this host itself, for steps that need someone at it (an OS prompt, a keychain). */
+  callerIsLocal?(): boolean
   /** The current call comes from a paired device with view-only access. */
   callerIsViewer?(): boolean
   send(channel: string, payload: unknown): void

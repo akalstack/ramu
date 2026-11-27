@@ -134,5 +134,5 @@ it('imports a local command with its folder, refuses a relative one, and needs t
   const paired = fixture({ remote: { type: 'http', url: 'https://remote.example/mcp' } })
   const key = mcpServerKey({ type: 'http', url: 'https://remote.example/mcp' })
   paired.revoke()
-  expect(() => paired.setup('mcp.import', paired.project.id, key)).toThrow('host running Ramu')
+  expect(() => paired.setup('mcp.import', paired.project.id, key)).toThrow('Change settings over an encrypted connection')
 })

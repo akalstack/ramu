@@ -4534,6 +4534,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Invalid Git branch name': 'Nama branch Git tidak valid',
   'MCP servers': 'Server MCP',
   'Show MCP connection status': 'Tampilkan status koneksi MCP',
+  'Change this on the host, or from a device with full access and Change settings over an encrypted connection (HTTPS, Ramu Link or Tailscale).':
+    'Ubah ini di host, atau dari perangkat dengan akses penuh dan izin Ubah pengaturan melalui koneksi terenkripsi (HTTPS, Ramu Link, atau Tailscale).',
   Connecting: 'Menyambungkan',
   'Needs authentication': 'Perlu autentikasi',
   Disabled: 'Dinonaktifkan',

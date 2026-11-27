@@ -6,6 +6,7 @@ import { font, space, useTheme } from '../theme'
 import { useSay } from '../i18n'
 import { useStore } from '../runtime/store'
 import { Button, Card, T } from './ui'
+import { ADMINISTER_REFUSAL } from '@ramu/shared/devicePermissions'
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error))
 /** Channels after which the card may read differently: its own change, or a tool turned on on the host. */
@@ -88,7 +89,7 @@ export function ToolSuggestionCard({ computerId, cardId }: { computerId: string;
       ) : null}
       {canAnswer && !settled && !canTurnOn ? (
         <T size={font.caption} tone="muted">
-          {say('Turn it on in Customize on the computer running Ramu.')}
+          {say(ADMINISTER_REFUSAL)}
         </T>
       ) : null}
       {canAnswer && status.state === 'open' ? (

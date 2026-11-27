@@ -1,4 +1,5 @@
 import { homedir } from 'node:os'
+import { ADMINISTER_REFUSAL } from '@ramu/shared/devicePermissions'
 import { join } from 'node:path'
 import { z } from 'zod'
 import {
@@ -70,8 +71,7 @@ export const registerToolSyncHandlers: RegisterHandlers = (ctx) => {
     'toolSync.addServer': {
       args: z.tuple([key]),
       run: (chosen: string) => {
-        if (ctx.host.canAdministerIntegrations?.() !== true)
-          throw new Error('Add MCP servers on the computer running Ramu')
+        if (ctx.host.canAdministerIntegrations?.() !== true) throw new Error(ADMINISTER_REFUSAL)
         if (!ctx.getSharedMcp) throw new Error('Update this host for Shared MCP management')
         const entry = waitingTools(ctx).find((waiting) => waiting.key === chosen)
         if (!entry || entry.tool.kind !== 'mcp') throw new Error('That server is no longer waiting here.')

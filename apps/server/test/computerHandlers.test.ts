@@ -23,7 +23,7 @@ vi.mock('../src/computer/lockedUse', () => ({
   },
 }))
 
-function setup(deviceId: string | undefined, admin: boolean, text?: string, eligible = () => false) {
+function setup(deviceId: string | undefined, admin: boolean, text?: string, eligible = () => false, local = admin) {
   const scales: number[] = []
   const backend: ComputerBackend = {
     useScale: (scale) => void scales.push(scale),
@@ -43,7 +43,12 @@ function setup(deviceId: string | undefined, admin: boolean, text?: string, elig
   const computer = new ComputerService(backend)
   const methods = registerComputerHandlers({
     computer,
-    host: { canAdministerIntegrations: () => admin, browserDevice: () => deviceId, browserGrantEligible: eligible },
+    host: {
+      canAdministerIntegrations: () => admin,
+      callerIsLocal: () => local,
+      browserDevice: () => deviceId,
+      browserGrantEligible: eligible,
+    },
     workspace: {
       getTask: () => ({}),
       listTasks: () => [{ id: 't1' }],
@@ -68,11 +73,16 @@ describe('computer handlers', () => {
     expect(host.scales).toEqual([1.6])
   })
 
-  it('lets a paired owner device read Locked Use but change it only on the host', async () => {
+  it('lets a paired owner device read Locked Use, turn it off with Change settings, and turn it on only on the host', async () => {
     const paired = setup('laptop', false, undefined, () => true)
     expect(await paired.call('computer.lockedUse')).toEqual({ enabled: false })
-    expect(() => paired.call('computer.lockedUseDisable')).toThrow(/owning host/)
+    expect(() => paired.call('computer.lockedUseDisable')).toThrow(/Change settings over an encrypted connection/)
     expect(() => setup('phone', false).call('computer.lockedUse')).toThrow(/owner device/)
+    // A device that may change settings turns it off from anywhere; turning it on asks macOS on the host itself.
+    const settings = setup('laptop', true, undefined, () => true, false)
+    await settings.call('computer.lockedUseDisable')
+    expect(() => settings.call('computer.lockedUseEnable')).toThrow(/on the host itself/)
+    await settings.call('computer.setGlobalPointer', true)
   })
   it('requires the setting and the owning host before a grant', async () => {
     const owner = setup('local', true)
@@ -94,7 +104,7 @@ describe('computer handlers', () => {
     expect(await owner.call('computer.status')).toMatchObject({ enabled: false, globalPointer: false })
     expect(owner.computer.session('t1')).toBeUndefined()
     const remote = setup('phone', false)
-    await expect(remote.call('computer.resetDefaults')).rejects.toThrow(/owning host/)
+    await expect(remote.call('computer.resetDefaults')).rejects.toThrow(/Change settings over an encrypted connection/)
   })
 
   it('refuses to install over an active computer session', async () => {
@@ -116,7 +126,7 @@ describe('computer handlers', () => {
     paired = true
     phone.call('computer.revoke', 't1')
     expect(phone.computer.session('t1')).toBeUndefined()
-    await expect(phone.call('computer.installApps')).rejects.toThrow(/owning host/)
+    await expect(phone.call('computer.installApps')).rejects.toThrow(/on the host itself/)
   })
 
   it('lets a paired owner device watch and drive a thread’s computer, and refuses any other device', async () => {
@@ -128,6 +138,7 @@ describe('computer handlers', () => {
         computer: owner.computer,
         host: {
           canAdministerIntegrations: () => false,
+          callerIsLocal: () => false,
           browserDevice: () => 'phone',
           browserGrantEligible: () => eligible,
         },
@@ -175,7 +186,7 @@ it('opens permission setup after installation and can reopen it without reinstal
   expect(ocu.install).toHaveBeenCalledOnce()
   expect(ocu.setup).toHaveBeenCalledTimes(2)
   const phone = setup('phone', false)
-  await expect(phone.call('computer.openSetup')).rejects.toThrow(/owning host/)
+  await expect(phone.call('computer.openSetup')).rejects.toThrow(/on the host itself/)
   expect(ocu.setup).toHaveBeenCalledTimes(2)
 })
 

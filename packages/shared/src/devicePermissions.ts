@@ -190,6 +190,13 @@ export function permissionFor(method: string): DevicePermission | null {
   return null
 }
 
+/**
+ * Why another device may not set up this host's providers, accounts, keys or connections: these carry sign-ins and keys,
+ * so they need full access, the Change settings permission and an encrypted connection.
+ */
+export const ADMINISTER_REFUSAL =
+  'Change this on the host, or from a device with full access and Change settings over an encrypted connection (HTTPS, Ramu Link or Tailscale).'
+
 const REFUSAL = /^This device needs the (computer|browser|terminal|settings|agents) permission/
 
 export const permissionRefusal = (permission: DevicePermission) =>

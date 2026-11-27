@@ -7,6 +7,7 @@ import { installOcu, ocuUpdateStatus, ocuPermissions, setupOcu } from '../../com
 import { LockedUse } from '../../computer/lockedUse'
 import { id } from '../schemas'
 import type { RegisterHandlers } from '../types'
+import { ADMINISTER_REFUSAL } from '@ramu/shared/devicePermissions'
 
 /** How long a viewer's request waits for a changed screen. */
 const FRAME_WAIT_MS = 1500
@@ -69,9 +70,14 @@ export const registerComputerHandlers: RegisterHandlers = ({
     return computer
   }
   const admin = () => {
-    if (!host.canAdministerIntegrations?.())
-      throw new Error('Computer use setup and grants must be reviewed on the owning host.')
+    if (!host.canAdministerIntegrations?.()) throw new Error(ADMINISTER_REFUSAL)
     return ready()
+  }
+  // Installing, and working through a locked screen, add macOS sign-in components: macOS asks for the administrator
+  // password and permissions on this host, so someone has to be at it.
+  const atHost = () => {
+    if (!host.callerIsLocal?.()) throw new Error('macOS asks for this on the host itself. Start it there.')
+    return admin()
   }
   // A paired owner already administers threads and terminals. Per-thread computer choices use that same identity.
   const owner = () => {
@@ -200,15 +206,15 @@ export const registerComputerHandlers: RegisterHandlers = ({
         if (!value) for (const task of workspace.listTasks()) service.revoke(task.id)
       },
     },
-    // Working through a locked screen installs macOS sign-in components, so it is reviewed and started on the owning host.
-    // Whether it is on is only read, so a paired owner device sees it too.
+    // Working through a locked screen installs macOS sign-in components, so it is started on the host itself; any device
+    // that may change settings can turn it off, and a paired owner device sees whether it is on.
     'computer.lockedUse': { args: z.tuple([]), run: () => (owner(), lockedUse.status()) },
-    'computer.lockedUseEnable': { args: z.tuple([]), run: () => (admin(), lockedUse.enable()) },
+    'computer.lockedUseEnable': { args: z.tuple([]), run: () => (atHost(), lockedUse.enable()) },
     'computer.lockedUseDisable': { args: z.tuple([]), run: () => (admin(), lockedUse.disable()) },
     'computer.installApps': {
       args: z.tuple([]),
       run: async () => {
-        admin()
+        atHost()
         if (installingApps) throw new Error('Open Computer Use installation is already running.')
         if (workspace.listTasks().some((task) => computer?.session(task.id)))
           throw new Error('Stop computer use in every thread before updating.')
@@ -228,7 +234,7 @@ export const registerComputerHandlers: RegisterHandlers = ({
     'computer.openSetup': {
       args: z.tuple([]),
       run: async () => {
-        admin()
+        atHost()
         await setupOcu()
       },
     },

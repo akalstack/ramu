@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ADMINISTER_REFUSAL } from '@ramu/shared/devicePermissions'
 import type { DeployStatus } from '@ramu/shared/types/deploy'
 import { appVariables } from '../../workspace/deploy/appVariables'
 import { latestDeployChecks } from '../../workspace/deploy/gitHostStatus'
@@ -36,7 +37,7 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
     return Object.fromEntries(Object.entries(saved).filter(([name]) => names.has(name)))
   })
   const administrate = () => {
-    if (ctx.host.canAdministerIntegrations?.() !== true) throw new Error('Change this on the host running Ramu.')
+    if (ctx.host.canAdministerIntegrations?.() !== true) throw new Error(ADMINISTER_REFUSAL)
   }
   const project = (projectId: string) => {
     const found = ctx.workspace.listProjects().find((entry) => entry.id === projectId)

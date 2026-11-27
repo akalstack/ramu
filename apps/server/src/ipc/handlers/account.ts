@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ADMINISTER_REFUSAL } from '@ramu/shared/devicePermissions'
 import { ACCOUNT_TRUST, type AccountTrust } from '@ramu/shared/account'
 import type { AccountService } from '../../account/service'
 import type { RegisterHandlers } from '../types'
@@ -14,8 +15,7 @@ export const registerAccountHandlers: RegisterHandlers = (ctx) => {
     return ctx.account
   }
   const admin = () => {
-    if (ctx.host.canAdministerIntegrations?.() !== true)
-      throw new Error('Sign in and change backups on the computer running Ramu')
+    if (ctx.host.canAdministerIntegrations?.() !== true) throw new Error(ADMINISTER_REFUSAL)
     return service()
   }
   return {

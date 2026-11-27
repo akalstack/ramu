@@ -44,6 +44,7 @@ import {
   Quiet,
   SectionTitle,
 } from './parts'
+import { ADMINISTER_REFUSAL } from '@ramu/shared/devicePermissions'
 
 type Entry = SharedMcpManagement['connections'][number]
 
@@ -427,7 +428,7 @@ function AddRecommended({
       confirmLabel={server.signIn ? t('Add and sign in') : t('Add')}
       confirmDisabled={!canAdminister}
       busy={busy}
-      error={error ?? (canAdminister ? null : t('Add MCP servers on the computer running Ramu.'))}
+      error={error ?? (canAdminister ? null : t(ADMINISTER_REFUSAL))}
       onConfirm={() => onAdd(use)}
       onCancel={onCancel}
     >
@@ -493,7 +494,7 @@ function ReceivedServer({
       confirmLabel={t('Add')}
       confirmDisabled={!canAdminister}
       busy={busy}
-      error={error ?? (canAdminister ? null : t('Add MCP servers on the computer running Ramu.'))}
+      error={error ?? (canAdminister ? null : t(ADMINISTER_REFUSAL))}
       onConfirm={onAdd}
       onCancel={onCancel}
     >

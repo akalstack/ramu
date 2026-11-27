@@ -109,7 +109,7 @@ it('offers OAuth sign-in on a remote server only to the host administrator', () 
 
 it('renders administration unavailable for a paired client while preserving status', () => {
   const html = render(false)
-  expect(html).toContain('Manage MCP connections and credentials on the host running Ramu')
+  expect(html).toContain('Change settings over an encrypted connection')
   expect(html).toMatch(/<button[^>]*disabled[^>]*>(?:<svg[^>]*>(?:(?!<\/svg>)[\s\S])*<\/svg>)?Add server<\/button>/)
   expect(html).toMatch(/<button[^>]*disabled[^>]*>Connect<\/button>/)
   expect(html).toContain('Project tracker')

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ADMINISTER_REFUSAL } from '@ramu/shared/devicePermissions'
 import type { ProviderConfiguration, ProviderStatus } from '@ramu/shared/providers/providers'
 import { codexHookTrust } from '../../providers/codex'
 import { claudeAdvisorModel } from '../../agent/advisor'
@@ -60,7 +61,7 @@ export const registerProviderHandlers: RegisterHandlers = ({
   }
   const administrator = () => host.canAdministerIntegrations?.() === true
   const administrate = () => {
-    if (!administrator()) throw new Error('Save media keys on the host running Ramu.')
+    if (!administrator()) throw new Error(ADMINISTER_REFUSAL)
   }
   return {
     'abilities.checks': { args: z.tuple([]), run: () => ability().status() },
@@ -121,7 +122,7 @@ export const registerProviderHandlers: RegisterHandlers = ({
             : null)
         if (method && name && key) {
           // A key is a credential: it joins Antigravity's variables in the host credential store, like any other.
-          if (host.canAdministerIntegrations?.() !== true) throw new Error('Enter API keys on the host running Ramu')
+          if (host.canAdministerIntegrations?.() !== true) throw new Error(ADMINISTER_REFUSAL)
           const current = environment.status(true).values ?? {}
           await environment.save({
             ...current,
@@ -153,7 +154,7 @@ export const registerProviderHandlers: RegisterHandlers = ({
         z.string().max(MAX_API_KEY_LENGTH).nullable(),
       ]),
       run: (provider: ProviderStatus['provider'], accountId: string, variable: string, key: string | null) => {
-        if (host.canAdministerIntegrations?.() !== true) throw new Error('Enter API keys on the host running Ramu')
+        if (host.canAdministerIntegrations?.() !== true) throw new Error(ADMINISTER_REFUSAL)
         return providers.setApiKey(provider, accountId, variable, key, apiKeys)
       },
     },
@@ -183,8 +184,7 @@ export const registerProviderHandlers: RegisterHandlers = ({
     'providers.setEnvironment': {
       args: z.tuple([environmentValues]),
       run: async (values: ProviderEnvironmentValues) => {
-        if (host.canAdministerIntegrations?.() !== true)
-          throw new Error('Change environment variables on the host running Ramu')
+        if (host.canAdministerIntegrations?.() !== true) throw new Error(ADMINISTER_REFUSAL)
         const saved = await environment.save(values)
         // An API key or endpoint typed here changes whose plan the gauges show.
         usageConfigurationChanged()

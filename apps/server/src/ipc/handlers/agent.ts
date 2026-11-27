@@ -1,4 +1,5 @@
 import { readFileSync, statSync } from 'node:fs'
+import { ADMINISTER_REFUSAL } from '@ramu/shared/devicePermissions'
 import { z } from 'zod'
 import type { AgentSettings, FileContext, PermissionScope, SecretAnswer } from '@ramu/shared/types'
 import type { ModelViewerLabels } from '@ramu/shared/interactive'
@@ -491,8 +492,7 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
         if (answer.remember) {
           if (!request.envName) throw new Error('This request has no environment variable to keep.')
           // Like API keys, kept variables are entered only on the host running Ramu.
-          if (host.canAdministerIntegrations?.() !== true)
-            throw new Error('Keep environment variables on the host running Ramu')
+          if (host.canAdministerIntegrations?.() !== true) throw new Error(ADMINISTER_REFUSAL)
           const status = environment.status(true)
           if (status.state === 'unavailable')
             throw new Error('The host credential store is locked. Unlock it and try again.')

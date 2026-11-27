@@ -114,7 +114,7 @@ it('lets paired clients read safe status but denies every administration operati
     ['mcp.remove', [connection.id]],
     ['mcp.checkCredentialStore', []],
   ] as const)
-    await expect(Promise.resolve().then(() => invoke(method, ...args))).rejects.toThrow('host running Ramu')
+    await expect(Promise.resolve().then(() => invoke(method, ...args))).rejects.toThrow('Change settings over an encrypted connection')
   const viewer = {
     id: 'viewer',
     name: 'Phone',

@@ -30,6 +30,7 @@ import { SettingsScopeContext, useSettingsEvents, useSettingsInvoke } from './Se
 import { SettingsCard, SettingsCardList, SettingsSectionHead } from './cards'
 import { ListCount, ListEmpty, ListToolbar, useListView } from './ListView'
 import { availabilityLabels, connectionAvailability } from './mcpAvailability'
+import { ADMINISTER_REFUSAL } from '@ramu/shared/devicePermissions'
 
 export type Definition = Omit<SharedMcpConnection, 'id' | 'hostId' | 'revision'>
 const statusLabels = {
@@ -598,7 +599,7 @@ export function McpSettings() {
       )}
       {data && !canAdminister && (
         <Alert>
-          <AlertDescription>{t('Manage MCP connections and credentials on the host running Ramu')}</AlertDescription>
+          <AlertDescription>{t(ADMINISTER_REFUSAL)}</AlertDescription>
         </Alert>
       )}
       {notice && (

@@ -6,6 +6,7 @@ import { saveBrowserDownload } from '../../browser/download'
 import { readBrowserUpload } from '../../browser/upload'
 import { DesktopBrowserViewer, type BrowserViewerBackend } from '../../browser/desktopViewer'
 import { IMPORT_SOURCE_IDS } from '../../browser/chromiumBrowsers'
+import { ADMINISTER_REFUSAL } from '@ramu/shared/devicePermissions'
 
 const NO_TRANSFERS =
   'The desktop browser cannot send or receive files from a phone yet. Use the browser on the computer for file transfers.'
@@ -63,9 +64,13 @@ export const registerHostBrowserHandlers: RegisterHandlers = ({
     return ready()
   }
   const admin = () => {
-    if (!host.canAdministerIntegrations?.())
-      throw new Error('Browser setup and device grants must be reviewed on the owning host.')
+    if (!host.canAdministerIntegrations?.()) throw new Error(ADMINISTER_REFUSAL)
     return ready()
+  }
+  // Importing reads another browser's saved sign-ins, which the OS guards with a keychain prompt on this host.
+  const atHost = () => {
+    if (!host.callerIsLocal?.()) throw new Error('Importing asks for the keychain on the host itself. Import there.')
+    return admin()
   }
   const device = () => {
     const identity = host.browserDevice?.()
@@ -116,22 +121,22 @@ export const registerHostBrowserHandlers: RegisterHandlers = ({
             })
         }),
     },
-    'hostBrowser.importSources': { args: z.tuple([]), run: () => admin().importSources() },
+    'hostBrowser.importSources': { args: z.tuple([]), run: () => atHost().importSources() },
     'hostBrowser.importProfiles': {
       args: z.tuple([importSource]),
-      run: (source) => admin().importProfiles(source),
+      run: (source) => atHost().importProfiles(source),
     },
     'hostBrowser.importInspect': {
       args: z.tuple([importSource, importText]),
-      run: (source, profileId) => admin().importInspect(source, profileId),
+      run: (source, profileId) => atHost().importInspect(source, profileId),
     },
     'hostBrowser.importRun': {
       args: z.tuple([importText, z.array(z.string().max(253)).max(500), z.string().min(1).max(80)]),
-      run: (token, domains, name) => admin().importRun(token, domains, name),
+      run: (token, domains, name) => atHost().importRun(token, domains, name),
     },
-    'hostBrowser.importCancel': { args: z.tuple([importText]), run: (token) => admin().importCancel(token) },
-    'hostBrowser.importKeep': { args: z.tuple([importText]), run: (profileId) => admin().importKeep(profileId) },
-    'hostBrowser.importDiscard': { args: z.tuple([importText]), run: (profileId) => admin().importDiscard(profileId) },
+    'hostBrowser.importCancel': { args: z.tuple([importText]), run: (token) => atHost().importCancel(token) },
+    'hostBrowser.importKeep': { args: z.tuple([importText]), run: (profileId) => atHost().importKeep(profileId) },
+    'hostBrowser.importDiscard': { args: z.tuple([importText]), run: (profileId) => atHost().importDiscard(profileId) },
     'hostBrowser.setup': { args: z.tuple([]), run: () => admin().setup() },
     // Frees the running Chromium; the next tab starts it again.
     'hostBrowser.stop': { args: z.tuple([]), run: () => admin().close() },

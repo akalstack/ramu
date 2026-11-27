@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ADMINISTER_REFUSAL } from '@ramu/shared/devicePermissions'
 import type { PluginScope } from '@ramu/shared/plugins'
 import type { AgentProvider } from '@ramu/shared/types'
 import { listenForCallback } from '../../plugins/callback'
@@ -30,8 +31,7 @@ export const registerPluginHandlers: RegisterHandlers = (ctx) => {
     return ctx.plugins
   }
   const admin = () => {
-    if (ctx.host.canAdministerIntegrations?.() !== true)
-      throw new Error('Install plugins and paste their credentials on the computer running Ramu')
+    if (ctx.host.canAdministerIntegrations?.() !== true) throw new Error(ADMINISTER_REFUSAL)
     return service()
   }
   const changed = () => ctx.host.send('plugins:changed', null)

@@ -33,6 +33,7 @@ function setup(
     browser: options.desktop && { isReady: () => options.desktop!.ready, view: options.desktop.view ?? vi.fn() },
     host: {
       canAdministerIntegrations: () => options.admin ?? false,
+      callerIsLocal: () => options.admin ?? false,
       browserDevice: () => ('deviceId' in options ? options.deviceId : 'phone'),
       browserGrantEligible: () => options.eligible ?? true,
     },
@@ -52,9 +53,11 @@ function setup(
 describe('host browser handlers', () => {
   it('keeps setup and grants on the owning host', () => {
     const remote = setup({ admin: false })
-    expect(() => remote.call('hostBrowser.setup')).toThrow(/owning host/)
-    expect(() => remote.call('hostBrowser.grant', 'phone', THREAD)).toThrow(/owning host/)
-    expect(() => remote.call('hostBrowser.stop')).toThrow(/owning host/)
+    expect(() => remote.call('hostBrowser.setup')).toThrow(/Change settings over an encrypted connection/)
+    expect(() => remote.call('hostBrowser.grant', 'phone', THREAD)).toThrow(
+      /Change settings over an encrypted connection/,
+    )
+    expect(() => remote.call('hostBrowser.stop')).toThrow(/Change settings over an encrypted connection/)
     const owner = setup({ admin: true })
     owner.call('hostBrowser.setup')
     expect(owner.hostBrowser.setup).toHaveBeenCalled()

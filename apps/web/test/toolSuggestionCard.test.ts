@@ -89,14 +89,14 @@ it('opens the plugin’s install review for this project, through Customize', ()
 it('keeps Not now on another device and says where to turn the tool on', () => {
   const html = render(view({ canTurnOn: false }))
   expect(labels()).toEqual(['Not now'])
-  expect(html).toContain('Turn it on in Customize on the computer running Ramu.')
+  expect(html).toContain('Change settings over an encrypted connection')
 })
 
 it('shows a viewer device the card without its buttons', () => {
   const html = render(view({ canAnswer: false }))
   expect(labels()).toEqual([])
   expect(html).toContain('Fly cli')
-  expect(html).not.toContain('computer running Ramu')
+  expect(html).not.toContain('Change settings over an encrypted connection')
 })
 
 it('shows the tool is on once it is, and asks for a sign-in a server still needs', () => {

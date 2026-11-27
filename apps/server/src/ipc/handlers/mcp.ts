@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ADMINISTER_REFUSAL } from '@ramu/shared/devicePermissions'
 import { defaultToolChoice, type SharedMcpToolChoice } from '@ramu/shared/mcp'
 import type { AgentProvider } from '@ramu/shared/types'
 import type {
@@ -52,8 +53,7 @@ export const registerSharedMcpHandlers: RegisterHandlers = (ctx) => {
     return ctx.getSharedMcp()
   }
   const admin = () => {
-    if (ctx.host.canAdministerIntegrations?.() !== true)
-      throw new Error('Manage MCP connections and credentials on the host running Ramu')
+    if (ctx.host.canAdministerIntegrations?.() !== true) throw new Error(ADMINISTER_REFUSAL)
     return service()
   }
   return {

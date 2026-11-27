@@ -18,6 +18,7 @@ import { errorText } from '../../../lib/errors'
 import { useAppSettings } from '../../../settings/AppSettings'
 import { useHost } from '../../../workspace/HostProvider'
 import { useHostRuntime } from '../../../workspace/workspace'
+import { ADMINISTER_REFUSAL } from '@ramu/shared/devicePermissions'
 
 /**
  * A tool Ramu suggests from what this thread did: what it does, why, and the way to turn it on here or everywhere.
@@ -103,7 +104,7 @@ function Suggestion({ view, onChange }: { view: ToolSuggestionView; onChange: ()
   // The agent's suggestion says where it thinks the tool belongs; that choice is the card's main button.
   const everywhereFirst = card.reason.kind === 'agent' && card.reason.scope === 'everywhere'
   const brand = brandOf(card.tool.name)
-  const elsewhere = t('Turn it on in Customize on the computer running Ramu.')
+  const elsewhere = t(ADMINISTER_REFUSAL)
   return (
     <section
       className="m-[12px_0] flex flex-col gap-2 rounded-(--radius-m) bg-fill p-[15px]"

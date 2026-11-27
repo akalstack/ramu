@@ -48,6 +48,41 @@ export function remoteRefusal(
   const needed = device ? permissionFor(method) : null
   return device && needed && !allows(device.id, needed) ? permissionRefusal(needed) : null
 }
+/** Tailscale's own addresses: its traffic is WireGuard-encrypted end to end, whatever the listener speaks. */
+const TAILSCALE = /^(::ffff:)?100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|^fd7a:115c:a1e0:/i
+const LOOPBACK = /^(::ffff:)?127\.|^::1$/
+
+/**
+ * Whether a connection keeps what crosses it private: TLS, this computer itself (a tunnel delivers here from loopback,
+ * and a public address is always HTTPS), or Tailscale. A plain-HTTP listener on a trusted network is not.
+ */
+export function encryptedConnection(socket: { encrypted?: boolean; remoteAddress?: string } | undefined): boolean {
+  if (!socket) return false
+  if (socket.encrypted) return true
+  const address = socket.remoteAddress ?? ''
+  return LOOPBACK.test(address) || TAILSCALE.test(address)
+}
+
+/**
+ * Whether a caller may set up this host's providers, accounts, keys and connections. The person here always may. From
+ * another device it takes full access, that device's Change settings permission, and an encrypted connection, since
+ * these calls carry sign-ins and keys; a key sent is stored here and never shown again.
+ */
+export function mayAdministerIntegrations(
+  caller: { network: boolean; device?: DeviceInfo; encrypted?: boolean },
+  allows: (deviceId: string, permission: DevicePermission) => boolean,
+): boolean {
+  if (!caller.network) return true
+  const device = caller.device
+  return (
+    !!device &&
+    device.kind !== 'host' &&
+    device.role !== 'viewer' &&
+    caller.encrypted === true &&
+    allows(device.id, 'settings')
+  )
+}
+
 /** What this device is told about its own access so clients can hide actions the server would refuse. Advisory only. */
 export const accessOf = (device: DeviceInfo | undefined): 'owner' | 'viewer' =>
   device?.role === 'viewer' ? 'viewer' : 'owner'

@@ -1,4 +1,5 @@
 import { AGENT_PROVIDERS } from '@ramu/shared/providers/providers'
+import { ADMINISTER_REFUSAL } from '@ramu/shared/devicePermissions'
 import type { AgentProvider } from '@ramu/shared/types'
 import type { ProjectSetup } from '@ramu/shared/mcp'
 import { z } from 'zod'
@@ -84,8 +85,7 @@ export const registerProjectSetupHandlers: RegisterHandlers = (ctx) => {
   const sharing = () => workspace.getAppState<McpSharing>(MCP_SHARING_KEY, {})
   const skillSharing = () => workspace.getAppState<SkillSharing>(SKILL_SHARING_KEY, {})
   const admin = () => {
-    if (ctx.host.canAdministerIntegrations?.() !== true)
-      throw new Error('Manage MCP connections and credentials on the host running Ramu')
+    if (ctx.host.canAdministerIntegrations?.() !== true) throw new Error(ADMINISTER_REFUSAL)
   }
   const setupOf = (projectId: string) => projectSetupOf(ctx, projectId)
   return {

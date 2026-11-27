@@ -154,7 +154,7 @@ import {
 } from '@ramu/contracts'
 import { loadConfig } from './config'
 import { DeviceStore, isHostAccess, validLifetime, type DeviceInfo, type DeviceRole } from './remote/devices'
-import { RemoteAccess, accessOf, remoteRefusal } from './remote/access'
+import { RemoteAccess, accessOf, encryptedConnection, mayAdministerIntegrations, remoteRefusal } from './remote/access'
 import { PermissionRequests } from './remote/permissionRequests'
 import { DeviceChanges, RemoteDeviceManagement, othersOf } from './remote/deviceManagement'
 import { deviceChangeText } from '@ramu/shared/deviceChanges'
@@ -1164,7 +1164,12 @@ agents.mcpDestination = (session, settings) => {
   )
 }
 // Calls that arrive over the network are marked, so a desktop dialog is never opened on this computer for someone else.
-const origin = new AsyncLocalStorage<{ network: boolean; deviceId?: string }>()
+const origin = new AsyncLocalStorage<{
+  network: boolean
+  deviceId?: string
+  device?: DeviceInfo
+  encrypted?: boolean
+}>()
 const interactive = new InteractiveStore(db, (session, ref) => agents.interactivePublished(session, ref))
 /** The model a page's AI uses: the maintenance model for fast work, the default model for smart work. */
 const pageSettings = (quality: 'fast' | 'smart') => {
@@ -1751,7 +1756,14 @@ function askDesktop(method: string, path?: string): Promise<unknown> {
 const dispatcher = createDispatcher(
   {
     userData,
-    canAdministerIntegrations: () => origin.getStore()?.network !== true,
+    canAdministerIntegrations: () => {
+      const caller = origin.getStore()
+      return mayAdministerIntegrations(
+        { network: caller?.network === true, device: caller?.device, encrypted: caller?.encrypted },
+        (id, permission) => devices.allows(id, permission),
+      )
+    },
+    callerIsLocal: () => origin.getStore()?.network !== true,
     browserDevice: () => (origin.getStore()?.network ? origin.getStore()?.deviceId : 'local'),
     callerName: () => {
       const caller = origin.getStore()
@@ -2146,7 +2158,9 @@ async function performInvoke(
   } else if (method === 'background.restart') {
     return { value: undefined, after: () => void stop() }
   } else {
-    const dispatch = async () => await origin.run({ network: remote, deviceId }, () => dispatcher.invoke(method, args))
+    const encrypted = remote ? encryptedConnection(req?.socket as { encrypted?: boolean } | undefined) : true
+    const dispatch = async () =>
+      await origin.run({ network: remote, deviceId, device, encrypted }, () => dispatcher.invoke(method, args))
     value = operationKey
       ? await runOnce(operations, deviceId ?? 'local', operationKey, method, args, dispatch)
       : await dispatch()
