@@ -86,15 +86,10 @@ export function ThreadActivity({
           : say('{0} questions', { 0: activity.requests.length }),
       provider: say('Waiting for limit reset'),
       working: chat.compacting ? say('Compacting context…') : say('Working'),
-      // Finished helpers still have a pill to open; it counts them, not a "0 active".
-      helpers: activity.model.counts.active
-        ? say('{0} active agents', { 0: activity.model.counts.active })
-        : say('{0} agents', { 0: activity.helpers.length || activity.groups.reduce((n, g) => n + g.agents.length, 0) }),
-      advisor: activity.advisors.some(helperActive)
-        ? say('Advisor reviewing')
-        : unread
-          ? say('Advisor history · {0} new', { 0: unread })
-          : say('Advisor history'),
+      // Fixed names with a count, as the desktop's chips, so the row above the message box holds still as work
+      // starts and ends; the sheet each opens says what is going on.
+      helpers: `${say('Agents')} · ${activity.helpers.length || activity.groups.reduce((n, g) => n + g.agents.length, 0)}`,
+      advisor: unread ? `${say('Advisor')} · ${say('{0} new', { 0: unread })}` : say('Advisor'),
       goal: say(goalActivityLabel(activity.model.goalState)),
       queue: say('{0} queued', { 0: chat.queue.length }),
       more: say('More activity'),

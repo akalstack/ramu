@@ -88,8 +88,9 @@ export function ThreadServers({
         <ActivityPill
           // The browser's own pill wears the globe; a server is a server, as on the desktop.
           icon={Server}
-          label={servers.length === 1 ? serverAddress(first) : say('{0} servers', { 0: servers.length })}
-          accessibilityLabel={say('Servers')}
+          // A fixed name and a count, as the desktop's chip: a label that changed with each server moved the row.
+          label={`${say('Servers')} · ${servers.length}`}
+          accessibilityLabel={`${say('Servers')}, ${servers.map(serverAddress).join(', ')}`}
           onPress={onOpen}
         />
       ) : null}

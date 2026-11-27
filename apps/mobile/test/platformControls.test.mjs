@@ -5044,7 +5044,8 @@ for (const os of ['ios', 'android']) {
     f.render()
     await settle()
     const pill = find(f.render(), 'ActivityPill')
-    assert.equal(pill.props.label, '1 background terminals')
+    // A fixed name and a count, as on the desktop.
+    assert.equal(pill.props.label, 'Terminals · 1')
     f.setOpen(true)
     const row = nodes(f.render()).find(
       (node) => node.type === 'Row' && String(node.props.accessibilityLabel).includes('Moved to the background'),
@@ -9787,7 +9788,7 @@ test('a thread’s servers show as a pill, open in its browser on the host and s
   render()
   await settle()
   const pill = find(render(), 'ActivityPill')
-  assert.equal(pill.props.label, '2 servers')
+  assert.equal(pill.props.label, 'Servers · 2')
   pill.props.onPress()
   const rows = nodes(render()).filter((node) => node.type === 'Row')
   // A web server opens in the thread's browser on the host; a database is listed but not opened.
@@ -9807,7 +9808,8 @@ test('a thread’s servers show as a pill, open in its browser on the host and s
     calls.find(([, method]) => method === 'servers.stop'),
     ['a', 'servers.stop', 'task', 42, 5432],
   )
-  assert.equal(find(render(), 'ActivityPill').props.label, 'localhost:3000')
+  assert.equal(find(render(), 'ActivityPill').props.label, 'Servers · 1')
+  assert.match(find(render(), 'ActivityPill').props.accessibilityLabel, /localhost:3000/)
   hooks.dispose()
   // A view-only device neither reads nor stops a host's servers.
   const viewer = hookHarness()

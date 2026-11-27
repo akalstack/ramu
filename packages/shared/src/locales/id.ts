@@ -2181,6 +2181,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Matched by its limits': 'Dicocokkan dari batasnya',
   'Refreshes when this provider next runs.': 'Diperbarui saat provider ini berjalan lagi.',
   Limit: 'Batas',
+  '{0} new': '{0} baru',
   'This file cannot be shown here.': 'Berkas ini tidak bisa ditampilkan di sini.',
   'Opens the file': 'Membuka berkas',
   'Drop to add to the message': 'Lepas untuk menambahkan ke pesan',

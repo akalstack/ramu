@@ -277,13 +277,14 @@ export function BackgroundTerminals({
       {!!(rows.length + commands.length) && (
         <ActivityPill
           icon={SquareTerminal}
-          // While the agent waits on a command, the pill says which one, so an idle-looking turn has a reason on screen.
-          label={
+          // A fixed name and a count, as the desktop's chip, so the row above the message box holds still. While the
+          // agent waits on a command the chip takes the attention colour; the working line says which command.
+          label={`${t('Terminals')} · ${rows.length + commands.length}`}
+          accessibilityLabel={
             awaited
-              ? t('Waiting on {0}', { 0: clipCommand('command' in awaited ? awaited.command : awaited.name) })
-              : t('{0} background terminals', { 0: rows.length + commands.length })
+              ? `${t('Background terminals')}, ${t('Waiting on {0}', { 0: clipCommand('command' in awaited ? awaited.command : awaited.name) })}`
+              : t('Background terminals')
           }
-          accessibilityLabel={t('Background terminals')}
           tone={awaited ? 'attention' : 'quiet'}
           onPress={onOpen}
         />
