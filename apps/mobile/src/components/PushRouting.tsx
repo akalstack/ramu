@@ -4,7 +4,11 @@ import Constants from 'expo-constants'
 import { useRouter } from 'expo-router'
 import { useStore } from '../runtime/store'
 import { pushTarget } from '../runtime/pushTarget'
-/** Refresh the originating computer before opening a push deep link. Foreground SSE supplies the toast. */
+import { useAppPresence } from '../runtime/threadViewing'
+/**
+ * Refresh the originating computer before opening a push deep link. Foreground SSE supplies the toast, and while the app
+ * is open its hosts hear so, sending no push and leaving desktops without system notifications.
+ */
 export function PushRouting() {
   const store = useStore(),
     router = useRouter()
@@ -13,6 +17,10 @@ export function PushRouting() {
   const handled = useRef(new Map<string, number>())
   const ready = store.ready
   const knownHosts = store.computers.map((computer) => computer.id).join(',')
+  useAppPresence(
+    store.invoke,
+    store.computers.filter((computer) => computer.status === 'online').map((computer) => computer.id),
+  )
   useEffect(() => {
     if (!ready) return
     if (Platform.OS === 'web' || Constants.appOwnership === 'expo') return

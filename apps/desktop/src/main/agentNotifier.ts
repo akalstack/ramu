@@ -16,7 +16,8 @@ const ACTIVE: AgentSessionState[] = ['starting', 'running', 'needs-input']
 
 /**
  * Tells the user when an agent finishes, needs input or fails. In the foreground the app shows its own
- * toast; in the background it sends a system notification. Clicking either opens the chat.
+ * toast; in the background it sends a system notification, unless the person is using Ramu on another device right
+ * now, which shows the news itself. Clicking either opens the chat.
  * One notifier serves one computer: `send` reaches the shell and `invoke` reaches that computer's server.
  */
 export function createAgentNotifier(options: {
@@ -85,6 +86,8 @@ export function createAgentNotifier(options: {
         return
       }
       if (!Notification.isSupported()) return
+      // The person is on their phone (or another desktop) right now, and that app shows the news itself.
+      if ((await options.invoke('notifications.elsewhere').catch(() => false)) === true) return
       const id = `agent:${notice.sessionId}`
       live.get(id)?.close()
       const system = new Notification({ title: notice.title, body: notice.body, silent: false })

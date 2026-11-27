@@ -23,9 +23,10 @@ const { createAgentNotifier } = await import('../src/main/agentNotifier')
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
 
-function setup(goal: unknown = null, helpers: { active: number }[] = [], focused = true) {
+function setup(goal: unknown = null, helpers: { active: number }[] = [], focused = true, elsewhere = false) {
   const send = vi.fn()
   const invoke = vi.fn(async (method: string) => {
+    if (method === 'notifications.elsewhere') return elsewhere
     if (method === 'agent.goal') return goal
     if (method === 'agent.get') return { id: 's1', taskId: 't1', title: 'A thread' }
     if (method === 'tasks.list') return [{ id: 't1', title: 'A thread', helperSummary: helpers[0] ?? null }]
@@ -140,6 +141,21 @@ it('closes a system notification once its notice is read on another device', asy
     expect(system.shown[0]!.closed).toBe(false)
     notifier.observe('notices:changed', [])
     expect(system.shown[0]!.closed).toBe(true)
+  } finally {
+    system.supported = false
+  }
+})
+
+it('raises no system notification while the person is using Ramu on their phone', async () => {
+  system.supported = true
+  system.shown.length = 0
+  try {
+    const { notifier, send } = setup(null, [], false, true)
+    notifier.observe('agent:event', { sessionId: 's1', event: { kind: 'state', state: 'running' } })
+    notifier.observe('agent:event', { sessionId: 's1', event: { kind: 'state', state: 'idle' } })
+    await flush()
+    expect(system.shown).toHaveLength(0)
+    expect(send).not.toHaveBeenCalled()
   } finally {
     system.supported = false
   }

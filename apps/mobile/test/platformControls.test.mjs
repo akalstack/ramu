@@ -7082,6 +7082,61 @@ for (const os of ['ios', 'android']) {
 }
 
 for (const os of ['ios', 'android']) {
+  test(`${os} the open app tells its hosts the person is here, with the thread on screen, and says so when it leaves`, () => {
+    const hooks = hookHarness()
+    const appState = { currentState: 'active', listeners: [] }
+    const { useAppPresence, useThreadViewing } = load(
+      'runtime/threadViewing.ts',
+      os,
+      {
+        react: hooks.react,
+        'react-native': {
+          AppState: {
+            get currentState() {
+              return appState.currentState
+            },
+            addEventListener: (_event, listener) => {
+              appState.listeners.push(listener)
+              return { remove() {} }
+            },
+          },
+        },
+        'expo-constants': { default: { appOwnership: 'expo' } },
+      },
+      { setInterval, clearInterval },
+    )
+    const reports = []
+    // Copied out of the module's realm, so they compare by value.
+    const invoke = async (host, method, sessions, present) => void reports.push([host, method, [...sessions], present])
+    let thread = false
+    const App = () => {
+      useAppPresence(invoke, ['a', 'b'])
+      useThreadViewing(invoke, 'a', 's1', thread)
+    }
+    try {
+      hooks.render(App)
+      assert.deepEqual(reports, [
+        ['a', 'notifications.viewing', [], true],
+        ['b', 'notifications.viewing', [], true],
+      ])
+      // Opening a thread keeps the presence in the same report.
+      reports.length = 0
+      thread = true
+      hooks.render(App)
+      assert.deepEqual(reports, [['a', 'notifications.viewing', ['s1'], true]])
+      // Going to the background: every host hears the person left, and the thread is no longer in front.
+      reports.length = 0
+      appState.currentState = 'background'
+      for (const listener of appState.listeners) listener('background')
+      hooks.render(App)
+      assert.ok(reports.length > 0)
+      assert.ok(reports.every(([, , sessions, present]) => sessions.length === 0 && present === false))
+      assert.deepEqual([...new Set(reports.map(([host]) => host))].sort(), ['a', 'b'])
+    } finally {
+      hooks.dispose()
+    }
+  })
+
   test(`${os} notification routing waits for hydration and opens a cold/live tap only once`, async () => {
     const hooks = hookHarness()
     let now = 1000
@@ -7128,6 +7183,7 @@ for (const os of ['ios', 'android']) {
         '../runtime/pushTarget': {
           pushTarget: (data, known) => (known.includes(data.computerId) ? { kind: 'thread', ...data } : null),
         },
+        '../runtime/threadViewing': { useAppPresence() {} },
       },
       { Date: { now: () => now } },
     )

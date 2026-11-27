@@ -1023,8 +1023,13 @@ export interface RamuMethods extends ArtifactMethods {
    * The threads this device shows the person right now, repeated every minute while they stay in front and sent empty
    * when none is; the host sends no push about a thread someone is looking at.
    */
-  /** `present`: the person is using this desktop app right now, so nothing from this host needs to reach the phone. */
+  /**
+   * `present`: the person is using this device right now (a desktop app in front, or the phone app open), so news shows
+   * there in the app's own notifications and no other device needs to raise one.
+   */
   'notifications.viewing'(sessionIds: string[], present?: boolean): void
+  /** Whether the person is using Ramu on another device right now, so this one raises no system notification. */
+  'notifications.elsewhere'(): boolean
   'liveActivity.status'(): { enabled: boolean }
   'liveActivity.register'(registration: MobileLiveActivityRegistration): { enabled: boolean }
   'liveActivity.unregister'(activityId: string): void

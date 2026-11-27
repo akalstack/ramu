@@ -143,6 +143,24 @@ it('a finished turn pushes "done" unless its goal continues, which includes a go
   expect(await finish({ status: 'paused', pausedBy: 'provider-limit' })).toBe(0)
   expect(await finish({ status: 'active' })).toBe(0)
 })
+it('tells each device whether the person is using Ramu on another one, so only that device notifies', () => {
+  dir = mkdtempSync(join(tmpdir(), 'ramu-phone-presence-'))
+  const push = new MobilePush(join(dir, 'push.json'), () => [{ id: 'phone' }])
+  expect(push.presentElsewhere('local')).toBe(false)
+  // The phone app is open: the desktop raises no system notification, and the phone hears nothing about its own use.
+  push.viewing('phone', [], true)
+  expect(push.presentElsewhere('local')).toBe(true)
+  expect(push.presentElsewhere('phone')).toBe(false)
+  // At the desktop instead: the phone is told the person is elsewhere.
+  push.viewing('phone', [])
+  push.viewing('local', [], true)
+  expect(push.presentElsewhere('local')).toBe(false)
+  expect(push.presentElsewhere('phone')).toBe(true)
+  // A device that stopped repeating itself no longer counts.
+  vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 120_000)
+  expect(push.presentElsewhere('phone')).toBe(false)
+  vi.restoreAllMocks()
+})
 it('sends no push about a thread someone is looking at, on the phone or a desktop, until they look away', async () => {
   dir = mkdtempSync(join(tmpdir(), 'ramu-phone-push-'))
   const sent: { to: string }[] = []

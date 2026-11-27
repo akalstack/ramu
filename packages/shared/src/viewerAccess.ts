@@ -91,6 +91,7 @@ const viewerMethods = new Set([
   'notifications.register',
   'notifications.unregister',
   'notifications.viewing',
+  'notifications.elsewhere',
   'liveActivity.status',
   'liveActivity.register',
   'liveActivity.unregister',
