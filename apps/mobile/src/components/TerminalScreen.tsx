@@ -388,6 +388,71 @@ export function TerminalScreen({
   }
   const targets = terminalTargets(store, computerId)
   const directory = terminal?.cwd.replace(/\\/g, '/').split('/').filter(Boolean).pop() || (terminal ? '/' : undefined)
+  // Its two parts share every handler: the top bar and the key bar above the keyboard.
+  const dock = (part: 'top' | 'keys') => (
+    <TerminalDock
+      part={part}
+      workspace={targets.find((target) => target.ctx === ctx)?.title ?? say('Terminal')}
+      kind={targets.find((target) => target.ctx === ctx)?.kind}
+      detail={
+        targets.find((target) => target.ctx === ctx)?.kind === 'worktree'
+          ? targets.find((target) => target.ctx === ctx)?.subtitle
+          : undefined
+      }
+      computer={computer?.name ?? say('Terminal')}
+      directory={directory}
+      hasShell={tabs.length > 0}
+      exited={terminal?.exited}
+      connected={connected}
+      keyboardVisible={keyboardVisible || keysOpen}
+      latch={latch}
+      rail={rail}
+      onBack={onBack}
+      {...(onAddToChat
+        ? {
+            onAddToChat: () => {
+              const shown = terminal && outputOwner === terminal.id ? output : ''
+              const attachment = captureScreen(
+                shown,
+                size.current?.rows ?? 40,
+                say('Shell {0}', { 0: active + 1 }),
+                `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+              )
+              if (!attachment) return setError(say('Nothing on screen to add yet.'))
+              onAddToChat(attachment)
+            },
+          }
+        : {})}
+      onWorkspace={() => {
+        setKeysOpen(false)
+        keyboardBeforeSheet.current = keyboardVisible
+        setKeyboardVisible(false)
+        NativeKeyboard.dismiss()
+        setKeyboardAction((old) => ({ sequence: old.sequence + 1, visible: false }))
+        setSessionsOpen(true)
+      }}
+      onCopy={() => {
+        setKeysOpen(false)
+        keyboardBeforeSheet.current = keyboardVisible
+        setKeyboardVisible(false)
+        NativeKeyboard.dismiss()
+        setKeyboardAction((old) => ({ sequence: old.sequence + 1, visible: false }))
+        setCaptureAction({ sequence: ++keySequence.current })
+      }}
+      onMoreKeys={() => {
+        // Open, the same button brings the keyboard back over the panel; the keyboard's rise closes the panel.
+        if (keysOpen) return setKeyboardAction((old) => ({ sequence: old.sequence + 1, visible: true }))
+        setKeysOpen(true)
+        NativeKeyboard.dismiss()
+        setKeyboardAction((old) => ({ sequence: old.sequence + 1, visible: false }))
+      }}
+      onKeyboard={toggleKeyboard}
+      onKey={(label) => {
+        void press(label)
+        setKeyboardAction((old) => ({ sequence: old.sequence + 1, visible: true }))
+      }}
+    />
+  )
   return (
     <View
       style={{
@@ -400,6 +465,21 @@ export function TerminalScreen({
     >
       <Stack.Screen options={{ headerShown: false }} />
       <StatusBar style="light" />
+      {dock('top')}
+      <TerminalTabs
+        tabs={tabs}
+        active={active}
+        busy={opening || !connected || computer?.access === 'viewer' || !terminalAllowed}
+        onNew={() => void open()}
+        onSelect={(index) => {
+          tap()
+          keepKeyboard()
+          setActive(index)
+          setKeyAction(undefined)
+          setLatch(null)
+        }}
+        onClose={(value) => void close(value)}
+      />
       <View style={{ flex: 1 }}>
         {error ? (
           <T tone="bad" style={{ padding: space.m }}>
@@ -462,20 +542,6 @@ export function TerminalScreen({
             />
           )}
         </View>
-        <TerminalTabs
-          tabs={tabs}
-          active={active}
-          busy={opening || !connected || computer?.access === 'viewer' || !terminalAllowed}
-          onNew={() => void open()}
-          onSelect={(index) => {
-            tap()
-            keepKeyboard()
-            setActive(index)
-            setKeyAction(undefined)
-            setLatch(null)
-          }}
-          onClose={(value) => void close(value)}
-        />
         <View
           style={{
             paddingHorizontal: 10,
@@ -483,67 +549,7 @@ export function TerminalScreen({
             paddingBottom: keyboardVisible || keysOpen ? 6 : Math.max(insets.bottom, 10),
           }}
         >
-          <TerminalDock
-            workspace={targets.find((target) => target.ctx === ctx)?.title ?? say('Terminal')}
-            kind={targets.find((target) => target.ctx === ctx)?.kind}
-            detail={
-              targets.find((target) => target.ctx === ctx)?.kind === 'worktree'
-                ? targets.find((target) => target.ctx === ctx)?.subtitle
-                : undefined
-            }
-            computer={computer?.name ?? say('Terminal')}
-            directory={directory}
-            hasShell={tabs.length > 0}
-            exited={terminal?.exited}
-            connected={connected}
-            keyboardVisible={keyboardVisible || keysOpen}
-            latch={latch}
-            rail={rail}
-            onBack={onBack}
-            {...(onAddToChat
-              ? {
-                  onAddToChat: () => {
-                    const shown = terminal && outputOwner === terminal.id ? output : ''
-                    const attachment = captureScreen(
-                      shown,
-                      size.current?.rows ?? 40,
-                      say('Shell {0}', { 0: active + 1 }),
-                      `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-                    )
-                    if (!attachment) return setError(say('Nothing on screen to add yet.'))
-                    onAddToChat(attachment)
-                  },
-                }
-              : {})}
-            onWorkspace={() => {
-              setKeysOpen(false)
-              keyboardBeforeSheet.current = keyboardVisible
-              setKeyboardVisible(false)
-              NativeKeyboard.dismiss()
-              setKeyboardAction((old) => ({ sequence: old.sequence + 1, visible: false }))
-              setSessionsOpen(true)
-            }}
-            onCopy={() => {
-              setKeysOpen(false)
-              keyboardBeforeSheet.current = keyboardVisible
-              setKeyboardVisible(false)
-              NativeKeyboard.dismiss()
-              setKeyboardAction((old) => ({ sequence: old.sequence + 1, visible: false }))
-              setCaptureAction({ sequence: ++keySequence.current })
-            }}
-            onMoreKeys={() => {
-              // Open, the same button brings the keyboard back over the panel; the keyboard's rise closes the panel.
-              if (keysOpen) return setKeyboardAction((old) => ({ sequence: old.sequence + 1, visible: true }))
-              setKeysOpen(true)
-              NativeKeyboard.dismiss()
-              setKeyboardAction((old) => ({ sequence: old.sequence + 1, visible: false }))
-            }}
-            onKeyboard={toggleKeyboard}
-            onKey={(label) => {
-              void press(label)
-              setKeyboardAction((old) => ({ sequence: old.sequence + 1, visible: true }))
-            }}
-          />
+          {dock('keys')}
         </View>
         {keysOpen || keyboardRoom ? (
           <View style={{ height: keysOpen ? Math.max(keyboardRoom, keyPanelHeight) : keyboardRoom }}>
