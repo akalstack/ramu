@@ -1,5 +1,4 @@
 import { usePageIndex } from '../../pages/pageIndex'
-import { LAUNCH_DECK_PROMPT, RELEASE_NOTE_PROMPT } from '@ramu/shared/artifacts'
 import { openPage } from '../../pages/openPage'
 import { useHostWriteAccess } from '../../composer/useHostWriteAccess'
 import { VIEW_ONLY_WRITE_NOTICE } from '../../composer/viewerAccess'
@@ -16,7 +15,6 @@ import {
   FolderSearch,
   GitBranch,
   Link2,
-  Megaphone,
   Pencil,
   Rocket,
   Route,
@@ -50,7 +48,6 @@ import { useSlideMount } from './useSlideMount'
 import { useHost } from '../../workspace/HostProvider'
 import { refreshIdentities, useIdentities, useProjectIdentity } from '../../workspace/identities'
 import { identityReason, identityTextColor } from '../../settings/IdentityChip'
-import { draftKey, draftStore, saveDraft } from '../../composer/drafts'
 
 export function ProjectGroup({ project, previewLimit }: { project: Project; previewLimit?: number }) {
   useLanguage()
@@ -98,12 +95,6 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
     } catch (e) {
       setError(errorText(e))
     }
-  }
-
-  // A launch write-up starts as a request already in New chat's box, so the person can adjust it before it goes.
-  const writeUp = (request: string) => {
-    saveDraft(draftKey.newChat(project.id), request, draftStore(host.id))
-    ws.newTask(project.id)
   }
 
   const act = async (fn: () => Promise<unknown>): Promise<boolean> => {
@@ -222,30 +213,6 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
         if (canWrite()) setDeploying(true)
       },
     },
-    ...(repos.length
-      ? [
-          {
-            key: 'launch',
-            label: (
-              <>
-                <Megaphone size={14} /> {t(' Tell people what shipped')}
-              </>
-            ),
-            submenu: [
-              {
-                key: 'release-note',
-                label: t('Make a release note'),
-                onSelect: () => writeUp(t(RELEASE_NOTE_PROMPT)),
-              },
-              {
-                key: 'launch-deck',
-                label: t('Make a launch deck'),
-                onSelect: () => writeUp(t(LAUNCH_DECK_PROMPT)),
-              },
-            ],
-          } as MenuEntry,
-        ]
-      : []),
     {
       key: 'ci',
       label: (

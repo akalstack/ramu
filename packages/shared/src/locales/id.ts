@@ -6552,13 +6552,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Undang penguji di TestFlight dan pengujian internal Play, isi listing tiap toko, lalu ajukan review di tiap toko saat kamu siap. Ramu tidak pernah mengajukan review.',
   Domain: 'Domain',
   User: 'Pengguna',
-  'Tell people what shipped': 'Kabarkan yang sudah dirilis',
-  'Make a release note': 'Buat catatan rilis',
-  'Make a launch deck': 'Buat dek peluncuran',
-  'Make a release note as a Doc artifact from the pull requests merged since the last release: what changed for the people who use it, grouped by what they would notice, with each pull request linked.':
-    'Buat catatan rilis sebagai artefak Dokumen dari pull request yang digabung sejak rilis terakhir: apa yang berubah bagi orang yang memakainya, dikelompokkan menurut apa yang akan mereka sadari, dengan tautan ke setiap pull request.',
-  'Make a short launch deck as a Slides artifact from the pull requests merged since the last release: the problem, what is new, how it looks, and what comes next, with speaker notes.':
-    'Buat dek peluncuran singkat sebagai artefak Slide dari pull request yang digabung sejak rilis terakhir: masalahnya, apa yang baru, tampilannya, dan langkah berikutnya, dengan catatan pembicara.',
   Outline: 'Kerangka',
   'Who said it': 'Siapa yang mengatakannya',
   'Text {number} of {frame}': 'Teks {number} dari {frame}',

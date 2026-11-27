@@ -12,8 +12,6 @@ import {
   Archive,
   ArchiveRestore,
   Copy,
-  Megaphone,
-  Presentation,
   Rocket,
   FolderSearch,
   ListChecks,
@@ -32,8 +30,6 @@ import {
 import { useRouter } from 'expo-router'
 import { moveProject } from '../runtime/threadGroups'
 import type { MobileProject } from '../runtime/types'
-import { newComposerKey } from '../runtime/composerDrafts'
-import { LAUNCH_DECK_PROMPT, RELEASE_NOTE_PROMPT } from '@ramu/shared/artifacts'
 import { font, radius, space, useTheme } from '../theme'
 import type { Chat } from '../runtime/types'
 import { useStore } from '../runtime/store'
@@ -552,21 +548,6 @@ export function ProjectActionsSheet({
           router.push({ pathname: '/terminal', params: { computer: project.computerId, ctx: `project:${raw}` } }),
         ),
     },
-    // Tell people what shipped, as on the desktop: a new thread in the project with the request already in its box.
-    ...(project.repos.length
-      ? [
-          { key: 'release-note', icon: Megaphone, label: say('Make a release note'), prompt: RELEASE_NOTE_PROMPT },
-          { key: 'launch-deck', icon: Presentation, label: say('Make a launch deck'), prompt: LAUNCH_DECK_PROMPT },
-        ].map(({ prompt, ...item }) => ({
-          ...item,
-          group: 'work' as const,
-          onPress: () =>
-            later(() => {
-              store.setDraft(newComposerKey(project.computerId, project.id), say(prompt))
-              router.push({ pathname: '/new', params: { project: project.id, computer: project.computerId } })
-            }),
-        }))
-      : []),
     {
       key: 'deploy',
       group: 'work',
