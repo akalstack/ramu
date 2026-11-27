@@ -71,13 +71,17 @@ test('a message held on the phone is marked as waiting', () => {
 })
 
 test('a message on its way is the sent message’s own bubble and footer, with the time it was sent', () => {
-  const sent = load().SentBubble({ text: 'Hello\n<ramu-context>open files</ramu-context>' })
+  const wrapped = load().SentBubble({ text: 'Hello\n<ramu-context>open files</ramu-context>' })
+  // Inside the sent message's own actions, so on iOS its words are laid out as selectable text, as the host's copy is.
+  assert.equal(wrapped.type, 'MessageActions')
+  assert.equal(wrapped.props.from, 'user')
+  const sent = wrapped.props.children
   // The bubble the host's copy is drawn with, given the words that copy will show, so the swap changes nothing.
   assert.equal(sent.type, 'UserBubble')
   assert.equal(sent.props.text, 'Hello')
   // The files sent with it show at once, from this phone's own copy, as the host's copy will draw them.
   const photo = { id: 'a1', name: 'photo.jpg', mimeType: 'image/jpeg', size: 10 }
-  const withFile = load().SentBubble({ text: '', files: [photo], computerId: 'host' })
+  const withFile = load().SentBubble({ text: '', files: [photo], computerId: 'host' }).props.children
   assert.deepEqual(withFile.props.attachments, [photo])
   assert.equal(withFile.props.computerId, 'host')
   const footer = pending(true)[1]

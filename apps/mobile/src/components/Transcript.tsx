@@ -218,7 +218,7 @@ export const MessageMenu = createContext<{
  * aside and More beside Copy, as on the desktop. "More" offers the whole message's actions. Where there is no native view
  * (the web build), a long press opens those actions instead.
  */
-function MessageActions({
+export function MessageActions({
   text,
   from,
   seq,

@@ -21,15 +21,12 @@ export function WorkingLine({
   chat,
   sending,
   inline,
-  quiet,
   timed = true,
   onPress,
 }: {
   chat: Chat
   sending?: boolean
   inline?: boolean
-  /** Inline only: the newest row already says what the agent is doing, so the line keeps its place but says nothing. */
-  quiet?: boolean
   /** Inline only: the line counts the turn's time. Off while the turn's own top already counts it. */
   timed?: boolean
   onPress?(): void
@@ -86,13 +83,11 @@ export function WorkingLine({
         // One height from sending to the turn's end, whatever it says, so the end of the chat never shifts under it.
         style={{ height: 24, justifyContent: 'center' }}
       >
-        {quiet ? null : (
-          <Shimmer size={font.control}>
-            {timed && running && !chat.compacting && since && (chat.activityLabel ?? 'Working') === 'Working'
-              ? translate(store.language, 'Working for {0}', { 0: elapsedText(now - since) })
-              : t(running ? (chat.compacting ? 'Compacting context…' : (chat.activityLabel ?? 'Working')) : 'Sending…')}
-          </Shimmer>
-        )}
+        <Shimmer size={font.control}>
+          {timed && running && !chat.compacting && since && (chat.activityLabel ?? 'Working') === 'Working'
+            ? translate(store.language, 'Working for {0}', { 0: elapsedText(now - since) })
+            : t(running ? (chat.compacting ? 'Compacting context…' : (chat.activityLabel ?? 'Working')) : 'Sending…')}
+        </Shimmer>
       </View>
     )
   return (

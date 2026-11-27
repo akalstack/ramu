@@ -8,7 +8,7 @@ import { Clock, CornerDownRight, ListPlus } from 'lucide-react-native'
 import { font, useTheme } from '../theme'
 import { useStore, type OutboxItem } from '../runtime/store'
 import { T, tap } from './ui'
-import { MessageFooter, UserBubble } from './Transcript'
+import { MessageActions, MessageFooter, UserBubble } from './Transcript'
 import { visibleText } from '../runtime/transcript'
 
 /** Asks how to cancel an outbox item: edit puts the text back in the composer, delete drops it. */
@@ -81,7 +81,13 @@ export function SentBubble({
   files?: Attachment[]
   computerId?: string
 }) {
-  return <UserBubble text={visibleText(text)} waiting={waiting} attachments={files} computerId={computerId} />
+  // Inside the same message actions as the sent message: on iOS they make its words selectable, which lays the lines
+  // out as the host's copy will, so the bubble keeps its height when that copy takes its place.
+  return (
+    <MessageActions text={visibleText(text)} from="user" files={files}>
+      <UserBubble text={visibleText(text)} waiting={waiting} attachments={files} computerId={computerId} />
+    </MessageActions>
+  )
 }
 
 /**

@@ -910,12 +910,12 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
   const running = chat.status === 'running'
   // As on the desktop, once the running turn has a tool row its headline says what the agent is doing, so the status
   // line under it stays quiet instead of flashing Working between one step and the next.
-  const turnRows = rows.slice(rows.findLastIndex((row) => row.kind === 'user') + 1)
   // A running turn already counts at its own top ("Working for 9s"); the line at its end then only says what the agent
   // is doing, as on the desktop, so the time is not shown twice.
   const turnCounts = rows.some((row) => row.kind === 'summary' && !!row.running)
-  const lastShowsWork =
-    running && (rows.at(-1)?.kind === 'thinking' || turnRows.some((row) => row.kind === 'tool' || row.kind === 'tools'))
+  // The newest row says what the agent is doing and keeps a line of its own for it (a live tool group, or a thought), so
+  // the end of the chat needs no status line too: both left two empty lines under a running step.
+  const lastShowsWork = running && ['thinking', 'tool', 'tools'].includes(rows.at(-1)?.kind ?? '')
   // Stopped by you or failed since the last message: the empty send button becomes Continue.
   const lastUser = chat.items.findLastIndex((item) => item.kind === 'user')
   const stopped =
@@ -1846,17 +1846,13 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                 keyboardDismissMode="on-drag"
                 keyboardShouldPersistTaps="handled"
                 ListFooterComponent={
-                  <View style={{ gap: space.m, paddingTop: space.m, zIndex: 2 }}>
-                    {/* The running turn's status at its end, as on the desktop: a shimmering label, unless the newest row
-                        (reasoning, or a tool group at work) already says what the agent is doing. */}
-                    <WorkingLine
-                      inline
-                      quiet={lastShowsWork}
-                      timed={!turnCounts}
-                      chat={chat}
-                      sending={pending.length > 0}
-                    />
-                  </View>
+                  // The running turn's status at its end, as on the desktop: a shimmering label, unless the newest row
+                  // (reasoning, or a tool group at work) already says what the agent is doing on a line of its own.
+                  lastShowsWork ? null : (
+                    <View style={{ gap: space.m, paddingTop: space.m, zIndex: 2 }}>
+                      <WorkingLine inline timed={!turnCounts} chat={chat} sending={pending.length > 0} />
+                    </View>
+                  )
                 }
               />
               {/* Covers the transcript while it settles at its end, then fades away; the composer stays above it. */}
