@@ -1,6 +1,6 @@
 import { projectIdentity, useHostIdentities } from '../../../runtime/identities'
 import { deliveryVisible, visibleText } from '../../../runtime/transcript'
-import { finishedAnswerRow, transcriptScrollState } from '../../../runtime/chatViewport'
+import { finishedAnswerRow, openingLanded, transcriptScrollState } from '../../../runtime/chatViewport'
 import { goBackOrHome, type ThreadArrival } from '../../../runtime/navigation'
 import { shareRows } from '../../../runtime/shareRows'
 import { VIEW_ONLY_WRITE_NOTICE } from '../../../runtime/viewerAccess'
@@ -229,14 +229,21 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
   const [revealed, setRevealed] = useState(!!arrival)
   const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const revealCap = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /**
+   * Shown once the list sits on its end, as T3 Code reveals its thread: rows measured during the first scroll can leave
+   * the list short of the end after it first draws, so a timer alone showed the chat still moving down. The check
+   * waits a frame for the scroll that the last growth caused, and a cap never leaves the chat covered.
+   */
   const settleReveal = () => {
     if (revealed) return
     // A started thread whose history is still on its way has nothing to show yet: wait for it, briefly.
     const loading = !!chat?.sessionId && !chat.items?.length
-    revealCap.current ??= setTimeout(() => setRevealed(true), loading ? 2500 : 800)
+    revealCap.current ??= setTimeout(() => setRevealed(true), loading ? 2500 : 1000)
     if (loading) return
     if (revealTimer.current) clearTimeout(revealTimer.current)
-    revealTimer.current = setTimeout(() => setRevealed(true), 150)
+    revealTimer.current = setTimeout(() => {
+      if (openingLanded(endOffset(), metrics.current.offset, metrics.current.content)) setRevealed(true)
+    }, 32)
   }
   useEffect(
     () => () => {
@@ -362,8 +369,8 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
     const was = overflowing
     setOverflowing(listFollows)
     if (end === null || followPaused || !following.current || userScrolling.current) return
-    // Before the chat is shown it lands on its end at once; afterwards a reply or a sent message glides into view.
-    if (!listFollows || !was) toEnd(revealed)
+    // Lands on the end at once while opening; afterwards a reply or a sent message glides into view.
+    if (!listFollows || !was) toEnd(revealed && Date.now() >= landingUntil.current)
   }
   /**
    * Sending closes the keyboard and brings the end into view, as T3 Code does, so the message just sent (a steer
@@ -1763,6 +1770,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                   onScroll={(event) => {
                     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent
                     metrics.current.offset = contentOffset.y
+                    settleReveal()
                     if (
                       ios &&
                       !userScrolling.current &&
@@ -1807,13 +1815,12 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                     catchUp()
                     // Stuck to the end while the reader is there, as T3 Code keeps its chat: every growth is followed
                     // here, not left to the list's own end tracking, which the message box laid over the list's bottom
-                    // threw off, so a reply streaming in at the bottom stopped being followed. Still landing, under the
-                    // opening cover it jumps and once shown it glides; afterwards each growth lands at once, without a
-                    // glide that read as the transcript moving up and down. Paused while the keyboard moves and right
-                    // after a row is opened by hand.
+                    // threw off, so a reply streaming in at the bottom stopped being followed. Each growth lands at
+                    // once, without a glide that read as the transcript moving up and down; while landing that holds
+                    // even when following is paused. Otherwise paused while the keyboard moves and right after a row
+                    // is opened by hand.
                     if (!following.current || userScrolling.current) return
-                    if (Date.now() < landingUntil.current) toEnd(revealed)
-                    else if (!followPaused) toEnd(false)
+                    if (Date.now() < landingUntil.current || !followPaused) toEnd(false)
                   }}
                   keyboardDismissMode="on-drag"
                   keyboardShouldPersistTaps="handled"
@@ -2308,6 +2315,17 @@ function OpeningCover({
   const [offset, setOffset] = useState<number | null>(null)
   const opacity = useSharedValue(visible ? 1 : 0)
   const [mounted, setMounted] = useState(visible)
+  // Most threads land within a few frames; the mark appears only for one that takes longer, so opening never flashes it.
+  const [slow, setSlow] = useState(false)
+  useEffect(() => {
+    if (!visible) return
+    const timer = setTimeout(() => setSlow(true), 400)
+    return () => clearTimeout(timer)
+  }, [visible])
+  const hide = () => {
+    setMounted(false)
+    setSlow(false)
+  }
   useEffect(() => {
     if (visible) {
       opacity.value = 1
@@ -2315,7 +2333,7 @@ function OpeningCover({
       return
     }
     opacity.value = withTiming(0, { duration: 200 }, (finished) => {
-      if (finished) scheduleOnRN(setMounted, false)
+      if (finished) scheduleOnRN(hide)
     })
     return () => cancelAnimation(opacity)
   }, [visible, opacity])
@@ -2328,7 +2346,7 @@ function OpeningCover({
       onLayout={() => cover.current?.measureInWindow((_, y) => setOffset(y))}
       style={[StyleSheet.absoluteFill, { backgroundColor: color }, fade]}
     >
-      {offset === null ? null : (
+      {offset === null || !slow ? null : (
         // Centered in what is visible between the floating header and the composer.
         <View
           style={{

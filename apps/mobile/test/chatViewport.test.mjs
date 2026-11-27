@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { appForeground, finishedAnswerRow, transcriptScrollState } from '../src/runtime/chatViewport.ts'
+import { appForeground, finishedAnswerRow, openingLanded, transcriptScrollState } from '../src/runtime/chatViewport.ts'
 import { transcript } from '../src/runtime/transcript.ts'
 
 test('jumping to latest stays hidden through intermediate animated scroll offsets', () => {
@@ -73,4 +73,13 @@ test('a finished answer taller than the room is read from its first line; one th
     null,
     'not measured yet',
   )
+})
+
+test('an opening thread is shown only once rows measured in have left it on its end', () => {
+  // Rows below the screen measured taller than estimated: the first scroll fell short of the new end.
+  assert.equal(openingLanded(2400, 1900, 3200), false)
+  assert.equal(openingLanded(2400, 2399, 3200), true)
+  // A chat that fits on screen has no end to reach, only content to draw.
+  assert.equal(openingLanded(null, -100, 600), true)
+  assert.equal(openingLanded(null, 0, 0), false)
 })
