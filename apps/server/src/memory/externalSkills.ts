@@ -21,6 +21,7 @@ import { ensureToolsOnPath, findExecutable } from '../providers/providerBinaries
 import { readSkillFolder, skillMetadata } from './skillFiles'
 import { toolKey } from '@ramu/shared/toolSync'
 import { setToolAvailability } from '../toolSync'
+import { containsSecret } from './secrets'
 
 export const SKILLS_CLI_VERSION = '1.7.2'
 
@@ -703,6 +704,59 @@ export class ExternalSkills {
             extra.signal,
             input.hosts === 'all',
           )
+        }),
+    )
+    server.registerTool(
+      'skill_create',
+      {
+        description:
+          'Write a new skill of the person\'s own, when they asked for one ("save this as a skill"): a name, when to use it, and the instructions. Ask the user scope when omitted, then show the text and wait for user approval. Learning never changes it; change it later with skill_update. For a skill that exists elsewhere use skill_install.',
+        inputSchema: {
+          name: z
+            .string()
+            .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+            .max(64)
+            .describe('Lowercase words joined by hyphens, such as review-checklist.'),
+          description: z.string().trim().min(1).max(1000).describe('When to use the skill.'),
+          content: z.string().trim().min(1).max(8000).describe('The instructions, as Markdown without frontmatter.'),
+          scope: z.enum(['user', 'project']).optional(),
+        },
+      },
+      (input, extra) =>
+        result(async () => {
+          if (containsSecret(`${input.description}\n${input.content}`))
+            throw new Error('This looks like a credential; never store secrets in a skill.')
+          const scope =
+            input.scope ??
+            (await ask(
+              'Where should this skill be available?',
+              ['This project', 'All projects', 'Cancel'],
+              extra.signal,
+            ))
+          if (scope === 'Cancel') return { cancelled: true }
+          if (!['user', 'project', 'All projects', 'This project'].includes(scope ?? ''))
+            throw new Error('Choose user or project scope explicitly.')
+          const user = scope === 'user' || scope === 'All projects'
+          if (!user && project === NO_PROJECT) throw new Error('Open a project thread to write project skills.')
+          const projectId = user ? null : project
+          // Refuse a bad or taken name before the person is asked to read the text.
+          this.checkName(input.name, projectId)
+          if (
+            (await ask(
+              `Add the skill ${input.name}?\nUse it: ${input.description}\nScope: ${user ? 'user' : 'project'}\n\n${input.content}`,
+              ['Add', 'Cancel'],
+              extra.signal,
+            )) !== 'Add'
+          )
+            return { cancelled: true }
+          const skill = this.create({ ...input, projectId })
+          return {
+            id: skill.id,
+            name: skill.name,
+            description: skill.description,
+            projectId: skill.projectId,
+            status: skill.status,
+          }
         }),
     )
     server.registerTool(

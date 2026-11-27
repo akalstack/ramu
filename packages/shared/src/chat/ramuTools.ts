@@ -38,6 +38,7 @@ const KNOWN = new Set([
   'skill_inspect',
   'skill_find',
   'skill_install',
+  'skill_create',
   'skill_list',
   'skill_update_from_source',
   'skill_remove',
@@ -399,6 +400,13 @@ export function describeRamuTool(call: RamuToolCall, result?: string): RamuToolR
         'Preparing skill installation',
         'sparkles',
         quote(text(data.name) ?? text(args.source)),
+      )
+    case 'skill_create':
+      return reply(
+        data.cancelled ? 'Cancelled writing a skill' : 'Wrote skill',
+        'Writing a skill',
+        'sparkles',
+        quote(text(data.name) ?? text(args.name)),
       )
     case 'skill_list':
       return reply('Listed installed skills', 'Listing installed skills', 'sparkles')
