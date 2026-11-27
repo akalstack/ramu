@@ -135,8 +135,11 @@ export function SettingsPanel({
     setSelected(scope.models.defaultSetId)
     setStaged(new Map())
     setError(null)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [scope.loadKey] by design; the values it reads beyond these are current as of that run
-  }, [scope.loadKey])
+    // A host never read in this window is still loading when it is chosen; the drafts are taken once it has loaded.
+    // Taking them only when the host changed left the last host's drafts against this host's settings, which read as
+    // unsaved changes and locked the host picker.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [scope.loadKey, scope.loading] by design; the values it reads beyond these are current as of that run
+  }, [scope.loadKey, scope.loading])
   const save = async () => {
     if (busy || !hasChanges) return
     setBusy(true)
