@@ -9,6 +9,7 @@ import type { Chat } from '../runtime/types'
 import { font, radius, space, useTheme } from '../theme'
 import { T, tap } from './ui'
 import { Shimmer } from './Motion'
+import { Glass } from './Glass'
 import { mobileThreadActivity } from '../runtime/threadActivity'
 
 /**
@@ -21,6 +22,7 @@ export function WorkingLine({
   sending,
   inline,
   quiet,
+  timed = true,
   onPress,
 }: {
   chat: Chat
@@ -28,6 +30,8 @@ export function WorkingLine({
   inline?: boolean
   /** Inline only: the newest row already says what the agent is doing, so the line keeps its place but says nothing. */
   quiet?: boolean
+  /** Inline only: the line counts the turn's time. Off while the turn's own top already counts it. */
+  timed?: boolean
   onPress?(): void
 }) {
   const store = useStore()
@@ -84,7 +88,7 @@ export function WorkingLine({
       >
         {quiet ? null : (
           <Shimmer size={font.control}>
-            {running && !chat.compacting && since && (chat.activityLabel ?? 'Working') === 'Working'
+            {timed && running && !chat.compacting && since && (chat.activityLabel ?? 'Working') === 'Working'
               ? translate(store.language, 'Working for {0}', { 0: elapsedText(now - since) })
               : t(running ? (chat.compacting ? 'Compacting context…' : (chat.activityLabel ?? 'Working')) : 'Sending…')}
           </Shimmer>
@@ -164,31 +168,21 @@ export function SyncLine({ what = 'messages', edge }: { what?: 'messages' | 'thr
           : { alignItems: 'center' }
       }
     >
-      <View
-        accessible
-        accessibilityRole="text"
-        accessibilityLabel={label}
-        accessibilityLiveRegion="polite"
-        style={{
-          height: 30,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: space.s,
-          paddingHorizontal: space.m,
-          borderRadius: 15,
-          backgroundColor: c.raised,
-          shadowColor: '#000',
-          shadowOpacity: 0.18,
-          shadowRadius: 8,
-          shadowOffset: { width: 0, height: 2 },
-          elevation: 3,
-        }}
-      >
-        <ActivityIndicator size="small" color={c.muted} style={{ transform: [{ scale: 0.75 }] }} />
-        <T size={font.control} tone="muted" numberOfLines={1}>
-          {label}
-        </T>
-      </View>
+      {/* The composer's glass, so it reads as part of the controls floating over the conversation. */}
+      <Glass floating radius={radius.full}>
+        <View
+          accessible
+          accessibilityRole="text"
+          accessibilityLabel={label}
+          accessibilityLiveRegion="polite"
+          style={{ height: 32, flexDirection: 'row', alignItems: 'center', gap: space.s, paddingHorizontal: space.m }}
+        >
+          <ActivityIndicator size="small" color={c.muted} style={{ transform: [{ scale: 0.75 }] }} />
+          <T size={font.control} tone="muted" numberOfLines={1}>
+            {label}
+          </T>
+        </View>
+      </Glass>
     </View>
   )
 }

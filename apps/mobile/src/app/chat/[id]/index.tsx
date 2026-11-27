@@ -903,6 +903,9 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
   // As on the desktop, once the running turn has a tool row its headline says what the agent is doing, so the status
   // line under it stays quiet instead of flashing Working between one step and the next.
   const turnRows = rows.slice(rows.findLastIndex((row) => row.kind === 'user') + 1)
+  // A running turn already counts at its own top ("Working for 9s"); the line at its end then only says what the agent
+  // is doing, as on the desktop, so the time is not shown twice.
+  const turnCounts = rows.some((row) => row.kind === 'summary' && !!row.running)
   const lastShowsWork =
     running && (rows.at(-1)?.kind === 'thinking' || turnRows.some((row) => row.kind === 'tool' || row.kind === 'tools'))
   // Stopped by you or failed since the last message: the empty send button becomes Continue.
@@ -1812,9 +1815,13 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                     <View style={{ gap: space.m, paddingTop: space.m, zIndex: 2 }}>
                       {/* The running turn's status at its end, as on the desktop: a shimmering label, unless the newest row
                         (reasoning, or a tool group at work) already says what the agent is doing. */}
-                      <WorkingLine inline quiet={lastShowsWork} chat={chat} sending={pending.length > 0} />
-                      {/* Floats over the last rows, just above the composer, so the transcript never moves for it. */}
-                      {syncShown ? <SyncLine edge="bottom" /> : null}
+                      <WorkingLine
+                        inline
+                        quiet={lastShowsWork}
+                        timed={!turnCounts}
+                        chat={chat}
+                        sending={pending.length > 0}
+                      />
                     </View>
                   }
                 />
@@ -2100,6 +2107,22 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                       />
                     )}
                   </ComposerDock>
+                  {/* Floats just above the message box, where Scroll to latest does, and over it when that shows, so
+                      the transcript never moves for it. */}
+                  {syncShown ? (
+                    <View
+                      pointerEvents="none"
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        right: 0,
+                        alignItems: 'center',
+                        bottom: composerHeight + space.s + (away ? 34 + space.s : 0),
+                      }}
+                    >
+                      <SyncLine />
+                    </View>
+                  ) : null}
                   <Presence
                     visible={away}
                     fade={false}
