@@ -22,7 +22,7 @@
     "web": "expo start --web",
     "export:ios": "expo export --platform ios --output-dir dist/ios",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test test/*.test.mjs",
+    "test": "node --test --test-timeout=60000 test/*.test.mjs",
     "gen:assets": "node scripts/gen-assets.mjs",
     "gen:terminal": "node scripts/gen-terminal.mjs",
     "export:android": "expo export --platform android --output-dir dist/android",
