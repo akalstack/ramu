@@ -9932,3 +9932,35 @@ test('every pull request row opens in full on the phone, a repository in no proj
   assert.equal(find(offline, 'PageScrollView').props.refreshControl, undefined)
   hooks.dispose()
 })
+
+test('the phone goal sheet sets this goal’s own turn limit, and offers none on a goal it cannot change', async () => {
+  const hooks = hookHarness()
+  const { GoalSheet } = load('components/GoalSheet.tsx', 'ios', {
+    react: hooks.react,
+    '@ramu/shared/types': await import('../../../packages/shared/src/types/goal.ts'),
+    '@ramu/shared/chat/goalHold': await import('../../../packages/shared/src/chat/goalHold.ts'),
+    './SettingRows': { ChoiceRow: 'ChoiceRow' },
+    './GoalVerifySheet': { GoalVerifySheet: 'GoalVerifySheet' },
+    './ui': { Button: 'Button', T: 'T' },
+  })
+  const sent = []
+  const goal = { objective: 'Ship the release', status: 'active', turns: 3, maxTurns: 7 }
+  const render = (props) =>
+    hooks.render(() => GoalSheet({ goal, defaultLimit: 20, onLimit: (limit) => sent.push(limit), ...props }))
+  const row = find(render(), 'ChoiceRow')
+  // Its own limit, kept among the common ones in order, beside Settings' default and none.
+  assert.equal(row.props.value, '7')
+  assert.deepEqual(
+    Array.from(row.props.options, (option) => option.value),
+    ['default', '5', '7', '10', '20', '50', '100', 'none'],
+  )
+  assert.equal(row.props.options[0].label, 'Settings default (20)')
+  for (const choice of ['10', 'none', 'default']) row.props.onChange(choice)
+  assert.deepEqual(sent, [10, null, 'default'])
+  // A goal following Settings shows that choice; no limit at all reads as none.
+  assert.equal(find(render({ goal: { ...goal, maxTurns: undefined } }), 'ChoiceRow').props.value, 'default')
+  assert.equal(find(render({ goal: { ...goal, maxTurns: null } }), 'ChoiceRow').props.value, 'none')
+  // A view-only device cannot change it, so the control is not offered.
+  assert.equal(find(render({ onLimit: undefined }), 'ChoiceRow'), undefined)
+  hooks.dispose()
+})
