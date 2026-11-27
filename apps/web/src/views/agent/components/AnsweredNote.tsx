@@ -1,17 +1,18 @@
-import { ArrowUp, ShieldQuestion } from 'lucide-react'
+import { ArrowUp, CornerDownRight, ShieldQuestion } from 'lucide-react'
 import { answerPairs } from '@ramu/shared/chat/questions'
 import { ChatActivityButton } from '../../../chat/ChatActivity'
 import { t as translate } from '../../../i18n'
 import { CARET_CLASS } from '../styles'
 
 /**
- * A sent answer: one line that leads back to the question's card, with each question and the answer given under it, so
- * the thread reads what was decided without scrolling up. Long ones are cut short; the card holds them in full.
+ * A sent answer, read like the agent's other activity: one line that leads back to the question's card, then each
+ * question with the answer given under it, indented to that line's text, so the thread reads what was decided without
+ * scrolling up. Long ones are cut short; the card holds them in full.
  */
 export function AnsweredNote({ requestId, body }: { requestId: string; body: string }) {
   const pairs = answerPairs(body)
   return (
-    <div className="flex max-w-[86%] flex-col items-end gap-1 self-end">
+    <div className="flex max-w-full flex-col gap-1">
       <ChatActivityButton type="button" title={translate('Show the question')} onClick={() => showQuestion(requestId)}>
         <ShieldQuestion size={13} />
         <span>
@@ -21,14 +22,21 @@ export function AnsweredNote({ requestId, body }: { requestId: string; body: str
         </span>
         <ArrowUp size={13} className={CARET_CLASS} />
       </ChatActivityButton>
-      {pairs.map((pair, index) => (
-        <div key={index} className="flex max-w-full flex-col items-end text-right text-caption leading-[1.45]">
-          {pair.question && (
-            <span className="max-w-full truncate text-muted-foreground">{pair.question.replace(/\*\*|__|`/g, '')}</span>
-          )}
-          <span className="line-clamp-2 max-w-full whitespace-pre-wrap [overflow-wrap:anywhere]">{pair.answer}</span>
-        </div>
-      ))}
+      <div className="answered-pairs flex flex-col gap-2 pl-[22px] text-caption leading-[1.45]">
+        {pairs.map((pair, index) => (
+          <div key={index} className="flex min-w-0 flex-col gap-0.5">
+            {pair.question && (
+              <span className="line-clamp-2 text-muted-foreground [overflow-wrap:anywhere]">
+                {pair.question.replace(/\*\*|__|`/g, '')}
+              </span>
+            )}
+            <span className="flex min-w-0 items-start gap-1.5 text-foreground">
+              <CornerDownRight size={12} className="mt-[3px] flex-none text-muted-foreground" aria-hidden />
+              <span className="line-clamp-3 min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{pair.answer}</span>
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
