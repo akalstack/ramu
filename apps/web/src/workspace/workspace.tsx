@@ -972,14 +972,15 @@ const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: 
           : undefined
         const target = projectId ?? current ?? NO_PROJECT
         if (target) {
-          const selectedWorkspace = target === current ? (isolated ?? null) : null
-          setComposingWorkspace(selectedWorkspace)
+          // A new thread starts on the project's default checkout, even from a thread in a worktree; the composer's
+          // checkout menu still offers that worktree.
+          setComposingWorkspace(null)
           if (composesOnHome(target)) {
             setUi((u) => ({ ...u, activeTaskId: null, sidebar: 'projects' }))
             setComposing(target)
             return
           }
-          const ctx = selectedWorkspace ? worktreeCtx(selectedWorkspace) : projectCtx(target)
+          const ctx = projectCtx(target)
           void refreshBindings(ctx)
           // Same project: keep the open file or terminal beside New chat. Another project starts on New chat alone.
           if (target !== current) updateTaskUi(ctx, (state) => ({ ...state, activeViewId: null }))

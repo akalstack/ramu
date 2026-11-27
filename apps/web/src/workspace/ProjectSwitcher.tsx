@@ -162,12 +162,8 @@ export function CheckoutSwitcher({ taskId, isolated, path }: { taskId: string; i
   const choice = (context: string, name: string): MenuEntry => ({
     key: context,
     selected: context === workspace,
-    label: (
-      <>
-        <span className="min-w-0 flex-1 truncate text-left">{name}</span>
-        {context === workspace && <Check size={13} />}
-      </>
-    ),
+    // The menu marks the selected entry itself.
+    label: <span className="min-w-0 flex-1 truncate text-left">{name}</span>,
     onSelect: () => open(context),
   })
   return (

@@ -1098,13 +1098,6 @@ export function NewThread({
                       </>
                     }
                     items={[
-                      {
-                        key: 'default',
-                        label: t('Use default'),
-                        onSelect: () => {
-                          workspaceDraft.choose({ mode: null, branch: workspaceDraft.choice.branch })
-                        },
-                      },
                       ...MODES.map((m) => ({
                         key: m.id,
                         disabled: m.id === 'worktree' && Boolean(options.data?.worktreeUnavailable),
