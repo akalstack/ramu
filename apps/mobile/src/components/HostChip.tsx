@@ -1,24 +1,29 @@
 import { useState } from 'react'
 import { useRouter } from 'expo-router'
-import { Network, Plus, Settings } from 'lucide-react-native'
+import { FolderGit2, Network, Plus, Settings } from 'lucide-react-native'
 import { counts, useStore } from '../runtime/store'
-import { ago, useT } from '../i18n'
+import { ago, useSay, useT } from '../i18n'
 import { Chip, ConnectionDot, Sheet } from './ui'
 import { SheetGroup, SheetOption } from './SheetOptions'
 
-type AllHosts = { all?: boolean; onAll?: (all: boolean) => void }
+type AllHosts = {
+  all?: boolean
+  onAll?: (all: boolean) => void
+  /** In All hosts: whether one repository's projects on several hosts show as one group or one per host. */
+  byHost?: { separate: boolean; onChange: (separate: boolean) => void }
+}
 
 /**
  * The one host control every tab leads its chip row with: the host it shows (or All hosts) and its connection; tap to
  * switch hosts or pair another. `onAll` offers All hosts, for a list that can merge every host; without a paired host
  * the chip pairs one.
  */
-export function HostChip({ all = false, onAll }: AllHosts) {
+export function HostChip({ all = false, onAll, byHost }: AllHosts) {
   const [open, setOpen] = useState(false)
   return (
     <>
       <HostChipButton all={all} onAll={onAll} onOpen={() => setOpen(true)} />
-      <HostSheet open={open} onClose={() => setOpen(false)} all={all} onAll={onAll} />
+      <HostSheet open={open} onClose={() => setOpen(false)} all={all} onAll={onAll} byHost={byHost} />
     </>
   )
 }
@@ -54,8 +59,15 @@ export function HostChipButton({
   )
 }
 
-export function HostSheet({ open, onClose, all = false, onAll }: AllHosts & { open: boolean; onClose: () => void }) {
+export function HostSheet({
+  open,
+  onClose,
+  all = false,
+  onAll,
+  byHost,
+}: AllHosts & { open: boolean; onClose: () => void }) {
   const t = useT()
+  const say = useSay()
   const router = useRouter()
   const store = useStore()
   const merged = all && !!onAll
@@ -95,6 +107,23 @@ export function HostSheet({ open, onClose, all = false, onAll }: AllHosts & { op
           )
         })}
       </SheetGroup>
+      {merged && byHost ? (
+        <SheetGroup title={say('A project on several hosts')}>
+          <SheetOption
+            icon={FolderGit2}
+            title={say('One group')}
+            help={say('A repository on several hosts is one project, each thread naming its host.')}
+            selected={!byHost.separate}
+            onPress={() => choose(() => byHost.onChange(false))}
+          />
+          <SheetOption
+            icon={Network}
+            title={say('Separate by host')}
+            selected={byHost.separate}
+            onPress={() => choose(() => byHost.onChange(true))}
+          />
+        </SheetGroup>
+      ) : null}
       <SheetGroup>
         <SheetOption icon={Plus} title={t.pair} onPress={() => choose(() => router.push('/pair'))} />
         <SheetOption icon={Settings} title={t.manageHosts} onPress={() => choose(() => router.push('/computers'))} />

@@ -117,3 +117,28 @@ test('a project moves one place in its host’s order, and not past either end',
   assert.equal(moveProject(['a', 'b', 'c'], 'c', 1), null)
   assert.equal(moveProject(['a', 'b'], 'gone', 1), null)
 })
+
+test('one repository on two hosts is one group, led by the host it was last worked on', () => {
+  const projects = [
+    { id: 'a:ramu', computerId: 'a', repository: 'github.com/akalstack/ramu' },
+    { id: 'a:local', computerId: 'a' },
+    { id: 'b:ramu', computerId: 'b', repository: 'github.com/akalstack/ramu' },
+  ]
+  const threads = [
+    thread('old', 'a:ramu', 1, 'idle', 'a'),
+    thread('new', 'b:ramu', 5, 'idle', 'b'),
+    thread('mine', 'a:local', 3, 'idle', 'a'),
+  ]
+  const merged = groupThreads(threads, projects, { ...none, mergeHosts: true })
+  assert.deepEqual(
+    merged.map((group) => [group.computerId, group.threads.map((x) => x.id), group.members?.length ?? 1]),
+    [
+      // Newest first inside the group, and its menu and New thread go to the host worked on last.
+      ['b', ['new', 'old'], 2],
+      // A project with no remote stays its own, under its host.
+      ['a', ['mine'], 1],
+    ],
+  )
+  // Separate by host: the same repository is one group per host.
+  assert.equal(groupThreads(threads, projects, none).length, 3)
+})

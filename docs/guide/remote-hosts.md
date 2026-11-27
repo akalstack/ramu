@@ -181,6 +181,8 @@ These threads run at **Allow edits**, show **Started from a terminal by ‹name�
 
 See the [mobile guide](../../apps/mobile/README.md) to pair the iOS or Android app.
 
+In the phone's thread list, **All hosts** shows one project group for a repository checked out on several hosts, matched by its remote. Each thread in it names its host, and the group's menu and **New thread** act on the host you last worked on there. A project without a remote stays under its own host. **A project on several hosts → Separate by host**, in the host picker, keeps one group per host instead; the phone remembers the choice.
+
 Terminals live on the host, so every device shows the same shells: what you type on one appears on the other. A terminal opened on the phone does not open a tab on the desktop by itself; the desktop's Terminal button gets a dot, and the shell joins the panel the next time you open it (straight away if the panel is already open).
 
 **Run** on a shell code block in a reply (`bash`, `sh`, `zsh`, `console` and the like) types that command into the thread's workspace shell that is not running anything, or opens a new one in the workspace folder, and shows it: the terminal panel on the desktop, the terminal screen on the phone. A `console` block runs only its lines after a `$ ` prompt, not the output shown between them. It needs the **terminals** permission on a paired device, and a viewer pairing does not get it.

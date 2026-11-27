@@ -39,6 +39,11 @@ export type ThreadGroup<T, P> = {
   /** Running, waiting and failed threads, so a collapsed header can still say work needs attention. */
   running: number
   attention: number
+  /**
+   * The same repository's project on every host that has it, when groups merge across hosts; the group's own
+   * `computerId`, `projectId` and `project` are the one worked in last. Absent for a group of one host.
+   */
+  members?: { computerId: string; projectId: string; project: P }[]
 }
 
 /**
@@ -49,23 +54,46 @@ export type ThreadGroup<T, P> = {
  */
 export function groupThreads<
   T extends { computerId: string; projectId: string; status: string; lastActiveAt: number },
-  P extends { id: string; computerId: string },
+  P extends { id: string; computerId: string; repository?: string },
 >(
   threads: readonly T[],
   projects: readonly P[],
-  options: { limit: number; expanded: ReadonlySet<string>; collapsed: ReadonlySet<string> },
+  options: {
+    limit: number
+    expanded: ReadonlySet<string>
+    collapsed: ReadonlySet<string>
+    /** One group for a repository however many hosts have it, as T3 Code groups by repository. */
+    mergeHosts?: boolean
+  },
 ): ThreadGroup<T, P>[] {
-  const buckets = new Map<string, { computerId: string; projectId: string; project?: P; threads: T[] }>()
-  for (const project of projects)
-    buckets.set(groupKey(project.computerId, project.id), {
-      computerId: project.computerId,
-      projectId: project.id,
-      project,
-      threads: [],
-    })
+  type Bucket = {
+    computerId: string
+    projectId: string
+    project?: P
+    threads: T[]
+    members: { computerId: string; projectId: string; project: P }[]
+  }
+  const buckets = new Map<string, Bucket>()
+  // Where each host's project lands: its own key, or with the rest of its repository when hosts merge.
+  const keyOf = new Map<string, string>()
+  for (const project of projects) {
+    const own = groupKey(project.computerId, project.id)
+    const key = options.mergeHosts && project.repository ? `repository\u0000${project.repository}` : own
+    keyOf.set(own, key)
+    const member = { computerId: project.computerId, projectId: project.id, project }
+    const bucket = buckets.get(key)
+    if (bucket) bucket.members.push(member)
+    else buckets.set(key, { ...member, threads: [], members: [member] })
+  }
   for (const thread of threads) {
-    const key = groupKey(thread.computerId, thread.projectId)
-    const bucket = buckets.get(key) ?? { computerId: thread.computerId, projectId: thread.projectId, threads: [] }
+    const own = groupKey(thread.computerId, thread.projectId)
+    const key = keyOf.get(own) ?? own
+    const bucket = buckets.get(key) ?? {
+      computerId: thread.computerId,
+      projectId: thread.projectId,
+      threads: [],
+      members: [],
+    }
     bucket.threads.push(thread)
     buckets.set(key, bucket)
   }
@@ -79,11 +107,20 @@ export function groupThreads<
           : options.expanded.has(key)
             ? sorted
             : sorted.filter((thread, index) => index < options.limit || active(thread.status))
+        // A merged group acts on the host it was last worked on, so its menu and New thread go where the work is.
+        const lead =
+          bucket.members.length > 1
+            ? (bucket.members.find(
+                (member) =>
+                  sorted[0] && member.computerId === sorted[0].computerId && member.projectId === sorted[0].projectId,
+              ) ?? bucket.members[0]!)
+            : undefined
         return {
           key,
-          computerId: bucket.computerId,
-          projectId: bucket.projectId,
-          project: bucket.project,
+          computerId: lead?.computerId ?? bucket.computerId,
+          projectId: lead?.projectId ?? bucket.projectId,
+          project: lead?.project ?? bucket.project,
+          ...(bucket.members.length > 1 ? { members: bucket.members } : {}),
           threads: visible,
           total: sorted.length,
           hidden: sorted.length - visible.length,

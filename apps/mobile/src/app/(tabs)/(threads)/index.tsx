@@ -88,6 +88,8 @@ const DONE_KEY = 'section:done'
 
 /** How this phone arranges projects by identity: all (default), grouped, or `only:<id>`. */
 const IDENTITY_VIEW_KEY = 'pref-device:identityView'
+/** This phone's own choice: one repository's projects on several hosts as one group (the default) or one per host. */
+const PROJECTS_BY_HOST_KEY = 'pref-device:projectsByHost'
 
 export default function Threads() {
   const { c } = useTheme()
@@ -100,6 +102,7 @@ export default function Threads() {
   const multi = computers.length > 1
   const [allHosts, setAllHosts] = useState(true)
   const merged = multi && allHosts
+  const separateHosts = store.drafts?.[PROJECTS_BY_HOST_KEY] === 'separate'
   // A message being delivered to a connected computer is in the outbox for a moment; only stuck ones (offline or uncertain) belong here.
   const outbox = allOutbox.filter(
     (o) =>
@@ -317,7 +320,12 @@ export default function Threads() {
       }
     // Folded runs count toward a section's "Show more", so a section holding only folded runs can still open them.
     const order = identityList?.map((identity) => identity.id) ?? []
-    const groups = groupThreads(listed, projectList, { limit: PER_PROJECT, expanded, collapsed })
+    const groups = groupThreads(listed, projectList, {
+      limit: PER_PROJECT,
+      expanded,
+      collapsed,
+      mergeHosts: merged && !separateHosts,
+    })
       .map((g) =>
         expanded.has(g.key) || collapsed.has(g.key) ? g : { ...g, hidden: g.hidden + (folded.get(g.key) ?? 0) },
       )
@@ -344,6 +352,8 @@ export default function Threads() {
                 chat,
                 divider: i > 0,
                 inProject: true,
+                // A group across hosts says on each thread which host it runs on.
+                ...(g.members ? { project: hostName(chat.computerId) } : {}),
                 earlierRuns: expanded.has(g.key) ? undefined : runs.earlierRuns[chat.id],
               }) as HomeRow,
           ),
@@ -390,6 +400,7 @@ export default function Threads() {
     filter,
     recentMode,
     merged,
+    separateHosts,
     projects,
     identities,
     identityView,
@@ -542,7 +553,11 @@ export default function Threads() {
           const p = g.project
           const name =
             p?.name ?? (g.projectId === STANDALONE ? t.standalone : translate(store.language, 'Unknown project'))
-          const host = merged ? hostName(g.computerId) : undefined
+          const host = g.members
+            ? [...new Set(g.members.map((member) => hostName(member.computerId)))].filter(Boolean).join(', ')
+            : merged
+              ? hostName(g.computerId)
+              : undefined
           const identity = p ? projectIdentity(identities, p.id) : null
           // The branch the project's own checkout has out, said once here instead of on each thread working in it.
           const branch = scoped.find(
@@ -824,7 +839,14 @@ export default function Threads() {
               style={{ flexGrow: 0 }}
               contentContainerStyle={{ paddingHorizontal: space.l, paddingTop: space.m, gap: space.s }}
             >
-              <HostChip all={merged} onAll={multi ? setAllHosts : undefined} />
+              <HostChip
+                all={merged}
+                onAll={multi ? setAllHosts : undefined}
+                byHost={{
+                  separate: separateHosts,
+                  onChange: (separate) => store.setDraft(PROJECTS_BY_HOST_KEY, separate ? 'separate' : ''),
+                }}
+              />
               {identityList && !recentMode ? (
                 <>
                   <Chip

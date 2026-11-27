@@ -2257,6 +2257,11 @@ export const indonesian: Readonly<Record<string, string>> = {
   'One provider for all': 'Satu provider untuk semua',
   'All sub-agents use': 'Semua sub-agent memakai',
   'One model for all': 'Satu model untuk semua',
+  'A project on several hosts': 'Proyek di beberapa host',
+  'One group': 'Satu grup',
+  'A repository on several hosts is one project, each thread naming its host.':
+    'Repositori di beberapa host menjadi satu proyek, dan setiap utas menyebut host-nya.',
+  'Separate by host': 'Pisahkan per host',
   'The model every helper runs on.': 'Model yang dipakai setiap helper.',
   'Automatic updates': 'Pembaruan otomatis',
   'Update the CLI when a newer one is out.': 'Perbarui CLI saat versi lebih baru tersedia.',
