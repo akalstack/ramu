@@ -1,4 +1,4 @@
-import { providerAccountId } from '../providers/providerBinaries'
+import { knownProviderAccount, providerAccountId } from '../providers/providerBinaries'
 import { supportsProviderAccounts } from '@ramu/shared/providers/providers'
 import type { AgentRunner, AgentRunnerFactory } from './agentRunner'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -186,6 +186,11 @@ export class BackgroundAnalysis {
     { timeoutMs = 90_000, signal, defer, attachments }: AnalyzeOptions = {},
   ): Promise<{ message: string; provider: AgentProvider; model: string }> {
     if (this.host.shutdown()) throw new Error('Background service is stopping')
+    // A chosen login this host does not have (a setting copied from another host) runs on the provider's own instead.
+    if (settings.accountId && !knownProviderAccount(settings.provider, settings.accountId)) {
+      const { accountId: _missing, ...rest } = settings
+      settings = rest
+    }
     if (
       supportsProviderAccounts(settings.provider) &&
       settings.accountId === undefined &&

@@ -34,6 +34,15 @@ export function providerAccountId(provider: AgentProvider) {
   return configuration[provider]?.accountId || 'default'
 }
 
+/**
+ * Whether this host has the login `id` for `provider`. A setting copied from another host can name an account added
+ * there and never here.
+ */
+export function knownProviderAccount(provider: AgentProvider, id: string): boolean {
+  const config = configuration[provider]
+  return id === 'default' || id === config?.accountId || !!config?.accounts?.some((account) => account.id === id)
+}
+
 let allowAccount: (provider: AgentProvider, accountId: string, taskId: string) => boolean = () => true
 
 /** Which logins a thread may use: those of its project's identity and those for every identity. */

@@ -18,6 +18,7 @@ import { FallbackRouter, type FallbackRouterHost } from '../src/agent/fallbackRo
 import { UsageService } from '../src/providers/usage'
 import { usageOnlyAtLimit } from '@ramu/shared/usage/presentation'
 import { openDb, type Db } from '../src/db'
+import { configureProviderBinaries } from '../src/providers/providerBinaries'
 
 const catalogs: ProviderCatalog[] = AGENT_PROVIDERS.map((provider) => ({
   provider,
@@ -535,4 +536,40 @@ it('pauses a limit fallback instead of moving a thread onto a login that would l
   await router.fallback('s', 'high')
   expect(launched).toBe(1)
   expect(events[0]).toMatchObject({ kind: 'settings', mcpAttention: attention })
+})
+
+it('background work set to a login this host does not have runs on the provider’s default login', async () => {
+  const runs: AgentSettings[] = []
+  const factory: AgentRunnerFactory = (_scope, current, emit) => ({
+    start: async () => {
+      runs.push(current)
+      emit({ kind: 'text', text: 'Named' })
+      emit({ kind: 'result', text: 'done', isError: false, costUsd: null })
+    },
+    send: async () => {},
+    steer: async () => {},
+    interrupt: async () => {},
+    stop: async () => {},
+    replyPermission() {},
+    replyQuestion() {},
+  })
+  const noQuery: QueryFn = () => {
+    throw new Error('Unexpected provider query')
+  }
+  configureProviderBinaries(prefs.providerBinaries)
+  service = new AgentService(db, () => {}, noQuery, { cursor: factory } satisfies ProviderRunners)
+  vi.spyOn(service, 'catalog').mockResolvedValue(catalogs)
+  service.apiKeyLogins = apiKeyLogins
+  service.preferences = () => prefs
+  service.usage = new UsageService(
+    () => [],
+    () => {},
+    () => {},
+  )
+  service.refreshAccountUsage = vi.fn(async () => {})
+  // Copied from another host, where an account "elsewhere" was added.
+  await service.analyze('Name the branch', { ...settings('cursor'), accountId: 'elsewhere' })
+  // No login named: the provider's own.
+  expect(runs.map((s) => [s.provider, s.accountId])).toEqual([['cursor', undefined]])
+  configureProviderBinaries({})
 })
