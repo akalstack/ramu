@@ -1370,8 +1370,10 @@ test('helper details honor capabilities and disconnected hosts without losing th
       calls.push(args)
     },
   }
-  const { HelperDetails } = load('components/Helpers.tsx', 'android', {
+  const { HelperBody } = load('components/Helpers.tsx', 'android', {
     react: {
+      createContext: () => ({}),
+      useContext: () => null,
       memo: (component) => component,
       useState: (value) => [value === '' ? 'hello' : value, () => {}],
       useEffect() {},
@@ -1382,7 +1384,7 @@ test('helper details honor capabilities and disconnected hosts without losing th
   })
   const chat = { id: 'remote:chat', computerId: 'remote', sessionId: 'parent' }
   const task = { agentId: 'helper', id: 'helper', name: 'Helper', status: 'running', canMessage: false, canStop: false }
-  const readonly = HelperDetails({ task, chat, onClose() {} })
+  const readonly = HelperBody({ task, chat, onClose() {} })
   assert.equal(
     nodes(readonly).some((node) => node.type === 'TextInput'),
     false,
@@ -1391,14 +1393,14 @@ test('helper details honor capabilities and disconnected hosts without losing th
     nodes(readonly).some((node) => node.type === 'Button' && node.props.title === 'Stop agent'),
     false,
   )
-  const capable = HelperDetails({ task: { ...task, canMessage: true, canStop: true }, chat, onClose() {} })
+  const capable = HelperBody({ task: { ...task, canMessage: true, canStop: true }, chat, onClose() {} })
   const send = nodes(capable).find((node) => node.type === 'Button' && node.props.title === 'Send')
   send.props.onPress()
   send.props.onPress()
   await Promise.resolve()
   assert.deepEqual(calls, [['remote', 'agent.messageTask', 'parent', 'helper', 'hello']])
   online = false
-  const offline = HelperDetails({ task: { ...task, canMessage: true, canStop: true }, chat, onClose() {} })
+  const offline = HelperBody({ task: { ...task, canMessage: true, canStop: true }, chat, onClose() {} })
   assert.equal(
     nodes(offline).some((node) => node.type === 'TextInput'),
     false,
@@ -5943,15 +5945,15 @@ for (const os of ['ios', 'android']) {
         calls.push(args)
       },
     }
-    const { HelperDetails } = load('components/Helpers.tsx', os, {
-      react: hooks.react,
+    const { HelperBody } = load('components/Helpers.tsx', os, {
+      react: { ...hooks.react, createContext: () => ({}), useContext: () => null },
       '../runtime/store': { useStore: () => store },
       '@ramu/shared/chat/helperPresentation': helpers,
       'react-native': { Alert: { alert: (...args) => confirmations.push(args) } },
     })
     const task = { agentId: 'helper', name: 'Helper', status: 'running', canMessage: true, canStop: true }
     const render = () =>
-      hooks.render(() => HelperDetails({ task, chat: { computerId: 'host', sessionId: 'parent' }, onClose() {} }))
+      hooks.render(() => HelperBody({ task, chat: { computerId: 'host', sessionId: 'parent' }, onClose() {} }))
     let tree = render()
     find(tree, 'TextInput').props.onChangeText('keep my draft')
     tree = render()
@@ -6002,6 +6004,7 @@ for (const os of ['ios', 'android']) {
       'expo-router': { useLocalSearchParams: () => ({ id: 'chat' }) },
       '../../../runtime/store': { useStore: () => store, useChat: () => chat },
       '../../../components/ui': { T: 'T', tap() {} },
+      '../../../components/Composer': { Composer: 'Composer' },
       '../../../components/Keyboard': {
         useKeyboardInset: () => 0,
         useKeyboardHeight: () => ({ height: 0 }),
@@ -6020,20 +6023,18 @@ for (const os of ['ios', 'android']) {
     render()
     await settle()
     let tree = render()
-    find(tree, 'TextInput').props.onChangeText('unsent follow-up')
-    tree = render()
-    const ask = nodes(tree).find((node) => node.props.accessibilityLabel === 'Ask')
+    // The thread's own composer keeps the unsent follow-up under its own draft key, which the access change keeps.
+    const composer = find(tree, 'Composer')
     // One side chat per thread: Clear (trash) is the only header action; keep it across the access change.
     find(tree, 'Header').props.right.props.onPress()
     calls.length = 0
     store = { ...store, computers: [{ id: 'host', status: 'online', access: 'viewer' }] }
     tree = render()
-    assert.equal(find(tree, 'TextInput').props.value, 'unsent follow-up')
-    assert.equal(find(tree, 'TextInput').props.editable, false)
+    assert.equal(find(tree, 'Composer').props.draftKey, composer.props.draftKey)
     // A viewer cannot clear; the conversation stays readable.
     assert.equal(find(tree, 'Header').props.right, null)
     assert.ok(nodes(tree).some((node) => node.props.children === 'existing question'))
-    ask.props.onPress()
+    await find(tree, 'Composer').props.onSend('unsent follow-up', 'send', [])
     confirmations[0][2].find((item) => item.style === 'destructive').onPress()
     await settle()
     assert.deepEqual(calls, [])
@@ -8756,6 +8757,7 @@ test('side-question input uses the thread dock and lifts the transcript inset wi
     },
     '../../../components/Keyboard': keyboard,
     '../../../components/ui': { T: 'T', tap() {} },
+    '../../../components/Composer': { Composer: 'Composer' },
     '../../../components/Screen': {
       Screen: 'Screen',
       Header: 'Header',
@@ -8770,7 +8772,6 @@ test('side-question input uses the thread dock and lifts the transcript inset wi
   list.props.onLayout({ nativeEvent: { layout: { height: 500 } } })
   list.props.onContentSizeChange(400, 1000)
   find(tree, 'ComposerDock').props.onLayout({ nativeEvent: { layout: { height: 100 } } })
-  find(tree, 'TextInput').props.onChangeText('draft stays here')
   tree = render()
   assert.equal(find(tree, 'ScrollView').props.contentInset.bottom, 100)
   keyboardHeight = 300
@@ -8779,7 +8780,6 @@ test('side-question input uses the thread dock and lifts the transcript inset wi
   assert.equal(find(tree, 'ScrollView').props.automaticallyAdjustKeyboardInsets, false)
   assert.equal(find(tree, 'ScrollView').props.contentInset.bottom, 374)
   assert.equal(find(tree, 'ScrollView').props.contentContainerStyle.paddingBottom, 24)
-  assert.equal(find(tree, 'TextInput').props.value, 'draft stays here')
   await settle()
   assert.ok(
     scrolls.some(({ y }) => y === 874),
@@ -8792,7 +8792,86 @@ test('side-question input uses the thread dock and lifts the transcript inset wi
   keyboardHeight = 0
   tree = render()
   assert.equal(find(tree, 'ScrollView').props.contentInset.bottom, 100)
-  assert.equal(find(tree, 'TextInput').props.value, 'draft stays here')
+  hooks.dispose()
+})
+
+test('a side question is answered on the model and login picked in the thread’s own composer, with its files', async () => {
+  const hooks = hookHarness()
+  const calls = []
+  const chat = {
+    id: 'chat',
+    taskId: 'task',
+    computerId: 'host',
+    sessionId: 'session',
+    title: 'Task',
+    provider: 'claude-code',
+    model: 'fable',
+    effort: 'high',
+    settings: { accountId: 'work' },
+  }
+  const { default: AsideScreen } = load('app/chat/[id]/aside.tsx', 'ios', {
+    react: hooks.react,
+    'expo-router': { useLocalSearchParams: () => ({ id: 'chat', quote: 'quoted passage' }) },
+    'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 59, bottom: 34 }) },
+    '../../../runtime/store': {
+      useChat: () => chat,
+      useStore: () => ({
+        language: 'en',
+        drafts: {},
+        computers: [{ id: 'host', status: 'online', access: 'owner' }],
+        subscribe: () => () => {},
+        watch: () => () => {},
+        invoke: async (...args) => {
+          calls.push(args)
+          return []
+        },
+      }),
+    },
+    '../../../components/Keyboard': {
+      useKeyboardHeight: () => ({ height: 0 }),
+      KeyboardLift: 'KeyboardLift',
+      ComposerDock: 'ComposerDock',
+    },
+    '../../../components/ui': { T: 'T', tap() {} },
+    '../../../components/Composer': { Composer: 'Composer' },
+    '../../../components/Screen': {
+      Screen: 'Screen',
+      Header: 'Header',
+      HeaderButton: 'HeaderButton',
+      PageScrollView: 'ScrollView',
+    },
+  })
+  const render = () => hooks.render(() => AsideScreen())
+  let tree = render()
+  // It starts on what the thread runs, its login included.
+  assert.deepEqual(JSON.parse(JSON.stringify(find(tree, 'Composer').props.model)), {
+    provider: 'claude-code',
+    model: 'fable',
+    effort: 'high',
+    settings: { accountId: 'work' },
+  })
+  find(tree, 'Composer').props.onModel({
+    provider: 'codex',
+    model: 'gpt',
+    effort: 'low',
+    settings: { accountId: 'personal' },
+  })
+  tree = render()
+  calls.length = 0
+  await find(tree, 'Composer').props.onSend('Why this way?', 'send', ['file-1'])
+  const ask = calls.find((call) => call[1] === 'aside.ask')
+  assert.deepEqual(JSON.parse(JSON.stringify(ask.slice(2))), [
+    'session',
+    null,
+    'quoted passage',
+    'assistant',
+    'Why this way?',
+    null,
+    {
+      model: { provider: 'codex', model: 'gpt', effort: 'low', accountId: 'personal' },
+      attachmentIds: ['file-1'],
+    },
+  ])
   hooks.dispose()
 })
 

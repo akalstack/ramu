@@ -1,7 +1,7 @@
 import { useSay } from '../i18n'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { AppState, Alert, Pressable, TextInput, View } from 'react-native'
-import { useFocusEffect } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 import { Bot, CircleCheck, CircleSlash, CircleX } from 'lucide-react-native'
 import {
   helperActions,
@@ -153,7 +153,37 @@ function HelperRow({
     </Pressable>
   )
 }
+/**
+ * How a helper row opens its agent: on a screen of its own, as the desktop opens it beside the thread. Inside a sheet
+ * the sheet closes first, since iOS shows nothing pushed beneath a sheet.
+ */
+export const HelperOpener = createContext<((open: () => void) => void) | null>(null)
+
+function useOpenHelper(chat: Chat) {
+  const router = useRouter()
+  const wrap = useContext(HelperOpener)
+  return (agentId: string) => {
+    const go = () => router.push({ pathname: '/chat/[id]/agent', params: { id: chat.id, agent: agentId } })
+    if (wrap) wrap(go)
+    else go()
+  }
+}
+
+/** A background command in a sheet over its list: its output, a message box when it takes one, and Stop. */
 export function HelperDetails({ task, chat, onClose }: { task: Helper | undefined; chat: Chat; onClose: () => void }) {
+  if (!task) return null
+  return (
+    <Sheet open onClose={onClose} title={task.name}>
+      <HelperBody task={task} chat={chat} onClose={onClose} />
+    </Sheet>
+  )
+}
+
+/**
+ * Everything about one helper: how it is doing, its task, output, changes and report, a message box and Stop. Drawn on
+ * the agent's own screen, or in a sheet for a background command; `onClose` adds a way back to the thread.
+ */
+export function HelperBody({ task, chat, onClose }: { task: Helper; chat: Chat; onClose?: () => void }) {
   const store = useStore()
   const say = useSay()
   const { c } = useTheme()
@@ -165,8 +195,7 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
   const latestStore = useRef(store)
   latestStore.current = store
   const id = store.language === 'id'
-  useEffect(() => setDraft(''), [task?.agentId])
-  if (!task) return null
+  useEffect(() => setDraft(''), [task.agentId])
   const command = task.taskType === 'local_bash'
   const online = store.isOnline(chat.computerId)
   const viewOnly = store.computers?.find((host) => host.id === chat.computerId)?.access === 'viewer'
@@ -207,119 +236,117 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
       ],
     )
   return (
-    <Sheet open onClose={onClose} title={task.name}>
-      <View style={{ paddingHorizontal: space.l, paddingBottom: space.m, gap: space.m }}>
-        <T tone="muted">
-          {!online ? `${say('Last known')} · ` : ''}
-          {say(helperStatusLabel(task))}
-        </T>
-        <T size={font.caption} tone="muted">
+    <View style={{ paddingHorizontal: space.l, paddingBottom: space.m, gap: space.m }}>
+      <T tone="muted">
+        {!online ? `${say('Last known')} · ` : ''}
+        {say(helperStatusLabel(task))}
+      </T>
+      <T size={font.caption} tone="muted">
+        {[
+          task.host ? say('On {0}', { 0: task.host }) : undefined,
+          task.provider ? providerNames[task.provider] : undefined,
+          task.model,
+          task.effort,
+          task.isolated ? say('Own copy') : undefined,
+          task.background ? say('Background') : undefined,
+        ]
+          .filter(Boolean)
+          .join(' · ')}
+      </T>
+      <HelperTime task={task} online={online} />
+      {task.recoveryError ? <T tone="muted">{task.recoveryError}</T> : null}
+      {/* A command's description is already the sheet's title; saying it again under Task only pushes its output down. */}
+      {task.prompt && !(command && task.prompt.trim() === task.name.trim()) ? (
+        <>
+          <T weight="600">{say('Task')}</T>
+          <T copyable={task.prompt}>{task.prompt}</T>
+        </>
+      ) : null}
+      {task.log ? (
+        <>
+          <T weight="600">{task.log.length > shown ? say('Output excerpt') : say('Output')}</T>
+          {command ? (
+            <T mono size={font.caption} selectable>
+              {task.log.slice(-shown)}
+            </T>
+          ) : (
+            <Markdown text={task.log.slice(-shown)} />
+          )}
+          {task.log.length > shown ? (
+            <Button
+              kind="ghost"
+              title={say('Show earlier output')}
+              onPress={() => setShown((current) => current + OUTPUT_PAGE)}
+            />
+          ) : null}
+        </>
+      ) : null}
+      {task.work ? (
+        <>
+          <T weight="600">{say('Changes')}</T>
+          <T tone="muted" size={font.caption}>
+            {workLine(task.work, say)}
+          </T>
+          {task.work.paths.map((path) => (
+            <T key={path} size={font.caption} mono numberOfLines={1}>
+              {path}
+            </T>
+          ))}
+        </>
+      ) : null}
+      {task.summary || task.error ? (
+        <>
+          <T weight="600">{say('Report')}</T>
+          <Markdown text={task.error ?? task.summary ?? ''} />
+        </>
+      ) : null}
+      {task.toolUses !== undefined || task.tokens !== undefined ? (
+        <T tone="muted" size={font.caption}>
           {[
-            task.host ? say('On {0}', { 0: task.host }) : undefined,
-            task.provider ? providerNames[task.provider] : undefined,
-            task.model,
-            task.effort,
-            task.isolated ? say('Own copy') : undefined,
-            task.background ? say('Background') : undefined,
+            task.toolUses !== undefined ? say('{0} tools', { 0: task.toolUses }) : '',
+            task.tokens !== undefined ? say('{0} tokens', { 0: task.tokens }) : '',
           ]
             .filter(Boolean)
             .join(' · ')}
         </T>
-        <HelperTime task={task} online={online} />
-        {task.recoveryError ? <T tone="muted">{task.recoveryError}</T> : null}
-        {/* A command's description is already the sheet's title; saying it again under Task only pushes its output down. */}
-        {task.prompt && !(command && task.prompt.trim() === task.name.trim()) ? (
-          <>
-            <T weight="600">{say('Task')}</T>
-            <T copyable={task.prompt}>{task.prompt}</T>
-          </>
-        ) : null}
-        {task.log ? (
-          <>
-            <T weight="600">{task.log.length > shown ? say('Output excerpt') : say('Output')}</T>
-            {command ? (
-              <T mono size={font.caption} selectable>
-                {task.log.slice(-shown)}
-              </T>
-            ) : (
-              <Markdown text={task.log.slice(-shown)} />
-            )}
-            {task.log.length > shown ? (
-              <Button
-                kind="ghost"
-                title={say('Show earlier output')}
-                onPress={() => setShown((current) => current + OUTPUT_PAGE)}
-              />
-            ) : null}
-          </>
-        ) : null}
-        {task.work ? (
-          <>
-            <T weight="600">{say('Changes')}</T>
-            <T tone="muted" size={font.caption}>
-              {workLine(task.work, say)}
-            </T>
-            {task.work.paths.map((path) => (
-              <T key={path} size={font.caption} mono numberOfLines={1}>
-                {path}
-              </T>
-            ))}
-          </>
-        ) : null}
-        {task.summary || task.error ? (
-          <>
-            <T weight="600">{say('Report')}</T>
-            <Markdown text={task.error ?? task.summary ?? ''} />
-          </>
-        ) : null}
-        {task.toolUses !== undefined || task.tokens !== undefined ? (
-          <T tone="muted" size={font.caption}>
-            {[
-              task.toolUses !== undefined ? say('{0} tools', { 0: task.toolUses }) : '',
-              task.tokens !== undefined ? say('{0} tokens', { 0: task.tokens }) : '',
-            ]
-              .filter(Boolean)
-              .join(' · ')}
-          </T>
-        ) : null}
-        {chat.sessionId && actions.canMessage ? (
-          <View style={{ flexDirection: 'row', gap: space.s, alignItems: 'flex-end' }}>
-            <TextInput
-              accessibilityLabel={say('Message {0}', { 0: task.name })}
-              value={draft}
-              onChangeText={setDraft}
-              multiline
-              editable={!viewOnly && !sending}
-              placeholder={say('Message {0}', { 0: task.name })}
-              placeholderTextColor={c.placeholder}
-              style={{
-                flex: 1,
-                maxHeight: 120,
-                minHeight: 44,
-                padding: space.m,
-                color: c.text,
-                backgroundColor: c.fill,
-                borderRadius: radius.m,
-              }}
-            />
-            <Button title={say('Send')} disabled={viewOnly || !draft.trim() || sending} onPress={() => void send()} />
-          </View>
-        ) : (
-          <T tone="muted" size={font.caption}>
-            {!online ? say('Reconnect to use agent controls.') : say('This agent does not support direct messages.')}
-          </T>
-        )}
-        {viewOnly ? <T tone="muted">{VIEW_ONLY_WRITE_NOTICE[id ? 'id' : 'en']}</T> : null}
-        {chat.sessionId && actions.canStop && !viewOnly ? (
-          <Button
-            kind="danger"
-            title={task.taskType === 'local_bash' ? say('Stop command') : say('Stop agent')}
-            onPress={stop}
+      ) : null}
+      {chat.sessionId && actions.canMessage ? (
+        <View style={{ flexDirection: 'row', gap: space.s, alignItems: 'flex-end' }}>
+          <TextInput
+            accessibilityLabel={say('Message {0}', { 0: task.name })}
+            value={draft}
+            onChangeText={setDraft}
+            multiline
+            editable={!viewOnly && !sending}
+            placeholder={say('Message {0}', { 0: task.name })}
+            placeholderTextColor={c.placeholder}
+            style={{
+              flex: 1,
+              maxHeight: 120,
+              minHeight: 44,
+              padding: space.m,
+              color: c.text,
+              backgroundColor: c.fill,
+              borderRadius: radius.m,
+            }}
           />
-        ) : null}
-        <Button kind="ghost" title={say('Back to thread')} onPress={onClose} />
-      </View>
-    </Sheet>
+          <Button title={say('Send')} disabled={viewOnly || !draft.trim() || sending} onPress={() => void send()} />
+        </View>
+      ) : (
+        <T tone="muted" size={font.caption}>
+          {!online ? say('Reconnect to use agent controls.') : say('This agent does not support direct messages.')}
+        </T>
+      )}
+      {viewOnly ? <T tone="muted">{VIEW_ONLY_WRITE_NOTICE[id ? 'id' : 'en']}</T> : null}
+      {chat.sessionId && actions.canStop && !viewOnly ? (
+        <Button
+          kind="danger"
+          title={task.taskType === 'local_bash' ? say('Stop command') : say('Stop agent')}
+          onPress={stop}
+        />
+      ) : null}
+      {onClose ? <Button kind="ghost" title={say('Back to thread')} onPress={onClose} /> : null}
+    </View>
   )
 }
 export function Helpers({ item, chat }: { item: Extract<TranscriptItem, { kind: 'agents' }>; chat: Chat }) {
@@ -328,7 +355,7 @@ export function Helpers({ item, chat }: { item: Extract<TranscriptItem, { kind: 
   const say = useSay()
   const online = store.isOnline(chat.computerId)
   const [open, setOpen] = useState(() => item.agents.some(helperActive))
-  const [shownId, setShownId] = useState<string | null>(null)
+  const openHelper = useOpenHelper(chat)
   const agents = item.agents.map((task) => ({ ...task, agentId: task.agentId ?? task.id }))
   const counts = helperCounts(agents)
   const names = [
@@ -339,20 +366,11 @@ export function Helpers({ item, chat }: { item: Extract<TranscriptItem, { kind: 
   ]
     .filter(Boolean)
     .join(' · ')
-  const details = (
-    <HelperDetails
-      key={`${chat.computerId}:${chat.sessionId}:${shownId}`}
-      task={agents.find((helper) => helper.agentId === shownId)}
-      chat={chat}
-      onClose={() => setShownId(null)}
-    />
-  )
   // One sub-agent is its own row: a header naming it again above it said the same thing twice.
   if (agents.length === 1 && !item.advisor && !item.earlier)
     return (
       <Card>
-        <HelperRow helper={agents[0]!} online={online} onOpen={() => setShownId(agents[0]!.agentId)} />
-        {details}
+        <HelperRow helper={agents[0]!} online={online} onOpen={() => openHelper(agents[0]!.agentId)} />
       </Card>
     )
   return (
@@ -388,11 +406,10 @@ export function Helpers({ item, chat }: { item: Extract<TranscriptItem, { kind: 
         {sortHelpers(agents).map((helper) => (
           <View key={helper.agentId}>
             <Divider inset={space.m} />
-            <HelperRow helper={helper} online={online} onOpen={() => setShownId(helper.agentId)} />
+            <HelperRow helper={helper} online={online} onOpen={() => openHelper(helper.agentId)} />
           </View>
         ))}
       </Collapse>
-      {details}
     </Card>
   )
 }
@@ -406,7 +423,7 @@ const REPORT_ICON = { finished: CircleCheck, failed: CircleX, stopped: CircleSla
 export function ReportCard({ item, chat }: { item: Extract<TranscriptItem, { kind: 'report' }>; chat: Chat }) {
   const { c } = useTheme()
   const { language } = useStore()
-  const [open, setOpen] = useState(false)
+  const openHelper = useOpenHelper(chat)
   let agent: Helper | undefined
   for (const entry of chat.items)
     if (entry.kind === 'agents') for (const task of entry.agents) if (task.name === item.name) agent = task
@@ -420,7 +437,7 @@ export function ReportCard({ item, chat }: { item: Extract<TranscriptItem, { kin
         disabled={!agent}
         onPress={() => {
           tap()
-          setOpen(true)
+          if (agent) openHelper(agent.agentId ?? agent.id)
         }}
         style={({ pressed }) => ({ padding: space.m, gap: space.s, backgroundColor: pressed ? c.pressed : undefined })}
       >
@@ -441,13 +458,6 @@ export function ReportCard({ item, chat }: { item: Extract<TranscriptItem, { kin
         ) : null}
         <Markdown text={item.body} />
       </Pressable>
-      {open && agent ? (
-        <HelperDetails
-          task={{ ...agent, agentId: agent.agentId ?? agent.id }}
-          chat={chat}
-          onClose={() => setOpen(false)}
-        />
-      ) : null}
     </Card>
   )
 }

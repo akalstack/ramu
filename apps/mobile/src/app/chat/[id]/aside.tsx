@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, Platform, Pressable, TextInput, View } from 'react-native'
+import { ActivityIndicator, Alert, Platform, Pressable, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams } from 'expo-router'
-import { ArrowUp, Trash2, X } from 'lucide-react-native'
+import { Trash2, X } from 'lucide-react-native'
 import { translate } from '@ramu/shared/i18n'
 import type { Aside } from '@ramu/shared/types'
 import { font, radius, space, useTheme } from '../../../theme'
@@ -12,8 +12,8 @@ import { quotedQuestion, sideChat } from '../../../runtime/sideChat'
 import { Header, HeaderButton, PageScrollView as ScrollView, Screen } from '../../../components/Screen'
 import { ComposerDock, KeyboardLift, useKeyboardHeight } from '../../../components/Keyboard'
 import { Markdown } from '../../../components/Markdown'
-import { Glass } from '../../../components/Glass'
-import { T, tap } from '../../../components/ui'
+import { T } from '../../../components/ui'
+import { Composer, type ModelChoice } from '../../../components/Composer'
 
 /**
  * One side chat per thread, like Claude's /btw: ask about the work without interrupting it (the agent never sees these),
@@ -59,8 +59,10 @@ export default function AsideScreen() {
     return () => cancelAnimationFrame(frame)
   }, [toEnd])
   const [asides, setAsides] = useState<Aside[]>([])
-  const [question, setQuestion] = useState('')
   const [busy, setBusy] = useState(false)
+  // A model and login picked here with the thread's own picker; until then the thread's choice (or Settings' model for
+  // asides) answers. It lasts while this screen is open, so a follow-up keeps it.
+  const [picked, setPicked] = useState<ModelChoice | null>(null)
   const scroll = useRef<import('react-native').ScrollViewInstance>(null)
   const computerId = chat?.computerId,
     sessionId = chat?.sessionId
@@ -109,9 +111,26 @@ export default function AsideScreen() {
   const writable = () => canWriteHost(latestStore.current.computers.find((host) => host.id === chat.computerId))
   const { messages, continueId, waiting } = sideChat(asides)
   const latest = asides.find((aside) => aside.id === continueId)
-  const ask = async () => {
-    const text = question.trim()
-    if (!writable() || !text || busy) return
+  // The model waiting in the thread's composer for its next message, as the desktop's aside follows the thread's pick.
+  const pending = (() => {
+    const stored = store.drafts?.[`${chat.computerId}:chat:${chat.taskId || chat.id}:model`]
+    try {
+      const model = stored ? (JSON.parse(stored) as ModelChoice) : null
+      return model && typeof model.provider === 'string' ? model : null
+    } catch {
+      return null
+    }
+  })()
+  const thread: ModelChoice = pending ?? {
+    provider: chat.provider,
+    model: chat.model,
+    effort: chat.effort,
+    settings: chat.settings,
+  }
+  const chosen = picked ?? pending
+  const ask = async (text: string, attachments: string[] = []) => {
+    const question = text.trim() || (attachments.length ? say('What is in the attached files?') : '')
+    if (!writable() || !question || busy) return false
     setBusy(true)
     try {
       // The first question carries its quote natively; later ones continue the same aside with the quote inline.
@@ -122,13 +141,27 @@ export default function AsideScreen() {
         latest?.id ?? null,
         latest ? latest.quote : pendingQuote,
         latest ? latest.quoteFrom : (from ?? 'assistant'),
-        latest ? quotedQuestion(text, pendingQuote) : text,
+        latest ? quotedQuestion(question, pendingQuote) : question,
+        undefined,
+        {
+          ...(chosen
+            ? {
+                model: {
+                  provider: chosen.provider,
+                  model: chosen.model,
+                  effort: (chosen.effort || null) as import('@ramu/shared/types').ReasoningEffort | null,
+                  ...(chosen.settings?.accountId ? { accountId: chosen.settings.accountId } : {}),
+                },
+              }
+            : {}),
+          ...(attachments.length ? { attachmentIds: attachments } : {}),
+        },
       )
-      setQuestion('')
       setPendingQuote('')
       await load()
     } catch (error) {
       Alert.alert(say('Could not ask'), error instanceof Error ? error.message : String(error))
+      return false
     } finally {
       setBusy(false)
     }
@@ -257,55 +290,17 @@ export default function AsideScreen() {
                   </Pressable>
                 </View>
               ) : null}
-              <Glass radius={radius.xl}>
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'flex-end',
-                    paddingLeft: space.m,
-                    paddingRight: space.s,
-                    paddingVertical: space.s,
-                  }}
-                >
-                  <TextInput
-                    editable={!viewOnly}
-                    value={question}
-                    onChangeText={setQuestion}
-                    multiline
-                    placeholder={say(messages.length ? 'Ask a follow-up' : 'Ask a side question')}
-                    placeholderTextColor={c.placeholder}
-                    style={{
-                      flex: 1,
-                      color: c.text,
-                      fontSize: font.body,
-                      lineHeight: 21,
-                      maxHeight: 120,
-                      minHeight: 36,
-                      paddingTop: 6,
-                      paddingBottom: 6,
-                    }}
-                  />
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={say('Ask')}
-                    disabled={viewOnly || !question.trim() || busy}
-                    onPress={() => {
-                      tap()
-                      void ask()
-                    }}
-                    style={{
-                      width: 34,
-                      height: 34,
-                      borderRadius: radius.full,
-                      backgroundColor: question.trim() ? c.primary : c.fill,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <ArrowUp size={18} color={question.trim() ? c.primaryInk : c.placeholder} strokeWidth={2.4} />
-                  </Pressable>
-                </View>
-              </Glass>
+              {/* The thread's own composer, with its files and its model and login picker, focused on the side question. */}
+              <Composer
+                computerId={chat.computerId}
+                scope={chat.taskId || undefined}
+                draftKey={`${chat.computerId}:aside:${sessionId}`}
+                running={false}
+                model={picked ?? thread}
+                onModel={setPicked}
+                onSend={(text, _mode, attachments) => ask(text, attachments)}
+                placeholder={say(messages.length ? 'Ask a follow-up' : 'Ask a side question')}
+              />
             </View>
           </ComposerDock>
         </KeyboardLift>

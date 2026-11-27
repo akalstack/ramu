@@ -33,7 +33,7 @@ Every enabled account of a provider is tried before another model.
 
 ## Sub-agents
 
-The agent can start helpers for parts of a task. Helper cards show progress. Open one to read, message or stop it. Stopping the thread stops its helpers.
+The agent can start helpers for parts of a task. Helper cards show progress. Open one to read, message or stop it: on the desktop it opens beside the thread, as an aside does, and on the phone on its own screen. Stopping the thread stops its helpers.
 
 - **Helpers use** (Settings → Goals & delegation → Sub-agents) picks their model:
   - **The thread's model** (default) keeps each provider's own helpers.
@@ -243,4 +243,4 @@ A thread is named from its first message, then once more after the first reply. 
 
 ## Asides and advice
 
-Select text in a thread to quote it or ask a read-only Aside, or type `/aside` (or `/btw`) and a question in the message box to ask about the whole thread; the agent keeps working and never sees it. A thread has one aside: every question, with the passage it was about, continues the same side conversation until you delete it. It is answered by the model chosen in that thread, or by one model for every aside when you pick it under **Settings → Models → Models for Ramu’s own work**; the model menu in the aside’s message box changes it for that aside while it stays open. Attach files or images to a question as in the thread’s message box, and the answering model reads them with it. **Continue in a new thread** opens a new thread with the aside in its message box. The optional advisor asks a second model for an opinion ([Providers](providers.md#advisor)).
+Select text in a thread to quote it or ask a read-only Aside, or type `/aside` (or `/btw`) and a question in the message box to ask about the whole thread; the agent keeps working and never sees it. A thread has one aside: every question, with the passage it was about, continues the same side conversation until you delete it. It is answered by the model chosen in that thread, or by one model for every aside when you pick it under **Settings → Models → Models for Ramu’s own work**; the aside’s message box has the thread’s own model menu, login included, which changes it for that aside while it stays open. On the phone the aside opens on its own screen with the same message box. Attach files or images to a question as in the thread’s message box, and the answering model reads them with it. **Continue in a new thread** opens a new thread with the aside in its message box. The optional advisor asks a second model for an opinion ([Providers](providers.md#advisor)).

@@ -2,6 +2,7 @@
 // English source copy is the key and the fallback for new strings.
 export const indonesian: Readonly<Record<string, string>> = {
   'Agent tools': 'Alat agent',
+  'This agent is no longer in the thread.': 'Agent ini sudah tidak ada di thread.',
   'Access & host': 'Akses & host',
   'Ready on iOS and Android': 'Siap di iOS dan Android',
   'Ready on iOS': 'Siap di iOS',

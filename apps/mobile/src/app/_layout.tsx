@@ -121,6 +121,7 @@ function Navigator() {
           <Stack.Screen name="chat/[id]/changes" />
           <Stack.Screen name="chat/[id]/file" />
           <Stack.Screen name="chat/[id]/aside" />
+          <Stack.Screen name="chat/[id]/agent" />
           <Stack.Screen name="chat/[id]/terminal" />
           <Stack.Screen name="terminal" />
           <Stack.Screen name="chat/[id]/scm" />

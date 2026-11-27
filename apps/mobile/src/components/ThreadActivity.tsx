@@ -32,7 +32,7 @@ const KIND_ICON: Record<ActivityKind | 'more', Icon> = {
   queue: ListOrdered,
   more: Ellipsis,
 }
-import { Helpers } from './Helpers'
+import { HelperOpener, Helpers } from './Helpers'
 import { InputRequests } from './InputRequests'
 import { GoalQueueTray, type QueuedEdit } from './Composer'
 import { confirmClearGoal } from './confirmClearGoal'
@@ -234,30 +234,45 @@ export function ThreadActivity({
             </ActivityList>
           </View>
         ) : null}
-        {opened === 'helpers' ? (
-          <View style={{ padding: space.m, gap: space.m }}>
-            {activity.helpers.length ? (
-              <Helpers item={{ kind: 'agents', id: 'selected-helpers', agents: activity.helpers }} chat={chat} />
+        {opened === 'helpers' || opened === 'advisor' ? (
+          // An agent opens on its own screen once this sheet has gone: iOS shows nothing pushed beneath a sheet.
+          <HelperOpener.Provider
+            value={(go) => {
+              setOpened(null)
+              setTimeout(go, 350)
+            }}
+          >
+            {opened === 'helpers' ? (
+              <View style={{ padding: space.m, gap: space.m }}>
+                {activity.helpers.length ? (
+                  <Helpers item={{ kind: 'agents', id: 'selected-helpers', agents: activity.helpers }} chat={chat} />
+                ) : null}
+                {activity.groups
+                  .filter(
+                    (g) => !g.advisor && g.agents.some((t) => !activity.helpers.some((h) => h.agentId === t.agentId)),
+                  )
+                  .map((group) => (
+                    <Helpers
+                      key={group.id}
+                      item={{
+                        ...group,
+                        earlier: true,
+                        agents: group.agents.filter((t) => !activity.helpers.some((h) => h.agentId === t.agentId)),
+                      }}
+                      chat={chat}
+                    />
+                  ))}
+              </View>
             ) : null}
-            {activity.groups
-              .filter((g) => !g.advisor && g.agents.some((t) => !activity.helpers.some((h) => h.agentId === t.agentId)))
-              .map((group) => (
+            {opened === 'advisor' ? (
+              <View style={{ padding: space.m }}>
                 <Helpers
-                  key={group.id}
-                  item={{
-                    ...group,
-                    earlier: true,
-                    agents: group.agents.filter((t) => !activity.helpers.some((h) => h.agentId === t.agentId)),
-                  }}
+                  item={{ kind: 'agents', id: 'advisors', advisor: true, agents: activity.advisors }}
                   chat={chat}
                 />
-              ))}
-          </View>
-        ) : null}
-        {opened === 'advisor' ? (
-          <View style={{ padding: space.m }}>
-            <Helpers item={{ kind: 'agents', id: 'advisors', advisor: true, agents: activity.advisors }} chat={chat} />
-          </View>
+              </View>
+            ) : null}
+          </HelperOpener.Provider>
         ) : null}
         {opened === 'input' ? <InputRequests chat={chat} /> : null}
         {(opened === 'goal' || opened === 'queue') && !online ? (
