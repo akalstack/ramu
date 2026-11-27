@@ -6,7 +6,6 @@ import { shareRows } from '../../../runtime/shareRows'
 import { VIEW_ONLY_WRITE_NOTICE } from '../../../runtime/viewerAccess'
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from 'react'
 import {
-  ActivityIndicator,
   Alert,
   Keyboard as SystemKeyboard,
   Platform,
@@ -76,6 +75,7 @@ import { scheduleOnRN } from 'react-native-worklets'
 import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
 import { ThreadActivity } from '../../../components/ThreadActivity'
 import { SyncLine, WorkingLine } from '../../../components/WorkingLine'
+import { LoadingDots } from '../../../components/LoadingDots'
 import { BackgroundTerminals } from '../../../components/BackgroundTerminals'
 import { ThreadServers } from '../../../components/ThreadServers'
 import { BrowserActivity } from '../../../components/BrowserActivity'
@@ -2099,7 +2099,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                   >
                     <NativePressable
                       accessibilityRole="button"
-                      accessibilityLabel={tr('Scroll to latest')}
+                      accessibilityLabel={running ? tr('Agent is working. Scroll to latest') : tr('Scroll to latest')}
                       // The send button's size, so the two round controls match; the slop keeps the target at 44 points.
                       hitSlop={5}
                       onPress={() => {
@@ -2120,7 +2120,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                             style={{ width: 34, height: 34, alignItems: 'center', justifyContent: 'center' }}
                           >
                             {running ? (
-                              <ActivityIndicator size="small" color={c.text} style={{ transform: [{ scale: 0.75 }] }} />
+                              <LoadingDots color={c.text} />
                             ) : (
                               <ArrowDown size={18} color={c.text} strokeWidth={2.4} />
                             )}
