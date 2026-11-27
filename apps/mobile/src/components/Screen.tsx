@@ -1,5 +1,5 @@
 import { pastScrollEdge } from '../runtime/scrollSurface'
-import { LegendList, type LegendListProps, type LegendListRef } from '@legendapp/list/react-native'
+import { type LegendListProps, type LegendListRef } from '@legendapp/list/react-native'
 import { KeyboardAwareLegendList } from '@legendapp/list/keyboard'
 import { backHistory, goBackOrHome, screenTitles } from '../runtime/navigation'
 import {
@@ -136,34 +136,10 @@ export function PageFlatList<T>({
 }
 
 /**
- * A long, growing list (a thread's transcript): only the rows near the screen are mounted, rows of one kind share a size
- * estimate, and it can open at its end without laying out everything above it. Rows keep their own state (an open tool
- * call, words still fading in), so a row is remounted rather than reused for another item unless a list opts in.
- */
-export function PageLegendList<T>({
-  ref,
-  recycleItems = false,
-  fullWidth,
-  ...props
-}: LegendListProps<T> & Readable & { ref?: Ref<LegendListRef> }) {
-  const { c } = useTheme()
-  const readable = useReadableProps(props, !props.horizontal && !fullWidth)
-  return (
-    <PrimaryScroll>
-      <LegendList
-        {...props}
-        {...readable}
-        ref={ref}
-        recycleItems={recycleItems}
-        style={[{ backgroundColor: c.window }, props.style]}
-      />
-    </PrimaryScroll>
-  )
-}
-
-/**
- * The thread's list: PageLegendList's page and reading column on LegendList's keyboard-aware list, which keeps a chat's
- * end above the message box and the keyboard by itself, as T3 Code's feed does.
+ * A thread's transcript on LegendList's keyboard-aware list, in the page's reading column: only the rows near the screen
+ * are mounted, it opens at its end without laying out everything above it, and it keeps the end above the message box
+ * and the keyboard by itself, as T3 Code's feed does. Rows keep their own state (an open tool call, words still fading
+ * in), so a row is remounted rather than reused for another item unless a list opts in.
  */
 export function PageKeyboardLegendList<T>({
   ref,
