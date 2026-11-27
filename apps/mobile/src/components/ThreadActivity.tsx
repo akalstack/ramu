@@ -14,6 +14,9 @@ import { ActivityList, ActivityRow, OfflineCard, WorkingSheet } from './Activity
 import { WorkingLine } from './WorkingLine'
 import { Ellipsis, Hand, Hourglass, ListOrdered, Loader, Sparkles, Target, Users, WifiOff } from 'lucide-react-native'
 
+/** Pills the activity row shows before gathering the rest under "N more": enough for the usual goal, queue and agents. */
+const MAX_PILLS = 4
+
 const KIND_ICON: Record<ActivityKind | 'more', Icon> = {
   connection: WifiOff,
   input: Hand,
@@ -104,26 +107,18 @@ export function ThreadActivity({
             ? say('Resumes on its own when the limit resets')
             : null
   const primaryKind: ActivityKind | 'more' = primary ?? 'more'
-  // Only what needs the person earns a second pill; helpers, a goal, advice and the queue wait under "More", so the row
-  // stays at the most urgent thing, the live tools and More.
-  const secondary = activity.model.secondary
-    .filter((kind) => kind === 'connection' || kind === 'input' || kind === 'provider')
-    .slice(0, 1)
-  const shown: (ActivityKind | 'more')[] = [...(primary && primary !== 'working' ? [primaryKind] : []), ...secondary]
-  const rest = [
+  // Each thing keeps its own pill, most urgent first, as the desktop's chips do: a goal, the queue and the agents stay in
+  // view. Only past MAX_PILLS does the rest gather under one "N more" pill, which opens all of them.
+  const ordered = [
     ...new Set<ActivityKind>([
-      ...activity.model.secondary.filter((kind) => kind !== 'working' && !shown.includes(kind)),
-      ...(activity.groups.length && !shown.includes('helpers') ? ['helpers' as const] : []),
+      ...(primary && primary !== 'working' ? [primary] : []),
+      ...activity.model.secondary.filter((kind) => kind !== 'working'),
+      ...(activity.groups.length ? ['helpers' as const] : []),
     ]),
   ]
-  // "More" only gathers two or more things; a single one (a goal, the queue) gets its own pill, which says what it is.
-  const kinds = [
-    ...new Set<ActivityKind | 'more'>([
-      // The working line before these pills says what the agent is doing, compaction included.
-      ...shown,
-      ...(rest.length === 1 ? rest : rest.length ? ['more' as const] : []),
-    ]),
-  ]
+  const folded = ordered.length > MAX_PILLS ? ordered.length - (MAX_PILLS - 1) : 0
+  // The working line before these pills says what the agent is doing, compaction included.
+  const kinds: (ActivityKind | 'more')[] = folded ? [...ordered.slice(0, MAX_PILLS - 1), 'more'] : ordered
   return (
     <>
       <ChromeScroll>
@@ -154,7 +149,7 @@ export function ThreadActivity({
               <ActivityPill
                 key={kind}
                 icon={KIND_ICON[kind]}
-                label={label(kind)}
+                label={kind === 'more' ? say('{0} more', { 0: folded }) : label(kind)}
                 tone={kind === 'connection' ? 'off' : kind === 'input' || kind === 'provider' ? 'attention' : 'quiet'}
                 emphasis={kind === primaryKind}
                 onPress={() => setOpened(kind)}

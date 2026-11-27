@@ -5219,6 +5219,38 @@ test('mobile composer tools remain reachable in a horizontal row without a gener
   hooks.dispose()
 })
 
+test('each activity keeps its own pill, and only past four does the rest gather under one “N more” pill', () => {
+  const hooks = hookHarness()
+  const render = (secondary) => {
+    const { ThreadActivity } = load('components/ThreadActivity.tsx', 'ios', {
+      react: hooks.react,
+      '../runtime/store': { useStore: () => ({ language: 'en', isOnline: () => true }) },
+      '@ramu/shared/chat/helperPresentation': { helperActive: () => false },
+      '@ramu/shared/chat/threadActivity': { goalActivityLabel: () => 'Goal' },
+      '../runtime/threadActivity': {
+        mobileThreadActivity: () => ({
+          model: { primary: 'working', secondary, counts: { active: 0 } },
+          requests: [],
+          groups: [],
+          helpers: [],
+          advisors: [],
+        }),
+      },
+    })
+    const tree = hooks.render(() =>
+      ThreadActivity({ chat: { computerId: 'a', queue: [{ text: 'next' }], goal: { objective: 'Ship' } } }),
+    )
+    return nodes(tree)
+      .filter((node) => node.type === 'ActivityPill')
+      .map((node) => node.props.label)
+  }
+  assert.deepEqual(render(['goal', 'queue']), ['Goal', '1 queued'])
+  const many = render(['goal', 'queue', 'advisor', 'provider', 'input'])
+  assert.equal(many.length, 4)
+  assert.equal(many.at(-1), '2 more')
+  hooks.dispose()
+})
+
 test('compact native headers reserve an opaque surface even when scroll underlap was requested', () => {
   const screen = load('components/Screen.tsx', 'ios')
   const tree = screen.Header({ title: 'Chat', scrollEdge: true })
