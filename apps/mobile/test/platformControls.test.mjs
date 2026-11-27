@@ -256,6 +256,7 @@ function load(file, os, overrides = {}, globals = {}) {
         return load('../../../packages/shared/src/sync/streamSync.ts', os, {}, globals)
       if (id === '@ramu/shared/transcriptChanges')
         return load('../../../packages/shared/src/transcriptChanges.ts', os, {}, globals)
+      if (id === '@ramu/shared/doneThreads') return load('../../../packages/shared/src/doneThreads.ts', os, {}, globals)
       if (id === '../../../runtime/recentThreads') return recentThreads
       if (id === '../../../runtime/threadGroups') return threadGroups
       if (id === '../../../runtime/threadsSync') return threadsSync
@@ -7772,6 +7773,7 @@ test('Threads uses native toolbar buttons and its usage action opens the shared 
     '../../../runtime/store': {
       useStore: () => ({
         chats: [],
+        doneRemaining: {},
         projects: [],
         selected: 'a',
         computers: [{ id: 'a', name: 'Host', status: 'online' }],

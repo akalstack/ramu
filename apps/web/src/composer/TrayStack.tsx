@@ -3,6 +3,7 @@ import {
   createContext,
   isValidElement,
   useContext,
+  useEffect,
   useId,
   useLayoutEffect,
   useRef,
@@ -92,6 +93,30 @@ export function TrayStack({ children }: { children: ReactNode }) {
     observer.observe(element)
     return () => observer.disconnect()
   })
+  // An open card closes on a click anywhere outside the row and its cards, or on Escape, as a popover does. A menu or
+  // dialog the card opened is drawn outside the row, so a click in one leaves the card open.
+  const anyOpen = open !== null
+  useEffect(() => {
+    if (!anyOpen) return
+    const outside = (event: PointerEvent) => {
+      const target = event.target instanceof Element ? event.target : null
+      if (!target || row.current?.contains(target)) return
+      if (
+        target.closest('[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], [data-base-ui-portal]')
+      )
+        return
+      setOpen(null)
+    }
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !event.defaultPrevented) setOpen(null)
+    }
+    document.addEventListener('pointerdown', outside, true)
+    document.addEventListener('keydown', escape)
+    return () => {
+      document.removeEventListener('pointerdown', outside, true)
+      document.removeEventListener('keydown', escape)
+    }
+  }, [anyOpen])
   if (!sections.length) return null
   const hidden = sections.map((_, index) => index).filter((index) => index >= fit.shown)
   return (
