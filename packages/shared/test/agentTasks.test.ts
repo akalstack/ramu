@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { isStaleProgress, latestTasks } from '../src/chat/agentTasks'
+import type { AgentEvent, AgentTask } from '../src/types'
+import { helperConversation, isStaleProgress, latestTasks, taskMessagePrompt } from '../src/chat/agentTasks'
 
 describe('isStaleProgress', () => {
   it('rejects running progress after a helper ended, unless it resumed later', () => {
@@ -22,5 +23,28 @@ describe('isStaleProgress', () => {
       { kind: 'agent', agentId: 'a', name: 'Late', status: 'running' },
     ] as never
     expect(latestTasks(events).map((task) => task.status)).toEqual(['stopped'])
+  })
+})
+
+describe('helperConversation', () => {
+  const task = { agentId: 'a1', address: 'scout', name: 'Scout', status: 'running' } as AgentTask
+  it('keeps the helper’s own events and what was relayed to it, without its agent id', () => {
+    const events = [
+      { kind: 'user', text: 'main question' },
+      { kind: 'agent', ...task },
+      { kind: 'text', text: 'helper thought', agentId: 'a1' },
+      { kind: 'text', text: 'other helper', agentId: 'a2' },
+      { kind: 'user', text: taskMessagePrompt('claude', task, 'look at tests') },
+      { kind: 'text', text: 'main answer' },
+    ] as AgentEvent[]
+    expect(helperConversation(events, task)).toEqual([
+      { kind: 'text', text: 'helper thought' },
+      { kind: 'user', text: 'look at tests' },
+    ])
+  })
+  it('gives a background command the call that started it', () => {
+    const call = { kind: 'tool-use', toolUseId: 't1', name: 'Bash', input: {} } as AgentEvent
+    const events = [call, { kind: 'tool-use', toolUseId: 't2', name: 'Bash', input: {} } as AgentEvent]
+    expect(helperConversation(events, { agentId: 'b', taskType: 'local_bash', toolUseId: 't1' })).toEqual([call])
   })
 })

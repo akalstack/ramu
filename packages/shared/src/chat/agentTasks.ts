@@ -63,6 +63,30 @@ export function latestTasks(events: AgentEvent[]): AgentTask[] {
 export const advisorTranscript = (events: AgentEvent[], agentId: string): AgentEvent[] =>
   events.filter((event) => event.agentId === agentId && event.kind !== 'agent')
 
+/**
+ * One helper's own conversation, as its screen shows it: its messages, thoughts and tool calls, plus what was sent to it
+ * through the thread's agent. A background command's is the Bash call that started it and that call's output.
+ */
+export function helperConversation(
+  events: AgentEvent[],
+  task: Pick<AgentTask, 'agentId' | 'address' | 'taskType' | 'toolUseId'>,
+): AgentEvent[] {
+  if (task.taskType === 'local_bash')
+    return events.filter((event) => event.kind === 'tool-use' && event.toolUseId === task.toolUseId)
+  const address = task.address ?? task.agentId
+  return (task.taskType === 'advisor' ? advisorTranscript(events, task.agentId) : events).flatMap(
+    (event): AgentEvent[] => {
+      if (event.kind === 'user' && !event.agentId) {
+        const relay = parseTaskMessage(event.text)
+        return relay?.address === address ? [{ ...event, text: relay.body }] : []
+      }
+      if (event.kind === 'agent' || event.agentId !== task.agentId) return []
+      const { agentId: _, ...rest } = event
+      return [rest as AgentEvent]
+    },
+  )
+}
+
 /** Parent turn state cannot settle independently owned helpers. The server records actual stops. */
 export function effectiveStatus(task: AgentTask, _sessionLive: boolean): AgentTaskStatus {
   return task.status

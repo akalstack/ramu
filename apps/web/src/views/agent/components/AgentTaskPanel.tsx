@@ -9,9 +9,9 @@ import { visibleText } from '../lib/messages'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { MarkdownText } from '../../../chat/MarkdownText'
 import type { AgentEvent } from '@ramu/shared/types'
-import { advisorTranscript, effectiveStatus, parseTaskMessage } from '@ramu/shared/chat/agentTasks'
+import { effectiveStatus, helperConversation } from '@ramu/shared/chat/agentTasks'
 import type { AgentTask } from '@ramu/shared/types'
-import { PanelComposer } from '@/components/panel-composer'
+import { Composer } from '../../../composer/Composer'
 import { type ToolResult } from '../types'
 import { toBlocks } from '../lib/blocks'
 import { ToolGroup } from './ToolGroup'
@@ -128,31 +128,11 @@ export function AgentTaskPanel({
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
   // Its own output, plus what you sent it through the main agent.
-  const own = useMemo(() => {
-    if (!task) return []
-    const address = task.address ?? task.agentId
-    // A background command has no conversation; its transcript is the Bash call that started it and that call's output.
-    if (task.taskType === 'local_bash')
-      return toBlocks(events.filter((event) => event.kind === 'tool-use' && event.toolUseId === task.toolUseId))
-    return toBlocks(
-      (task.taskType === 'advisor' ? advisorTranscript(events, task.agentId) : events).flatMap(
-        (event): AgentEvent[] => {
-          if (event.kind === 'user' && event.agentId === task.agentId) {
-            const { agentId: _, ...rest } = event
-            return [rest as AgentEvent]
-          }
-          if (event.kind === 'user') {
-            const relay = parseTaskMessage(event.text)
-            return relay?.address === address ? [{ ...event, text: relay.body }] : []
-          }
-          if (event.kind === 'agent' || event.agentId !== task.agentId) return []
-          const { agentId: _, ...rest } = event
-          return [rest as AgentEvent]
-        },
-      ),
-    )
+  const own = useMemo(
+    () => (task ? toBlocks(helperConversation(events, task)) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [events, task?.agentId, task?.address, task?.taskType, task?.toolUseId] by design; the values it reads beyond these are current as of that run
-  }, [events, task?.agentId, task?.address, task?.taskType, task?.toolUseId])
+    [events, task?.agentId, task?.address, task?.taskType, task?.toolUseId],
+  )
   useEffect(() => {
     const el = body.current
     if (el) el.scrollTop = el.scrollHeight
@@ -377,17 +357,20 @@ export function AgentTaskPanel({
             </p>
           )}
           {actions.canMessage ? (
-            <PanelComposer
-              label={translate('Message {0}', { '0': task.name })}
-              placeholder={translate('Message {0}…', { '0': task.name })}
-              sendLabel={translate('Send to agent')}
-              sendTitle={translate('Send through the main agent')}
-              disabled={readOnly}
-              value={draft}
-              onChange={setDraft}
-              canSend={!!draft.trim() && !sending}
-              onSend={() => void send()}
-            />
+            // The thread's own composer, focused on this agent: no files or model, since a message reaches it as text
+            // through the thread's agent.
+            <div className="flex-none min-w-0 p-[0_10px_10px]">
+              <Composer
+                value={draft}
+                scopeId={taskId}
+                onChange={setDraft}
+                onSubmit={send}
+                placeholder={translate('Message {0}…', { '0': task.name })}
+                submitLabel={translate('Send to agent')}
+                submitTitle={translate('Send through the main agent')}
+                disabled={readOnly || sending}
+              />
+            </div>
           ) : (
             <p className="agent-panel-hint flex-none m-0 p-[10px_14px_14px] min-w-0 muted text-muted-foreground small text-caption">
               {task.taskType === 'advisor'

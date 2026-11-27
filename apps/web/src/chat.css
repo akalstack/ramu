@@ -500,8 +500,7 @@
   background: var(--hover);
   color: var(--text);
 }
-.composer-bar .send,
-.panel-composer .send {
+.composer-bar .send {
   width: 30px;
   height: 30px;
   min-height: 30px;
@@ -514,12 +513,10 @@
   color: var(--primary-ink);
   box-shadow: none;
 }
-.composer-bar .send:hover:not(:disabled),
-.panel-composer .send:hover:not(:disabled) {
+.composer-bar .send:hover:not(:disabled) {
   background: var(--primary-hover);
 }
-.composer-bar .send:disabled,
-.panel-composer .send:disabled {
+.composer-bar .send:disabled {
   background: rgb(var(--ink) / 0.08);
   color: var(--placeholder);
   opacity: 1;

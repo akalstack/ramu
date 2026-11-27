@@ -307,6 +307,8 @@ interface Store extends State {
     settings?: Pick<AgentSettings, 'access' | 'autoFallback' | 'serviceTier' | 'accountId'>,
   ): Promise<void>
   isOnline(id: string): boolean
+  /** The thread's events as received, oldest first; a screen of one sub-agent reads its own conversation from them. */
+  eventsOf(computerId: string, sessionId: string): AgentEvent[]
   setDraft(key: string, text: string): void
   /**
    * Shows a change to a thread at once (pinned, done, archived, renamed) while the host makes it. The next read from the
@@ -2133,6 +2135,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
     },
     isOnline: (id) => ref.current.computers.find((c) => c.id === id)?.status === 'online',
+    eventsOf: (computerId, sessionId) =>
+      [...(eventRows.current.get(scoped(computerId, sessionId))?.entries() ?? [])]
+        .sort((a, b) => a[0] - b[0])
+        .map((entry) => entry[1]),
     send: async (id, text, mode, attachments, context) => {
       const chat = ref.current.chats.find((c) => c.id === id)
       if (!chat) throw new Error('Thread not found')

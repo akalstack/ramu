@@ -758,7 +758,10 @@ export function Composer({
   onFindQuote,
   compaction,
   nextMessages,
+  textOnly,
 }: {
+  /** Messages go out as words only (to a sub-agent, through the thread's agent): no files and no model to pick. */
+  textOnly?: boolean
   /** Predicted next messages for an empty box, shown as chips above it; tapping one puts it in the box to edit or send. */
   nextMessages?: string[]
   /**
@@ -826,7 +829,7 @@ export function Composer({
   const textInput = useRef<import('react-native').TextInputInstance>(null)
   const [reading, setReading] = useState<import('@ramu/shared/types').Attachment | null>(null)
   // A picture or file pasted into the field attaches as if chosen from the attach menu.
-  usePastedFiles(textInput, (files) => void upload(...files))
+  usePastedFiles(textInput, (files) => (textOnly ? undefined : void upload(...files)))
   useEffect(() => {
     if (!autoFocus) return
     // iOS ignores a focus while the screen is still sliding in or a sheet above it is closing, so look again once each
@@ -1558,15 +1561,19 @@ export function Composer({
             gap: 4,
           }}
         >
-          <IconButton
-            icon={Plus}
-            label={say('Attach')}
-            size={34}
-            tone="muted"
-            style={{ borderRadius: radius.full }}
-            onPress={() => setMenu('actions')}
-          />
-          <ModelChip value={model} onChange={onModel} computerId={computerId} limited={limited} />
+          {textOnly ? null : (
+            <>
+              <IconButton
+                icon={Plus}
+                label={say('Attach')}
+                size={34}
+                tone="muted"
+                style={{ borderRadius: radius.full }}
+                onPress={() => setMenu('actions')}
+              />
+              <ModelChip value={model} onChange={onModel} computerId={computerId} limited={limited} />
+            </>
+          )}
 
           <View style={{ flex: 1, minWidth: 0 }} />
           {/* Dictation sits beside sending, where the words it writes go next. */}

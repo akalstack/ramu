@@ -67,8 +67,8 @@ function nodes(tree: ReactNode): Record<string, unknown>[] {
   return [tree.props as Record<string, unknown>, ...nodes(tree.props.children)]
 }
 const find = (tree: ReactNode, label: string) => nodes(tree).find((props) => props['aria-label'] === label)!
-/** The panel's message box, by its label: a shared composer whose `onChange` takes the text. */
-const box = (tree: ReactNode, label: string) => nodes(tree).find((props) => props.label === label)!
+/** An agent's message box: the thread's composer, which sends through `onSubmit`. */
+const box = (tree: ReactNode) => nodes(tree).find((props) => props.submitLabel === 'Send to agent')!
 /** The aside's message box: the thread's composer, which sends through `onSubmit`. */
 const asideBox = (tree: ReactNode) => nodes(tree).find((props) => props.submitLabel === 'Ask aside')!
 beforeEach(() => {
@@ -99,15 +99,15 @@ it('retains a helper draft across role changes and blocks form and keyboard subm
       readOnly,
     })
   }
-  ;(box(RenderPanel(false), 'Message Helper').onChange as (value: string) => void)('Keep this draft')
+  ;(box(RenderPanel(false)).onChange as (value: string) => void)('Keep this draft')
   const viewer = RenderPanel(true)
-  expect(box(viewer, 'Message Helper').value).toBe('Keep this draft')
-  expect(box(viewer, 'Message Helper').disabled).toBe(true)
-  // Sending, by button or Enter, goes through onSend; a viewer's send does nothing.
-  ;(box(viewer, 'Message Helper').onSend as () => void)()
+  expect(box(viewer).value).toBe('Keep this draft')
+  expect(box(viewer).disabled).toBe(true)
+  // Sending, by button or Enter, goes through onSubmit; a viewer's send does nothing.
+  ;(box(viewer).onSubmit as (context: unknown[]) => void)([])
   await Promise.resolve()
   expect(onMessage).not.toHaveBeenCalled()
-  expect(box(RenderPanel(false), 'Message Helper').value).toBe('Keep this draft')
+  expect(box(RenderPanel(false)).value).toBe('Keep this draft')
 })
 
 it('keeps aside drafts and existing answers readable without sending or deleting for viewers', async () => {
