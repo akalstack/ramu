@@ -4,7 +4,6 @@ import { t as translate, useLanguage } from '../../../i18n'
 import { Button } from '@/components/desktop-button'
 import {
   AppWindow,
-  ArrowUp,
   Bot,
   Check,
   ChevronDown,
@@ -42,6 +41,7 @@ export { UserBubble } from '../../../chat/UserBubble'
 import { Message, MessageContent, MessageHeader } from '@/components/ui/message'
 import { MarkdownText } from '../../../chat/MarkdownText'
 import { MessageActions } from './MessageActions'
+import { AnsweredNote } from './AnsweredNote'
 import { useSentRise } from '../../../chat/ChatMotion'
 import { CARET_CLASS, ICON_BUTTON_CLASS } from '../styles'
 
@@ -192,7 +192,7 @@ export function UserMessage({
   // The question's own card already shows what was answered; a second bubble said it again. While that card is in the
   // thread this is one line that leads back to it, and the full answer shows only when the card is not there.
   if (answers && askedQuestions?.has(answers.requestId))
-    return <AnsweredNote requestId={answers.requestId} count={answerPairs(answers.body).length} />
+    return <AnsweredNote requestId={answers.requestId} body={answers.body} />
   if (answers)
     return (
       <UserShell
@@ -398,31 +398,4 @@ function TaskReport({
       </div>
     </div>
   )
-}
-
-/** One line that stands for a sent answer and leads back to the question's card, which shows what was answered. */
-export function AnsweredNote({ requestId, count }: { requestId: string; count: number }) {
-  return (
-    <ChatActivityButton
-      type="button"
-      className="self-end"
-      title={translate('Show the question')}
-      onClick={() => showQuestion(requestId)}
-    >
-      <ShieldQuestion size={13} />
-      <span>{count === 1 ? translate('Answered 1 question') : translate('Answered {0} questions', { 0: count })}</span>
-      <ArrowUp size={13} className={CARET_CLASS} />
-    </ChatActivityButton>
-  )
-}
-
-/** Brings a question's card into view and marks it for a moment, so the eye lands on it. */
-function showQuestion(requestId: string) {
-  const card = document.querySelector<HTMLElement>(`[data-question-request="${CSS.escape(requestId)}"]`)
-  if (!card) return
-  card.scrollIntoView({ block: 'center', behavior: 'smooth' })
-  card.animate([{ boxShadow: '0 0 0 2px var(--primary)' }, { boxShadow: '0 0 0 2px transparent' }], {
-    duration: 1400,
-    easing: 'ease-out',
-  })
 }

@@ -7,8 +7,9 @@ import { Attachments } from '../../../composer/Attachments'
 import { useHost } from '../../../workspace/HostProvider'
 import { t as translate } from '../../../i18n'
 import { visibleText } from '../lib/messages'
-import { answerPairs, parseAnswerMessage } from '@ramu/shared/chat/questions'
-import { AnsweredNote, UserBubble } from './UserMessage'
+import { parseAnswerMessage } from '@ramu/shared/chat/questions'
+import { UserBubble } from './UserMessage'
+import { AnsweredNote } from './AnsweredNote'
 import { ICON_BUTTON_CLASS } from '../styles'
 
 type Act = (fn: () => Promise<unknown>) => Promise<void>
@@ -54,7 +55,7 @@ export function SteeringMessage({
     <Message align="end" className="mt-3.5" aria-busy="true">
       <MessageContent ref={rise} className="group max-w-[86%] origin-bottom-right items-end gap-1">
         {message.attachments?.length ? <Attachments files={message.attachments} /> : null}
-        {answers && <AnsweredNote requestId={answers.requestId} count={answerPairs(answers.body).length} />}
+        {answers && <AnsweredNote requestId={answers.requestId} body={answers.body} />}
         {text && <UserBubble>{text}</UserBubble>}
         <div className="flex items-center gap-1 text-caption text-muted-foreground">
           <span className={editing ? 'text-primary' : undefined}>
