@@ -70,3 +70,13 @@ it('lets a toggle whose open state is its resting state keep no fill while expan
   const menu = renderToStaticMarkup(createElement(Button, { variant: 'ghost', 'aria-expanded': true }))
   expect(menu).toContain('aria-expanded:bg-fill-hover')
 })
+
+it('stays in place when pressed, like the menu buttons beside it', () => {
+  for (const variant of ['secondary', 'ghost', 'link'] as const) {
+    const list = renderToStaticMarkup(createElement(Button, { variant }, 'Changes'))
+      .match(/class="([^"]*)"/)![1]!
+      .split(' ')
+    expect(list).toContain('active:not-aria-[haspopup]:translate-y-0')
+    expect(list).not.toContain('active:not-aria-[haspopup]:translate-y-px')
+  }
+})

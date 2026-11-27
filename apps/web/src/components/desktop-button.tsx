@@ -30,9 +30,13 @@ function ghostHover(className: unknown) {
  * tinted box around an inline "Why?". A caller's own classes still come after these.
  */
 const LINK =
-  'h-auto min-h-0 p-0 align-baseline text-[length:inherit] leading-[inherit] text-brand bg-transparent shadow-none underline-offset-2 hover:bg-transparent hover:underline aria-expanded:bg-transparent aria-expanded:text-brand active:translate-y-0'
+  'h-auto min-h-0 p-0 align-baseline text-[length:inherit] leading-[inherit] text-brand bg-transparent shadow-none underline-offset-2 hover:bg-transparent hover:underline aria-expanded:bg-transparent aria-expanded:text-brand'
 
-/** Keep desktop density and the user's font size while composing the registry Button. */
+/**
+ * Keep desktop density and the user's font size while composing the registry Button. A press leaves the button where it
+ * is: the registry nudges every button but a menu trigger down a pixel, so neighbouring buttons in a toolbar moved
+ * differently under the pointer.
+ */
 export function Button({ className, size, variant = 'secondary', ...props }: ComponentProps<typeof NativeButton>) {
   const field = useSettingsField()
   return (
@@ -40,7 +44,7 @@ export function Button({ className, size, variant = 'secondary', ...props }: Com
       variant={variant}
       size={size}
       className={cn(
-        'text-[length:var(--font-body)] font-normal whitespace-inherit disabled:opacity-40',
+        'text-[length:var(--font-body)] font-normal whitespace-inherit disabled:opacity-40 active:not-aria-[haspopup]:translate-y-0',
         size?.startsWith('icon') ? 'min-h-0' : variant === 'link' ? null : 'h-auto min-h-[26px]',
         variant === 'secondary' && 'bg-fill hover:bg-fill-hover',
         variant === 'link' && LINK,
