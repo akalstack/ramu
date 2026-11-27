@@ -1,10 +1,14 @@
 import { randomBytes, randomUUID } from 'node:crypto'
 import type { Db } from '../db'
+import type { Page } from '@ramu/shared/paging'
+import { pageOf, readCursor } from '../paging'
 import type { InteractiveDocument, InteractiveFile, InteractiveReference, JsonValue } from '@ramu/shared/interactive'
 import { interactiveOrigin, readInteractiveState } from '@ramu/shared/interactive'
 import {
   ARTIFACT_LIMITS,
   artifactKind,
+  ARTIFACT_KINDS,
+  type ArtifactKind,
   declaredCapabilities,
   migrateRecord,
   pendingGrants,
@@ -125,6 +129,55 @@ export class PageStore {
         .prepare('SELECT * FROM artifacts ORDER BY pinned DESC, changed_at DESC LIMIT 500')
         .all() as unknown as PageRow[]
     ).map((row) => this.info(row))
+  }
+  /**
+   * Artifacts a page at a time in the list's order (pinned first, then newest), with the list's search and kind filter
+   * applied here so each page holds only what the reader asked for. `kinds` are every kind the host has, for the filter.
+   */
+  page(
+    filter: { query?: string; kind?: ArtifactKind },
+    cursor: string | null,
+    limit: number,
+  ): Page<ArtifactInfo> & { kinds: ArtifactKind[] } {
+    const after = readCursor(cursor, 3)
+    const where: string[] = []
+    const values: (string | number)[] = []
+    const query = filter.query?.trim().toLowerCase()
+    if (query) {
+      where.push("instr(lower(json_extract(data, '$.title')), ?) > 0")
+      values.push(query)
+    }
+    if (filter.kind === 'app') {
+      // A kind this build does not know opens as an app, so the App filter keeps it too.
+      const others = ARTIFACT_KINDS.filter((kind) => kind !== 'app')
+      where.push(`kind NOT IN (${others.map(() => '?').join(',')})`)
+      values.push(...others)
+    } else if (filter.kind) {
+      where.push('kind = ?')
+      values.push(filter.kind)
+    }
+    if (after) {
+      where.push('(pinned < ? OR (pinned = ? AND (changed_at < ? OR (changed_at = ? AND id < ?))))')
+      const [pinned, changed, id] = [Number(after[0]), Number(after[1]), after[2]!]
+      values.push(pinned, pinned, changed, changed, id)
+    }
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM artifacts ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY pinned DESC, changed_at DESC, id DESC LIMIT ?`,
+      )
+      .all(...values, limit + 1) as unknown as PageRow[]
+    const kinds = (this.db.prepare('SELECT DISTINCT kind FROM artifacts').all() as { kind: string }[]).map((row) =>
+      artifactKind(row.kind),
+    )
+    return {
+      ...pageOf(
+        rows,
+        limit,
+        (row) => [row.pinned, row.changed_at, row.id],
+        (row) => this.info(row),
+      ),
+      kinds: [...new Set(kinds)],
+    }
   }
   get(id: string): ArtifactInfo {
     return this.info(this.row(id))

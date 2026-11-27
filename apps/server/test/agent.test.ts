@@ -4277,6 +4277,10 @@ describe('AgentService.searchMessages', () => {
     expect(hits.find((hit) => hit.taskId === 't' && hit.role === 'user')?.snippet).toBe(
       'Add a Password reset with tokens',
     )
+    // A page at a time, the same hits in the same order, and the last page says nothing is left.
+    const page = svc.searchMessagesPage('password', null, 3)
+    expect(page.items).toEqual(hits.slice(0, 3))
+    expect(svc.searchMessagesPage('password', page.next, 3)).toEqual({ items: hits.slice(3), next: null })
     expect(svc.searchMessages('p')).toEqual([])
     expect(svc.searchMessages('no such text')).toEqual([])
     svc.stop(first.id)

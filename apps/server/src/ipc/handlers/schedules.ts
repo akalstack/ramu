@@ -3,6 +3,7 @@ import type { ScheduleInput } from '@ramu/shared/types'
 import { scheduleSchema, ruleSchema, previewOccurrences } from '../../background/schedules'
 import { WebhookSetup } from '../../background/webhookSetup'
 import { id } from '../schemas'
+import { cursorArg, limitArg } from '../../paging'
 import type { RegisterHandlers } from '../types'
 
 /** Schedules. */
@@ -32,6 +33,10 @@ export const registerScheduleHandlers: RegisterHandlers = ({ schedules, workspac
     },
     'schedules.runNow': { args: z.tuple([id]), run: (scheduleId: string) => schedules.runNow(scheduleId) },
     'schedules.runs': { args: z.tuple([id.optional()]), run: (scheduleId?: string) => schedules.runs(scheduleId) },
+    'schedules.runsPage': {
+      args: z.tuple([id, cursorArg, limitArg]),
+      run: (scheduleId: string, cursor: string | null, limit: number) => schedules.runsPage(scheduleId, cursor, limit),
+    },
     'schedules.preview': {
       args: z.tuple([ruleSchema, z.string()]),
       run: (rule: Parameters<typeof previewOccurrences>[0], zone: string) => {

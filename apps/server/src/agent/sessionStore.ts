@@ -18,6 +18,8 @@ import { toInfo, TITLE_SQL, type SessionRow } from './sessionRow'
 import { excerpt } from './text'
 import { RECORDED_ACCOUNT_PROVIDERS } from './settings'
 import type { Db } from '../db'
+import type { Page } from '@ramu/shared/paging'
+import { pageOf, readCursor } from '../paging'
 import { readInputSummaries } from './inputSummaries'
 import { readSessionHelperSummary } from './helperSummaries'
 
@@ -135,23 +137,42 @@ export class SessionStore {
 
   /** Case-insensitive substring search over top-level chats' user and agent messages, newest first. */
   searchMessages(query: string, limit = 60): ChatSearchHit[] {
+    return this.searchMessagesPage(query, null, limit).items
+  }
+
+  /** The same search a page at a time, continuing after the previous page's last hit. */
+  searchMessagesPage(query: string, cursor: string | null, limit: number): Page<ChatSearchHit> {
     const needle = query.trim().toLowerCase()
-    if (needle.length < 2) return []
+    if (needle.length < 2) return { items: [], next: null }
+    const after = readCursor(cursor, 1)
     const rows = this.db
       .prepare(
-        `SELECT s.task_id AS taskId, e.session_id AS sessionId, e.seq AS seq, json_extract(e.event, '$.kind') AS kind, json_extract(e.event, '$.text') AS text
+        `SELECT e.rowid AS position, s.task_id AS taskId, e.session_id AS sessionId, e.seq AS seq, json_extract(e.event, '$.kind') AS kind, json_extract(e.event, '$.text') AS text
       FROM agent_events e JOIN agent_sessions s ON s.id = e.session_id
       WHERE s.parent_session_id IS NULL AND json_extract(e.event, '$.kind') IN ('user', 'text') AND instr(lower(json_extract(e.event, '$.text')), ?) > 0
+      ${after ? 'AND e.rowid < ?' : ''}
       ORDER BY e.rowid DESC LIMIT ?`,
       )
-      .all(needle, limit) as { taskId: string; sessionId: string; seq: number; kind: string; text: string }[]
-    return rows.map(({ taskId, sessionId, seq, kind, text }) => ({
-      taskId,
-      sessionId,
-      seq,
-      role: kind === 'user' ? 'user' : 'agent',
-      snippet: excerpt(text, needle),
-    }))
+      .all(...(after ? [needle, Number(after[0]), limit + 1] : [needle, limit + 1])) as {
+      position: number
+      taskId: string
+      sessionId: string
+      seq: number
+      kind: string
+      text: string
+    }[]
+    return pageOf(
+      rows,
+      limit,
+      (row) => [row.position],
+      ({ taskId, sessionId, seq, kind, text }): ChatSearchHit => ({
+        taskId,
+        sessionId,
+        seq,
+        role: kind === 'user' ? 'user' : 'agent',
+        snippet: excerpt(text, needle),
+      }),
+    )
   }
 
   /** Only bounded visible main-thread prose is needed to name a thread, never tools or helper transcripts. */

@@ -275,6 +275,15 @@ export type ArtifactProjectDestination =
 /** Artifacts: what agents make and people keep, with their state, records, runs, shares and publishing. */
 interface ArtifactMethods {
   'artifacts.list'(): import('./artifacts').ArtifactInfo[]
+  /**
+   * Artifacts a page at a time, pinned first then newest, matching the search and kind; `kinds` lists every kind the host
+   * has, for the filter. `cursor` is the previous page's `next`.
+   */
+  'artifacts.page'(
+    filter: { query?: string; kind?: import('./artifacts').ArtifactKind },
+    cursor: string | null,
+    limit: number,
+  ): import('./paging').Page<import('./artifacts').ArtifactInfo> & { kinds: import('./artifacts').ArtifactKind[] }
   'artifacts.get'(artifactId: string): import('./artifacts').ArtifactInfo
   'artifacts.exists'(artifactId: string): boolean
   'artifacts.versions'(artifactId: string): import('./artifacts').ArtifactVersion[]
@@ -1202,6 +1211,8 @@ export interface RamuMethods extends ArtifactMethods {
   'schedules.delete'(id: string): void
   'schedules.runNow'(id: string): ScheduleRun
   'schedules.runs'(id?: string): ScheduleRun[]
+  /** One schedule's whole run history, newest first, a page at a time; `cursor` is the previous page's `next`. */
+  'schedules.runsPage'(id: string, cursor: string | null, limit: number): import('./paging').Page<ScheduleRun>
   'schedules.preview'(rule: ScheduleRule, timezone: string): number[]
   /** The latest requests a webhook schedule received, newest first. */
   'schedules.deliveries'(id: string): import('./types').WebhookDelivery[]
@@ -1958,6 +1969,12 @@ export interface RamuMethods extends ArtifactMethods {
   ): { output: string; cursor: number; exited: boolean; resume?: 'live' | 'replay' | 'snapshot' }
   /** Your messages and the agent's replies that contain `query`, newest first, across every chat. */
   'agent.searchMessages'(query: string): ChatSearchHit[]
+  /** The same search a page at a time, newest first; `cursor` is the previous page's `next`. */
+  'agent.searchMessagesPage'(
+    query: string,
+    cursor: string | null,
+    limit: number,
+  ): import('./paging').Page<ChatSearchHit>
   'agent.scope'(taskId: string): AgentScope
   'attachments.pick'(): Attachment[]
   'attachments.add'(name: string, base64: string): Attachment

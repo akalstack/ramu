@@ -504,3 +504,29 @@ describe('repeated failure', () => {
     expect(service.get(s.id)).toMatchObject({ state: 'paused', name: 'Renamed', pausedReason: reason })
   })
 })
+
+describe('run history pages', () => {
+  it('reads one schedule’s whole history a page at a time, past what the recent list keeps', () => {
+    const s = service.save(input({ kind: 'daily', time: '09:00' }), undefined, at('2026-10-09T00:00:00Z'))
+    const other = service.save(input({ kind: 'daily', time: '10:00' }), undefined, at('2026-10-09T00:00:00Z'))
+    const insert = db.prepare(
+      "INSERT INTO schedule_runs (id,schedule_id,due_at,status,created_at) VALUES (?,?,?,'completed',?)",
+    )
+    // Two runs share a time, so the cursor must tell them apart by id.
+    for (let index = 0; index < 205; index++)
+      insert.run(`r${String(index).padStart(3, '0')}`, s.id, index, index === 1 ? 0 : index)
+    for (let index = 0; index < 5; index++) insert.run(`o${index}`, other.id, index, 1000 + index)
+    const seen: string[] = []
+    let cursor: string | null = null
+    do {
+      const page = service.runsPage(s.id, cursor, 100)
+      seen.push(...page.items.map((run) => run.id))
+      cursor = page.next
+    } while (cursor)
+    expect(seen).toHaveLength(205)
+    expect(new Set(seen).size).toBe(205)
+    expect(seen[0]).toBe('r204')
+    expect(seen.slice(-2)).toEqual(['r001', 'r000'])
+    expect(() => service.runsPage(s.id, 'not-a-cursor', 10)).toThrow('This list changed')
+  })
+})

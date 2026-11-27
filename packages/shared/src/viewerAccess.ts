@@ -17,6 +17,7 @@ const viewerMethods = new Set([
   'agent.checkpoint',
   'agent.counts',
   'agent.searchMessages',
+  'agent.searchMessagesPage',
   'agent.scope',
   'agent.catalog',
   'customAgents.list',
@@ -42,6 +43,7 @@ const viewerMethods = new Set([
   'summaries.get',
   'schedules.list',
   'schedules.runs',
+  'schedules.runsPage',
   'projects.list',
   'repos.list',
   'tasks.list',
@@ -62,6 +64,7 @@ const viewerMethods = new Set([
   'interactive.media',
   // Kept artifacts are read like threads: the list, a version and its values, never changed.
   'artifacts.list',
+  'artifacts.page',
   'artifacts.get',
   'artifacts.exists',
   'artifacts.document',

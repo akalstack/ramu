@@ -18,6 +18,7 @@ import {
 import {
   ARTIFACT_KINDS,
   type ArtifactGrants,
+  type ArtifactKind,
   type ArtifactRecordQuery,
   type RamuDataSource,
 } from '@ramu/shared/artifacts'
@@ -49,6 +50,7 @@ import { renderArtifactSource } from '../../interactive/kinds'
 import { restyleArtifact } from '../../interactive/restyle'
 import { HOST_EXPORT_FORMATS, type HostExportFormat } from '@ramu/shared/interactiveExport'
 import { id } from '../schemas'
+import { cursorArg, limitArg } from '../../paging'
 import type { HandlerContext, RegisterHandlers } from '../types'
 import type { AnswerShape, PageFunction } from '../../interactive/pageAi'
 import { widgetData } from '../../interactive/pageAutomation'
@@ -536,6 +538,15 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
   }
   return {
     'artifacts.list': { args: z.tuple([]), run: () => ctx.pages?.list() ?? [] },
+    'artifacts.page': {
+      args: z.tuple([
+        z.object({ query: z.string().max(200).optional(), kind: z.enum(ARTIFACT_KINDS).optional() }).strict(),
+        cursorArg,
+        limitArg,
+      ]),
+      run: (filter: { query?: string; kind?: ArtifactKind }, cursor: string | null, limit: number) =>
+        ctx.pages?.page(filter, cursor, limit) ?? { items: [], next: null, kinds: [] },
+    },
     'artifacts.get': { args: z.tuple([id]), run: (artifactId: string) => need().pages.get(artifactId) },
     'artifacts.exists': { args: z.tuple([id]), run: (artifactId: string) => need().pages.has(artifactId) },
     'artifacts.versions': { args: z.tuple([id]), run: (artifactId: string) => need().pages.versions(artifactId) },

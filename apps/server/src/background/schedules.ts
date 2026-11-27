@@ -7,6 +7,8 @@ import type { Db } from '../db'
 import type { AgentService } from '../agent'
 import type { Workspace } from '../workspace/workspace'
 import { threadOutcome } from './threadOutcome'
+import type { Page } from '@ramu/shared/paging'
+import { pageOf, readCursor } from '../paging'
 import {
   NO_PROJECT,
   type Schedule,
@@ -237,6 +239,23 @@ export class ScheduleService {
         `SELECT ${RUN_COLUMNS} FROM schedule_runs ${id ? 'WHERE schedule_id = ?' : ''} ORDER BY created_at DESC LIMIT 200`,
       )
       .all(...(id ? [id] : [])) as unknown as ScheduleRun[]
+  }
+  /** One schedule's runs, newest first, a page at a time: its whole history, not only what the recent list keeps. */
+  runsPage(scheduleId: string, cursor: string | null, limit: number): Page<ScheduleRun> {
+    const after = readCursor(cursor, 2)
+    const rows = this.db
+      .prepare(
+        `SELECT ${RUN_COLUMNS} FROM schedule_runs WHERE schedule_id = ? ${after ? 'AND (created_at < ? OR (created_at = ? AND id < ?))' : ''} ORDER BY created_at DESC, id DESC LIMIT ?`,
+      )
+      .all(
+        ...(after ? [scheduleId, Number(after[0]), Number(after[0]), after[1]!, limit + 1] : [scheduleId, limit + 1]),
+      ) as unknown as ScheduleRun[]
+    return pageOf(
+      rows,
+      limit,
+      (run) => [run.createdAt, run.id],
+      (run) => run,
+    )
   }
   private validate(input: ScheduleInput): ScheduleInput {
     const parsed = scheduleSchema.parse(input)

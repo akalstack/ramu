@@ -826,6 +826,9 @@ export class AgentService {
   searchMessages(...args: Parameters<SessionStore['searchMessages']>) {
     return this.parts.store.searchMessages(...args)
   }
+  searchMessagesPage(...args: Parameters<SessionStore['searchMessagesPage']>) {
+    return this.parts.store.searchMessagesPage(...args)
+  }
 
   /** Whether the session rests after a turn the person stopped, which the thread lists show as stopped, not finished. */
   stoppedByPerson(sessionId: string): boolean {

@@ -15,6 +15,7 @@ import {
   type DuplicateChoices,
 } from '../../mcp/duplicates'
 import { projectSetupOf } from './projectSetup'
+import { cursorArg, limitArg } from '../../paging'
 import { PROVIDER_MANAGED_KEY, type ProviderManaged } from '../../agent/projectSetup'
 import { buildSetupSnapshot, providerManagedServers } from '../../agent/effectiveSetup'
 import {
@@ -78,6 +79,10 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
     'agent.searchMessages': {
       args: z.tuple([z.string().max(200)]),
       run: (query: string) => agents.searchMessages(query),
+    },
+    'agent.searchMessagesPage': {
+      args: z.tuple([z.string().max(200), cursorArg, limitArg]),
+      run: (query: string, cursor: string | null, limit: number) => agents.searchMessagesPage(query, cursor, limit),
     },
     'agent.mcpStatus': { args: z.tuple([id]), run: (s: string) => agents.mcpStatus(s) },
     /** What this thread has from Ramu's agent setup, from the resolvers a launch uses. Names and states only. */
