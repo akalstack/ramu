@@ -50,14 +50,19 @@ export function readKeptTranscript(store: Store, sessionId: string): KeptTranscr
 
 /** Saves the thread as most recent, dropping the least recently kept beyond the limit. */
 export function writeKeptTranscript(store: Store, sessionId: string, transcript: KeptTranscript) {
-  let rows = [...transcript.rows].sort(([a], [b]) => a - b).map(([seq, item]) => [seq, item.event] as const)
-  let text = JSON.stringify({ session: transcript.session, rows })
-  // Halving keeps this to a few serialisations even for a very long thread.
-  while (text.length > MAX_TRANSCRIPT_CHARS && rows.length > 1) {
-    rows = rows.slice(Math.ceil(rows.length / 2))
-    text = JSON.stringify({ session: transcript.session, rows })
+  const head = `{"session":${JSON.stringify(transcript.session)},"rows":[`
+  // The newest rows that fit, serialised one by one from the end: a long thread saved while it streams costs what is
+  // kept, not its whole history.
+  const kept: string[] = []
+  let length = head.length + 2
+  const seqs = [...transcript.rows.keys()].sort((a, b) => b - a)
+  for (const seq of seqs) {
+    const row = JSON.stringify([seq, transcript.rows.get(seq)!.event])
+    if (length + row.length + 1 > MAX_TRANSCRIPT_CHARS) break
+    kept.push(row)
+    length += row.length + 1
   }
-  if (text.length > MAX_TRANSCRIPT_CHARS) text = JSON.stringify({ session: transcript.session, rows: [] })
+  const text = `${head}${kept.reverse().join(',')}]}`
   const index = [sessionId, ...readIndex(store).filter((id) => id !== sessionId)]
   try {
     for (const dropped of index.slice(MAX_KEPT_TRANSCRIPTS)) store.removeItem(keyOf(dropped))
