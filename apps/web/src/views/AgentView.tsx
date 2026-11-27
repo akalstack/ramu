@@ -34,6 +34,7 @@ import {
   MessageScrollerViewport,
 } from '@/components/ui/message-scroller'
 import { TranscriptScrollApi } from './agent/components/TranscriptScrollApi'
+import { TranscriptFollow } from './agent/components/TranscriptFollow'
 import type { FileContext } from '@ramu/shared/types'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Attachment, AgentEvent } from '@ramu/shared/types'
@@ -1020,6 +1021,7 @@ export const AgentView = memo(function AgentView({
               <ThreadAgents.Provider value={allTasks}>
                 <MessageScrollerProvider autoScroll defaultScrollPosition="end">
                   <TranscriptScrollApi apiRef={scrollToEnd} />
+                  <TranscriptFollow viewport={scroller} />
                   <div className="transcript-frame [&_>_.agent-panel]:relative [&_>_.agent-panel]:inset-auto [&_>_.agent-panel]:flex-none [&_>_.agent-panel]:w-[min(440px,_45%)] [&_>_.agent-panel]:h-auto [&_>_.agent-panel]:[box-shadow:none] [&_>_.agent-panel]:[animation:none] [&_>_.agent-panel]:[border-left:var(--pane-border-width)_solid_var(--pane-border-color)] relative flex-1 min-h-0 min-w-0 flex [container:transcript-frame_/_inline-size] flex-col">
                     <MessageScroller
                       className={`transcript min-h-0 min-w-0 flex-1 ${hydrating && !turns.length && !openingShown ? 'chat-loading' : ''}`}

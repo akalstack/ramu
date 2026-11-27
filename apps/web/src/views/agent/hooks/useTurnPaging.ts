@@ -7,6 +7,7 @@ import { scrollMotion } from '../../../workspace/panelMotion'
 import { TURN_PAGE } from '../constants'
 import { turnsToKeep } from '../lib/paging'
 import { sourceEvent } from '../lib/sourceEvent'
+import { releaseFollow } from './useTranscriptScroll'
 import type { AgentViewDesc, Turn } from '../types'
 
 /**
@@ -63,6 +64,7 @@ export function useTurnPaging({
       // A nearby message glides into view, as on the phone; a far one jumps, since a long glide over turns not laid out
       // yet lands on estimated heights.
       const viewport = scroller.current
+      releaseFollow(viewport)
       const distance = viewport ? Math.abs(node.getBoundingClientRect().top - viewport.getBoundingClientRect().top) : 0
       node.scrollIntoView({
         block: 'center',
