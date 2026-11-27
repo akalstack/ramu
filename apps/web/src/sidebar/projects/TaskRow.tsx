@@ -36,7 +36,7 @@ import { useModelSets } from '../../models/ModelSets'
 import { WorkspaceNameDialog } from '../../workspace/WorkspaceNameDialog'
 import { ICON_BUTTON_CLASS, ROW_ACTIONS_CLASS, ROW_ERROR_CLASS } from './constants'
 import { InlineEdit } from './InlineEdit'
-import { TaskAge, TaskStateIcon } from './TaskStateIcon'
+import { TaskStateIcon } from './TaskStateIcon'
 import { AgentStack } from './AgentStack'
 import { PullRequestIcon } from '../../git/PullRequestIcon'
 import { offerThreadUndo } from './threadUndo'
@@ -462,11 +462,7 @@ export function TaskRow({
             if (openable && e.key === 'Enter' && !renaming) open()
           }}
         >
-          {done ? (
-            <Check size={14} className="flex-none text-muted-foreground" aria-label={t('Done')} />
-          ) : (
-            <TaskStateIcon task={task} unread={!!ws?.unread.has(task.id)} />
-          )}
+          {done && <Check size={14} className="flex-none text-muted-foreground" aria-label={t('Done')} />}
           {/* Where the work lands goes on a second line only when there is something to say, so no row carries an
               empty one; titles keep one left edge either way. */}
           <span className={`flex min-w-0 flex-1 flex-col text-left${context ? ' py-1' : ''}`}>
@@ -533,7 +529,7 @@ export function TaskRow({
                   {archived ? <ArchiveRestore size={14} /> : done ? <RotateCcw size={14} /> : <Check size={14} />}
                 </Button>
               </span>
-              <TaskAge task={task} unread={!!ws?.unread.has(task.id)} />
+              <TaskStateIcon task={task} unread={!!ws?.unread.has(task.id)} />
               {/* Every icon sits in one group at the row's right edge, as on the context line of a two-line row. */}
               {!context && (
                 <span className="task-trailing flex flex-none items-center gap-1">

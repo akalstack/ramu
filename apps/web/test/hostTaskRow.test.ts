@@ -47,10 +47,7 @@ vi.mock('../src/Menu', () => ({
 }))
 vi.mock('../src/workspace/TaskPane', () => ({ errorText: String }))
 vi.mock('../src/chat/Notifications', () => ({ notifyError: vi.fn() }))
-vi.mock('../src/sidebar/projects/TaskStateIcon', () => ({
-  TaskStateIcon: () => null,
-  TaskAge: () => createElement('span', {}, 'time'),
-}))
+vi.mock('../src/sidebar/projects/TaskStateIcon', () => ({ TaskStateIcon: () => createElement('span', {}, 'time') }))
 vi.mock('@/components/desktop-button', () => ({ Button: 'button' }))
 vi.mock('../src/sidebar/projects/AgentStack', () => ({ AgentStack: () => createElement('span', {}, 'agent-icon') }))
 vi.mock('../src/FadeText', () => ({ FadeText: ({ text }: { text: string }) => createElement('span', {}, text) }))
