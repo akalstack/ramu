@@ -127,7 +127,8 @@ jobs:
             gh release edit "$RELEASE_TAG" --title "Ramu $RELEASE_TAG" --notes-file /tmp/ramu-notes.md
           else
             prerelease=()
-            if [[ "$RELEASE_TAG" == *-* ]]; then prerelease=(--prerelease); fi
+            # A beta or release candidate is published as a release; only earlier builds carry the pre-release label.
+            if [[ "$RELEASE_TAG" == *-* && "$RELEASE_TAG" != *-beta.* && "$RELEASE_TAG" != *-rc.* ]]; then prerelease=(--prerelease); fi
             gh release create "$RELEASE_TAG" --draft --verify-tag --title "Ramu $RELEASE_TAG" --notes-file /tmp/ramu-notes.md "${prerelease[@]}"
           fi
           gh release upload "$RELEASE_TAG" dist/release/* --clobber
