@@ -49,7 +49,7 @@ it('gives back what a thread holds when it is marked done, and leaves other thre
     holdThread: vi.fn(),
     stopAndWait: vi.fn(async () => {}),
   }
-  const computer = { revoke: vi.fn() }
+  const computer = { revoke: vi.fn(), session: vi.fn(() => null) }
   const testDevices = { releaseThread: vi.fn(async () => {}) }
   const watchers = { release: vi.fn() }
   const browser = {
@@ -58,6 +58,7 @@ it('gives back what a thread holds when it is marked done, and leaves other thre
       command.kind === 'list' ? [{ id: 'tab-1' }, { id: 'tab-2' }] : undefined,
     ),
   }
+  const hostBrowser = { closeThread: vi.fn(), threadTabs: vi.fn(() => 1) }
   const table = registerWorkspaceHandlers({
     workspace,
     terminals,
@@ -68,9 +69,14 @@ it('gives back what a thread holds when it is marked done, and leaves other thre
     computer,
     testDevices,
     browser,
+    hostBrowser,
   } as unknown as HandlerContext)
   const server = terminals.launchBackground(task.id, null, tmpdir(), 'sleep 300')
   const unrelated = terminals.launchBackground(other.id, null, tmpdir(), 'sleep 300')
+
+  // Tabs in the host's own browser count and close as well as the attached desktop's.
+  expect(await table['tasks.doneImpact']!.run(task.id)).toMatchObject({ browserTabs: 3 })
+  browser.view.mockClear()
 
   const done = table['tasks.done']!
   done.run(...done.args.parse([task.id, true]))
@@ -80,6 +86,7 @@ it('gives back what a thread holds when it is marked done, and leaves other thre
   expect(computer.revoke).toHaveBeenCalledWith(task.id)
   expect(testDevices.releaseThread).toHaveBeenCalledWith(task.id)
   expect(watchers.release).toHaveBeenCalledWith(task.id)
+  expect(hostBrowser.closeThread).toHaveBeenCalledWith(task.id)
   await until(() => browser.view.mock.calls.length === 3)
   expect(browser.view.mock.calls.slice(1).map(([, command]) => command)).toEqual([
     { kind: 'close', tabId: 'tab-1' },

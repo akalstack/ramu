@@ -230,6 +230,16 @@ export class HostBrowser implements HostedBrowserBackend {
         )
     })
   }
+  /** How many tabs a thread has open here; a browser that never started has none. */
+  threadTabs(threadId: string): number {
+    return this.runtime?.list({ hostId: HOST, threadId }).length ?? 0
+  }
+  /** Closes every tab a thread has, when it is done. */
+  closeThread(threadId: string): void {
+    const runtime = this.runtime
+    if (!runtime) return
+    for (const tab of runtime.list({ hostId: HOST, threadId })) runtime.close(tab.id)
+  }
   endRun(threadId: string, runId: string): void {
     for (const operation of [...this.pending.values()])
       if (operation.thread === threadId && operation.run === runId) operation.cancel()
