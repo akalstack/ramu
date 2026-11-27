@@ -7,7 +7,8 @@ import { Attachments } from '../../../composer/Attachments'
 import { useHost } from '../../../workspace/HostProvider'
 import { t as translate } from '../../../i18n'
 import { visibleText } from '../lib/messages'
-import { UserBubble } from './UserMessage'
+import { answerPairs, parseAnswerMessage } from '@ramu/shared/chat/questions'
+import { AnsweredNote, UserBubble } from './UserMessage'
 import { ICON_BUTTON_CLASS } from '../styles'
 
 type Act = (fn: () => Promise<unknown>) => Promise<void>
@@ -36,7 +37,11 @@ export function SteeringMessage({
   onRemoved?: () => void
 }) {
   const { invoke } = useHost()
-  const text = visibleText(message.text)
+  // An answer on its way to the agent reads as it will once sent: one line leading to the question's card, not the
+  // delivery note the agent reads. It is not the person's to edit, and removing it would leave the card answered
+  // with the agent never told.
+  const answers = parseAnswerMessage(message.text)
+  const text = answers ? '' : visibleText(message.text)
   // The copy shown while sending began rising from the message box; this row takes its place a moment later and
   // carries the rise on, instead of snapping the bubble to rest.
   const rise = useSentRise<HTMLDivElement>(false)
@@ -49,6 +54,7 @@ export function SteeringMessage({
     <Message align="end" className="mt-3.5" aria-busy="true">
       <MessageContent ref={rise} className="group max-w-[86%] origin-bottom-right items-end gap-1">
         {message.attachments?.length ? <Attachments files={message.attachments} /> : null}
+        {answers && <AnsweredNote requestId={answers.requestId} count={answerPairs(answers.body).length} />}
         {text && <UserBubble>{text}</UserBubble>}
         <div className="flex items-center gap-1 text-caption text-muted-foreground">
           <span className={editing ? 'text-primary' : undefined}>
@@ -58,7 +64,7 @@ export function SteeringMessage({
                 ? translate('Held while editing')
                 : translate('Steering · sends after the current tool call')}
           </span>
-          {!readOnly && !editing && (
+          {!readOnly && !editing && !answers && (
             <>
               <Button
                 variant="ghost"

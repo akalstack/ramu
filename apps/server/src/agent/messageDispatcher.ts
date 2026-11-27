@@ -2,6 +2,7 @@ import { providerName, isAcpProvider } from '@ramu/shared/providers/providers'
 import { randomUUID } from 'node:crypto'
 import type { AgentSessionInfo, QueuedMessage, Attachment, MessageOrigin } from '@ramu/shared/types'
 import { combineQueued } from './inputQueue'
+import { parseAnswerMessage } from '@ramu/shared/chat/questions'
 import { WRITING_STATES } from './constants'
 import { currentBranch } from '../workspace/git'
 import type { GoalManager } from './goalManager'
@@ -368,8 +369,16 @@ export class MessageDispatcher {
         !this.host.queuePaused(id) &&
         !this.host.activeTools.get(id)?.size
       ) {
-        const batch = this.host.queued(id).filter((message) => message.mode === 'steer' && !message.held)
-        if (!batch.length) break
+        const waiting = this.host.queued(id).filter((message) => message.mode === 'steer' && !message.held)
+        if (!waiting.length) break
+        // An answer to a question goes as its own message: joined to what the person typed next, their words would
+        // read in the chat as part of the answer.
+        const other = waiting.findIndex((message, index) => index > 0 && parseAnswerMessage(message.text))
+        const batch = parseAnswerMessage(waiting[0]!.text)
+          ? [waiting[0]!]
+          : other < 0
+            ? waiting
+            : waiting.slice(0, other)
         const codex = this.host.runners.get(id)
         const live = this.host.live.get(id)
         if (!codex && !live) break

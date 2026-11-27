@@ -191,23 +191,8 @@ export function UserMessage({
   const answers = parseAnswerMessage(e.text)
   // The question's own card already shows what was answered; a second bubble said it again. While that card is in the
   // thread this is one line that leads back to it, and the full answer shows only when the card is not there.
-  if (answers && askedQuestions?.has(answers.requestId)) {
-    const count = answerPairs(answers.body).length
-    return (
-      <ChatActivityButton
-        type="button"
-        className="self-end"
-        title={translate('Show the question')}
-        onClick={() => showQuestion(answers.requestId)}
-      >
-        <ShieldQuestion size={13} />
-        <span>
-          {count === 1 ? translate('Answered 1 question') : translate('Answered {0} questions', { 0: count })}
-        </span>
-        <ArrowUp size={13} className={CARET_CLASS} />
-      </ChatActivityButton>
-    )
-  }
+  if (answers && askedQuestions?.has(answers.requestId))
+    return <AnsweredNote requestId={answers.requestId} count={answerPairs(answers.body).length} />
   if (answers)
     return (
       <UserShell
@@ -412,6 +397,22 @@ function TaskReport({
         )}
       </div>
     </div>
+  )
+}
+
+/** One line that stands for a sent answer and leads back to the question's card, which shows what was answered. */
+export function AnsweredNote({ requestId, count }: { requestId: string; count: number }) {
+  return (
+    <ChatActivityButton
+      type="button"
+      className="self-end"
+      title={translate('Show the question')}
+      onClick={() => showQuestion(requestId)}
+    >
+      <ShieldQuestion size={13} />
+      <span>{count === 1 ? translate('Answered 1 question') : translate('Answered {0} questions', { 0: count })}</span>
+      <ArrowUp size={13} className={CARET_CLASS} />
+    </ChatActivityButton>
   )
 }
 
