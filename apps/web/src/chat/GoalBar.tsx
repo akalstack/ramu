@@ -18,10 +18,10 @@ import { useTraySection } from '../composer/TrayStack'
 import { Button } from '@/components/desktop-button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
-import type { ChatGoal } from '@ramu/shared/types'
+import { goalTurnLimit, type ChatGoal } from '@ramu/shared/types'
 import { type GoalChange, type GoalChangeType } from '@ramu/shared/chat/goalHistory'
 import { t, useLanguage } from '../i18n'
-import { Dialog } from '../Menu'
+import { Dialog, Dropdown } from '../Menu'
 import { useAppSettings } from '../settings/AppSettings'
 import { resumeTime } from '../models/limitCopy'
 import { goalContinues, goalState, isLimitHold } from '@ramu/shared/chat/goalHold'
@@ -42,9 +42,14 @@ const goalIcon = (goal: ChatGoal) => {
 
 export { GoalFacts } from './GoalFacts'
 
-function GoalDetails({ goal }: { goal: ChatGoal }) {
+/** Limits this goal can take instead of Settings', the common ones a person reaches for. */
+const LIMIT_CHOICES = [5, 10, 20, 50, 100]
+
+function GoalDetails({ goal, onLimit }: { goal: ChatGoal; onLimit?: (limit: number | null | 'default') => void }) {
   const { preferences } = useAppSettings()
-  const limit = preferences.goals.maxTurns
+  const fallback = preferences.goals.maxTurns
+  const limit = goalTurnLimit(goal, preferences.goals)
+  const value = goal.maxTurns === undefined ? 'default' : goal.maxTurns === null ? 'none' : String(goal.maxTurns)
   return (
     <div className="goal-details flex flex-col gap-1.5 p-[2px_4px_8px_28px]">
       <p className="goal-objective-full m-0 whitespace-pre-wrap [overflow-wrap:anywhere] select-text text-foreground">
@@ -56,10 +61,36 @@ function GoalDetails({ goal }: { goal: ChatGoal }) {
         </p>
       )}
       <GoalFacts goal={goal} />
-      <span className="goal-meta text-muted-foreground text-caption">
-        {limit === null
-          ? t('{0} continuation turns · no limit', { '0': goal.turns })
-          : t('{0} continuation turns · limit {1}', { '0': goal.turns, '1': limit })}
+      <span className="goal-meta flex flex-wrap items-center gap-x-1.5 text-muted-foreground text-caption">
+        {onLimit ? (
+          <>
+            {t('{0} continuation turns', { '0': goal.turns })} ·
+            {/* This goal only: Settings keep the limit every other goal starts with. */}
+            <Dropdown
+              label={t('Turn limit for this goal')}
+              value={value}
+              options={[
+                {
+                  value: 'default',
+                  label:
+                    fallback === null
+                      ? t('Settings default (no limit)')
+                      : t('Settings default ({0})', { '0': fallback }),
+                },
+                ...[...new Set([...LIMIT_CHOICES, ...(goal.maxTurns ? [goal.maxTurns] : [])])]
+                  .sort((a, b) => a - b)
+                  .map((n) => ({ value: String(n), label: t('Limit {0}', { '0': n }) })),
+                { value: 'none', label: t('No limit') },
+              ]}
+              onChange={(next) => onLimit(next === 'default' ? 'default' : next === 'none' ? null : Number(next))}
+              className="h-6! min-h-6! w-auto! min-w-0! text-caption"
+            />
+          </>
+        ) : limit === null ? (
+          t('{0} continuation turns · no limit', { '0': goal.turns })
+        ) : (
+          t('{0} continuation turns · limit {1}', { '0': goal.turns, '1': limit })
+        )}
         {isLimitHold(goal) && goal.retryAt ? ` · ${t('Resumes around {0}', { '0': resumeTime(goal.retryAt) })}` : ''}
       </span>
     </div>
@@ -132,6 +163,7 @@ export function GoalBar({
   goal,
   onControl,
   onVerify,
+  onLimit,
   readOnly = false,
 }: {
   readOnly?: boolean
@@ -139,6 +171,8 @@ export function GoalBar({
   onControl: (action: 'pause' | 'resume' | 'clear') => void
   /** Sets the goal's verification command, or removes it with null. */
   onVerify?: (command: string | null) => void
+  /** Sets how many automatic turns this goal may take: a number, null for none, or `default` for Settings'. */
+  onLimit?: (limit: number | null | 'default') => void
 }) {
   useLanguage()
   const [editing, setEditing] = useState(false)
@@ -148,7 +182,7 @@ export function GoalBar({
   const { preferences } = useAppSettings()
   const active = goalContinues(goal)
   const Icon = goalIcon(goal),
-    limit = preferences.goals.maxTurns
+    limit = goalTurnLimit(goal, preferences.goals)
   return (
     <ComposerTraySection
       className="goal-bar [&[data-status='paused']_.goal-icon]:text-muted-foreground [&:is([data-status='blocked'],_[data-status='turn-limit'],_[data-status='limit'])_.goal-icon]:text-warn"
@@ -250,7 +284,7 @@ export function GoalBar({
           onClose={() => setEditing(false)}
         />
       )}
-      <GoalDetails goal={goal} />
+      <GoalDetails goal={goal} onLimit={readOnly ? undefined : onLimit} />
     </ComposerTraySection>
   )
 }

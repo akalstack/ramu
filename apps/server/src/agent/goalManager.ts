@@ -4,6 +4,7 @@ import {
   type AgentEvent,
   type ProviderCatalog,
   DEFAULT_GOAL_PREFERENCES,
+  goalTurnLimit,
   type ChatGoal,
   type GoalEvidence,
 } from '@ramu/shared/types'
@@ -146,6 +147,7 @@ export class GoalManager {
       reason: reuse ? current.reason : '',
       updatedAt: Date.now(),
       ...(reuse ? { verify: current.verify } : {}),
+      ...(reuse && current.maxTurns !== undefined ? { maxTurns: current.maxTurns } : {}),
     }
     if (fromUser && verify !== undefined) goal.verify = this.cleanCommand(verify)
     if (!goal.verify) delete goal.verify
@@ -172,6 +174,25 @@ export class GoalManager {
     if (verify) next.verify = verify
     else delete next.verify
     this.verifying.get(id)?.abort()
+    return this.saveGoal(id, next)!
+  }
+
+  /**
+   * The person sets this goal's own limit on automatic turns: a number, null for none, or `default` to follow Settings.
+   * A goal held at its limit carries on at once when the new limit leaves it room.
+   */
+  setTurnLimit(id: string, limit: number | null | 'default'): ChatGoal {
+    const goal = this.getGoal(id)
+    if (!goal) throw new Error('This thread has no goal. Start one with /goal first.')
+    if (goal.status === 'completed') throw new Error('This goal is already complete. Start a new goal.')
+    const next: ChatGoal = { ...goal, updatedAt: Date.now() }
+    if (limit === 'default') delete next.maxTurns
+    else next.maxTurns = limit
+    const cap = goalTurnLimit(next, this.goalPreferences())
+    if (next.status === 'turn-limit' && (cap === null || next.turns < cap)) {
+      next.status = 'active'
+      next.reason = 'Continuation limit increased.'
+    }
     return this.saveGoal(id, next)!
   }
 
@@ -300,10 +321,8 @@ export class GoalManager {
     }[]) {
       if (this.host.providerWait(id)) this.host.scheduleProvider(id)
       const goal = this.getGoal(id)
-      if (
-        goal?.status === 'turn-limit' &&
-        (this.goalPreferences().maxTurns === null || goal.turns < this.goalPreferences().maxTurns!)
-      ) {
+      const cap = goal ? goalTurnLimit(goal, this.goalPreferences()) : null
+      if (goal?.status === 'turn-limit' && (cap === null || goal.turns < cap)) {
         this.saveGoal(id, { ...goal, status: 'active', reason: 'Continuation limit increased.', updatedAt: Date.now() })
         continue
       }
@@ -356,12 +375,12 @@ export class GoalManager {
       await this.verifyClaim(id, goal, session.cwd)
       return
     }
-    const cap = this.goalPreferences().maxTurns
+    const cap = goalTurnLimit(goal, this.goalPreferences())
     if (!isLimitHold(goal) && cap !== null && goal.turns >= cap) {
       this.saveGoal(id, {
         ...goal,
         status: 'turn-limit',
-        reason: `Reached ${cap} automatic continuation turns. Resume to allow another batch, or change the limit in Settings.`,
+        reason: `Reached ${cap} automatic continuation turns. Resume to allow another batch, or raise this goal's limit.`,
         updatedAt: Date.now(),
       })
       return

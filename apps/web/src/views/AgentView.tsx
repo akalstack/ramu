@@ -1204,6 +1204,30 @@ export const AgentView = memo(function AgentView({
                     setStopping(null)
                   }}
                 />
+                {/* Above the tray, which sits on the message box: between the two it was drawn over. */}
+                {threadDoneAt && !viewOnly && !threadArchived && (
+                  // A done thread holds automatic turns; sending a message or Reopen continues it.
+                  <div className="mx-auto mb-2 flex w-full max-w-(--chat-column-width) items-center gap-2 px-1 text-control text-soft">
+                    <CheckCircle2 size={14} className="flex-none text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate">
+                      {translate('This thread is done.')}{' '}
+                      <span className="text-muted-foreground">{timeAgo(threadDoneAt)}</span>
+                      {queued.length > 0 && (
+                        <>
+                          {' · '}
+                          {translate('{count} queued messages held', { count: queued.length })}
+                        </>
+                      )}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => void act(() => invoke('tasks.done', session!.taskId, false))}
+                    >
+                      <RotateCcw size={14} /> {translate('Reopen')}
+                    </Button>
+                  </div>
+                )}
                 {(hostOffline ||
                   backgroundTerminals.terminals.length > 0 ||
                   commands.length > 0 ||
@@ -1243,6 +1267,9 @@ export const AgentView = memo(function AgentView({
                           }}
                           onVerify={(command) => {
                             void act(() => invoke('agent.goal.verify', view.sessionId, command))
+                          }}
+                          onLimit={(limit) => {
+                            void act(() => invoke('agent.goal.limit', view.sessionId, limit))
                           }}
                         />
                       )}
@@ -1305,29 +1332,6 @@ export const AgentView = memo(function AgentView({
                   </div>
                 ) : (
                   <>
-                    {threadDoneAt && !viewOnly && (
-                      // A done thread holds automatic turns; sending a message or Reopen continues it.
-                      <div className="mx-auto mb-2 flex w-full max-w-(--chat-column-width) items-center gap-2 px-1 text-control text-soft">
-                        <CheckCircle2 size={14} className="flex-none text-muted-foreground" />
-                        <span className="min-w-0 flex-1 truncate">
-                          {translate('This thread is done.')}{' '}
-                          <span className="text-muted-foreground">{timeAgo(threadDoneAt)}</span>
-                          {queued.length > 0 && (
-                            <>
-                              {' · '}
-                              {translate('{count} queued messages held', { count: queued.length })}
-                            </>
-                          )}
-                        </span>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => void act(() => invoke('tasks.done', session!.taskId, false))}
-                        >
-                          <RotateCcw size={14} /> {translate('Reopen')}
-                        </Button>
-                      </div>
-                    )}
                     <Composer
                       attachments={attachments}
                       onAttachmentsChange={setAttachments}
@@ -1366,7 +1370,9 @@ export const AgentView = memo(function AgentView({
                               settings={pendingSettings ?? session.settings}
                               limited={!!providerWait}
                               readOnly={viewOnly}
-                              autoResume={autoResume}
+                              // At a limit the note above the message box holds Auto-resume; offered here too, it was
+                              // one choice in three places.
+                              autoResume={providerWait ? undefined : autoResume}
                               onSession={setSession}
                             />
                           )}
@@ -1412,7 +1418,9 @@ export const AgentView = memo(function AgentView({
                             running={working}
                             trailing={
                               <>
-                                {autoResume && <AutoResumeMenu autoResume={autoResume} readOnly={viewOnly} />}
+                                {autoResume && !providerWait && (
+                                  <AutoResumeMenu autoResume={autoResume} readOnly={viewOnly} />
+                                )}
                                 <ContextMeter context={context} />
                               </>
                             }

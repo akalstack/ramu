@@ -61,6 +61,11 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id, z.string().max(2000).nullable()]),
       run: (s: string, command: string | null) => agents.setVerify(s, command),
     },
+    // The person raises or lowers how many automatic turns this one goal may take, without changing Settings.
+    'agent.goal.limit': {
+      args: z.tuple([id, z.union([z.number().int().min(1).max(1000), z.null(), z.literal('default')])]),
+      run: (s: string, limit: number | null | 'default') => agents.setGoalTurnLimit(s, limit),
+    },
     'agent.changes': {
       args: z.tuple([id, z.number().int().min(0), z.number().int().min(0), z.boolean().optional()]),
       run: (sessionId: string, cursor: number, knownLastSeq: number, paged?: boolean) =>

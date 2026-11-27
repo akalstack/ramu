@@ -599,6 +599,9 @@ export class AgentService {
   setVerify(...args: Parameters<GoalManager['setVerify']>) {
     return this.parts.goals.setVerify(...args)
   }
+  setGoalTurnLimit(...args: Parameters<GoalManager['setTurnLimit']>) {
+    return this.parts.goals.setTurnLimit(...args)
+  }
 
   updateGoal(...args: Parameters<GoalManager['updateGoal']>) {
     return this.parts.goals.updateGoal(...args)

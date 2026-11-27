@@ -4,6 +4,10 @@ export interface GoalPreferences {
   maxTurns: number | null
 }
 export const DEFAULT_GOAL_PREFERENCES: GoalPreferences = { mode: 'auto', maxTurns: 10 }
+/** The automatic follow-up turns this goal may take: its own limit when the person set one, else Settings'. */
+export function goalTurnLimit(goal: Pick<ChatGoal, 'maxTurns'>, preferences: Pick<GoalPreferences, 'maxTurns'>) {
+  return goal.maxTurns === undefined ? preferences.maxTurns : goal.maxTurns
+}
 /** What the agent reports when it declares a goal complete: each check it ran and the files it changed. */
 export interface GoalEvidence {
   checks: { name: string; passed: boolean; output?: string }[]
@@ -40,6 +44,8 @@ export interface ChatGoal {
   /** Only meaningful while `status` is `paused`. Absent means the user paused it. */
   pausedBy?: GoalPausedBy
   turns: number
+  /** This goal's own limit on automatic turns, set from the goal itself; absent follows Settings, null is no limit. */
+  maxTurns?: number | null
   reason: string
   updatedAt: number
   retryAt?: number

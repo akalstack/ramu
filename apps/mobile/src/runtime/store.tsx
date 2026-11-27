@@ -275,6 +275,8 @@ interface Store extends State {
   clearGoal(id: string): void
   /** Sets, changes or (null) removes the goal's verification command; rejects with the host's reason so the editor can show it. */
   setGoalVerify(id: string, command: string | null): Promise<void>
+  /** This goal's own limit on automatic turns: a number, null for none, or `default` to follow Settings. */
+  setGoalLimit(id: string, limit: number | null | 'default'): void
   /** Checks a thread held at a usage limit now instead of at the timer; resolves with whether it continued. */
   retryLimitNow(id: string): Promise<LimitRetryResult | null>
   /** This thread's own auto-resume choice at a limit; null clears it so the thread follows the host's default. */
@@ -2312,6 +2314,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       await invoke(chat.computerId, GOAL_VERIFY_METHOD, chat.sessionId, command)
       void refresh(chat.computerId).catch(report)
     },
+    setGoalLimit: (id, limit) => sessionAction(id, (pc, session) => invoke(pc, 'agent.goal.limit', session, limit)),
     retryLimitNow: async (id) => {
       const chat = ref.current.chats.find((c) => c.id === id)
       if (!chat?.sessionId) return null

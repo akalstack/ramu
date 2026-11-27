@@ -179,6 +179,24 @@ describe('Ramu goals', () => {
     })
   })
 
+  it('lets one goal take more turns than Settings allow, and carries on at once when its new limit leaves room', async () => {
+    prefs.goals.maxTurns = 1
+    service.setGoal(id, 'Implement and verify login')
+    done()
+    await tick()
+    done()
+    await tick()
+    expect(service.getGoal(id)).toMatchObject({ status: 'turn-limit', turns: 1 })
+    expect(service.setGoalTurnLimit(id, 3)).toMatchObject({ status: 'active', maxTurns: 3 })
+    await tick()
+    expect(service.getGoal(id)?.turns).toBe(2)
+    // The agent refining its goal keeps the person's limit; Default goes back to Settings.
+    service.setGoal(id, 'Implement and verify login with tests')
+    expect(service.getGoal(id)?.maxTurns).toBe(3)
+    expect(service.setGoalTurnLimit(id, 'default').maxTurns).toBeUndefined()
+    expect(service.setGoalTurnLimit(id, null).maxTurns).toBeNull()
+  })
+
   it('continues idle unfinished work, keeps user history intact, and stops at the cap', async () => {
     prefs.goals.maxTurns = 2
     service.setGoal(id, 'Implement and verify login')

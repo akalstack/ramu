@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { DEFAULT_GOAL_PREFERENCES } from '@ramu/shared/types'
 import { ScrollView, View } from 'react-native'
 import { helperActive } from '@ramu/shared/chat/helperPresentation'
 import { mobileThreadActivity } from '../runtime/threadActivity'
@@ -245,6 +246,8 @@ export function ThreadActivity({
             onToggle={() => store.toggleGoal(chat.id)}
             onClear={() => confirmClearGoal(say, () => store.clearGoal(chat.id))}
             onVerify={(command) => store.setGoalVerify(chat.id, command)}
+            defaultLimit={store.appPreferences[chat.computerId]?.goals?.maxTurns ?? DEFAULT_GOAL_PREFERENCES.maxTurns}
+            onLimit={(limit) => store.setGoalLimit(chat.id, limit)}
           />
         ) : null}
         {online && opened === 'queue' ? (
