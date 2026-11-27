@@ -72,7 +72,10 @@ export function ThreadActivity({
     void store.invoke(chat.computerId, 'agent.markAdviceRead', chat.sessionId).catch(() => {})
   }, [opened, online, chat.sessionId, chat.computerId, chat.unreadAdvice, settledAdvice, adviceSeen, store])
   const primary = activity.model.primary
-  if (!primary && !actions.length && !children && !leading) return null
+  // On the thread screen the row's height stays reserved while it is empty, so a pill appearing or going never moves the
+  // conversation above the message box.
+  if (!primary && !actions.length && !children && !leading)
+    return inlineStatus ? <View style={{ height: 32, marginTop: space.xs }} /> : null
   const label = (kind: ActivityKind | 'more'): string =>
     ({
       connection: say('Offline'),

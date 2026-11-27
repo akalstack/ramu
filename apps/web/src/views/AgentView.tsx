@@ -1228,18 +1228,18 @@ export const AgentView = memo(function AgentView({
                     </Button>
                   </div>
                 )}
-                {(hostOffline ||
-                  backgroundTerminals.terminals.length > 0 ||
-                  commands.length > 0 ||
-                  threadServers.servers.length > 0 ||
-                  browserActivity.tabs.length > 0 ||
-                  !!computerActivity.session ||
-                  providerWait ||
-                  liveGoal ||
-                  trayQueued.length > 0 ||
-                  pending.length > 0 ||
-                  (!!session && trayAgents.length > 0) ||
-                  dockQuestions.length > 0) && (
+                {hostOffline ||
+                backgroundTerminals.terminals.length > 0 ||
+                commands.length > 0 ||
+                threadServers.servers.length > 0 ||
+                browserActivity.tabs.length > 0 ||
+                !!computerActivity.session ||
+                providerWait ||
+                liveGoal ||
+                trayQueued.length > 0 ||
+                pending.length > 0 ||
+                (!!session && trayAgents.length > 0) ||
+                dockQuestions.length > 0 ? (
                   <ComposerTray className="chat-tray">
                     {dockQuestions.length > 0 && (
                       <QuestionDock
@@ -1315,6 +1315,14 @@ export const AgentView = memo(function AgentView({
                         />
                       )}
                     </TrayStack>
+                  </ComposerTray>
+                ) : (
+                  // The tray's row stays reserved while it is empty, so a chip appearing or going never moves the
+                  // conversation above.
+                  <ComposerTray className="chat-tray invisible" aria-hidden>
+                    <div className="composer-tray-stack">
+                      <span className="h-7" />
+                    </div>
                   </ComposerTray>
                 )}
                 {threadArchived && !viewOnly ? (
