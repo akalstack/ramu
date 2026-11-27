@@ -7436,9 +7436,12 @@ function deliveryStoreHarness() {
       { seq: 3, event: { kind: 'state', state: 'idle' } },
     ],
   }
+  const projectList = { current: [] }
   const invoke = async (method, ...args) => {
     calls.push([method, ...args])
     if (method === 'tasks.list') return [{ id: 'task', projectId: 'no-project', status: 'ready-for-review' }]
+    if (method === 'projects.list') return projectList.current
+    if (method === 'repos.list') return [{ id: 'r1', name: 'site' }]
     if (method === 'agent.all') return [{ id: 'session', taskId: 'task', createdAt: 1, state: 'idle', settings: {} }]
     if (method === 'agent.changes') return snapshot
     if (method === 'agent.tail') return { complete: true, events: snapshot.events }
@@ -7508,6 +7511,7 @@ function deliveryStoreHarness() {
     render,
     state,
     calls,
+    projectList,
     threadStart,
     attach,
     release() {
@@ -7617,6 +7621,19 @@ test('a refresh interrupted mid-stream recovers all missed text on the next conn
     [],
     'a thread nobody has open reads its tail, with no catch-up cursor to consume',
   )
+  h.dispose()
+})
+
+test('the once-a-minute read keeps each project’s repositories instead of asking for them again', async () => {
+  const h = deliveryStoreHarness()
+  h.attach()
+  h.projectList.current = [{ id: 'p1', name: 'Site' }]
+  await h.render().refresh('a', true)
+  await h.render().refresh('a', 'live')
+  assert.equal(h.calls.filter(([method]) => method === 'repos.list').length, 1)
+  assert.deepEqual(h.state.current.projects.find((project) => project.id === 'a:p1').repos, ['site'])
+  await h.render().refresh('a', true)
+  assert.equal(h.calls.filter(([method]) => method === 'repos.list').length, 2, 'a full read asks again')
   h.dispose()
 })
 

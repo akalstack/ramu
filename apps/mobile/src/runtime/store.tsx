@@ -826,8 +826,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (!candidate.parentId && (!held || candidate.createdAt > held.createdAt))
           newestSessions.set(candidate.taskId, candidate)
       }
+      // A project's repositories change only when someone adds or removes one, which a full read catches; the periodic
+      // read keeps the names it already has instead of asking for every project each time.
+      const heldRepos = new Map(known.projects.filter((p) => p.computerId === id).map((p) => [p.id, p.repos] as const))
       const projectViews = await mapBounded(projects, 8, async (p) => {
-        const repos = await read('repos.list', p.id)
+        const held = depth === 'live' ? heldRepos.get(scoped(id, p.id)) : undefined
+        const repos = held ? held.map((name) => ({ name })) : await read('repos.list', p.id)
         return {
           ...p,
           id: scoped(id, p.id),
@@ -1674,7 +1678,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             void refresh(computer.id, 'live').catch(report)
             void learnRoutes(computer.id)
           }
-    }, 20_000)
+      // A safety net: threads, transcripts and lists arrive as they change, and a dropped connection replays what it
+      // missed, so this only catches what slipped past both. Once a minute keeps the radio and the host quiet.
+    }, 60_000)
     return () => {
       app.remove()
       clearInterval(poll)
