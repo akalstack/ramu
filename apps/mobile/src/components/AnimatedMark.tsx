@@ -1,15 +1,19 @@
-import { useEffect, useRef, useState } from 'react'
-import { Animated, Easing, Pressable, View } from 'react-native'
+import { useEffect, useState } from 'react'
+import { Pressable, View } from 'react-native'
 import Svg, { Circle, Path } from 'react-native-svg'
 import Reanimated, {
   cancelAnimation,
   Easing as ReEasing,
   interpolate,
   useAnimatedProps,
+  useAnimatedStyle,
   useSharedValue,
+  withDelay,
   withRepeat,
   withTiming,
+  type SharedValue,
 } from 'react-native-reanimated'
+import { scheduleOnRN } from 'react-native-worklets'
 import { useTheme } from '../theme'
 import { useReducedMotion } from './Motion'
 import { tap as haptic } from './ui'
@@ -32,25 +36,18 @@ export function AnimatedMark({ size = 56 }: { size?: number }) {
   const k = size / VIEW
   const [first] = useState(() => !revealed)
   const draw = useSharedValue(first ? 0 : 1)
-  const drop = useRef(new Animated.Value(first ? 0 : 1)).current
-  const hop = useRef(new Animated.Value(0)).current
+  const drop = useSharedValue(first ? 0 : 1)
+  const hop = useSharedValue(0)
   useEffect(() => {
     if (!first) return
     revealed = true
     if (reduced) {
       draw.value = 1
-      drop.setValue(1)
+      drop.value = 1
       return
     }
-    // The stem's dash is an SVG prop, which the native driver cannot move; Reanimated draws it on the UI thread.
     draw.value = withTiming(1, { duration: 850, easing: ReEasing.bezier(0.22, 1, 0.36, 1) })
-    Animated.timing(drop, {
-      toValue: 1,
-      duration: 620,
-      delay: 420,
-      easing: Easing.linear,
-      useNativeDriver: true,
-    }).start()
+    drop.value = withDelay(420, withTiming(1, { duration: 620, easing: ReEasing.linear }))
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [mount only] by design; the values it reads beyond these are current as of that run
   }, [])
   const replay = () => {
@@ -69,14 +66,7 @@ export function AnimatedMark({ size = 56 }: { size?: number }) {
     transformOrigin: [(x - ORIGIN) * k, (y - ORIGIN) * k, 0],
   })
   // ramu-dot (reveal) and ramu-tap-dot (tap) compose: both rest at identity.
-  const dropY = drop.interpolate({
-    inputRange: [0, 0.48, 0.72, 0.88, 1],
-    outputRange: [-130, 8, -22, 3, 0].map((v) => v * k),
-  })
-  const dropX = drop.interpolate({ inputRange: [0, 0.48, 0.72, 0.88, 1], outputRange: [0.45, 1.16, 0.94, 1.03, 1] })
-  const dropSY = drop.interpolate({ inputRange: [0, 0.48, 0.72, 0.88, 1], outputRange: [0.45, 0.84, 1.06, 0.97, 1] })
-  const dropOpacity = drop.interpolate({ inputRange: [0, 0.48, 1], outputRange: [0, 1, 1] })
-  const { tilt, hopX, hopY, hopSX, hopSY } = wakeMotion(hop, k)
+  const { stemStyle, dotStyle } = useWakeStyles(hop, k, drop)
   const viewBox = MARK_VIEW_BOX
   const stem = useAnimatedProps(() => ({
     strokeDashoffset: STEM_LENGTH * (1 - draw.value),
@@ -85,7 +75,7 @@ export function AnimatedMark({ size = 56 }: { size?: number }) {
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={say('Animate Ramu logo')} onPress={replay} hitSlop={8}>
       <View style={{ width: size, height: size, overflow: 'visible' }}>
-        <Animated.View pointerEvents="none" style={[at(356, 694), { transform: [{ rotate: tilt }] }]}>
+        <Reanimated.View pointerEvents="none" style={[at(356, 694), stemStyle]}>
           <Svg width={size} height={size} viewBox={viewBox}>
             <WorkletPath
               d={STEM}
@@ -97,63 +87,63 @@ export function AnimatedMark({ size = 56 }: { size?: number }) {
               animatedProps={stem}
             />
           </Svg>
-        </Animated.View>
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            at(664, 622),
-            {
-              opacity: dropOpacity,
-              transform: [
-                { translateX: hopX },
-                { translateY: Animated.add(dropY, hopY) },
-                { scaleX: Animated.multiply(dropX, hopSX) },
-                { scaleY: Animated.multiply(dropSY, hopSY) },
-              ],
-            },
-          ]}
-        >
+        </Reanimated.View>
+        <Reanimated.View pointerEvents="none" style={[at(664, 622), dotStyle]}>
           <Svg width={size} height={size} viewBox={viewBox}>
             <Circle {...MARK.dot} fill={MARK.dotColor} />
           </Svg>
-        </Animated.View>
+        </Reanimated.View>
       </View>
     </Pressable>
   )
 }
 
-/** Plays the shared wake on a 0→1 value, on the native driver. */
-export function wake(value: Animated.Value, done?: () => void) {
-  value.setValue(0)
-  Animated.timing(value, {
-    toValue: 1,
-    duration: MARK_WAKE.duration,
-    easing: Easing.inOut(Easing.ease),
-    useNativeDriver: true,
-  }).start(({ finished }) => finished && done?.())
+/** Plays the shared wake on a 0→1 value, on the UI thread. */
+export function wake(value: SharedValue<number>, done?: () => void) {
+  value.value = 0
+  value.value = withTiming(1, { duration: MARK_WAKE.duration, easing: ReEasing.inOut(ReEasing.ease) }, (finished) => {
+    if (finished && done) scheduleOnRN(done)
+  })
 }
 
-/** The shared wake keyframes as transforms for a mark drawn `k` points per artwork unit. */
-export function wakeMotion(value: Animated.Value, k: number) {
-  const dot = MARK_WAKE.dot
-  const range = dot.map((frame) => frame.at)
-  return {
-    tilt: value.interpolate({
-      inputRange: MARK_WAKE.stem.map((frame) => frame.at),
-      outputRange: MARK_WAKE.stem.map((frame) => `${frame.rotate}deg`),
-    }),
-    hopX: value.interpolate({ inputRange: range, outputRange: dot.map((frame) => frame.x * k) }),
-    hopY: value.interpolate({ inputRange: range, outputRange: dot.map((frame) => frame.y * k) }),
-    hopSX: value.interpolate({ inputRange: range, outputRange: dot.map((frame) => frame.scaleX) }),
-    hopSY: value.interpolate({ inputRange: range, outputRange: dot.map((frame) => frame.scaleY) }),
-  }
+const STEM_AT = MARK_WAKE.stem.map((frame) => frame.at)
+const STEM_TURN = MARK_WAKE.stem.map((frame) => frame.rotate)
+const DOT_AT = MARK_WAKE.dot.map((frame) => frame.at)
+const DOT_X = MARK_WAKE.dot.map((frame) => frame.x)
+const DOT_Y = MARK_WAKE.dot.map((frame) => frame.y)
+const DOT_SX = MARK_WAKE.dot.map((frame) => frame.scaleX)
+const DOT_SY = MARK_WAKE.dot.map((frame) => frame.scaleY)
+const DROP_AT = [0, 0.48, 0.72, 0.88, 1]
+
+/**
+ * The shared wake keyframes as styles for a mark drawn `k` points per artwork unit, and, with `drop`, the dot falling
+ * onto the stem the first time it shows.
+ */
+function useWakeStyles(value: SharedValue<number>, k: number, drop?: SharedValue<number>) {
+  const stemStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${interpolate(value.value, STEM_AT, STEM_TURN)}deg` }],
+  }))
+  const dotStyle = useAnimatedStyle(() => {
+    const v = value.value
+    const d = drop ? drop.value : 1
+    return {
+      opacity: drop ? interpolate(d, [0, 0.48, 1], [0, 1, 1]) : 1,
+      transform: [
+        { translateX: interpolate(v, DOT_AT, DOT_X) * k },
+        { translateY: interpolate(v, DOT_AT, DOT_Y) * k + interpolate(d, DROP_AT, [-130, 8, -22, 3, 0]) * k },
+        { scaleX: interpolate(v, DOT_AT, DOT_SX) * interpolate(d, DROP_AT, [0.45, 1.16, 0.94, 1.03, 1]) },
+        { scaleY: interpolate(v, DOT_AT, DOT_SY) * interpolate(d, DROP_AT, [0.45, 0.84, 1.06, 0.97, 1]) },
+      ],
+    }
+  })
+  return { stemStyle, dotStyle }
 }
 
 /** The mark at rest that wakes on `value`: the startup screen's, where the launch image leaves it. */
-export function WakingMark({ size, value }: { size: number; value: Animated.Value }) {
+export function WakingMark({ size, value }: { size: number; value: SharedValue<number> }) {
   const { c } = useTheme()
   const k = size / VIEW
-  const { tilt, hopX, hopY, hopSX, hopSY } = wakeMotion(value, k)
+  const { stemStyle, dotStyle } = useWakeStyles(value, k)
   const at = (x: number, y: number) => ({
     left: 0,
     top: 0,
@@ -164,21 +154,16 @@ export function WakingMark({ size, value }: { size: number; value: Animated.Valu
   })
   return (
     <View style={{ width: size, height: size, overflow: 'visible' }}>
-      <Animated.View style={[at(MARK.stemPivot[0], MARK.stemPivot[1]), { transform: [{ rotate: tilt }] }]}>
+      <Reanimated.View style={[at(MARK.stemPivot[0], MARK.stemPivot[1]), stemStyle]}>
         <Svg width={size} height={size} viewBox={MARK_VIEW_BOX}>
           <Path d={STEM} stroke={c.text} strokeWidth={120} strokeLinecap="round" fill="none" />
         </Svg>
-      </Animated.View>
-      <Animated.View
-        style={[
-          at(MARK.dot.cx, MARK.dot.cy),
-          { transform: [{ translateX: hopX }, { translateY: hopY }, { scaleX: hopSX }, { scaleY: hopSY }] },
-        ]}
-      >
+      </Reanimated.View>
+      <Reanimated.View style={[at(MARK.dot.cx, MARK.dot.cy), dotStyle]}>
         <Svg width={size} height={size} viewBox={MARK_VIEW_BOX}>
           <Circle {...MARK.dot} fill={MARK.dotColor} />
         </Svg>
-      </Animated.View>
+      </Reanimated.View>
     </View>
   )
 }

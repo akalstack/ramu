@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { AccessibilityInfo, Animated, Platform, StyleSheet, View } from 'react-native'
+import { useEffect, useState, type ReactNode } from 'react'
+import { AccessibilityInfo, Platform, StyleSheet, View } from 'react-native'
+import Reanimated, { cancelAnimation, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
+import { scheduleOnRN } from 'react-native-worklets'
 import * as SplashScreen from 'expo-splash-screen'
 import { MARK_WAKE, STARTUP_FADE, STARTUP_MARK_SIZE } from '@ramu/shared/brandMark'
 import { useTheme } from '../theme'
@@ -15,8 +17,9 @@ if (Platform.OS !== 'web') void SplashScreen.preventAutoHideAsync().catch(() => 
 export function StartupScreen({ ready, children }: { ready: boolean; children: ReactNode }) {
   const say = useSay()
   const { c } = useTheme()
-  const motion = useRef(new Animated.Value(0)).current
-  const opacity = useRef(new Animated.Value(1)).current
+  const motion = useSharedValue(0)
+  const opacity = useSharedValue(1)
+  const fade = useAnimatedStyle(() => ({ opacity: opacity.value }))
   const [reduced, setReduced] = useState<boolean | null>(null)
   const [motionDone, setMotionDone] = useState(false)
   const [closed, setClosed] = useState(false)
@@ -37,21 +40,16 @@ export function StartupScreen({ ready, children }: { ready: boolean; children: R
     wake(motion, () => setMotionDone(true))
     const fallback = setTimeout(() => setMotionDone(true), MARK_WAKE.duration + 600)
     return () => {
-      motion.stopAnimation()
+      cancelAnimation(motion)
       clearTimeout(fallback)
     }
   }, [reduced, motion])
   useEffect(() => {
     if (!ready || !motionDone) return
-    const animation = Animated.timing(opacity, {
-      toValue: 0,
-      duration: reduced ? 0 : STARTUP_FADE,
-      useNativeDriver: true,
+    opacity.value = withTiming(0, { duration: reduced ? 0 : STARTUP_FADE }, (finished) => {
+      if (finished) scheduleOnRN(setClosed, true)
     })
-    animation.start(({ finished }) => {
-      if (finished) setClosed(true)
-    })
-    return () => animation.stop()
+    return () => cancelAnimation(opacity)
   }, [ready, motionDone, reduced, opacity])
   return (
     <View
@@ -69,16 +67,17 @@ export function StartupScreen({ ready, children }: { ready: boolean; children: R
         {children}
       </View>
       {!closed ? (
-        <Animated.View
+        <Reanimated.View
           accessibilityRole="progressbar"
           accessibilityLabel={say('Starting Ramu')}
           style={[
             StyleSheet.absoluteFill,
-            { backgroundColor: c.canvas, opacity, alignItems: 'center', justifyContent: 'center' },
+            { backgroundColor: c.canvas, alignItems: 'center', justifyContent: 'center' },
+            fade,
           ]}
         >
           <WakingMark size={STARTUP_MARK_SIZE} value={motion} />
-        </Animated.View>
+        </Reanimated.View>
       ) : null}
     </View>
   )
