@@ -16,6 +16,7 @@ import { collapseScheduleRuns } from '@ramu/shared/chat/scheduleRuns'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { BackHandler, Platform, Pressable, RefreshControl, ScrollView as HScroll, StyleSheet, View } from 'react-native'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   Folder,
   FolderGit2,
@@ -178,6 +179,7 @@ export default function Threads() {
       .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
   }, [scoped, filter])
   const filtering = filter !== 'all'
+  const insets = useSafeAreaInsets()
   const sync = threadsSync(
     computers
       .filter((host) => merged || host.id === selected)
@@ -835,8 +837,6 @@ export default function Threads() {
                   />
                 ))}
             </HScroll>
-            {/* Floats over the first rows from the bottom of this header, so the list never moves for it. */}
-            <View>{refreshing ? <SyncLine what="threads" edge="top" /> : null}</View>
           </>
         }
         ListHeaderComponentStyle={{ zIndex: 2, elevation: 2 }}
@@ -858,11 +858,8 @@ export default function Threads() {
                 </Pressable>
               </View>
             ) : null}
-            {filtering || mine.length || projectList.length ? null : sync === 'loading' ? (
-              <View style={{ alignItems: 'center', padding: space.xl * 2 }}>
-                <SyncLine what="threads" />
-              </View>
-            ) : (
+            {/* While the host's threads are first read the list stays empty; the floating pill says it is syncing. */}
+            {filtering || mine.length || projectList.length || sync === 'loading' ? null : (
               <View style={{ alignItems: 'center', padding: space.xl * 2, gap: space.m }}>
                 {sync === 'offline' ? (
                   <WifiOff size={28} color={c.placeholder} />
@@ -886,6 +883,16 @@ export default function Threads() {
         open={usageOpen}
         onClose={() => setUsageOpen(false)}
       />
+      {/* Floats over the list above the tab bar, as a thread's does above the message box: the list never moves for
+          it, and it shows wherever the list is scrolled. */}
+      {refreshing || sync === 'loading' ? (
+        <View
+          pointerEvents="none"
+          style={{ position: 'absolute', left: 0, right: 0, bottom: insets.bottom + 72, alignItems: 'center' }}
+        >
+          <SyncLine what="threads" />
+        </View>
+      ) : null}
       {selection.on ? null : (
         <FloatingActionButton icon={SquarePen} label={t.newChat} onPress={() => router.push('/new')} />
       )}

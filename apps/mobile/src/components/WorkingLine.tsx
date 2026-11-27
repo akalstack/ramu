@@ -144,30 +144,16 @@ export function WorkingLine({
  * Quieter than the turn's status: nothing is wrong and nothing needs the person, so it neither shimmers nor takes the accent.
  */
 /**
- * A pill saying a list or a thread is being read again. With `edge` it floats over the content at that edge of the
- * view holding it and takes no room, so nothing moves when it comes and goes; without, it stands in an empty list.
+ * A pill saying a list or a thread is being read again. Its screen floats it over the content, so nothing moves when it
+ * comes and goes.
  */
-export function SyncLine({ what = 'messages', edge }: { what?: 'messages' | 'threads'; edge?: 'top' | 'bottom' }) {
+export function SyncLine({ what = 'messages' }: { what?: 'messages' | 'threads' }) {
   const store = useStore()
   const { c } = useTheme()
   const label =
     what === 'threads' ? translate(store.language, 'Syncing threads…') : translate(store.language, 'Syncing messages…')
   return (
-    <View
-      pointerEvents="none"
-      style={
-        edge
-          ? {
-              position: 'absolute',
-              left: 0,
-              right: 0,
-              alignItems: 'center',
-              zIndex: 2,
-              ...(edge === 'top' ? { top: '100%', marginTop: space.xs } : { bottom: '100%', marginBottom: space.xs }),
-            }
-          : { alignItems: 'center' }
-      }
-    >
+    <View pointerEvents="none" style={{ alignItems: 'center' }}>
       {/* The composer's glass, so it reads as part of the controls floating over the conversation. */}
       <Glass floating radius={radius.full}>
         <View
