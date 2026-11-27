@@ -1,6 +1,14 @@
 import { CHAT_MOTION, SENT_MOTION, TOOL_MOTION } from '@ramu/shared/chat/presentation'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { AccessibilityInfo, LayoutAnimation, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native'
+import {
+  AccessibilityInfo,
+  LayoutAnimation,
+  PixelRatio,
+  View,
+  type StyleProp,
+  type TextStyle,
+  type ViewStyle,
+} from 'react-native'
 import Reanimated, {
   cancelAnimation,
   Easing as ReEasing,
@@ -88,7 +96,10 @@ export function Shimmer({
   style?: StyleProp<TextStyle>
 }) {
   const reduced = useReducedMotion()
-  const [width, setWidth] = useState(0)
+  // The width belongs to the text it was measured for: a new label (the next tool) gets its bright copies only once
+  // it is laid out, rather than copies cut to the last label's width over it.
+  const [measured, setMeasured] = useState({ text: '', width: 0 })
+  const width = measured.text === children ? measured.width : 0
   sweep.useRunning(!reduced)
   const textStyle = [{ fontVariant: ['tabular-nums' as const] }, style]
   return (
@@ -98,7 +109,7 @@ export function Shimmer({
         tone="muted"
         numberOfLines={1}
         style={textStyle}
-        onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+        onLayout={(event) => setMeasured({ text: children, width: event.nativeEvent.layout.width })}
       >
         {children}
       </T>
@@ -127,9 +138,12 @@ function ShimmerBand({
   width: number
   children: ReactNode
 }) {
+  // On whole device pixels: the window and the copy inside it move by the same amount in opposite directions, and a
+  // fractional move rounded differently for each left the bright copy half a pixel off the label, which read as two.
+  const scale = PixelRatio.get()
   const left = (pass: number) => {
     'worklet'
-    return pass * 2 * width - span / 2
+    return Math.round((pass * 2 * width - span / 2) * scale) / scale
   }
   const band = useAnimatedStyle(() => ({ transform: [{ translateX: left(sweep.value.value) }] }))
   const content = useAnimatedStyle(() => ({ transform: [{ translateX: -left(sweep.value.value) }] }))
