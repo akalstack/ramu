@@ -8168,15 +8168,12 @@ test('Threads uses native toolbar buttons and its usage action opens the shared 
   })
   const render = () => hooks.render(() => Threads())
   const tree = render()
-  // Until the host's threads are read a pill floating over the list says it is syncing, outside the list so nothing
-  // in it moves, and the list says "No threads yet" only afterwards.
+  // Until the host's threads are read the empty list says it is syncing, and "No threads yet" only afterwards.
   const footer = (rendered) => nodes(find(rendered, screen.PageFlatList).props.ListFooterComponent)
-  const pill = (rendered) => nodes(rendered).find((node) => node.type === 'SyncLine')
-  assert.equal(pill(tree).props.what, 'threads')
-  assert.ok(!footer(tree).some((node) => node.type === 'SyncLine'))
+  assert.equal(footer(tree).find((node) => node.type === 'SyncLine').props.what, 'threads')
   assert.ok(!JSON.stringify(footer(tree)).includes('No threads yet'))
   threadReads = { a: 'read' }
-  assert.equal(pill(render()), undefined)
+  assert.ok(!footer(render()).some((node) => node.type === 'SyncLine'))
   assert.ok(JSON.stringify(footer(render())).includes('No threads yet'))
   const header = nodes(tree).find((node) => node.type === screen.Header)
   assert.equal(header.props.scrollEdge, true)

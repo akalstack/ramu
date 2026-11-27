@@ -14,9 +14,17 @@ import { sharedValue } from '@ramu/shared/sharedFields'
 import { shortHostName } from '@ramu/shared/hostLabel'
 import { collapseScheduleRuns } from '@ramu/shared/chat/scheduleRuns'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { BackHandler, Platform, Pressable, RefreshControl, ScrollView as HScroll, StyleSheet, View } from 'react-native'
+import {
+  ActivityIndicator,
+  BackHandler,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView as HScroll,
+  StyleSheet,
+  View,
+} from 'react-native'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   Folder,
   FolderGit2,
@@ -179,7 +187,6 @@ export default function Threads() {
       .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
   }, [scoped, filter])
   const filtering = filter !== 'all'
-  const insets = useSafeAreaInsets()
   const sync = threadsSync(
     computers
       .filter((host) => merged || host.id === selected)
@@ -395,12 +402,27 @@ export default function Threads() {
     store.inbox,
   ])
   const newChat = (projectId: string) => router.push({ pathname: '/new', params: { project: projectId } })
+  // A list read again says so beside its first heading, where it covers nothing and nothing moves for it.
+  const firstLabel = rows.find((row) => row.kind === 'label')?.key
   const renderRow = (row: HomeRow) => {
     if (row.kind === 'label')
       return (
         <SectionLabel
           right={
-            row.right ? (
+            refreshing && row.key === firstLabel ? (
+              <View
+                accessible
+                accessibilityRole="text"
+                accessibilityLabel={say('Syncing threads…')}
+                accessibilityLiveRegion="polite"
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+              >
+                <ActivityIndicator size="small" color={c.muted} style={{ transform: [{ scale: 0.7 }] }} />
+                <T size={font.caption} tone="muted">
+                  {say('Syncing…')}
+                </T>
+              </View>
+            ) : row.right ? (
               <T size={font.caption} tone="muted">
                 {translate(store.language, row.right)}
               </T>
@@ -858,8 +880,11 @@ export default function Threads() {
                 </Pressable>
               </View>
             ) : null}
-            {/* While the host's threads are first read the list stays empty; the floating pill says it is syncing. */}
-            {filtering || mine.length || projectList.length || sync === 'loading' ? null : (
+            {filtering || mine.length || projectList.length ? null : sync === 'loading' ? (
+              <View style={{ alignItems: 'center', padding: space.xl * 2 }}>
+                <SyncLine what="threads" />
+              </View>
+            ) : (
               <View style={{ alignItems: 'center', padding: space.xl * 2, gap: space.m }}>
                 {sync === 'offline' ? (
                   <WifiOff size={28} color={c.placeholder} />
@@ -883,16 +908,6 @@ export default function Threads() {
         open={usageOpen}
         onClose={() => setUsageOpen(false)}
       />
-      {/* Floats over the list above the tab bar, as a thread's does above the message box: the list never moves for
-          it, and it shows wherever the list is scrolled. */}
-      {refreshing || sync === 'loading' ? (
-        <View
-          pointerEvents="none"
-          style={{ position: 'absolute', left: 0, right: 0, bottom: insets.bottom + 72, alignItems: 'center' }}
-        >
-          <SyncLine what="threads" />
-        </View>
-      ) : null}
       {selection.on ? null : (
         <FloatingActionButton icon={SquarePen} label={t.newChat} onPress={() => router.push('/new')} />
       )}
