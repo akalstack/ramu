@@ -2,6 +2,7 @@ import { expect, it } from 'vitest'
 import {
   branchForTitle,
   resolveCheckoutMode,
+  checkoutBusyForDefault,
   validBranchPrefix,
   validBranchName,
   parseWorkspaceChoice,
@@ -90,4 +91,24 @@ it('retains bounded manual branch edits but scopes generated names to their orig
   ])
     expect(parseBranchNameDraft(value)).toBeUndefined()
   expect(readWorkspaceChoice(JSON.stringify({ version: 1, mode: null, branch: manual })).branch).toEqual(manual)
+})
+
+it('counts running threads in the checkout only when the default puts a new thread beside them', () => {
+  const threads = [
+    { projectId: 'p', mode: 'current', status: 'running' },
+    { projectId: 'p', mode: 'current', status: 'running' },
+    { projectId: 'p', mode: 'current', status: 'idle' },
+    { projectId: 'p', mode: 'worktree', status: 'running' },
+    { projectId: 'other', mode: 'current', status: 'running' },
+  ] as const
+  const byDefault = resolveCheckoutMode({ defaultMode: 'current' })
+  expect(checkoutBusyForDefault({ resolution: byDefault, projectId: 'p', threads })).toBe(2)
+  // The person chose this checkout, or it cannot branch: nothing to suggest.
+  const chosen = resolveCheckoutMode({ defaultMode: 'current', manual: 'current' })
+  expect(checkoutBusyForDefault({ resolution: chosen, projectId: 'p', threads })).toBe(0)
+  expect(
+    checkoutBusyForDefault({ resolution: byDefault, projectId: 'p', threads, worktreeUnavailable: 'No commits' }),
+  ).toBe(0)
+  const worktree = resolveCheckoutMode({ defaultMode: 'worktree' })
+  expect(checkoutBusyForDefault({ resolution: worktree, projectId: 'p', threads })).toBe(0)
 })

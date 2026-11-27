@@ -1,4 +1,4 @@
-import type { CheckoutMode } from './types/workspace'
+import type { CheckoutMode, Task } from './types/workspace'
 
 export type BranchNamingStrategy = 'fixed' | 'semantic' | 'custom'
 /** An unresolved default remains distinct from a manual choice or an existing workspace. */
@@ -158,4 +158,21 @@ export function resolveCheckoutMode(input: {
       blocked: source !== 'default',
     }
   return { mode, source, reason: null, blocked: false }
+}
+
+/**
+ * How many threads have a turn running in this project's own checkout, when a new thread would join them only because
+ * that is the default. A choice the person made, or a worktree that cannot be made, is never second-guessed.
+ */
+export function checkoutBusyForDefault(input: {
+  resolution: { mode: CheckoutMode; source: 'default' | 'manual' | 'workspace' }
+  projectId: string
+  threads: readonly Pick<Task, 'projectId' | 'mode' | 'status'>[]
+  worktreeUnavailable?: string | null
+}): number {
+  if (input.resolution.source !== 'default' || input.resolution.mode !== 'current' || input.worktreeUnavailable)
+    return 0
+  return input.threads.filter(
+    (thread) => thread.projectId === input.projectId && thread.mode === 'current' && thread.status === 'running',
+  ).length
 }

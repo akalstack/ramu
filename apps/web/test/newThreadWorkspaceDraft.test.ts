@@ -41,6 +41,8 @@ const state = vi.hoisted(() => ({
   elsewhere: [] as { host: string; method: string; args: unknown[] }[],
   opened: [] as { host: string; taskId: string }[],
   workspaces: [] as { id: string; projectId: string; name: string }[],
+  tasks: [] as { projectId: string; mode: 'current' | 'worktree'; status: string }[],
+  buttons: [] as { children?: ReactNode; onClick?: () => void }[],
 }))
 vi.mock('../src/i18n', () => ({
   useLanguage() {},
@@ -62,6 +64,7 @@ vi.mock('../src/workspace/workspace', () => ({
     projects: [{ id: 'p', name: 'Project' }],
     repos: { p: [{ id: 'repo', name: 'Repo' }] },
     workspaces: state.workspaces,
+    tasks: state.tasks,
     composing: 'p',
     composingWorkspace: null,
     refresh: async () => {},
@@ -172,7 +175,10 @@ vi.mock('../src/components/combobox', () => ({
   },
 }))
 vi.mock('../src/components/desktop-button', () => ({
-  Button: ({ children }: { children?: ReactNode }) => createElement('button', null, children),
+  Button: (props: { children?: ReactNode; onClick?: () => void }) => {
+    state.buttons.push(props)
+    return createElement('button', null, props.children)
+  },
 }))
 vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: async () => {}, setQueryData() {} }),
@@ -196,6 +202,8 @@ import { startingThreads } from '../src/workspace/startingThreads'
 
 beforeEach(() => {
   state.openedTasks = []
+  state.tasks = []
+  state.buttons = []
   state.returnedTo = []
   state.prompt = 'Fix login'
   state.failMethod = ''
@@ -449,4 +457,15 @@ it('Auto never sends a stale or missing destination to the server', async () => 
   render(AUTO_PROJECT)
   await expect(state.composer!.onSubmit([])).rejects.toThrow('no longer available')
   expect(state.calls.some((call) => call.method === 'tasks.create')).toBe(false)
+})
+
+it('offers a new worktree when the default checkout already has a thread at work', () => {
+  expect(render()).not.toContain('working in this checkout')
+  state.tasks = [
+    { projectId: 'p', mode: 'current', status: 'running' },
+    { projectId: 'p', mode: 'worktree', status: 'running' },
+  ]
+  expect(render()).toContain('Another thread is working in this checkout.')
+  state.buttons.find((button) => button.children === 'Use a new worktree')!.onClick!()
+  expect(state.draft.choose).toHaveBeenCalledWith({ mode: 'worktree', branch: undefined })
 })
