@@ -242,6 +242,34 @@ function HostMeters({ data }: { data: ResourceSnapshot }) {
   )
 }
 
+/** A thread's build daemons as one line: kept up between builds, and stopped by Ramu once the thread rests. */
+function DaemonsLine({ hostId, daemons }: { hostId: string; daemons: ThreadServer[] }) {
+  const say = useSay()
+  const store = useStore()
+  const invoke = store.invoke as unknown as Invoke
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, paddingLeft: space.m }}>
+      <View style={{ flex: 1 }}>
+        <T size={font.control} numberOfLines={1}>
+          {say('{0} build daemons', { 0: daemons.length })}
+        </T>
+        <T size={font.caption} tone="muted" numberOfLines={2}>
+          {[...new Set(daemons.map((daemon) => daemon.daemon))].join(', ')}
+        </T>
+      </View>
+      <Button
+        kind="ghost"
+        title={say('Stop')}
+        accessibilityLabel={say('Stop build daemons')}
+        onPress={() => {
+          for (const daemon of daemons)
+            void invoke(hostId, 'servers.stop', daemon.taskId, daemon.pid, daemon.port).catch(() => {})
+        }}
+      />
+    </View>
+  )
+}
+
 function ServerLine({ hostId, server }: { hostId: string; server: ThreadServer }) {
   const say = useSay()
   const store = useStore()
@@ -293,7 +321,7 @@ function ThreadRow({
   thread,
   divider,
   cores,
-  servers,
+  servers: all,
 }: {
   hostId: string
   thread: ThreadResources
@@ -328,7 +356,10 @@ function ThreadRow({
       : activity === 'idle'
         ? { text: say('Idle'), color: c.muted, background: c.fill }
         : { text: say('Left running'), color: c.warn, background: c.warnWash }
-  const details = thread.items.length + servers.length
+  // Build daemons only speed up the next build: one line for all of them, apart from the servers the person may open.
+  const daemons = [...new Map(all.filter((server) => server.daemon).map((server) => [server.pid, server])).values()]
+  const servers = all.filter((server) => !server.daemon)
+  const details = thread.items.length + servers.length + (daemons.length ? 1 : 0)
   return (
     <View style={{ padding: space.m, gap: space.s, borderTopWidth: divider ? 0.5 : 0, borderTopColor: c.line }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m }}>
@@ -384,6 +415,7 @@ function ThreadRow({
       {open
         ? servers.map((server) => <ServerLine key={`${server.pid}:${server.port}`} hostId={hostId} server={server} />)
         : null}
+      {open && daemons.length ? <DaemonsLine hostId={hostId} daemons={daemons} /> : null}
     </View>
   )
 }

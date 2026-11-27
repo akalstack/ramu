@@ -59,6 +59,16 @@ it('gives back what a thread holds when it is marked done, and leaves other thre
     ),
   }
   const hostBrowser = { closeThread: vi.fn(), threadTabs: vi.fn(() => 1) }
+  const agentItem = { kind: 'agent' as const, id: 'main', name: 'Agent' }
+  // One server the agent left behind with nohup, and a Gradle daemon on two ports, which is not asked about.
+  const servers = {
+    list: vi.fn(async () => [
+      { pid: 41, port: 3000, owner: agentItem, orphaned: false },
+      { pid: 42, port: 17038, owner: agentItem, orphaned: false, daemon: 'Gradle daemon' },
+      { pid: 42, port: 17039, owner: agentItem, orphaned: false, daemon: 'Gradle daemon' },
+    ]),
+    stopLeftBehind: vi.fn(async () => 2),
+  }
   const table = registerWorkspaceHandlers({
     workspace,
     terminals,
@@ -70,12 +80,13 @@ it('gives back what a thread holds when it is marked done, and leaves other thre
     testDevices,
     browser,
     hostBrowser,
+    servers,
   } as unknown as HandlerContext)
   const server = terminals.launchBackground(task.id, null, tmpdir(), 'sleep 300')
   const unrelated = terminals.launchBackground(other.id, null, tmpdir(), 'sleep 300')
 
   // Tabs in the host's own browser count and close as well as the attached desktop's.
-  expect(await table['tasks.doneImpact']!.run(task.id)).toMatchObject({ browserTabs: 3 })
+  expect(await table['tasks.doneImpact']!.run(task.id)).toMatchObject({ browserTabs: 3, servers: 1 })
   browser.view.mockClear()
 
   const done = table['tasks.done']!
@@ -87,6 +98,7 @@ it('gives back what a thread holds when it is marked done, and leaves other thre
   expect(testDevices.releaseThread).toHaveBeenCalledWith(task.id)
   expect(watchers.release).toHaveBeenCalledWith(task.id)
   expect(hostBrowser.closeThread).toHaveBeenCalledWith(task.id)
+  expect(servers.stopLeftBehind).toHaveBeenCalledWith(task.id, { all: true })
   await until(() => browser.view.mock.calls.length === 3)
   expect(browser.view.mock.calls.slice(1).map(([, command]) => command)).toEqual([
     { kind: 'close', tabId: 'tab-1' },

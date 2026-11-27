@@ -2181,6 +2181,12 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Matched by its limits': 'Dicocokkan dari batasnya',
   'Refreshes when this provider next runs.': 'Diperbarui saat provider ini berjalan lagi.',
   Limit: 'Batas',
+  '{0} build daemons': '{0} daemon build',
+  'Build daemons': 'Daemon build',
+  'Stop build daemons': 'Hentikan daemon build',
+  'Kept up between builds; Ramu stops them once the thread has rested ten minutes.':
+    'Tetap berjalan di antara build; Ramu menghentikannya setelah thread diam sepuluh menit.',
+  '{0} servers left running': '{0} server yang masih berjalan',
   'Stopped {0} idle agents, freeing {1} GB': 'Menghentikan {0} agen menganggur, membebaskan {1} GB',
   'Stop {0} idle agents · {1}': 'Hentikan {0} agen menganggur · {1}',
   'Each starts again with its thread’s next message. Servers and terminals keep running.':

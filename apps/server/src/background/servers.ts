@@ -4,6 +4,7 @@ import { promisify } from 'node:util'
 import type { ProcessRoot } from '@ramu/shared/resources'
 import {
   attributeServers,
+  buildDaemon,
   ownerFromEnvironment,
   parseListening,
   parseSs,
@@ -39,28 +40,40 @@ async function readListening(): Promise<ListeningSocket[]> {
   }
 }
 
-/** The owner a detached process's environment names. Only the few listening processes outside every tree are read. */
-async function readEnvironmentOwners(pids: number[]): Promise<Map<number, string>> {
+/**
+ * The owner a detached process's environment names, and the build daemon its command line is. Only the few listening
+ * processes outside every tree are read.
+ */
+async function readDetached(pids: number[]): Promise<{ owners: Map<number, string>; daemons: Map<number, string> }> {
   const owners = new Map<number, string>()
-  if (!pids.length) return owners
+  const daemons = new Map<number, string>()
+  const learn = (pid: number, text: string) => {
+    const owner = ownerFromEnvironment(text)
+    if (owner) owners.set(pid, owner)
+    const daemon = buildDaemon(text)
+    if (daemon) daemons.set(pid, daemon)
+  }
+  if (!pids.length) return { owners, daemons }
   if (process.platform === 'linux') {
     await Promise.all(
       pids.map(async (pid) => {
-        const owner = ownerFromEnvironment(await readFile(`/proc/${pid}/environ`, 'utf8').catch(() => ''))
-        if (owner) owners.set(pid, owner)
+        const [environment, command] = await Promise.all([
+          readFile(`/proc/${pid}/environ`, 'utf8').catch(() => ''),
+          readFile(`/proc/${pid}/cmdline`, 'utf8').catch(() => ''),
+        ])
+        learn(pid, `${command.replaceAll('\0', ' ')}\0${environment}`)
       }),
     )
-    return owners
+    return { owners, daemons }
   }
-  if (process.platform !== 'darwin') return owners
+  if (process.platform !== 'darwin') return { owners, daemons }
   for (const pid of pids) {
     const { stdout } = await run('/bin/ps', ['-Eww', '-o', 'command=', '-p', String(pid)], { timeout: 2000 }).catch(
       () => ({ stdout: '' }),
     )
-    const owner = ownerFromEnvironment(stdout)
-    if (owner) owners.set(pid, owner)
+    learn(pid, stdout)
   }
-  return owners
+  return { owners, daemons }
 }
 
 /** Statuses that say "not for a browser": the listener wants a credential or another protocol, so a tab shows nothing. */
@@ -99,7 +112,7 @@ export class ServerService {
     private readonly sources = {
       listening: readListening,
       processes: readProcesses,
-      environment: readEnvironmentOwners,
+      detached: readDetached,
       answersHttp,
     },
   ) {}
@@ -133,6 +146,24 @@ export class ServerService {
     this.cached = null
   }
 
+  /**
+   * Stops a thread's build daemons, which only speed up its next build; with `all`, every server the thread started, as
+   * when it is marked done and gives back what it holds.
+   */
+  async stopLeftBehind(taskId: string, { all = false } = {}): Promise<number> {
+    this.cached = null
+    const servers = (await this.list(taskId)).filter((server) => all || server.daemon)
+    // A daemon listens on several ports; each process is stopped once.
+    const pids = [...new Map(servers.map((server) => [server.pid, server])).values()]
+    let stopped = 0
+    for (const server of pids)
+      await this.stop(taskId, server.pid, server.port).then(
+        () => stopped++,
+        () => {},
+      )
+    return stopped
+  }
+
   private async read(): Promise<ThreadServer[]> {
     const roots = this.roots()
     for (const root of roots) {
@@ -144,12 +175,14 @@ export class ServerService {
     const [sockets, rows] = await Promise.all([this.sources.listening(), this.sources.processes()])
     const owners = processOwners(rows, roots)
     const detached = [...new Set(sockets.map((socket) => socket.pid).filter((pid) => !owners.has(pid)))]
-    const environment = await this.sources.environment(detached)
-    const found = attributeServers(sockets, owners, roots, environment, this.ended)
+    const { owners: environment, daemons } = await this.sources.detached(detached)
+    const found = attributeServers(sockets, owners, roots, environment, this.ended, daemons)
     const now = Date.now()
     const value = await Promise.all(
       found.map(async (server) => {
         const key = `${server.pid}:${server.port}`
+        // A build daemon is never a page; it is not asked.
+        if (server.daemon) return { ...server, web: false }
         let known = this.web.get(key)
         if (!known || now - known.at > WEB_CACHE_MS) {
           known = { at: now, web: await this.sources.answersHttp(server) }

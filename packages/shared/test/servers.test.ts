@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
 import {
+  buildDaemon,
   attributeServers,
   ownerFromEnvironment,
   parseListening,
@@ -80,4 +81,21 @@ it('gives servers to the item that started them, by tree or by environment, and 
 it('writes the address a person would type', () => {
   expect(serverUrl({ port: 5173, host: '127.0.0.1' })).toBe('http://localhost:5173')
   expect(serverUrl({ port: 4000, host: '::1' })).toBe('http://[::1]:4000')
+})
+
+it('recognises build daemons by their command line, and nothing else, even with build options in the environment', () => {
+  const java =
+    '/Library/Java/JavaVirtualMachines/jdk-26.jdk/Contents/Home/bin/java --add-opens=java.base/java.lang=ALL-UNNAMED'
+  expect(
+    buildDaemon(`${java} -cp gradle-daemon-main.jar org.gradle.launcher.daemon.bootstrap.GradleDaemon 9.4.1`),
+  ).toBe('Gradle daemon')
+  expect(
+    buildDaemon(`${java} -cp kotlin-compiler-embeddable.jar org.jetbrains.kotlin.daemon.KotlinCompileDaemon`),
+  ).toBe('Kotlin daemon')
+  expect(buildDaemon(`${java} worker.org.gradle.process.internal.worker.GradleWorkerMain 'Gradle Worker'`)).toBe(
+    'Gradle worker',
+  )
+  expect(buildDaemon('/usr/local/bin/sccache')).toBe('sccache')
+  // A dev server whose environment carries the agent's Gradle options is still a server.
+  expect(buildDaemon('node vite.js GRADLE_OPTS=-Dorg.gradle.daemon.idletimeout=600000 RAMU_OWNER=s1')).toBeNull()
 })

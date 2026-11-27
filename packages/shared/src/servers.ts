@@ -26,6 +26,25 @@ export interface ThreadServer {
   owner: Omit<ResourceItem, 'rssBytes'>
   /** Its owner has ended; the server outlived it and is easy to forget. */
   orphaned: boolean
+  /** A build tool's daemon kept up between builds, such as `Gradle daemon`: never opened, and safe to stop at any time. */
+  daemon?: string
+}
+
+/**
+ * Build tools that leave a daemon listening between builds, by what their command line names. Matched on the command
+ * and environment `ps -Eww` prints, so each pattern is a class or binary no environment variable carries.
+ */
+const BUILD_DAEMONS: readonly [RegExp, string][] = [
+  [/org\.gradle\.launcher\.daemon\.bootstrap\.GradleDaemon/, 'Gradle daemon'],
+  [/worker\.org\.gradle\.process\.internal\.worker\.GradleWorkerMain/, 'Gradle worker'],
+  [/org\.jetbrains\.kotlin\.daemon\.KotlinCompileDaemon/, 'Kotlin daemon'],
+  [/A-server\.jar|--server_jvm_out/, 'Bazel server'],
+  [/(^|\/)sccache(\s|$)/, 'sccache'],
+]
+
+/** The build daemon a process is, from its command line, or null for anything else. */
+export function buildDaemon(command: string): string | null {
+  return BUILD_DAEMONS.find(([pattern]) => pattern.test(command))?.[1] ?? null
 }
 
 /**
@@ -104,6 +123,7 @@ export function attributeServers(
   roots: ProcessRoot[],
   environmentOwners: ReadonlyMap<number, string>,
   ended: ReadonlyMap<string, ProcessRoot> = new Map(),
+  daemons: ReadonlyMap<number, string> = new Map(),
 ): Omit<ThreadServer, 'web'>[] {
   const rootPids = new Set(roots.map((root) => root.pid))
   const byItem = new Map([...ended, ...roots.map((root) => [root.item.id, root] as const)])
@@ -122,6 +142,7 @@ export function attributeServers(
       taskId: owner.taskId,
       owner: owner.item,
       orphaned: !tree && !roots.some((root) => root.item.id === owner.item.id),
+      ...(daemons.has(socket.pid) ? { daemon: daemons.get(socket.pid) } : {}),
     })
   }
   return servers.sort((a, b) => a.port - b.port)

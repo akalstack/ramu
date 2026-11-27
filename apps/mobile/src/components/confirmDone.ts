@@ -12,7 +12,8 @@ const NOTHING_RUNNING: ThreadDoneImpact = { commands: 0, helpers: 0, computer: f
 
 /**
  * Asks before marking threads done when that would stop running work, as the desktop does: done stops a thread's
- * background commands (and the servers they run), its working helpers, computer use and browser tabs. Resolves true
+ * background commands (and the servers they run), servers it left running, its working helpers, computer use and
+ * browser tabs. Resolves true
  * when there is nothing to stop or the person agrees; false keeps everything running and the threads open.
  */
 export async function confirmDone(
@@ -34,6 +35,7 @@ export async function confirmDone(
     impact.helpers ? `• ${say('{0} helper agents still working', { 0: impact.helpers })}` : '',
     impact.computer ? `• ${say('Using the computer')}` : '',
     impact.browserTabs ? `• ${say('{0} browser tabs', { 0: impact.browserTabs })}` : '',
+    impact.servers ? `• ${say('{0} servers left running', { 0: impact.servers })}` : '',
   ].filter(Boolean)
   return new Promise((resolve) =>
     Alert.alert(

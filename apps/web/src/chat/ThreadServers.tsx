@@ -24,7 +24,8 @@ export function useThreadServers(taskId: string | undefined, visible = true) {
     refetchInterval: POLL_MS,
     retry: false,
   })
-  const servers = query.data ?? []
+  // Build daemons are not servers to open; Resources lists them, and Ramu stops them once the thread rests.
+  const servers = (query.data ?? []).filter((server) => !server.daemon)
   const stop = async (server: ThreadServer) => {
     try {
       await invoke('servers.stop', server.taskId, server.pid, server.port)

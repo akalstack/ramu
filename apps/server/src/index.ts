@@ -28,7 +28,7 @@ import { customAgentList } from '@ramu/shared/customAgents'
 import { ResourceService } from './background/resources'
 import { ServerService } from './background/servers'
 import type { ProcessRoot } from '@ramu/shared/resources'
-import { processRoots } from './agent/processOwners'
+import { AGENT_DAEMON_IDLE_MS, processRoots } from './agent/processOwners'
 import { writeEvent } from './remote/eventStream'
 import { DEFAULT_AGENT_BROWSER_PREFERENCES } from '@ramu/shared/browser'
 import { providerAdapter } from './providers/adapters'
@@ -77,7 +77,7 @@ import { resolveInteractiveKit } from './interactive/kit'
 import { previewInteractive } from './interactive/preview'
 import { openHeadlessPage } from './interactive/pageHeadless'
 import type { ArtifactInfo } from '@ramu/shared/artifacts'
-import type { PairingOffer, TunnelChoice } from '@ramu/shared/types'
+import type { AgentSessionState, PairingOffer, TunnelChoice } from '@ramu/shared/types'
 import type { InstalledApp } from '@ramu/shared/updates'
 import { registerThemeTools } from './themeTools'
 import { registerScriptTools } from './agent/scriptTools'
@@ -604,10 +604,32 @@ const computer = new ComputerService(new ComputerRouter(new SckDisplayBackend(ne
 if (workspace.getAppState<boolean>('computer:enabled', false) === true) computer.backend.warm?.()
 // Made once plugins and Shared MCP are, below; events from before then suggest nothing.
 const suggestions: { service?: ToolSuggestions } = {}
+/**
+ * Build daemons a thread's work started (Gradle, Kotlin, Bazel…) are stopped once the thread has rested ten minutes, as
+ * the person would from Resources; the next build starts them again. A new turn calls it off.
+ */
+const daemonSweeps = new Map<string, NodeJS.Timeout>()
+function sweepDaemonsLater(taskId: string, state: AgentSessionState) {
+  clearTimeout(daemonSweeps.get(taskId))
+  daemonSweeps.delete(taskId)
+  if (!['idle', 'failed', 'stopped'].includes(state)) return
+  const timer = setTimeout(() => {
+    daemonSweeps.delete(taskId)
+    if (agents.list(taskId).some((session) => ['starting', 'running', 'needs-input'].includes(session.state))) return
+    void servers.stopLeftBehind(taskId).catch(() => {})
+  }, AGENT_DAEMON_IDLE_MS)
+  timer.unref()
+  daemonSweeps.set(taskId, timer)
+}
 const agents = new AgentService(
   db,
   (sessionId, event, seq, revision) => {
     send('agent:event', { sessionId, event, seq, revision })
+    if (event.kind === 'state')
+      try {
+        const session = agents.get(sessionId)
+        if (!session.parentId) sweepDaemonsLater(session.taskId, event.state)
+      } catch {}
     // A stopped or failed chat (deletion stops it first) keeps no external MCP session or local server running.
     if (event.kind === 'state' && ['failed', 'stopped'].includes(event.state))
       void externalTools.closeSession(sessionId)
@@ -819,6 +841,7 @@ const resources = new ResourceService(
           !agents.queued(session.id).length
         )
           await agents.stopAndWait(session.id)
+      for (const taskId of taskIds) await servers.stopLeftBehind(taskId).catch(() => 0)
     },
   },
   undefined,

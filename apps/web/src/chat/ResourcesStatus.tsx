@@ -323,7 +323,7 @@ function ThreadRow({
   hostId,
   thread,
   task,
-  servers,
+  servers: all,
   cores,
   onStopped,
 }: {
@@ -334,6 +334,9 @@ function ThreadRow({
   cores: number
   onStopped: () => void
 }) {
+  // Build daemons only speed up the next build: one line for all of them, apart from the servers the person may open.
+  const daemons = [...new Map(all.filter((server) => server.daemon).map((server) => [server.pid, server])).values()]
+  const servers = all.filter((server) => !server.daemon)
   const active = useHost().id
   const { local, open: openServer } = useOpenServer(hostId)
   const stopServer = (server: ThreadServer) =>
@@ -363,7 +366,7 @@ function ThreadRow({
   const title =
     task?.title ??
     (isWorkspaceContext(thread.taskId) ? t('Project terminal') : (leftoverLabel(thread) ?? t('Untitled thread')))
-  const parts = thread.items.length + servers.length
+  const parts = thread.items.length + servers.length + (daemons.length ? 1 : 0)
   return (
     <li className="flex flex-col rounded-(--radius-s) border border-line bg-foreground/[0.02]">
       <div className="flex min-h-12 items-center gap-2.5 px-2.5 py-1.5">
@@ -387,6 +390,7 @@ function ThreadRow({
                   {servers.length === 1 ? t('1 server') : t('{0} servers', { 0: servers.length })}
                 </span>
               )}
+              {daemons.length > 0 && <span className="truncate">{t('{0} build daemons', { 0: daemons.length })}</span>}
               {parts > 0 && (
                 <ChevronDown
                   size={12}
@@ -428,6 +432,26 @@ function ThreadRow({
           {thread.items.map((item) => (
             <ItemRow key={item.id} hostId={hostId} thread={thread} item={item} onStopped={onStopped} />
           ))}
+          {daemons.length > 0 && (
+            <div className="flex min-h-8 items-center gap-2 pl-3 text-caption text-muted-foreground">
+              <span
+                className="min-w-0 flex-1 truncate"
+                title={t('Kept up between builds; Ramu stops them once the thread has rested ten minutes.')}
+              >
+                {t('Build daemons')} · {[...new Set(daemons.map((daemon) => daemon.daemon))].join(', ')}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="flex-none"
+                aria-label={t('Stop build daemons')}
+                title={t('Stop build daemons')}
+                onClick={() => daemons.forEach(stopServer)}
+              >
+                <Square size={11} />
+              </Button>
+            </div>
+          )}
           {servers.length > 0 && (
             <ul className="my-0 flex list-none flex-col p-0">
               {servers.map((server) => (

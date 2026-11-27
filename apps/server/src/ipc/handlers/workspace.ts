@@ -109,6 +109,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
   browser,
   hostBrowser,
   reviews,
+  servers,
 }) => {
   const continuations = () => {
     if (!agentThreads) throw new Error('Continuing threads is unavailable on this host.')
@@ -163,7 +164,8 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
   /** Stops a thread's agents and commands, then deletes it; `review` approves the commands the person saw. */
   /**
    * A thread marked done gives back what its work was holding, so nothing keeps running or stays open for a thread the
-   * person has finished: helpers and background commands (and the servers they run) stop, and the computer, its browser
+   * person has finished: helpers and background commands (and the servers they run) stop, as do servers and build
+   * daemons that outlived their command, and the computer, its browser
    * tabs, a test device and file watching are released. Reopening the thread starts each again as the work needs it.
    */
   const releaseThread = (taskId: string) => {
@@ -178,6 +180,8 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
           // Already stopping or gone; nothing to give back.
         }
       }
+    // Servers that outlived the command that started them, and build daemons, would otherwise run until the host stops.
+    void servers?.stopLeftBehind(taskId, { all: true }).catch(() => 0)
     computer?.revoke(taskId)
     void testDevices?.releaseThread(taskId)
     watchers.release(taskId)
@@ -198,6 +202,13 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
   }
   /** What marking a thread done would stop, so the person can confirm before running work ends. */
   const doneImpact = async (taskId: string): Promise<ThreadDoneImpact> => ({
+    // Build daemons are not asked about: they only speed up the next build. A server under a running command counts
+    // with that command.
+    servers: new Set(
+      ((await servers?.list(taskId).catch(() => [])) ?? [])
+        .filter((server) => !server.daemon && (server.orphaned || server.owner.kind === 'agent'))
+        .map((server) => server.pid),
+    ).size,
     commands: terminals.listBackground(taskId).filter((command) => command.state === 'running').length,
     helpers: agents.list(taskId).filter((session) => session.parentId && WRITING_STATES.includes(session.state)).length,
     computer: !!computer?.session(taskId),

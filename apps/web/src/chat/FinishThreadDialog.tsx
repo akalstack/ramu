@@ -72,6 +72,7 @@ export function FinishThreadDialog() {
         {impact.helpers > 0 && <li>{t('{0} helper agents still working', { '0': impact.helpers })}</li>}
         {impact.computer && <li>{t('Using the computer')}</li>}
         {impact.browserTabs > 0 && <li>{t('{0} browser tabs', { '0': impact.browserTabs })}</li>}
+        {(impact.servers ?? 0) > 0 && <li>{t('{0} servers left running', { '0': impact.servers ?? 0 })}</li>}
       </ul>
       <p className="text-muted-foreground">{t('Reopening the thread later starts the work again as it needs.')}</p>
     </Dialog>

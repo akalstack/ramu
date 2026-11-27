@@ -30,7 +30,20 @@ export function ownedEnvironment<T extends NodeJS.ProcessEnv | Record<string, st
   env: T,
   sessionId = owner.getStore(),
 ): T {
-  return sessionId ? { ...env, [OWNER_ENV]: sessionId } : env
+  return sessionId ? { ...env, [OWNER_ENV]: sessionId, ...daemonTimeouts(env) } : env
+}
+
+/** How long a build daemon an agent started stays up with nothing to build, instead of the tools' hours. */
+export const AGENT_DAEMON_IDLE_MS = 10 * 60_000
+
+/**
+ * A build an agent runs leaves its daemon behind for the next one, for hours by default; one that quits after ten idle
+ * minutes still speeds up the agent's next build. Gradle's compiler daemons end with it. A timeout the person set wins.
+ */
+export function daemonTimeouts(env: NodeJS.ProcessEnv | Record<string, string>): { GRADLE_OPTS?: string } {
+  const current = env.GRADLE_OPTS ?? ''
+  if (current.includes('org.gradle.daemon.idletimeout')) return {}
+  return { GRADLE_OPTS: `${current} -Dorg.gradle.daemon.idletimeout=${AGENT_DAEMON_IDLE_MS}`.trim() }
 }
 
 /** The SDK starts Claude Code itself; this keeps its usual launch and learns the process id it otherwise hides. */

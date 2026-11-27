@@ -53,7 +53,8 @@ export function ThreadServers({
     const read = () =>
       void invoke.current(hostId, 'servers.list', taskId).then(
         (list) => {
-          if (active) setServers(list.filter((server) => server.taskId === taskId))
+          // Build daemons are not servers to open; Resources lists them, and Ramu stops them once the thread rests.
+          if (active) setServers(list.filter((server) => server.taskId === taskId && !server.daemon))
         },
         // A host without the call, or a read that failed, shows nothing rather than a stale list.
         () => {
