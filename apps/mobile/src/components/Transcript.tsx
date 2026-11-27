@@ -2070,6 +2070,14 @@ function QuestionPrompt({ item, chatId }: { item: QuestionItem; chatId: string }
     Keyboard.dismiss()
     setOpenQuestion(autoKey)
   }
+  // Typing an answer brings Submit into view above the keyboard: the sheet keeps the field there, and Submit, below it,
+  // stayed behind the keys.
+  const form = useRef<import('react-native').ScrollViewInstance>(null)
+  useEffect(() => {
+    if (!open) return
+    const shown = Keyboard.addListener('keyboardDidShow', () => form.current?.scrollToEnd({ animated: true }))
+    return () => shown.remove()
+  }, [open])
   // A question waiting while its thread is on screen opens once by itself, so answering takes no extra tap.
   useEffect(() => {
     // Read live: questions arriving together run this in the same commit, and the first one takes the sheet.
@@ -2113,7 +2121,7 @@ function QuestionPrompt({ item, chatId }: { item: QuestionItem; chatId: string }
         }
         scroll={false}
       >
-        <SheetScrollView style={{ flexGrow: 0 }}>
+        <SheetScrollView ref={form} style={{ flexGrow: 0 }}>
           <View style={{ paddingHorizontal: space.l, gap: space.l }}>
             <QuestionForm item={item} state={state} headers={many} />
             <QuestionActions state={state} onDone={close} />
