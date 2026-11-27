@@ -137,23 +137,56 @@ export function WorkingLine({
  * The end of a thread, or the thread list, while its host catches up what this phone holds, as T3 Code shows it.
  * Quieter than the turn's status: nothing is wrong and nothing needs the person, so it neither shimmers nor takes the accent.
  */
-export function SyncLine({ what = 'messages' }: { what?: 'messages' | 'threads' }) {
+/**
+ * A pill saying a list or a thread is being read again. With `edge` it floats over the content at that edge of the
+ * view holding it and takes no room, so nothing moves when it comes and goes; without, it stands in an empty list.
+ */
+export function SyncLine({ what = 'messages', edge }: { what?: 'messages' | 'threads'; edge?: 'top' | 'bottom' }) {
   const store = useStore()
   const { c } = useTheme()
   const label =
     what === 'threads' ? translate(store.language, 'Syncing threads…') : translate(store.language, 'Syncing messages…')
   return (
     <View
-      accessible
-      accessibilityRole="text"
-      accessibilityLabel={label}
-      accessibilityLiveRegion="polite"
-      style={{ height: 24, flexDirection: 'row', alignItems: 'center', gap: space.s }}
+      pointerEvents="none"
+      style={
+        edge
+          ? {
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              alignItems: 'center',
+              zIndex: 2,
+              ...(edge === 'top' ? { top: '100%', marginTop: space.xs } : { bottom: '100%', marginBottom: space.xs }),
+            }
+          : { alignItems: 'center' }
+      }
     >
-      <ActivityIndicator size="small" color={c.muted} style={{ transform: [{ scale: 0.75 }] }} />
-      <T size={font.control} tone="muted" numberOfLines={1}>
-        {label}
-      </T>
+      <View
+        accessible
+        accessibilityRole="text"
+        accessibilityLabel={label}
+        accessibilityLiveRegion="polite"
+        style={{
+          height: 30,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: space.s,
+          paddingHorizontal: space.m,
+          borderRadius: 15,
+          backgroundColor: c.raised,
+          shadowColor: '#000',
+          shadowOpacity: 0.18,
+          shadowRadius: 8,
+          shadowOffset: { width: 0, height: 2 },
+          elevation: 3,
+        }}
+      >
+        <ActivityIndicator size="small" color={c.muted} style={{ transform: [{ scale: 0.75 }] }} />
+        <T size={font.control} tone="muted" numberOfLines={1}>
+          {label}
+        </T>
+      </View>
     </View>
   )
 }

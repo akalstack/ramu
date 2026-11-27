@@ -1780,11 +1780,12 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                   keyboardDismissMode="on-drag"
                   keyboardShouldPersistTaps="handled"
                   ListFooterComponent={
-                    <View style={{ gap: space.m, paddingTop: space.m }}>
+                    <View style={{ gap: space.m, paddingTop: space.m, zIndex: 2 }}>
                       {/* The running turn's status at its end, as on the desktop: a shimmering label, unless the newest row
                         (reasoning, or a tool group at work) already says what the agent is doing. */}
                       <WorkingLine inline quiet={lastShowsWork} chat={chat} sending={pending.length > 0} />
-                      {syncShown ? <SyncLine /> : null}
+                      {/* Floats over the last rows, just above the composer, so the transcript never moves for it. */}
+                      {syncShown ? <SyncLine edge="bottom" /> : null}
                     </View>
                   }
                 />

@@ -821,13 +821,11 @@ export default function Threads() {
                   />
                 ))}
             </HScroll>
-            {refreshing ? (
-              <View style={{ paddingHorizontal: space.l, paddingTop: space.s }}>
-                <SyncLine what="threads" />
-              </View>
-            ) : null}
+            {/* Floats over the first rows from the bottom of this header, so the list never moves for it. */}
+            <View>{refreshing ? <SyncLine what="threads" edge="top" /> : null}</View>
           </>
         }
+        ListHeaderComponentStyle={{ zIndex: 2, elevation: 2 }}
         ListFooterComponent={
           <>
             {filtering && !mine.length ? (

@@ -123,11 +123,20 @@ function WorkingFor({ since }: { since: number }) {
  * The rows on screen are this client's copy while the host catches the thread up. Quieter than the agent's own status:
  * nothing is wrong and nothing needs the person, so it neither shimmers nor takes the accent.
  */
+/**
+ * A pill floating at the top of the transcript while it is read again. It takes no room in the transcript, so nothing
+ * moves when it comes and goes, and it stays clear of the jump-to-latest button at the bottom.
+ */
 export function ChatSyncStatus({ label }: { label: string }) {
   return (
-    <div className={`${WORKING_CLASS} text-muted-foreground`} role="status" aria-live="polite" data-chat-sync>
+    <div
+      className="pointer-events-none absolute top-2 left-1/2 z-10 -translate-x-1/2"
+      role="status"
+      aria-live="polite"
+      data-chat-sync
+    >
       <ChatFade identity={label} animate>
-        <span className="flex items-center gap-2">
+        <span className="flex items-center gap-2 rounded-full bg-raised px-3 py-1 text-caption text-muted-foreground shadow-md">
           <Spinner role="presentation" aria-hidden aria-label={undefined} className="size-3.5 flex-none" />
           {label}
         </span>

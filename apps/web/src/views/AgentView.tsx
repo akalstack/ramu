@@ -1176,9 +1176,9 @@ export const AgentView = memo(function AgentView({
                               enter={!openingShown}
                             />
                           )}
-                          {syncShown && <ChatSyncStatus label={translate('Syncing messages…')} />}
                         </MessageScrollerContent>
                       </MessageScrollerViewport>
+                      {syncShown && <ChatSyncStatus label={translate('Syncing messages…')} />}
                       <ScrollToLatestButton working={working} />
                     </MessageScroller>
                     <SelectionActions
