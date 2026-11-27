@@ -721,9 +721,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
                 accessibilityLiveRegion="polite"
                 style={{ height: 24, justifyContent: 'center' }}
               >
-                <Shimmer size={font.control} singleLine>
-                  {routing.status}
-                </Shimmer>
+                <Shimmer size={font.control}>{routing.status}</Shimmer>
               </View>
             </View>
           </ScrollView>

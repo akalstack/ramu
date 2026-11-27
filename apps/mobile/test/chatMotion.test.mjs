@@ -79,6 +79,7 @@ function harness(reduced = false) {
     default: { View: 'ReanimatedView' },
     Easing: { linear: 'linear', out: (value) => value, cubic: 'cubic', bezier: (...values) => values },
     useSharedValue: (value) => react.useRef({ value }).current,
+    makeMutable: (value) => ({ value }),
     useAnimatedStyle: (style) => style(),
     interpolate: (value) => value,
     withTiming(toValue, config, callback) {

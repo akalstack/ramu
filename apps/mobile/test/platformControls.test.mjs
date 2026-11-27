@@ -7659,6 +7659,8 @@ test('a refresh interrupted mid-stream recovers all missed text on the next conn
 test('the once-a-minute read keeps each project’s repositories instead of asking for them again', async () => {
   const h = deliveryStoreHarness()
   h.attach()
+  // The harness holds the bindings read until released; a refresh waits for it.
+  h.release()
   h.projectList.current = [{ id: 'p1', name: 'Site' }]
   await h.render().refresh('a', true)
   await h.render().refresh('a', 'live')
@@ -8320,23 +8322,10 @@ for (const os of ['ios', 'android']) {
   })
 }
 
-test('native tool completion uses the shared delayed left-to-right sweep without replaying history', async () => {
+test('a native tool label shimmers only while it runs past the delay, and a finished tool reads as done', async () => {
   const hooks = hookHarness()
-  const calls = []
+  const timers = []
   const listeners = []
-  let stopped = 0
-  class Value {
-    constructor(value) {
-      this.value = value
-    }
-    setValue(value) {
-      this.value = value
-    }
-    interpolate(config) {
-      return { value: this, ...config }
-    }
-  }
-  let clock = 0
   const { ActivityText } = load(
     'components/Motion.tsx',
     'ios',
@@ -8351,59 +8340,42 @@ test('native tool completion uses the shared delayed left-to-right sweep without
             return { remove() {} }
           },
         },
-        Easing: { linear: 'linear' },
-        Animated: { Value, View: 'AnimatedView' },
+        View: 'View',
       },
-      // The sweep runs on the UI thread through Reanimated: record each timing with the delay that wraps it.
       'react-native-reanimated': {
         default: { View: 'ReanimatedView' },
-        Easing: { linear: 'linear' },
+        Easing: { linear: 'linear', inOut: (value) => value, sin: 'sin' },
+        makeMutable: (value) => ({ value }),
         useSharedValue: (value) => hooks.react.useRef({ value }).current,
         useAnimatedStyle: (style) => style(),
-        interpolate: (value) => value,
-        withTiming: (toValue, options) => {
-          const timing = { toValue, ...options }
-          calls.push(timing)
-          return timing
-        },
-        withDelay: (delay, timing) => Object.assign(timing, { delay }),
-        cancelAnimation: () => {
-          stopped++
-        },
+        withTiming: (toValue) => toValue,
+        withRepeat: (value) => value,
+        withSequence: (...values) => values[0],
+        cancelAnimation() {},
       },
       'react-native-worklets': { scheduleOnRN: (run, ...args) => run(...args) },
       './ui': { T: 'T' },
     },
-    { Date: { now: () => clock } },
+    { setTimeout: (run) => timers.push(run), clearTimeout() {} },
   )
-  let active = false
-  let text = 'Read files'
-  const render = () => hooks.render(() => ActivityText({ active, children: text }))
-  render()
-  assert.equal(calls.length, 0)
-  active = true
-  render()
-  // A row that has only just appeared does not light up; this one has been on screen past that.
-  clock = chatPresentation.TOOL_MOTION.quietMs
+  const shimmering = (tree) => nodes(tree).some((node) => node.type?.name === 'Shimmer')
+  let active = true
+  const render = () => hooks.render(() => ActivityText({ active, children: 'Read files' }))
+  // A command that finishes at once never flashes the shimmer.
+  assert.equal(shimmering(render()), false)
+  for (const run of timers.splice(0)) run()
+  assert.equal(shimmering(render()), true)
   active = false
-  const tree = render()
-  assert.equal(find(tree, 'T').props.children, text)
-  assert.equal(calls.length, 1)
-  assert.equal(calls[0].delay, chatPresentation.TOOL_MOTION.settleMs)
-  assert.equal(calls[0].duration, chatPresentation.TOOL_MOTION.finishMs)
-  text = 'Read more files'
-  render()
-  assert.equal(calls.length, 1)
-  active = true
-  render()
-  assert.equal(stopped, 1)
+  const done = render()
+  assert.equal(shimmering(done), false)
+  assert.equal(find(done, 'T').props.children, 'Read files')
+  assert.equal(find(done, 'T').props.tone, 'muted')
   await settle()
   for (const listener of listeners) listener(true)
+  active = true
   render()
-  active = false
-  const reduced = render()
-  assert.equal(find(reduced, 'T').props.children, text)
-  assert.equal(calls.length, 1, 'reduced motion never adds a delayed highlight')
+  for (const run of timers.splice(0)) run()
+  assert.equal(shimmering(render()), false, 'Reduce Motion keeps the label still')
   hooks.dispose()
 })
 

@@ -52,7 +52,7 @@ export function WorkingLine({
   if (inline && waitingOn.length)
     return (
       <View accessibilityRole="text" accessibilityLiveRegion="polite" style={{ height: 24, justifyContent: 'center' }}>
-        <Shimmer size={font.control} singleLine>
+        <Shimmer size={font.control}>
           {waitingOn.length === 1
             ? translate(store.language, 'Waiting on {0}', { 0: waitingOn[0]!.name })
             : translate(
@@ -64,7 +64,9 @@ export function WorkingLine({
       </View>
     )
   // From the moment a message is sent, so the pill does not wait for the host to report the turn.
-  if (!running && !(sending && online)) return null
+  // Inline, the line keeps its height while idle too, so sending a message does not add a row to the end of the chat
+  // and move the transcript under it.
+  if (!running && !(sending && online)) return inline ? <View style={{ height: 24 }} /> : null
   const step = chat.compacting
     ? { label: 'Compacting context…' }
     : running
@@ -81,7 +83,7 @@ export function WorkingLine({
         style={{ height: 24, justifyContent: 'center' }}
       >
         {quiet ? null : (
-          <Shimmer size={font.control} singleLine>
+          <Shimmer size={font.control}>
             {running && !chat.compacting && since && (chat.activityLabel ?? 'Working') === 'Working'
               ? translate(store.language, 'Working for {0}', { 0: elapsedText(now - since) })
               : t(running ? (chat.compacting ? 'Compacting context…' : (chat.activityLabel ?? 'Working')) : 'Sending…')}

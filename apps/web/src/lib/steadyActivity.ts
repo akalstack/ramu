@@ -17,14 +17,26 @@ export function useHeld(active: boolean): boolean {
   return active || held
 }
 
+const PULSE: Keyframe[] = [{ opacity: 1 }, { opacity: 0.35 }, { opacity: 1 }]
+
 /**
- * Keeps a CSS spinner on one shared clock. A list that re-sorts moves its row in the DOM, which restarts the animation
- * and reads as a blink; pinned to the timeline, every spinner stays in phase however often it moves or remounts.
+ * Breathes the element's dot (its ::before) on one shared clock, so every working dot on screen pulses together. A CSS
+ * animation restarts whenever a re-sorting list moves its row, without the row rendering again; an animation started
+ * from script stays with the element and is pinned to the document's clock.
  */
-export function useSteadySpin<T extends Element>() {
+export function useSteadyPulse<T extends Element>() {
   const ref = useRef<T>(null)
   useLayoutEffect(() => {
-    for (const animation of ref.current?.getAnimations?.({ subtree: true }) ?? []) animation.startTime = 0
-  })
+    const element = ref.current
+    if (!element?.animate || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
+    const animation = element.animate(PULSE, {
+      duration: 1600,
+      easing: 'ease-in-out',
+      iterations: Infinity,
+      pseudoElement: '::before',
+    })
+    animation.startTime = 0
+    return () => animation.cancel()
+  }, [])
   return ref
 }

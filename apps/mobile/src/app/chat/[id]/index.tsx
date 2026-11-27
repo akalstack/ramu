@@ -376,9 +376,12 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
     if (following.current && !followPaused && !userScrolling.current) toEnd(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [composerHeight] by design; the values it reads beyond these are current as of that run
   }, [composerHeight])
-  // A row opened or closed by hand keeps its place; the agent's own output still follows the end afterwards.
+  // A row opened or closed by hand is what the reader is looking at: it keeps its place, and the list stops following
+  // the end until they tap Scroll to latest or scroll back down themselves, so the transcript never glides away from it.
   const holdScroll = useCallback(() => {
     pauseFollow(600, false)
+    following.current = false
+    setAway(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- pauseFollow only touches refs and stable setters
   }, [])
   const [restore, setRestore] = useState<{ text: string; n: number }>()
@@ -1722,11 +1725,11 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                   drawDistance={400}
                   // Lays out the newest rows first instead of the whole page from the top.
                   initialScrollAtEnd
-                  // Pinned to the end, gliding as a reply streams in or a message is sent (the list gathers the changes of
-                  // half a second into one motion), and without motion before the chat is shown or with Reduce Motion on.
-                  // It stops following once the reader scrolls up past its threshold, and a chat that fits on screen is
+                  // Pinned to the end without motion: each change lands where it ends instead of gliding there, which
+                  // would read as the transcript scrolling up and down while a reply streams, a tool row grows or a
+                  // message is sent. It stops following once the reader scrolls up, and a chat that fits on screen is
                   // left where UIKit rests it.
-                  maintainScrollAtEnd={overflowing && !followPaused ? { animated: revealed && !reducedMotion } : false}
+                  maintainScrollAtEnd={overflowing && !followPaused ? { animated: false } : false}
                   ItemSeparatorComponent={RowSeparator}
                   refreshControl={
                     chat?.taskId ? (

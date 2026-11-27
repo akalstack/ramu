@@ -34,13 +34,10 @@ export const REFERENCE_APPEARANCE = {
 
 /** Tool labels share a left-to-right sweep; only the decorative completion highlight waits. */
 export const TOOL_MOTION = {
-  /** The shortest pass; a longer label takes longer, at `sweepPxPerSecond`, so the highlight never streaks. */
+  /** One pass of the working shimmer: across the label, then off its end before the next. */
   sweepMs: 2200,
-  sweepPxPerSecond: 140,
   /** The completion highlight's pace across a label, with `finishMs` as its shortest run. */
   finishPxPerSecond: 360,
-  /** The pause between passes, while the highlight is off the end of the text. */
-  restMs: 700,
   /** How long a finished tool stays finished before its label lights up; the next tool starting meanwhile cancels it. */
   settleMs: 300,
   finishMs: 650,

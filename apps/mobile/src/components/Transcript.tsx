@@ -53,7 +53,7 @@ import {
 } from 'lucide-react-native'
 import { pickFolder } from '../runtime/folderPick'
 import { font, radius, space, useTheme } from '../theme'
-import { fill, useT, useSay } from '../i18n'
+import { useSay } from '../i18n'
 import { agentErrorView } from '@ramu/shared/chat/agentErrorView'
 import { toolFailure } from '@ramu/shared/chat/toolFailure'
 import { endedOnError, formatDuration } from '../runtime/turns'
@@ -1462,11 +1462,9 @@ function ToolGroup({ item, live }: { item: Extract<TranscriptItem, { kind: 'tool
           <Icon size={14} color={tint} />
         )}
         <View style={{ flex: 1, minWidth: 0 }}>
-          {/* Only a new paragraph of thought fades in. The next call, or the summary once the group settles, takes the
-              line's place at once, as in T3 Code: a fade on every call made a busy turn flicker. */}
-          <Arrive animate={false} identity={thought ? `thought:${thought.id}:${thoughtLine(thought.text, true)}` : ''}>
-            <ActivityText active={running > 0 || live}>{headline}</ActivityText>
-          </Arrive>
+          {/* The line changes in place: the next call, a new paragraph of thought or the summary once the group settles
+              takes its place at once, so the row never seems to jump between tools. */}
+          <ActivityText active={running > 0 || live}>{headline}</ActivityText>
         </View>
         {failed > 0 ? (
           // A quiet mark, as in T3 Code: the tinted icon and this cross say it failed; the words stay the tool's own.
@@ -2777,9 +2775,7 @@ function ThinkingRow({ text, live }: { text: string; live: boolean }) {
         ) : null}
         <View style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
           {open || !line ? null : live ? (
-            <Shimmer size={font.control} singleLine>
-              {line.slice(0, 180)}
-            </Shimmer>
+            <Shimmer size={font.control}>{line.slice(0, 180)}</Shimmer>
           ) : (
             <T size={font.control} tone="muted" numberOfLines={1}>
               {line}

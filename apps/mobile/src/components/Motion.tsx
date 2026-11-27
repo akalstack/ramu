@@ -1,4 +1,4 @@
-import { CHAT_MOTION, SENT_MOTION, sweepDuration, TOOL_MOTION } from '@ramu/shared/chat/presentation'
+import { CHAT_MOTION, SENT_MOTION, TOOL_MOTION } from '@ramu/shared/chat/presentation'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { AccessibilityInfo, LayoutAnimation, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native'
 import Reanimated, {
@@ -6,15 +6,16 @@ import Reanimated, {
   Easing as ReEasing,
   Extrapolation,
   interpolate,
+  makeMutable,
   useAnimatedStyle,
   useSharedValue,
-  withDelay,
+  type SharedValue,
   withRepeat,
   withSequence,
   withTiming,
 } from 'react-native-reanimated'
 import { scheduleOnRN } from 'react-native-worklets'
-import { font, useTheme } from '../theme'
+import { font } from '../theme'
 import { ChevronRight } from 'lucide-react-native'
 import { T } from './ui'
 
@@ -36,64 +37,119 @@ export function useReducedMotion() {
 }
 
 /**
- * The desktop's "Working…" shimmer, as one breathing label: the text brightens and dims, at least 2.2 s a pass and
- * slower across a long label. React Native cannot clip a moving gradient to text without a native dependency, and
- * sweeping it letter by letter animated one view per character on every frame, which kept the phone warm while a
- * thread ran; one animated label costs the same whatever its length.
+ * One animation for every mark of a kind, started by its first user and stopped with its last, so marks that appeared
+ * at different moments move together.
+ */
+function sharedLoop(start: (value: SharedValue<number>) => void) {
+  const value = makeMutable(0)
+  let users = 0
+  return {
+    value,
+    useRunning(active: boolean) {
+      useEffect(() => {
+        if (!active) return
+        if (users++ === 0) start(value)
+        return () => {
+          if (--users > 0) return
+          cancelAnimation(value)
+          value.value = 0
+        }
+      }, [active])
+    },
+  }
+}
+
+/** The shimmer's pass, 0 to 1: the highlight crosses the label in the first half and is off its end in the second. */
+const sweep = sharedLoop((value) => {
+  value.value = withRepeat(withTiming(1, { duration: TOOL_MOTION.sweepMs, easing: ReEasing.linear }), -1, false)
+})
+
+/**
+ * Bright copies of the label in clipped bands centred on the highlight, outermost first. Stacked, they rise from the
+ * muted label to full text colour and back, as the desktop's gradient does across 40% of the label each side.
+ */
+const SHIMMER_BANDS = [
+  { span: 0.8, opacity: 0.35 },
+  { span: 0.53, opacity: 0.5 },
+  { span: 0.27, opacity: 1 },
+] as const
+
+/**
+ * The desktop's working shimmer: a soft highlight sweeps the muted label left to right every 2.2 s, on one clock for
+ * every label. Only the bands move, by transform, so it costs the same however long the label is.
  */
 export function Shimmer({
   children,
   size = font.control,
   style,
-  singleLine = false,
-  visibleWidth,
 }: {
   children: string
   size?: number
-  singleLine?: boolean
   style?: StyleProp<TextStyle>
-  /** The width that shows, when the row cuts the text off: the pass is timed to it rather than to the hidden rest. */
-  visibleWidth?: number
 }) {
   const reduced = useReducedMotion()
-  const pulse = useSharedValue(1)
-  const [measured, setMeasured] = useState(0)
-  const width = visibleWidth ? Math.min(visibleWidth, measured || visibleWidth) : measured
-  const duration = sweepDuration(width, TOOL_MOTION.sweepMs, TOOL_MOTION.sweepPxPerSecond)
-  useEffect(() => {
-    if (reduced) return
-    pulse.value = 1
-    pulse.value = withRepeat(
-      withSequence(
-        withTiming(0.45, { duration: duration / 2, easing: ReEasing.inOut(ReEasing.quad) }),
-        withTiming(1, { duration: duration / 2, easing: ReEasing.inOut(ReEasing.quad) }),
-        withDelay(TOOL_MOTION.restMs, withTiming(1, { duration: 0 })),
-      ),
-      -1,
-    )
-    return () => cancelAnimation(pulse)
-  }, [reduced, pulse, duration])
-  const { c } = useTheme()
-  const animated = useAnimatedStyle(() => ({ opacity: pulse.value }))
-  if (reduced)
-    return (
-      <T size={size} tone="muted" style={style}>
+  const [width, setWidth] = useState(0)
+  sweep.useRunning(!reduced)
+  const textStyle = [{ fontVariant: ['tabular-nums' as const] }, style]
+  return (
+    <View style={{ minWidth: 0 }}>
+      <T
+        size={size}
+        tone="muted"
+        numberOfLines={1}
+        style={textStyle}
+        onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+      >
         {children}
       </T>
-    )
-  return (
-    <Reanimated.Text
-      accessibilityRole="text"
-      numberOfLines={singleLine ? 1 : undefined}
-      onLayout={(event) => setMeasured(event.nativeEvent.layout.width)}
-      style={[{ fontSize: size, color: c.text, fontVariant: ['tabular-nums'] }, style, animated]}
-    >
-      {children}
-    </Reanimated.Text>
+      {!reduced && width > 0
+        ? SHIMMER_BANDS.map((band) => (
+            <ShimmerBand key={band.span} span={band.span * width} opacity={band.opacity} width={width}>
+              <T size={size} numberOfLines={1} style={textStyle}>
+                {children}
+              </T>
+            </ShimmerBand>
+          ))
+        : null}
+    </View>
   )
 }
 
-/** The same delayed completion highlight as desktop; the real text stays visible throughout. */
+/** A window `span` wide that follows the highlight, showing the bright copy at the same place as the label under it. */
+function ShimmerBand({
+  span,
+  opacity,
+  width,
+  children,
+}: {
+  span: number
+  opacity: number
+  width: number
+  children: ReactNode
+}) {
+  const left = (pass: number) => {
+    'worklet'
+    return pass * 2 * width - span / 2
+  }
+  const band = useAnimatedStyle(() => ({ transform: [{ translateX: left(sweep.value.value) }] }))
+  const content = useAnimatedStyle(() => ({ transform: [{ translateX: -left(sweep.value.value) }] }))
+  return (
+    <Reanimated.View
+      pointerEvents="none"
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={[{ position: 'absolute', top: 0, bottom: 0, left: 0, width: span, overflow: 'hidden', opacity }, band]}
+    >
+      <Reanimated.View style={[{ position: 'absolute', top: 0, left: 0, width }, content]}>{children}</Reanimated.View>
+    </Reanimated.View>
+  )
+}
+
+/**
+ * A tool's label: muted text, with a shimmer while the tool runs past a short delay, so a command that finishes at once
+ * never flashes it. A finished tool reads as done without a highlight: a wipe on finishing would streak across rows the
+ * list has just reused, before their width is known.
+ */
 export function ActivityText({
   active,
   children,
@@ -104,18 +160,7 @@ export function ActivityText({
   size?: number
 }) {
   const reduced = useReducedMotion()
-  const previous = useRef(active)
-  const shownAt = useRef(0)
-  const progress = useSharedValue(1)
-  const [width, setWidth] = useState(0)
-  // Read by the completion wipe without restarting it when layout settles mid-wipe.
-  const measured = useRef(0)
-  measured.current = width
-  // The shimmer waits a moment: a command that finishes at once should never flash it.
   const [settled, setSettled] = useState(false)
-  useEffect(() => {
-    shownAt.current = Date.now()
-  }, [])
   useEffect(() => {
     if (!active) return
     const timer = setTimeout(() => setSettled(true), TOOL_MOTION.shimmerDelayMs)
@@ -124,69 +169,13 @@ export function ActivityText({
       setSettled(false)
     }
   }, [active])
-  const shimmering = active && settled && !reduced
-  useEffect(() => {
-    const completed = previous.current && !active
-    previous.current = active
-    // A row that has only just appeared, as when its group opens, does not light up.
-    if (!completed || reduced || Date.now() - shownAt.current < TOOL_MOTION.quietMs) {
-      progress.value = 1
-      return
-    }
-    // The wipe resizes its clip, which the native driver cannot do; Reanimated runs it on the UI thread.
-    progress.value = 0
-    progress.value = withDelay(
-      TOOL_MOTION.settleMs,
-      // Paced by the label's width, so a long command's highlight does not streak across it.
-      withTiming(1, {
-        duration: sweepDuration(measured.current, TOOL_MOTION.finishMs, TOOL_MOTION.finishPxPerSecond),
-        easing: ReEasing.linear,
-      }),
-    )
-    // A highlight cut short by the next tool would otherwise stay half drawn.
-    return () => {
-      cancelAnimation(progress)
-      progress.value = 1
-    }
-  }, [active, reduced, progress])
-  const wipe = useAnimatedStyle(() => ({
-    width: `${interpolate(progress.value, [0, TOOL_MOTION.fadeAt, 1], [0, 100, 100])}%`,
-    opacity: interpolate(progress.value, [0, TOOL_MOTION.fadeAt, 1], [1, 1, 0]),
-  }))
-  return (
-    <View onLayout={(event) => setWidth(event.nativeEvent.layout.width)} style={{ minWidth: 0, overflow: 'hidden' }}>
-      {/* While the shimmer runs it is the only copy shown; drawing both put two slightly offset labels on top of each other. */}
-      <T size={size} tone="muted" numberOfLines={1} style={shimmering ? { opacity: 0 } : undefined}>
-        {children}
-      </T>
-      {shimmering ? (
-        <View
-          pointerEvents="none"
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
-          style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}
-        >
-          {/* Only about what fits the row sweeps: the highlight crosses visible letters instead of hidden ones. */}
-          <Shimmer size={size} singleLine visibleWidth={width || undefined}>
-            {children.slice(0, width ? Math.max(12, Math.ceil(width / (size * 0.5))) : 180)}
-          </Shimmer>
-        </View>
-      ) : null}
-      {!active && !reduced ? (
-        <Reanimated.View
-          pointerEvents="none"
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
-          style={[{ position: 'absolute', top: 0, left: 0, overflow: 'hidden' }, wipe]}
-        >
-          <View style={{ width }}>
-            <T size={size} numberOfLines={1}>
-              {children}
-            </T>
-          </View>
-        </Reanimated.View>
-      ) : null}
-    </View>
+  // The shimmer draws the same muted label under its highlight, so the row does not move when it starts or stops.
+  return active && settled && !reduced ? (
+    <Shimmer size={size}>{children}</Shimmer>
+  ) : (
+    <T size={size} tone="muted" numberOfLines={1} style={{ fontVariant: ['tabular-nums'] }}>
+      {children}
+    </T>
   )
 }
 
@@ -295,20 +284,23 @@ export function Collapse({ open, children }: { open: boolean; children: ReactNod
   )
 }
 
+/** The working dot's breath, 0 to 1: the desktop's 1.6 s from full to a third and back. */
+const breath = sharedLoop((value) => {
+  const half = { duration: 800, easing: ReEasing.inOut(ReEasing.sin) }
+  value.value = withRepeat(withSequence(withTiming(1, half), withTiming(0, half)), -1)
+})
+
 /** A soft breathing pulse while `active` (a tool still running), settling back to full opacity when it stops. */
 export function Breathe({ active, children }: { active: boolean; children: ReactNode }) {
   const reduced = useReducedMotion()
-  const opacity = useSharedValue(1)
+  const on = active && !reduced
+  breath.useRunning(on)
+  // How much of the shared breath shows: eases in and out so a mark that stops does not snap to full.
+  const depth = useSharedValue(on ? 1 : 0)
   useEffect(() => {
-    if (!active || reduced) {
-      opacity.value = withTiming(1, { duration: reduced ? 0 : 220, easing: ReEasing.out(ReEasing.quad) })
-      return
-    }
-    const half = { duration: 700, easing: ReEasing.inOut(ReEasing.sin) }
-    opacity.value = withRepeat(withSequence(withTiming(0.4, half), withTiming(1, half)), -1)
-    return () => cancelAnimation(opacity)
-  }, [active, reduced, opacity])
-  const style = useAnimatedStyle(() => ({ opacity: opacity.value }))
+    depth.value = withTiming(on ? 1 : 0, { duration: reduced ? 0 : 220, easing: ReEasing.out(ReEasing.quad) })
+  }, [on, reduced, depth])
+  const style = useAnimatedStyle(() => ({ opacity: 1 - 0.65 * breath.value.value * depth.value }))
   return <Reanimated.View style={style}>{children}</Reanimated.View>
 }
 
