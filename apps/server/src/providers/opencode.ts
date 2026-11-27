@@ -675,9 +675,7 @@ export class OpenCodeSession implements AgentRunner {
         // Forms/questions remain interactive. Auto and full access approve too, except a command that always asks.
         const danger =
           !this.readOnly && ['bash', 'shell'].includes(d.action)
-            ? ((d.resources ?? [])
-                .map((command: string) => productionDeploy(command))
-                .find(Boolean) ?? null)
+            ? ((d.resources ?? []).map((command: string) => productionDeploy(command)).find(Boolean) ?? null)
             : null
         if (
           !danger &&
