@@ -189,6 +189,23 @@ export function defaultInput(settings: AgentSettings, projectId = NO_PROJECT): S
   }
 }
 
+/**
+ * A new schedule set on a thread: named after it, in its project and checkout, and sending each run into it, where its
+ * own agent and settings answer. `projectId` is the host's own id for the thread's project.
+ */
+export function threadInput(
+  settings: AgentSettings,
+  thread: { taskId: string; title: string; projectId: string; workspaceId?: string | null },
+): ScheduleInput {
+  return {
+    ...defaultInput(settings, thread.projectId),
+    name: thread.title,
+    workspaceId: thread.workspaceId ?? null,
+    sourceTaskId: thread.taskId,
+    targetTaskId: thread.taskId,
+  }
+}
+
 /** Switches the rule's kind and keeps what carries over (the time of day), so flipping the picker is not destructive. */
 export function ruleOfKind(kind: ScheduleRule['kind'], previous: ScheduleRule, now = new Date()): ScheduleRule {
   if (previous.kind === kind) return previous

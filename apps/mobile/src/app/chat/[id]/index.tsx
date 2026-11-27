@@ -1484,6 +1484,18 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                               if (!viewerNow()) setActions('rename')
                             },
                           },
+                          {
+                            label: say_('Schedule a message…'),
+                            icon: 'calendar.badge.clock' as const,
+                            section: 'thread',
+                            onPress: () => {
+                              if (viewerNow()) return
+                              router.push({
+                                pathname: '/schedule-edit',
+                                params: { computer: chat.computerId, thread: chat.id },
+                              })
+                            },
+                          },
                           ...(chat.settings && chat.titleGenerationState !== 'pending' && !offline
                             ? [
                                 {

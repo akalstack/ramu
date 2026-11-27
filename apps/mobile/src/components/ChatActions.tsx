@@ -25,6 +25,7 @@ import {
   Sparkles,
   Trash2,
   UsersRound,
+  CalendarClock,
 } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
 import type { MobileProject } from '../runtime/types'
@@ -261,6 +262,7 @@ export function ChatActionsSheet({
     latestStore.current.isOnline(chat.computerId) &&
     latestStore.current.computers?.find((host) => host.id === chat.computerId)?.access !== 'viewer'
   const commands = useChatCommands(chat)
+  const router = useRouter()
   const say = (text: string, values?: Record<string, string | number>) => translate(store.language, text, values)
   const archived = chat.status === 'archived'
   const pinned = chat.pinnedAt !== null
@@ -304,6 +306,15 @@ export function ChatActionsSheet({
       label: say('Rename'),
       onPress: () => {
         if (writable()) setRenaming(true)
+      },
+    },
+    {
+      icon: CalendarClock,
+      label: say('Schedule a message…'),
+      onPress: () => {
+        if (!writable()) return
+        onClose()
+        router.push({ pathname: '/schedule-edit', params: { computer: chat.computerId, thread: chat.id } })
       },
     },
     ...(chat.settings

@@ -1,12 +1,13 @@
 import { goBackOrHome } from '../runtime/navigation'
 import { useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, Platform, View } from 'react-native'
+import { ActivityIndicator, Alert, Platform, Pressable, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
 import { Check, Folder, MessagesSquare } from 'lucide-react-native'
 import type { ScheduleInput } from '@ramu/shared/types'
 import { font, space, useTheme } from '../theme'
 import { scoped, useStore } from '../runtime/store'
+import { STANDALONE } from '../runtime/types'
 import { useAutomation } from '../runtime/automation'
 import {
   NO_PROJECT,
@@ -15,6 +16,7 @@ import {
   RULE_LABELS,
   addDays,
   defaultInput,
+  threadInput,
   describeRule,
   formatWhen,
   onceInstant,
@@ -48,20 +50,41 @@ export default function ScheduleEdit() {
   const insets = useSafeAreaInsets()
   const store = useStore()
   const auto = useAutomation()
-  const { computer, id } = useLocalSearchParams<{ computer?: string; id?: string }>()
+  const { computer, id, thread } = useLocalSearchParams<{ computer?: string; id?: string; thread?: string }>()
   const ownerId = computer ?? store.selected
   const existing = id ? auto.of(ownerId).schedules.find((s) => s.id === id) : undefined
+  // Opened from a thread's menu: each run sends into that thread.
+  const fromThread = !existing && thread ? store.chats.find((chat) => chat.id === thread) : undefined
   // Runs on: a schedule lives on the host that fires it. Moving one saves it there, then removes it here on confirmation.
   const [computerId, setComputerId] = useState(ownerId)
   const hosts = store.computers.filter((pc) => pc.status === 'online' && pc.access !== 'viewer')
   const preset = store.defaults[computerId]
-  const [input, setInput] = useState<ScheduleInput>(() =>
-    existing
-      ? { ...existing }
-      : defaultInput(
-          preset ?? { provider: 'claude-code', model: '', effort: null, access: 'full', autoFallback: true },
-        ),
-  )
+  const [input, setInput] = useState<ScheduleInput>(() => {
+    const settings = preset ?? {
+      provider: 'claude-code' as const,
+      model: '',
+      effort: null,
+      access: 'full' as const,
+      autoFallback: true,
+    }
+    if (existing) return { ...existing }
+    if (fromThread?.taskId)
+      return threadInput(settings, {
+        taskId: fromThread.taskId,
+        title: fromThread.title,
+        projectId:
+          fromThread.projectId === STANDALONE
+            ? NO_PROJECT
+            : fromThread.projectId.slice(fromThread.computerId.length + 1),
+        workspaceId: fromThread.workspaceId,
+      })
+    return defaultInput(settings)
+  })
+  // Runs sent into a thread use its agent, settings, project and checkout, so those choices step aside.
+  const target = input.targetTaskId
+    ? (store.chats.find((chat) => chat.computerId === computerId && chat.taskId === input.targetTaskId)?.title ??
+      say('This thread'))
+    : null
   const rule = input.rule
   const [unit, setUnit] = useState<Unit>(() => (rule.kind === 'interval' ? unitOf(rule.minutes) : 'hours'))
   const [onceDay, setOnceDay] = useState(() => (rule.kind === 'once' ? new Date(rule.at) : addDays(new Date(), 1)))
@@ -199,7 +222,7 @@ export default function ScheduleEdit() {
           paddingBottom: Platform.OS === 'ios' ? space.xl : insets.bottom + 96,
         }}
       >
-        {hosts.length > 1 ? (
+        {hosts.length > 1 && !target ? (
           <Field label={say('Runs on')}>
             <Segmented
               value={computerId}
@@ -229,20 +252,44 @@ export default function ScheduleEdit() {
             onChangeText={(prompt) => patch({ prompt })}
           />
         </Field>
-        <Field label={t.scope}>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
-            <Row
-              onPress={() => setProjectSheet(true)}
-              style={{ backgroundColor: c.raised2, borderRadius: 999, paddingVertical: 8, minHeight: 0, flexShrink: 1 }}
+        {target ? (
+          <Field label={t.scope}>
+            <T tone="soft">
+              {say('Each run sends this message into {0}, with its agent and settings.', { 0: target })}
+            </T>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => patch({ targetTaskId: null })}
+              hitSlop={8}
+              style={{ alignSelf: 'flex-start', paddingVertical: space.xs }}
             >
-              <Folder size={14} color={c.soft} />
-              <T weight="500" numberOfLines={1} style={{ flexShrink: 1 }}>
-                {projectName}
+              <T weight="600" tone="accent">
+                {say('Start a new thread each run')}
               </T>
-            </Row>
-            <ModelChip value={model} computerId={computerId} onChange={chooseModel} />
-          </View>
-        </Field>
+            </Pressable>
+          </Field>
+        ) : (
+          <Field label={t.scope}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
+              <Row
+                onPress={() => setProjectSheet(true)}
+                style={{
+                  backgroundColor: c.raised2,
+                  borderRadius: 999,
+                  paddingVertical: 8,
+                  minHeight: 0,
+                  flexShrink: 1,
+                }}
+              >
+                <Folder size={14} color={c.soft} />
+                <T weight="500" numberOfLines={1} style={{ flexShrink: 1 }}>
+                  {projectName}
+                </T>
+              </Row>
+              <ModelChip value={model} computerId={computerId} onChange={chooseModel} />
+            </View>
+          </Field>
+        )}
 
         {rule.kind === 'webhook' ? (
           <Field label={t.repeat}>

@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   defaultInput,
+  threadInput,
   describeRule,
   intervalText,
   onceInstant,
@@ -132,4 +133,15 @@ test('a webhook schedule names its sender and saves without a time', () => {
   assert.equal(describeRule(rule), 'When GitHub sends a request')
   assert.equal(describeRule({ ...rule, source: 'generic' }, 'id'), 'Saat permintaan masuk')
   assert.equal(validateInput({ ...valid(), rule }), null)
+})
+
+test('a schedule opened from a thread is named after it and sends each run into it', () => {
+  const settings = { provider: 'claude-code', model: 'opus', effort: null, access: 'full', autoFallback: true }
+  const input = threadInput(settings, { taskId: 't1', title: 'Release checks', projectId: 'p1', workspaceId: 'w1' })
+  assert.equal(input.name, 'Release checks')
+  assert.equal(input.projectId, 'p1')
+  assert.equal(input.workspaceId, 'w1')
+  assert.equal(input.sourceTaskId, 't1')
+  assert.equal(input.targetTaskId, 't1')
+  assert.equal(input.prompt, '')
 })
