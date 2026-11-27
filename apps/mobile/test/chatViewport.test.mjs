@@ -1,18 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { appForeground, openingLanded, transcriptScrollState } from '../src/runtime/chatViewport.ts'
+import { appForeground } from '../src/runtime/chatViewport.ts'
 import { transcript } from '../src/runtime/transcript.ts'
-
-test('jumping to latest stays hidden through intermediate animated scroll offsets', () => {
-  for (const gap of [1000, 700, 200, 90, 0])
-    assert.deepEqual(transcriptScrollState(true, gap, false, false), { following: true, away: false })
-  assert.deepEqual(transcriptScrollState(true, 200, true, false), { following: false, away: true })
-  assert.deepEqual(transcriptScrollState(false, 20, true, false), { following: true, away: false })
-})
-
-test('keyboard settling does not mistake inset movement for leaving latest', () => {
-  assert.deepEqual(transcriptScrollState(true, 200, true, true), { following: true, away: false })
-})
 
 test('native interruptions retain foreground state; background and resume change it', () => {
   assert.equal(appForeground(true, 'inactive'), true)
@@ -53,11 +42,3 @@ test('helper activity cannot publish a partial main-agent answer', () => {
   assert.ok(!rows.some((row) => row.kind === 'text' && row.text === 'Partial'))
 })
 
-test('an opening thread is shown only once rows measured in have left it on its end', () => {
-  // Rows below the screen measured taller than estimated: the first scroll fell short of the new end.
-  assert.equal(openingLanded(2400, 1900, 3200), false)
-  assert.equal(openingLanded(2400, 2399, 3200), true)
-  // A chat that fits on screen has no end to reach, only content to draw.
-  assert.equal(openingLanded(null, -100, 600), true)
-  assert.equal(openingLanded(null, 0, 0), false)
-})

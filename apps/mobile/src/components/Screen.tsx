@@ -1,5 +1,6 @@
 import { pastScrollEdge } from '../runtime/scrollSurface'
 import { LegendList, type LegendListProps, type LegendListRef } from '@legendapp/list/react-native'
+import { KeyboardAwareLegendList } from '@legendapp/list/keyboard'
 import { backHistory, goBackOrHome, screenTitles } from '../runtime/navigation'
 import {
   Children,
@@ -150,6 +151,31 @@ export function PageLegendList<T>({
   return (
     <PrimaryScroll>
       <LegendList
+        {...props}
+        {...readable}
+        ref={ref}
+        recycleItems={recycleItems}
+        style={[{ backgroundColor: c.window }, props.style]}
+      />
+    </PrimaryScroll>
+  )
+}
+
+/**
+ * The thread's list: PageLegendList's page and reading column on LegendList's keyboard-aware list, which keeps a chat's
+ * end above the message box and the keyboard by itself, as T3 Code's feed does.
+ */
+export function PageKeyboardLegendList<T>({
+  ref,
+  recycleItems = false,
+  fullWidth,
+  ...props
+}: ComponentProps<typeof KeyboardAwareLegendList<T>> & Readable & { ref?: Ref<LegendListRef> }) {
+  const { c } = useTheme()
+  const readable = useReadableProps(props as LegendListProps<T>, !props.horizontal && !fullWidth)
+  return (
+    <PrimaryScroll>
+      <KeyboardAwareLegendList
         {...props}
         {...readable}
         ref={ref}

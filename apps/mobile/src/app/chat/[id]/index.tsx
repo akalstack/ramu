@@ -1,6 +1,5 @@
 import { projectIdentity, useHostIdentities } from '../../../runtime/identities'
 import { deliveryVisible, visibleText } from '../../../runtime/transcript'
-import { openingLanded, transcriptScrollState } from '../../../runtime/chatViewport'
 import { goBackOrHome, type ThreadArrival } from '../../../runtime/navigation'
 import { shareRows } from '../../../runtime/shareRows'
 import { VIEW_ONLY_WRITE_NOTICE } from '../../../runtime/viewerAccess'
@@ -68,7 +67,14 @@ import { formatChatDate, needsChatDate } from '@ramu/shared/chat/chatDates'
 import { commitAndPush, pushBranch } from '../../../runtime/gitQuick'
 import { chooseCommitBranch } from '../../../runtime/commitBranchPrompt'
 import { STANDALONE, providerNames } from '../../../runtime/types'
-import { Header, HeaderButton, HeaderMenu, Screen, PageLegendList, liquidGlass } from '../../../components/Screen'
+import {
+  Header,
+  HeaderButton,
+  HeaderMenu,
+  Screen,
+  PageKeyboardLegendList,
+  liquidGlass,
+} from '../../../components/Screen'
 import type { LegendListRef } from '@legendapp/list/react-native'
 import Reanimated, { cancelAnimation, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import { scheduleOnRN } from 'react-native-worklets'
@@ -103,7 +109,7 @@ import {
 } from '../../../components/Transcript'
 import { RunCommandProvider } from '../../../runtime/runCommand'
 import { Button, ConnectionDot, Sheet, T, tap } from '../../../components/ui'
-import { BottomFade, Glass, TopFade, floatingChrome } from '../../../components/Glass'
+import { BottomFade, Glass, TopFade } from '../../../components/Glass'
 import { ComposerDock, KeyboardLift, useKeyboardHeight } from '../../../components/Keyboard'
 import { PendingBubble } from '../../../components/Outbox'
 import { SteeringBubble } from '../../../components/SteeringBubble'
@@ -124,12 +130,10 @@ import { messageWithTerminal, readTerminalDraft, terminalDraftKey } from '../../
 
 /** Turns drawn at a time; a chat can have hundreds. */
 const TURN_PAGE = 15
-/**
- * How long opening a thread keeps landing on its end. Its rows below the first screen are estimated until drawn, so the
- * content keeps growing after the first aim and a single scroll fell short of the end. As T3 Code keeps its chat stuck to
- * the bottom while it lays out, each growth re-aims until the reader touches the list.
- */
-const OPENING_LANDING_MS = 3000
+/** The gap kept between the thread's last row and the message box, as T3 Code's feed keeps above its composer. */
+const FEED_END_GAP = space.s
+/** How far above the end the reader has to be before Scroll to latest shows. */
+const AWAY_GAP = 80
 
 const RowSeparator = () => <View style={{ height: space.m + 2 }} />
 
@@ -214,7 +218,6 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
       return () => setContentScreenFocused(false)
     }, []),
   )
-  const following = useRef(true)
   // A long thread renders top-down in batches; jumping to its end after each batch showed the whole transcript
   // scrolling past. It stays hidden until its size settles at the end, then appears already there.
   // How this screen opened, kept past the route parameter, which is cleared so Back and later visits use the usual
@@ -236,17 +239,18 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
    * the list short of the end after it first draws, so a timer alone showed the chat still moving down. The check
    * waits a frame for the scroll that the last growth caused, and a cap never leaves the chat covered.
    */
+  // Whether the list has laid out its first rows at its end (its onReady), as T3 Code waits for before showing the feed.
+  const [listReady, setListReady] = useState(false)
   const settleReveal = () => {
     if (revealed) return
     // A started thread whose history is still on its way has nothing to show yet: wait for it, briefly. So does one
     // whose catch-up read or change cards are still coming, which would rebuild its rows just after it showed.
     const loading = !!chat?.sessionId && (!chat.items?.length || openReady !== chat.sessionId)
     revealCap.current ??= setTimeout(() => setRevealed(true), loading ? 2500 : 1000)
-    if (loading) return
+    if (loading || !listReady) return
     if (revealTimer.current) clearTimeout(revealTimer.current)
-    revealTimer.current = setTimeout(() => {
-      if (openingLanded(endOffset(), metrics.current.offset, metrics.current.content)) setRevealed(true)
-    }, 32)
+    // A moment for the end following the last layout started, so the thread appears already at its end.
+    revealTimer.current = setTimeout(() => setRevealed(true), 100)
   }
   useEffect(
     () => () => {
@@ -256,12 +260,9 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
     [],
   )
   const reducedMotion = useReducedMotion()
-  const userScrolling = useRef(false)
   const [away, setAway] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const [composerHeight, setComposerHeight] = useState(120)
-  // iOS: the composer and keyboard cover the list's bottom through UIScrollView.contentInset, which moves no content.
-  // The keyboard handler then sets the offset itself: the end when following, else the same lines stay above the keys.
   const ios = Platform.OS === 'ios'
   // Pulling down at the top reads this thread again from the host, the whole of it, as opening it fresh would.
   const [pulling, setPulling] = useState(false)
@@ -273,127 +274,37 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
       .catch(() => {})
       .finally(() => setPulling(false))
   }
-  const slack = Math.max(0, insets.bottom - space.s)
-  const coverFor = (keys: number) => composerHeight + (keys ? keys - slack : 0)
-  const metrics = useRef({ offset: 0, content: 0, viewport: 0, cover: 0 })
-  // The list keeps itself at the end (maintainScrollAtEnd) once the chat is taller than the screen; a chat that fits
-  // rests at its top, where UIKit puts it. That following pauses while the keyboard moves, so the list's own jump
-  // never interrupts the scroll that moves with the keyboard, and right after a row is opened by hand, which keeps
-  // its place.
-  const [overflowing, setOverflowing] = useState(false)
-  const [followPaused, setFollowPaused] = useState(false)
-  const pauseTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const settling = useRef(false)
-  const pauseFollow = (ms: number, keyboardMoving: boolean) => {
-    settling.current ||= keyboardMoving
-    setFollowPaused(true)
-    if (pauseTimer.current) clearTimeout(pauseTimer.current)
-    pauseTimer.current = setTimeout(() => {
-      pauseTimer.current = null
-      const keyboardMoved = settling.current
-      settling.current = false
-      setFollowPaused(false)
-      if (!keyboardMoved) return
-      // Rows that arrived meanwhile were not followed; land on them.
-      if (following.current && !userScrolling.current) toEnd(false)
-    }, ms)
+  /**
+   * The list's end, as T3 Code gives its feed the composer's measured height: the message box and a gap above it. The
+   * list adds the keyboard itself and keeps its end in view through every change (rows, sizes, the keyboard), so this
+   * screen works out no offsets of its own.
+   */
+  const endInset = useSharedValue(120 + FEED_END_GAP)
+  const onComposerLayout = (height: number) => {
+    setComposerHeight(height)
+    endInset.set(height + FEED_END_GAP)
   }
-  useEffect(
-    () => () => {
-      if (pauseTimer.current) clearTimeout(pauseTimer.current)
-    },
-    [],
-  )
-  // When the keyboard moves, the list moves with it: at the end it stays on the end (worked out once the new inset and
-  // any just-sent message are laid out, so it is one motion), elsewhere the same lines stay above the keys.
-  const keyboardMove = useRef<'end' | number | null>(null)
-  const keyboard = useKeyboardHeight((to) => {
-    pauseFollow(500, true)
-    const m = metrics.current
-    const cover = coverFor(to)
-    keyboardMove.current = following.current
-      ? 'end'
-      : ios
-        ? Math.max(restTop.current, Math.min(m.content - m.viewport + cover, m.offset + cover - m.cover))
-        : null
-  })
-  useEffect(() => {
-    const move = keyboardMove.current
-    if (move == null) return
-    keyboardMove.current = null
-    const frame = requestAnimationFrame(() =>
-      move === 'end' ? toEnd(true) : scroll.current?.scrollToOffset({ offset: move, animated: true }),
-    )
-    return () => cancelAnimationFrame(frame)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [keyboard.height] by design; the values it reads beyond these are current as of that run
-  }, [keyboard.height])
-  const cover = ios ? coverFor(keyboard.height) : 0
-  const bottomInset = Math.max(0, cover - (keyboard.height ? 0 : insets.bottom))
-  metrics.current.cover = cover
+  // The message box's home-indicator padding hides behind the keys, so the keyboard covers that much less of the list
+  // (KeyboardLift lifts the box by the same amount). Android reports the keys without the navigation bar.
+  const keyboardSlack = ios ? Math.max(0, insets.bottom - space.s) : -space.s
+  const keyboard = useKeyboardHeight()
   // Native scroll-edge chrome overlays the list; UIKit supplies its top inset. Beside the thread list the page draws its
   // own header above the list instead, as on Android.
   const inPane = useInDetailPane()
   // A thread left mid-scroll must not leave updates held for the next one.
   useEffect(() => () => scrollBusy.set(false), [])
   const topInset = ios && !inPane ? insets.top + (liquidGlass ? 54 : 44) : 0
-  // Where UIKit rests a chat that fits on screen: read from the list while it is short, since the bar's real height can
-  // differ from the guess above.
-  const measuredRest = useRef<number | null>(null)
-  const restTop = useRef(-topInset)
-  restTop.current = measuredRest.current ?? -topInset
-  /** The end of a chat taller than the screen, past the composer and keyboard inset; a chat that fits stays put. */
-  const endOffset = () => {
-    const m = metrics.current
-    // Not measured yet: an offset worked out from a zero-height viewport lands far down and hides the first messages.
-    if (!m.viewport || !m.content) return null
-    const end = m.content - m.viewport + m.cover
-    return end > restTop.current + 1 ? end : null
-  }
-  /**
-   * Until when a jump to the latest keeps aiming at the end. Rows below the screen are only estimated until they are
-   * drawn, so the first aim falls short and the content grows as the list lands; each growth re-aims, until the reader
-   * touches the list.
-   */
-  // Opening a thread lands the same way (see OPENING_LANDING_MS).
-  const landingUntil = useRef(Date.now() + OPENING_LANDING_MS)
-  const toEnd = (animated: boolean) => {
-    animated = animated && !reducedMotion
-    if (!ios) return scroll.current?.scrollToEnd({ animated })
-    const end = endOffset()
-    if (end !== null) scroll.current?.scrollToOffset({ offset: end, animated })
-  }
-  /**
-   * The list follows the end itself once its end is past offset 0, since the native scroll to the end stops at 0. A
-   * chat taller than the screen by less than the bar under it is followed here, and so is the change that first makes
-   * the list follow (a long reply, the keyboard, a sent message), which the list does not follow itself.
-   */
-  const catchUp = () => {
-    const end = endOffset()
-    const listFollows = end !== null && end > 0
-    const was = overflowing
-    setOverflowing(listFollows)
-    if (end === null || followPaused || !following.current || userScrolling.current) return
-    // Lands on the end at once, as T3 Code's list follows its end without motion. On iOS nothing else follows it.
-    if (ios || !listFollows || !was) toEnd(false)
-  }
+  const toEnd = (animated: boolean) => scroll.current?.scrollToEnd({ animated: animated && !reducedMotion })
   /**
    * Sending closes the keyboard and brings the end into view, as T3 Code does, so the message just sent (a steer
    * included) is seen at once even by a reader who had scrolled up; the list then follows the reply.
    */
   const followSend = () => {
     if (keyboard.height > 0) SystemKeyboard.dismiss()
-    if (following.current && !userScrolling.current) return
-    following.current = true
-    userScrolling.current = false
+    if (!away) return
     setAway(false)
-    landingUntil.current = Date.now() + 2000
     requestAnimationFrame(() => toEnd(true))
   }
-  // The composer growing or shrinking moves the inset under the list; stay on the end.
-  useEffect(() => {
-    if (following.current && !followPaused && !userScrolling.current) toEnd(false)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [composerHeight] by design; the values it reads beyond these are current as of that run
-  }, [composerHeight])
   // A row opened or closed by hand is what the reader is looking at: it keeps its place, and the list stops following
   // the end until they tap Scroll to latest or scroll back down themselves, so the transcript never glides away from it.
   const [restore, setRestore] = useState<{ text: string; n: number }>()
@@ -681,7 +592,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
     seen.current.clear()
     arrivalReady.current = false
     openedAt.current = Date.now()
-    landingUntil.current = Date.now() + OPENING_LANDING_MS
+    setListReady(false)
   }
   const initialItems = chat?.items
   if (!arrivalReady.current && initialItems?.length) {
@@ -690,10 +601,8 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
   }
   // A long chat draws its latest turns; "Earlier turns" brings back the previous page without moving what you are reading.
   const [turnsShown, setTurnsShown] = useState(TURN_PAGE)
-  const [pagedBack, setPagedBack] = useState(false)
   useEffect(() => {
     setTurnsShown(TURN_PAGE)
-    setPagedBack(false)
   }, [id])
   const { pageRows, hiddenTurns } = useMemo(() => {
     const users = rows.flatMap((row, index) => (row.kind === 'user' ? [index] : []))
@@ -733,7 +642,6 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
   const [finding, setFinding] = useState(false)
   /** Lands a row at the top of the list, under the header and, while finding, the find bar over it. */
   const toTop = (index: number, underFind: boolean) => {
-    following.current = false
     // A row not laid out yet can refuse to be scrolled to; the highlight still marks it once it is.
     try {
       scroll.current?.scrollToIndex({
@@ -1564,7 +1472,6 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
             goTo: (itemId) => {
               const index = pageRows.findIndex((row) => row.id === itemId)
               if (index < 0) return
-              following.current = false
               // A row not laid out yet can refuse to be scrolled to.
               try {
                 scroll.current?.scrollToIndex({ index, animated: true, viewPosition: 0 })
@@ -1696,11 +1603,20 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
         >
           <ChatMentions.Provider value={composerMentions.mentions}>
             <CancelPendingSettings.Provider value={() => setStaged(null)}>
-              <PageLegendList
+              <PageKeyboardLegendList
                 key={chat.id}
                 ref={scroll}
-                contentInsetAdjustmentBehavior="automatic"
-                automaticallyAdjustsScrollIndicatorInsets
+                // As T3 Code's feed: the list owns its insets. The bar above it is the top inset; the message box, the
+                // gap over it and the keyboard are its end, which it keeps in view itself.
+                contentInsetAdjustmentBehavior="never"
+                automaticallyAdjustsScrollIndicatorInsets={false}
+                contentInset={topInset ? { top: topInset } : undefined}
+                scrollIndicatorInsets={{ top: topInset, bottom: 0 }}
+                contentInsetEndAdjustment={endInset}
+                keyboardOffset={keyboardSlack}
+                keyboardLiftBehavior="whenAtEnd"
+                // RN 0.81+ drops touches in the inset area, which left the blank room after sending unscrollable.
+                applyWorkaroundForContentInsetHitTestBug
                 ListHeaderComponent={
                   <View style={{ gap: space.s, paddingBottom: space.m }}>
                     {chat.branchNamingFallback ? (
@@ -1713,8 +1629,6 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                         accessibilityRole="button"
                         onPress={() => {
                           tap()
-                          following.current = false
-                          setPagedBack(true)
                           setTurnsShown((n) => n + TURN_PAGE)
                         }}
                         style={{
@@ -1737,8 +1651,8 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                 extraData={rowContext}
                 viewabilityConfig={contentViewability}
                 onViewableItemsChanged={contentViewabilityChanged}
-                // Earlier turns arrive above what you are reading; they must not move it.
-                maintainVisibleContentPosition={pagedBack ? { data: true, size: true } : undefined}
+                // Earlier turns arrive above what you are reading, and rows above grow as they are measured; neither moves it.
+                maintainVisibleContentPosition
                 keyExtractor={rowKey}
                 renderItem={renderRow}
                 // Each kind keeps its own measured size, so unmeasured rows above and below are estimated closely.
@@ -1754,17 +1668,15 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                 }
                 estimatedItemSize={260}
                 drawDistance={400}
-                // Lays out the newest rows first instead of the whole page from the top.
+                // Lays out the newest rows first, and a chat shorter than the screen sits just above the message box.
                 initialScrollAtEnd
-                // Pinned to the end without motion: each change lands where it ends instead of gliding there, which
-                // would read as the transcript scrolling up and down while a reply streams, a tool row grows or a
-                // message is sent. It stops following once the reader scrolls up, and a chat that fits on screen is
-                // left where UIKit rests it.
-                // Not on iOS: there the message box lies over the list's bottom as an inset the list does not count, so
-                // its own end stops short by the box's height. It and the following below then took turns placing the
-                // end, and a finished turn, which changes size several times as it folds, sometimes came to rest with
-                // its last lines under the box. On iOS the following below is the only one.
-                maintainScrollAtEnd={!ios && overflowing && !followPaused ? { animated: false } : false}
+                alignItemsAtEnd
+                // Stuck to the end without motion while the reader is there, as T3 Code keeps its feed: a new row, a row
+                // growing (a reply streaming, a turn folding) and a change of the list's own size each land where they
+                // end. It lets go once the reader scrolls up and picks up again only at the very end.
+                maintainScrollAtEnd={{ animated: false, on: { dataChange: true, itemLayout: true, layout: true } }}
+                maintainScrollAtEndThreshold={0}
+                onReady={() => setListReady(true)}
                 ItemSeparatorComponent={RowSeparator}
                 refreshControl={
                   chat?.taskId ? (
@@ -1772,77 +1684,22 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                   ) : undefined
                 }
                 style={{ flex: 1 }}
-                // With the keyboard down UIKit adds the bottom safe area (the home indicator's strip) to this inset by
-                // itself, and `cover` already reaches the screen's edge, so the strip is taken back out: counted twice,
-                // a scroll by hand went past the end the app lands on and left empty room under the last row. With the
-                // keyboard up it adds nothing, and taking it out hid the last line under the message box.
-                contentInset={ios ? { bottom: bottomInset } : undefined}
-                scrollIndicatorInsets={ios ? { bottom: bottomInset } : undefined}
-                contentContainerStyle={{
-                  padding: space.l,
-                  paddingBottom: ios
-                    ? space.l
-                    : (floatingChrome ? composerHeight + space.l : space.l) + keyboard.height,
-                }}
-                onLayout={(event) => {
-                  metrics.current.viewport = event.nativeEvent.layout.height
-                  catchUp()
-                }}
+                contentContainerStyle={{ padding: space.l }}
                 onScroll={(event) => {
-                  const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent
-                  metrics.current.offset = contentOffset.y
+                  const { contentOffset, contentSize, layoutMeasurement, contentInset } = event.nativeEvent
                   settleReveal()
-                  if (
-                    ios &&
-                    !userScrolling.current &&
-                    contentOffset.y < 0 &&
-                    contentSize.height + metrics.current.cover <= layoutMeasurement.height + contentOffset.y
-                  ) {
-                    measuredRest.current = contentOffset.y
-                    restTop.current = contentOffset.y
-                  }
-                  const gap = contentSize.height - contentOffset.y - layoutMeasurement.height + metrics.current.cover
-                  // Only the reader's own scrolling decides whether to follow the end. The list's first, programmatic offset
-                  // (resting at the top before it is measured) used to switch following off, so a chat opened at its top.
-                  const position = transcriptScrollState(
-                    following.current,
-                    gap,
-                    userScrolling.current,
-                    !!settling.current,
-                  )
-                  following.current = position.following
-                  setAway(position.away)
+                  // How far the end is: past the content, the list's own end inset (message box, gap and keyboard).
+                  const gap =
+                    contentSize.height + (contentInset?.bottom ?? 0) - contentOffset.y - layoutMeasurement.height
+                  setAway(gap > AWAY_GAP)
                   setScrolled(contentOffset.y > 8 - topInset)
                 }}
                 scrollEventThrottle={16}
-                onScrollBeginDrag={() => {
-                  userScrolling.current = true
-                  scrollBusy.set(true)
-                  landingUntil.current = 0
-                }}
+                onScrollBeginDrag={() => scrollBusy.set(true)}
                 onScrollEndDrag={(event) => {
-                  if (!event.nativeEvent.velocity?.y) {
-                    userScrolling.current = false
-                    scrollBusy.set(false)
-                  }
+                  if (!event.nativeEvent.velocity?.y) scrollBusy.set(false)
                 }}
-                onMomentumScrollEnd={() => {
-                  userScrolling.current = false
-                  scrollBusy.set(false)
-                }}
-                onContentSizeChange={(_, height) => {
-                  metrics.current.content = height
-                  settleReveal()
-                  catchUp()
-                  // Stuck to the end while the reader is there, as T3 Code keeps its chat: every growth is followed
-                  // here, not left to the list's own end tracking, which the message box laid over the list's bottom
-                  // threw off, so a reply streaming in at the bottom stopped being followed. Each growth lands at
-                  // once, without a glide that read as the transcript moving up and down; while landing that holds
-                  // even when following is paused. Otherwise paused while the keyboard moves and right after a row
-                  // is opened by hand.
-                  if (!following.current || userScrolling.current) return
-                  if (Date.now() < landingUntil.current || !followPaused) toEnd(false)
-                }}
+                onMomentumScrollEnd={() => scrollBusy.set(false)}
                 keyboardDismissMode="on-drag"
                 keyboardShouldPersistTaps="handled"
                 ListFooterComponent={
@@ -1879,7 +1736,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
               <KeyboardLift keyboard={keyboard}>
                 <BottomFade height={composerHeight * 0.75} color={c.window} />
                 {/* iOS/web: the glass composer floats over the transcript, which scrolls beneath it. */}
-                <ComposerDock onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
+                <ComposerDock onLayout={(e) => onComposerLayout(e.nativeEvent.layout.height)}>
                   {chat.status === 'archived' && !viewer ? (
                     // An archived thread takes no messages; it is unarchived first, which is offered right here.
                     <Glass
@@ -2170,10 +2027,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                     hitSlop={5}
                     onPress={() => {
                       tap()
-                      following.current = true
-                      userScrolling.current = false
                       setAway(false)
-                      landingUntil.current = Date.now() + 2000
                       toEnd(true)
                     }}
                   >
