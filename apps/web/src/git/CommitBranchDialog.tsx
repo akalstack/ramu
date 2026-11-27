@@ -58,10 +58,10 @@ export function CommitBranchDialog() {
     }
   }, [])
   const finish = (choice: CommitBranchOptions | null) => {
-    const current = active
+    // Resolve before clearing: the React Compiler folds a `const current = active` alias into a read after `active = null`.
+    active?.resolve(choice)
     active = null
     setRequest(null)
-    current?.resolve(choice)
   }
   if (!request) return null
   const createBranch = () => finish({ expectedBranch: request.branch, autoBranch: true })

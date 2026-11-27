@@ -43,10 +43,10 @@ export function SwitchBranchDialog() {
     }
   }, [])
   const finish = (wait: boolean) => {
-    const current = active
+    // Resolve before clearing: the React Compiler folds a `const current = active` alias into a read after `active = null`.
+    active?.resolve(wait)
     active = null
     setRequest(null)
-    current?.resolve(wait)
   }
   if (!request) return null
   return (

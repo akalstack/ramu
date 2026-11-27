@@ -1,5 +1,5 @@
 import type { AgentEvent, AgentQuestion } from '../types'
-import { visibleMessage } from './visibleMessage'
+import { visibleMessage } from '@ramu/shared/chat/visibleMessage'
 
 export type QuestionRequest = Extract<AgentEvent, { kind: 'question' }>
 export interface QuestionInput {

@@ -28,10 +28,10 @@ export function ProtectedSyncDialog() {
     }
   }, [])
   const finish = (approved: boolean) => {
-    const current = active
+    // Resolve before clearing: the React Compiler folds a `const current = active` alias into a read after `active = null`.
+    active?.resolve(approved)
     active = null
     setRequest(null)
-    current?.resolve(approved)
   }
   if (!request) return null
   return (
