@@ -1,8 +1,11 @@
 package dev.ramu.paste
 
+import android.content.ClipData
 import android.net.Uri
 import android.os.Build
 import android.provider.OpenableColumns
+import android.view.ContentInfo
+import android.view.OnReceiveContentListener
 import android.view.View
 import android.webkit.MimeTypeMap
 import expo.modules.kotlin.modules.Module
@@ -31,14 +34,20 @@ class RamuPasteModule : Module() {
 
   private fun watch(view: View) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
-    view.setOnReceiveContentListener(arrayOf("image/*", "video/*", "audio/*", "application/*")) { _, payload ->
-      val split = payload.partition { item -> item.uri != null }
-      val taken = split.first ?: return@setOnReceiveContentListener payload
-      val uris = (0 until taken.clip.itemCount).mapNotNull { taken.clip.getItemAt(it).uri }
+    val listener = OnReceiveContentListener { _: View, payload: ContentInfo ->
+      val clip = payload.clip
+      val items = (0 until clip.itemCount).map { clip.getItemAt(it) }
+      val uris = items.mapNotNull { it.uri }
+      if (uris.isEmpty()) return@OnReceiveContentListener payload
       Thread { report(uris.take(10)) }.start()
       // What is left (text) pastes as usual.
-      split.second
+      val rest = items.filter { it.uri == null }
+      if (rest.isEmpty()) return@OnReceiveContentListener null
+      val text = ClipData(clip.description, rest.first())
+      rest.drop(1).forEach { text.addItem(it) }
+      ContentInfo.Builder(payload).setClip(text).build()
     }
+    view.setOnReceiveContentListener(arrayOf("image/*", "video/*", "audio/*", "application/*"), listener)
   }
 
   private fun report(uris: List<Uri>) {
