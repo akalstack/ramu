@@ -65,6 +65,8 @@ let goal: { status: string; reason: string; pausedBy?: string } | null, queuedMe
 // A run held at a usage limit, and whether the thread continues by itself.
 let limited: boolean, autoResume: boolean
 let start: ReturnType<typeof vi.fn>
+// Messages a schedule set on a thread sent into it.
+let submit: ReturnType<typeof vi.fn>
 // Told when a run gives up before any thread exists.
 let startFailed: ReturnType<typeof vi.fn>
 const input = (rule: ScheduleInput['rule']): ScheduleInput => ({
@@ -86,6 +88,7 @@ beforeEach(() => {
   goal = null
   queuedMessages = []
   start = vi.fn(() => ({ id: 'session' }))
+  submit = vi.fn(async () => {})
   startFailed = vi.fn()
   const agents = {
     validateSettings: async () => {},
@@ -96,6 +99,8 @@ beforeEach(() => {
     getGoal: () => goal,
     queued: () => queuedMessages,
     get: () => ({ id: 'session', state }),
+    list: () => [{ id: 'thread-session', parentId: null }],
+    submit,
   } as unknown as AgentService
   service = new ScheduleService(db, ws, agents, () => {}, startFailed as unknown as () => void)
 })
@@ -104,6 +109,39 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true })
 })
 describe('durable dispatch', () => {
+  it('sends each run of a schedule set on a thread into that thread instead of starting a new one', async () => {
+    const thread = await ws.createTask({ projectId: NO_PROJECT, title: 'Release', mode: 'current' })
+    const s = service.save(
+      { ...input({ kind: 'daily', time: '09:00' }), targetTaskId: thread.id },
+      undefined,
+      at('2026-10-09T00:00:00Z'),
+    )
+    await service.tick(at('2026-10-10T03:00:00Z'))
+    expect(start).not.toHaveBeenCalled()
+    expect(submit).toHaveBeenCalledWith('thread-session', 'Review work', 'queue', [], undefined, true, {
+      kind: 'ramu',
+      title: 'Scheduled message: {0}',
+      values: { 0: 'Check' },
+      detail: 'Review work',
+    })
+    expect(service.runs(s.id)[0]).toMatchObject({ taskId: thread.id, sessionId: 'thread-session', status: 'running' })
+    state = 'idle'
+    await service.tick(at('2026-10-10T04:00:00Z'))
+    expect(service.runs(s.id)[0]?.status).toBe('completed')
+    // A deleted thread fails the run rather than starting a new thread in its place.
+    await ws.deleteTask(thread.id, false)
+    await service.tick(at('2026-10-11T03:00:00Z'))
+    expect(start).not.toHaveBeenCalled()
+    expect(service.runs(s.id)[0]?.error).toContain('deleted')
+  })
+  it('refuses a thread from another project', () => {
+    db.exec(`INSERT INTO projects (id, name, created_at) VALUES ('other', 'Other', 0);
+             INSERT INTO tasks (id, project_id, title, mode, status, created_at)
+             VALUES ('elsewhere', 'other', 'Elsewhere', 'current', 'idle', 0);`)
+    expect(() => service.save({ ...input({ kind: 'daily', time: '09:00' }), targetTaskId: 'elsewhere' })).toThrow(
+      'another project',
+    )
+  })
   it('coalesces missed daily runs and prevents duplicate dispatch', async () => {
     const s = service.save(input({ kind: 'daily', time: '09:00' }), undefined, at('2026-10-01T00:00:00Z'))
     await Promise.all([service.tick(at('2026-10-10T03:00:00Z')), service.tick(at('2026-10-10T03:00:00Z'))])

@@ -14,6 +14,11 @@ export interface ScheduleInput {
   projectId: string
   workspaceId?: string | null
   sourceTaskId?: string | null
+  /**
+   * The thread each run sends its prompt into, as a message from the person, with that thread's own agent and settings.
+   * Without it each run starts a new thread with `settings`.
+   */
+  targetTaskId?: string | null
   timezone: string
   rule: ScheduleRule
   missedPolicy: 'latest' | 'skip'

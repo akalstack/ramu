@@ -90,6 +90,7 @@ export const scheduleSchema = z.object({
   projectId: z.string().min(1).max(100).default(NO_PROJECT),
   workspaceId: z.string().max(100).nullable().optional(),
   sourceTaskId: z.string().max(100).nullable().optional(),
+  targetTaskId: z.string().max(100).nullable().optional(),
   timezone: z
     .string()
     .refine((zone) => DateTime.now().setZone(zone).isValid, 'Unknown timezone')
@@ -246,6 +247,8 @@ export class ScheduleService {
     if (value.workspaceId && this.workspace.getWorktreeWorkspace(value.workspaceId).projectId !== value.projectId)
       throw new Error('Workspace belongs to another project')
     if (value.sourceTaskId) this.workspace.getTask(value.sourceTaskId)
+    if (value.targetTaskId && this.workspace.getTask(value.targetTaskId).projectId !== value.projectId)
+      throw new Error('The thread belongs to another project')
     return value
   }
   save(input: ScheduleInput, id?: string, now = Date.now()): Schedule {
@@ -298,6 +301,28 @@ export class ScheduleService {
     } catch {
       return false
     }
+  }
+
+  /**
+   * A run of a schedule set on a thread: its prompt goes into that thread as the person's message, sent now when the
+   * thread rests or queued behind its current turn, and the run follows that thread's session.
+   */
+  private async sendIntoThread(run: ScheduleRun, s: Schedule, taskId: string, prompt: string): Promise<void> {
+    if (!this.threadExists(taskId)) throw new Error('The thread this schedule sends to was deleted.')
+    const session = this.agents.list(taskId).findLast((entry) => !entry.parentId)
+    if (!session) throw new Error('The thread this schedule sends to has no agent yet.')
+    this.db.prepare('UPDATE schedule_runs SET task_id=? WHERE id=?').run(taskId, run.id)
+    await this.agents.submit(session.id, prompt, 'queue', [], undefined, true, {
+      kind: 'ramu',
+      title: 'Scheduled message: {0}',
+      values: { 0: s.name },
+      detail: clipText(prompt, 20_000),
+    })
+    this.db
+      .prepare(
+        "UPDATE schedule_runs SET session_id=?, status='running', attempts=attempts+1, retry_at=NULL, error=NULL WHERE id=?",
+      )
+      .run(session.id, run.id)
   }
 
   /** Runs still marked live whose thread is gone are over: they cannot finish and must not hold the schedule. */
@@ -672,6 +697,12 @@ export class ScheduleService {
         const s = this.get(run.scheduleId)
         try {
           const fromWebhook = this.workspace.getAppState<RunPrompt | null>(promptKey(run.id), null)
+          if (s.targetTaskId) {
+            await this.sendIntoThread(run, s, s.targetTaskId, fromWebhook?.prompt ?? s.prompt)
+            if (fromWebhook) this.db.prepare('DELETE FROM app_state WHERE key=?').run(promptKey(run.id))
+            this.changed()
+            continue
+          }
           // A thread made for this run on an earlier try may have been deleted since; the run then starts a new one.
           const kept = run.taskId && this.threadExists(run.taskId) ? run.taskId : null
           const task = kept

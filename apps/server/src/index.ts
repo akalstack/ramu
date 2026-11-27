@@ -2366,23 +2366,40 @@ const mcpHttp = createServer(async (req, res) => {
   if (launched.memory) registerMemoryTools(server, memory, source, projectOf(source))
   const result = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value) }] })
   const scope = workspace.getTask(source.taskId)
-  const input = scheduleSchema
-    .omit({ sourceTaskId: true })
-    .extend({ projectId: scheduleSchema.shape.projectId.optional(), workspaceId: scheduleSchema.shape.workspaceId })
-  const resolve = (
-    value: Omit<ScheduleInput, 'sourceTaskId' | 'projectId'> & { projectId?: string },
-  ): ScheduleInput => ({
-    ...value,
-    projectId: value.projectId ?? scope.projectId,
-    workspaceId:
-      value.workspaceId === undefined && (!value.projectId || value.projectId === scope.projectId)
-        ? scope.workspaceId
-        : value.workspaceId,
-    sourceTaskId: scope.id,
+  const input = scheduleSchema.omit({ sourceTaskId: true, targetTaskId: true }).extend({
+    projectId: scheduleSchema.shape.projectId.optional(),
+    workspaceId: scheduleSchema.shape.workspaceId,
+    inThisThread: z.boolean().optional(),
   })
+  const resolve = ({
+    inThisThread,
+    ...value
+  }: Omit<ScheduleInput, 'sourceTaskId' | 'targetTaskId' | 'projectId'> & {
+    projectId?: string
+    inThisThread?: boolean
+  }): ScheduleInput =>
+    inThisThread
+      ? {
+          ...value,
+          // Each run is a message in this thread, from its own agent with its own settings.
+          projectId: scope.projectId,
+          workspaceId: scope.workspaceId,
+          settings: agents.get(source.id).settings,
+          sourceTaskId: scope.id,
+          targetTaskId: scope.id,
+        }
+      : {
+          ...value,
+          projectId: value.projectId ?? scope.projectId,
+          workspaceId:
+            value.workspaceId === undefined && (!value.projectId || value.projectId === scope.projectId)
+              ? scope.workspaceId
+              : value.workspaceId,
+          sourceTaskId: scope.id,
+        }
   const descriptions = {
     schedule_create:
-      'Create a one-time or repeating agent schedule when the user requests it. Interpret dates using the current time and requested timezone. Ask about ambiguous timing. Defaults to the current thread scope. Return the saved schedule and next run.',
+      "Create a one-time or repeating agent schedule when the user requests it. Interpret dates using the current time and requested timezone. Ask about ambiguous timing. Defaults to the current thread scope: each run starts a new thread there. Set inThisThread to send the prompt into this thread instead, on each run, with this thread's own agent and settings (for check-ins and follow-ups on this work). Return the saved schedule and next run.",
     schedule_update: 'Edit an existing schedule using its ID and full replacement configuration.',
   }
   const checkReview = (reviewId: string) => {

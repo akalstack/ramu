@@ -4392,6 +4392,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'You requested a stop for {0}': 'Kamu meminta {0} dihentikan',
   'Background command finished: {0}': 'Perintah latar belakang selesai: {0}',
   'Background command failed: {0}': 'Perintah latar belakang gagal: {0}',
+  'Scheduled message: {0}': 'Pesan terjadwal: {0}',
   'Waiting for the current browser action to finish': 'Menunggu tindakan browser saat ini selesai',
   'Agent browser': 'Browser agent',
   'Provider browser setup': 'Pengaturan browser provider',
