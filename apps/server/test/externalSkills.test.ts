@@ -187,6 +187,52 @@ it('creates an authored skill that learning never changes, and copies instead of
   expect(learning.skills().some((s) => s.id === copy.id)).toBe(false)
 })
 
+it('lets an agent write a skill only after the person has read and approved its text', async () => {
+  type Handler = (args: Record<string, unknown>, extra: { signal?: AbortSignal }) => Promise<any>
+  const tools: Record<string, Handler> = {}
+  const asked: string[] = []
+  let answers: string[] = []
+  vi.spyOn(ws, 'projectIdOf').mockReturnValue('no-project')
+  const agents = {
+    get: () => ({ taskId: 'task', cwd: root }),
+    askQuestion: async (_session: string, input: { questions: { question: string }[] }) => {
+      asked.push(input.questions[0]!.question)
+      return { answers: { choice: answers.shift() } }
+    },
+  } as unknown as AgentService
+  service.register(
+    { registerTool: (name: string, _def: unknown, handler: Handler) => (tools[name] = handler) } as never,
+    agents,
+    'session',
+  )
+  const input = { name: 'review-checklist', description: 'Before merging', content: 'Check tests.' }
+  const call = async (args: Record<string, unknown>) => {
+    const reply = await tools.skill_create!(args, {})
+    return reply.isError ? { error: reply.content[0].text as string } : JSON.parse(reply.content[0].text)
+  }
+
+  answers = ['All projects', 'Cancel']
+  expect(await call(input)).toEqual({ cancelled: true })
+  expect(asked[1]).toContain('Check tests.')
+  expect(learning.skills()).toHaveLength(0)
+
+  answers = ['Add']
+  const made = await call({ ...input, scope: 'user' })
+  expect(made).toMatchObject({ name: 'review-checklist', projectId: null, status: 'active' })
+  expect(learning.skills().find((s) => s.id === made.id)).toMatchObject({ pinned: true, changedBy: 'user' })
+  expect(learning.skills().find((s) => s.id === made.id)!.installation).toBeUndefined()
+
+  // A taken name, a project skill outside a project and a credential are refused before the person is asked.
+  const before = asked.length
+  expect((await call({ ...input, scope: 'user' })).error).toContain('already exists')
+  expect((await call({ ...input, name: 'other', scope: 'project' })).error).toContain('Open a project thread')
+  expect(
+    (await call({ ...input, name: 'other', scope: 'user', content: 'Use ghp_abcdefghijklmnopqrstuvwxyz0123456789' }))
+      .error,
+  ).toContain('credential')
+  expect(asked).toHaveLength(before)
+})
+
 it('reads the MCP tools a skill asks for from allowed-tools, ignoring built-in tools', async () => {
   const { skillMcpTools } = await import('../src/memory/skillFiles')
   const doc = (line: string) => `---\nname: x\ndescription: y\n${line}\n---\nBody`
