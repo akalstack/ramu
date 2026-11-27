@@ -152,36 +152,21 @@ it('keeps the reason Full access asks out of the detail, so the card can explain
   await result
 })
 
-it('turns a dangerous Bash call into an ask before Claude runs it, and leaves routine ones alone', async () => {
-  const hooks = claudeHooks({ PreToolUse: [] }, alwaysAskHooks({ cwd: '/work/app' }, 'full'))!
+it('asks before a production deploy at every access level, and leaves every other command to the access level', async () => {
+  const hooks = claudeHooks({ PreToolUse: [] }, alwaysAskHooks())!
   const hook = hooks.PreToolUse![0]!.hooks[0]!
   const run = (command: string) =>
     hook({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command } } as never, 'id', {
       signal: new AbortController().signal,
     })
-  expect(await run('rm -rf dist')).toEqual({})
-  expect(await run('git push --force')).toMatchObject({
-    hookSpecificOutput: { permissionDecision: 'ask', permissionDecisionReason: expect.stringContaining('remote') },
-  })
-  expect(await run('npx vercel deploy --prod')).toMatchObject({
+  expect(await run('cd web && vercel deploy --prod')).toMatchObject({
     hookSpecificOutput: { permissionDecision: 'ask', permissionDecisionReason: 'Deploys to production' },
   })
+  // As T3 Code: the agent's own checks decide the rest (Claude's safety checks, Codex's judgement).
+  expect(await run('vercel deploy')).toEqual({})
+  expect(await run('rm -rf dist')).toEqual({})
+  expect(await run('git push --force')).toEqual({})
   expect(claudeHooks(undefined, undefined)).toBeUndefined()
-})
-
-it('asks before a production deploy at every access level, while a preview and routine commands follow the level', async () => {
-  for (const access of ['edits', 'auto'] as const) {
-    const hook = alwaysAskHooks({ cwd: '/work/app' }, access).PreToolUse![0]!.hooks[0]!
-    const run = (command: string) =>
-      hook({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command } } as never, 'id', {
-        signal: new AbortController().signal,
-      })
-    expect(await run('cd web && vercel deploy --prod')).toMatchObject({
-      hookSpecificOutput: { permissionDecision: 'ask', permissionDecisionReason: 'Deploys to production' },
-    })
-    expect(await run('vercel deploy')).toEqual({})
-    expect(await run('git push --force')).toEqual({})
-  }
 })
 
 it('makes a command that can write take its turn, and lets one that only reads run at once', async () => {

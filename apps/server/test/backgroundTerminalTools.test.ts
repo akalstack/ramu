@@ -264,16 +264,16 @@ it.skipIf(process.platform === 'win32')(
   },
 )
 
-it('still asks before a dangerous command in Full access, and refuses when it cannot ask', async () => {
+it('still asks before a production deploy in Full access, and refuses when it cannot ask', async () => {
   const details: string[] = []
   const { call } = await setup('full', async (detail) => {
     details.push(detail)
     return false
   })
-  const declined = await call('background_terminal_launch', { command: 'rm -rf ~/notes' })
+  const declined = await call('background_terminal_launch', { command: 'npx vercel deploy --prod' })
   expect(declined.isError).toBe(true)
-  expect(details).toEqual([expect.stringContaining('outside this thread')])
-  const unasked = await (await setup('full')).call('background_terminal_launch', { command: 'sudo make install' })
+  expect(details).toEqual([expect.stringContaining('Deploys to production')])
+  const unasked = await (await setup('full')).call('background_terminal_launch', { command: 'vercel deploy --prod' })
   expect(unasked.isError).toBe(true)
-  expect(unasked.content).toEqual([expect.objectContaining({ text: expect.stringContaining('administrator') })])
+  expect(unasked.content).toEqual([expect.objectContaining({ text: expect.stringContaining('production') })])
 })

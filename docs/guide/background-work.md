@@ -24,7 +24,7 @@ On the phone, **Settings → Threads** sets the choice, and the warning before c
 
 ## Background commands
 
-Agents can start a development server, watcher or long test run that keeps going after their reply. It runs on the thread's host, in its checkout. Outside Full access you approve each exact command first, and Full access still asks before a command that can destroy work or the machine.
+Agents can start a development server, watcher or long test run that keeps going after their reply. It runs on the thread's host, in its checkout. Outside Full access you approve each exact command first, and Full access still asks before a production deploy.
 
 **Background terminals** (above the composer on the desktop, a pill on the phone) lists the ones still running, with their output and **Stop**. A command leaves the list when it ends, and the thread says how it ended. A Claude command still running after the **Move slow commands to background** time, or one Claude moved to the background itself, is listed there too, marked **Moved to the background**. One the agent is waiting on also says **Agent is waiting**.
 

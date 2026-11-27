@@ -590,7 +590,7 @@ export class SessionProcess {
           preferences: this.host.preferencesSource(),
           hooks: claudeHooks(
             !s.parentId && this.host.preferencesSource() ? this.host.subagentHooks(id) : undefined,
-            !readOnly && !connection?.restricted ? alwaysAskHooks(s, s.settings.access) : undefined,
+            !readOnly && !connection?.restricted ? alwaysAskHooks() : undefined,
             readOnly ? readOnlyBashHooks() : undefined,
             readOnly ? undefined : this.commandTurns(id),
             ramuFileHooks(s),

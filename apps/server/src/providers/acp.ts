@@ -12,7 +12,7 @@ import { providerBinary, providerEnvironment } from './providerBinaries'
 import { providerAdapter } from './adapters'
 import { createInterface } from 'node:readline'
 import { AcpEvents, nativeShell } from './acpEvents'
-import { dangerousCommand } from '../agent/dangerousCommands'
+import { productionDeploy } from '../agent/dangerousCommands'
 import type {
   AgentEvent,
   AgentModel,
@@ -851,7 +851,7 @@ class AcpSession implements AgentRunner {
     const tool = p.toolCall._meta?.claudeCode?.toolName || p.toolCall.rawInput?._toolName || p.toolCall.kind || ''
     if (!['execute', 'command', 'Bash', 'bash', 'run_command'].includes(tool)) return null
     const command = nativeShell(p.toolCall.rawInput, undefined)?.command
-    return command ? dangerousCommand(command, this.scope) : null
+    return command ? productionDeploy(command) : null
   }
   replyPermission(id: string, allow: boolean): void {
     const m = this.pending.get(id)

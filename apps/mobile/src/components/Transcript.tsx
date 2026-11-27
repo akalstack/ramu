@@ -2487,46 +2487,15 @@ function PermissionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind
   )
 }
 
-/** As on the desktop: Full access still asks, and Why? opens the reason and what Full access skips. */
+/** As on the desktop: why Full access still asks, in one line, so the person decides at a glance. */
 function FullAccessWhy({ reason }: { reason?: string }) {
   const say = useSay()
-  const [open, setOpen] = useState(false)
   return (
-    <View style={{ gap: space.xs }}>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.xs }}>
-        <T size={font.caption} tone="muted">
-          {say('Full access still asks before this.')}
-        </T>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ expanded: open }}
-          hitSlop={8}
-          onPress={() => {
-            tap()
-            setOpen((value) => !value)
-          }}
-        >
-          <T size={font.caption} tone="accent">
-            {say('Why?')}
-          </T>
-        </Pressable>
-      </View>
-      {open ? (
-        <View style={{ gap: space.xs }}>
-          {reason ? (
-            <T size={font.caption} tone="soft">
-              {reason}
-            </T>
-          ) : null}
-          <T size={font.caption} tone="muted">
-            {say('Always asks: deleting work for good, changing the computer, acting as you, deploying to production.')}
-          </T>
-          <T size={font.caption} tone="muted">
-            {say('Allow once approves just this one.')}
-          </T>
-        </View>
-      ) : null}
-    </View>
+    <T size={font.caption} tone="muted">
+      {reason
+        ? say('Full access still asks: {0}.', { 0: reason.replace(/\.$/, '') })
+        : say('Full access still asks before this.')}
+    </T>
   )
 }
 

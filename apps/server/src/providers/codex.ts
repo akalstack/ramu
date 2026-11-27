@@ -8,7 +8,7 @@ import { codexMcpConfig, sessionMcpServers, configuredMcpStatus } from './discov
 import { classifyLimit } from './limitClassifier'
 import { elicitationRequest, elicitationContent } from '../agent/elicitation'
 import { attachmentPrompt } from '../attachments'
-import { dangerousCommand } from '../agent/dangerousCommands'
+import { productionDeploy } from '../agent/dangerousCommands'
 import { agentContent } from '@ramu/shared/chat/agentContent'
 import { toolDescription, toolInput } from './acpEvents'
 // Codex's local app-server protocol, using the user's existing CLI login.
@@ -727,7 +727,7 @@ class CodexSession implements CodexRunner {
           m.method === 'item/permissions/requestApproval')
       ) {
         const command = Array.isArray(p.command) ? p.command.join(' ') : p.command
-        const danger = typeof command === 'string' ? dangerousCommand(command, this.scope) : null
+        const danger = typeof command === 'string' ? productionDeploy(command) : null
         if (!danger) {
           this.rpc.write({
             id: m.id,

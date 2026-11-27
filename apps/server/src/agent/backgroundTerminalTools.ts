@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AgentSessionInfo } from '@ramu/shared/types'
 import { z } from 'zod'
 import type { TerminalService } from '../workspace/pty'
-import { dangerousCommand } from './dangerousCommands'
+import { productionDeploy } from './dangerousCommands'
 
 export const BACKGROUND_TERMINAL_GUIDE = `Use background_terminal_launch for a development server or watcher that should remain running after your reply. The user can inspect and stop it in Background terminals. Commands run on this thread's execution host, in this session's checkout. After a host restart, saved commands without a verified process handle are Unknown and their saved output is read-only; inspect and verify them before starting anything again. Ramu never replays saved launches automatically. In Full access it launches directly unless the command can destroy work or the machine; otherwise each launch asks the person to approve the exact command once, and a refusal must be respected. Never use it to bypass a restriction. A command whose stoppedBy is "user" was stopped by the person; do not restart it without a new instruction.
 
@@ -33,8 +33,8 @@ export function registerBackgroundTerminalTools(
       let session = scope()
       // App-owned MCP tools can be auto-approved by providers, so outside Full access every launch needs the person's
       // approval of this exact command. The approval is single-use and bound to the access mode it was asked under.
-      // Full access still asks before the few commands that can destroy work or the machine.
-      const danger = full(session) ? dangerousCommand(command, session) : null
+      // Full access still asks before a production deploy.
+      const danger = full(session) ? productionDeploy(command) : null
       if (!full(session) || danger) {
         if (!requestApproval)
           throw new Error(

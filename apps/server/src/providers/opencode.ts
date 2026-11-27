@@ -25,7 +25,7 @@ import type {
 } from '@ramu/shared/types'
 import { ResumeUnavailable, type AgentRunner, type AgentRunnerFactory } from '../agent/agentRunner'
 import { providerAdapter } from './adapters'
-import { alwaysAsks } from '../agent/dangerousCommands'
+import { productionDeploy } from '../agent/dangerousCommands'
 import { providerBinary, providerEnvironment } from './providerBinaries'
 import { classifyLimit, limitSignal } from './limitClassifier'
 import { limitedReading } from './usageLimit'
@@ -676,7 +676,7 @@ export class OpenCodeSession implements AgentRunner {
         const danger =
           !this.readOnly && ['bash', 'shell'].includes(d.action)
             ? ((d.resources ?? [])
-                .map((command: string) => alwaysAsks(command, this.scope, this.settings.access))
+                .map((command: string) => productionDeploy(command))
                 .find(Boolean) ?? null)
             : null
         if (

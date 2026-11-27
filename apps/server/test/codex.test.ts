@@ -69,7 +69,7 @@ rl.on('line', line => {
     if (text === 'full gate') {
       send({id:910,method:'item/commandExecution/requestApproval',params:{threadId:'thread-1',command:'pnpm test'}});
       send({id:911,method:'mcpServer/elicitation/request',params:{threadId:'thread-1',serverName:'ramu',mode:'form',message:'Allow tool?',requestedSchema:{type:'object',properties:{}},_meta:{codex_approval_kind:'mcp_tool_call'}}});
-      send({id:912,method:'item/commandExecution/requestApproval',params:{threadId:'thread-1',command:['bash','-lc','rm -rf ~/notes']}});
+      send({id:912,method:'item/commandExecution/requestApproval',params:{threadId:'thread-1',command:['bash','-lc','npx vercel deploy --prod']}});
       return;
     }
     if (text === 'dynamic call') {
@@ -222,7 +222,7 @@ describe('Codex app-server wire adapter', () => {
       .filter((method) => method === 'thread/fork' || method === 'thread/unarchive')
     expect(methods).toEqual(['thread/fork', 'thread/unarchive', 'thread/fork'])
   })
-  it('routes Full access through approval, answering everything at once except a dangerous command', async () => {
+  it('routes Full access through approval, answering everything at once except a production deploy', async () => {
     const events: AgentEvent[] = []
     const runner = createCodexRunner(scope, { ...DEFAULT_AGENT_SETTINGS, provider: 'codex', access: 'full' }, (event) =>
       events.push(event),
@@ -246,7 +246,7 @@ describe('Codex app-server wire adapter', () => {
       expect(asked).toEqual([
         expect.objectContaining({
           approvalOnceOnly: true,
-          approvalFullAccess: { reason: expect.stringContaining('outside this thread') },
+          approvalFullAccess: { reason: 'Deploys to production' },
         }),
       ])
       runner.replyPermission!(asked[0]!.requestId, false)

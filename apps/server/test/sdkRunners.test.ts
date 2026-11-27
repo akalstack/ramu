@@ -472,8 +472,8 @@ function fakeOpenCode(action: string, resources = ['*']) {
 describe('OpenCode Full access', () => {
   it.each([
     ['pnpm test', false],
-    ['git reset --hard', true],
-  ] as const)('answers commands itself and asks only before a dangerous one: %s', async (command, asks) => {
+    ['vercel deploy --prod', true],
+  ] as const)('answers commands itself and asks only before a production deploy: %s', async (command, asks) => {
     const { client, replies } = fakeOpenCode('bash', [command])
     const events: AgentEvent[] = []
     const runner = new OpenCodeSession(
@@ -489,7 +489,7 @@ describe('OpenCode Full access', () => {
         await settle(events, 'permission-request')
         expect(events.find((event) => event.kind === 'permission-request')).toMatchObject({
           approvalOnceOnly: true,
-          approvalFullAccess: { reason: expect.stringContaining('uncommitted') },
+          approvalFullAccess: { reason: 'Deploys to production' },
         })
         expect(replies).toEqual([])
         runner.replyPermission('p1', false)

@@ -3307,10 +3307,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Izin proyek dan pengguna mengingat permintaan yang sama persis ini.',
   'Applies to this request only.': 'Hanya berlaku untuk permintaan ini.',
   'Full access still asks before this.': 'Akses penuh tetap meminta izin untuk ini.',
-  'Why?': 'Kenapa?',
-  'Always asks: deleting work for good, changing the computer, acting as you, deploying to production.':
-    'Selalu bertanya: menghapus pekerjaan permanen, mengubah komputer, bertindak atas namamu, deploy ke produksi.',
-  'Allow once approves just this one.': 'Izinkan sekali hanya menyetujui yang ini.',
   Allowed: 'Diizinkan',
   Denied: 'Ditolak',
   Answered: 'Dijawab',
@@ -4535,6 +4531,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Invalid Git branch name': 'Nama branch Git tidak valid',
   'MCP servers': 'Server MCP',
   'Show MCP connection status': 'Tampilkan status koneksi MCP',
+  'Full access still asks: {0}.': 'Akses penuh tetap bertanya: {0}.',
   '1 agent at work': '1 agent sedang bekerja',
   '{0} agents at work': '{0} agent sedang bekerja',
   '1 command running': '1 perintah berjalan',

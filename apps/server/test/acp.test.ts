@@ -731,9 +731,9 @@ it('does not select native edit mode in restricted threads', async () => {
 
 it.each([
   ['pnpm test', false],
-  ['rm -rf ~/notes', true],
+  ['npx vercel deploy --prod', true],
 ] as const)(
-  'runs Antigravity Full access in auto_edit and asks only before a dangerous command: %s',
+  'runs Antigravity Full access in auto_edit and asks only before a production deploy: %s',
   async (command, asks) => {
     vi.stubEnv(
       'RAMU_EXTRA_MODES',
@@ -748,7 +748,7 @@ it.each([
       await until(() => events.some((event) => event.kind === 'permission-request'))
       expect(events.find((event) => event.kind === 'permission-request')).toMatchObject({
         approvalOnceOnly: true,
-        approvalFullAccess: { reason: expect.stringContaining('outside this thread') },
+        approvalFullAccess: { reason: 'Deploys to production' },
       })
       runner!.replyPermission('900', false)
     }
