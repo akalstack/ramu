@@ -74,7 +74,7 @@ export function QuestionRow({
                 {q.options.length > 0 ? (
                   <CollapsibleTrigger
                     render={<Button variant="ghost" />}
-                    className="flex items-start justify-between gap-2 w-full h-auto p-0 text-left whitespace-normal font-normal"
+                    className="flex items-start justify-between gap-2 -mx-2 w-[calc(100%+16px)] h-auto px-2 py-1 text-left whitespace-normal font-normal"
                   >
                     <span>{q.question}</span>
                     <ChevronRight className="mt-0.5 flex-none text-muted-foreground [[data-open]_>_&]:rotate-90" />

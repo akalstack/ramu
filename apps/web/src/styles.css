@@ -1266,6 +1266,10 @@ kbd {
   opacity: 0;
   animation: found-flash 2.2s ease-out;
 }
+/* A group title is bare text, so its wash reaches past the letters instead of touching them. */
+.settings-group-title.found-flash::after {
+  inset: -4px -8px;
+}
 @keyframes found-flash {
   0% {
     opacity: 0;
