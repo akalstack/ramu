@@ -806,6 +806,21 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
     }
     return map
   }, [pageRows, store.language])
+  /**
+   * What each row reads from the screen rather than from its own data. The list redraws a row only when its data or
+   * this changes, so without it a tool group stayed live (shimmering) after newer rows arrived below it, and a reply kept
+   * the footer that had moved to the next. Rows are memoised, so only those whose props changed render again.
+   */
+  const rowContext = useMemo(
+    () => ({
+      itemMeta,
+      found,
+      visibleContentRows,
+      contentScreenFocused,
+      live: chat?.status === 'running' ? rows.at(-1) : undefined,
+    }),
+    [itemMeta, found, visibleContentRows, contentScreenFocused, chat?.status, rows],
+  )
   // New rows fade in on their own (`fresh` below). A screen-wide layout animation is not used here: it left the list's
   // row positions behind their measured sizes, drawing a tall message over the reply under it.
   const renderRow = ({ item }: { item: ListRow; index: number }) => {
@@ -1722,6 +1737,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                     </View>
                   }
                   data={listRows}
+                  extraData={rowContext}
                   viewabilityConfig={contentViewability}
                   onViewableItemsChanged={contentViewabilityChanged}
                   // Earlier turns arrive above what you are reading; they must not move it.
