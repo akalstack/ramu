@@ -111,6 +111,7 @@ function load(file, os, overrides = {}, globals = {}) {
     '../runtime/scrollSurface': scrollSurface,
     '../runtime/turns': turnsModule,
     '@ramu/shared/chat/helperPresentation': helperPresentation,
+    '../runtime/threadGroups': threadGroups,
     // A phone-width view: no gutter, content styles pass through.
     './ReadableColumn': {
       useReadableColumn: () => ({ gutter: 0, onLayout() {}, contentContainerStyle: (style) => style }),

@@ -487,7 +487,7 @@ export function ProjectActionsSheet({
     }
   }, [open, project.name])
   const raw = project.id.slice(project.id.indexOf(':') + 1)
-  const hostProjects = store.projects
+  const hostProjects = (store.projects ?? [])
     .filter((entry) => entry.computerId === project.computerId)
     .map((entry) => entry.id.slice(entry.id.indexOf(':') + 1))
   const identities = useHostIdentities(project.computerId)
