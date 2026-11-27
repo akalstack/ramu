@@ -7428,6 +7428,7 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Lebih cepat dinyalakan dan lebih hemat memori, tanpa beberapa aplikasi sistem seperti Safari.',
   'Compact · {0}': 'Ringkas · {0}',
   'Keep · {0}': 'Simpan · {0}',
+  'Keep all {0} tokens of history': 'Simpan semua {0} token riwayat',
   'Compact and send': 'Ringkas lalu kirim',
   'Summarize {0} tokens of history, then send': 'Ringkas {0} token riwayat, lalu kirim',
   'Compact {0} tokens of history before sending': 'Ringkas {0} token riwayat sebelum mengirim',

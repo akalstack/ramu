@@ -1560,20 +1560,21 @@ export function Composer({
               }
             />
           ) : null}
+          {/* An icon beside the microphone: lit while the history will be compacted first. Words here crowded the
+              model's name out of the row; the label and hint still say what it does and how much it covers. */}
           {compaction && !running && !offline ? (
-            <Chip
-              small
+            <IconButton
               icon={compaction.compact ? Minimize2 : History}
-              label={
-                compaction.compact
-                  ? translate(store.language, 'Compact · {0}', { 0: contextTokensShort(compaction.tokens) })
-                  : translate(store.language, 'Keep · {0}', { 0: contextTokensShort(compaction.tokens) })
-              }
-              selected={compaction.compact}
-              accessibilityLabel={translate(store.language, 'Compact {0} tokens of history before sending', {
-                0: contextTokensShort(compaction.tokens),
-              })}
-              accessibilityHint={
+              size={34}
+              tone={compaction.compact ? 'accent' : 'muted'}
+              filled={compaction.compact}
+              style={{ borderRadius: radius.full }}
+              label={translate(
+                store.language,
+                compaction.compact ? 'Compact {0} tokens of history before sending' : 'Keep all {0} tokens of history',
+                { 0: contextTokensShort(compaction.tokens) },
+              )}
+              hint={
                 compaction.compact
                   ? say(
                       'Its cache has expired, so the next message re-reads the whole thread. Double-tap to keep the full history instead.',
