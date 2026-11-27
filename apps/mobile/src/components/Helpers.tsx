@@ -56,7 +56,8 @@ function workLine(work: AgentWork, say: (text: string, values?: TranslationValue
 /** How much of a helper's output the sheet reveals at a time, counted from the end. */
 const OUTPUT_PAGE = 6000
 
-function HelperTime({ task, online }: { task: AgentTask; online: boolean }) {
+/** How long a helper has run, counting on while it works and this screen is in front; null before it started. */
+function useHelperTime(task: AgentTask, online: boolean): string | null {
   const [now, setNow] = useState(Date.now())
   const active = online && helperActive(task)
   useFocusEffect(
@@ -78,10 +79,78 @@ function HelperTime({ task, online }: { task: AgentTask; online: boolean }) {
     }, [active]),
   )
   const ms = !online && helperActive(task) ? (task.durationMs ?? null) : helperElapsed(task, now)
-  return ms === null ? null : (
+  return ms === null ? null : formatDuration(ms)
+}
+
+function HelperTime({ task, online }: { task: AgentTask; online: boolean }) {
+  const time = useHelperTime(task, online)
+  return time === null ? null : (
     <T size={font.caption} tone="muted">
-      {formatDuration(ms)}
+      {time}
     </T>
+  )
+}
+
+/**
+ * One helper as a compact row: its model's icon, its name and how it stands on the first line; its role, what it last
+ * did and how long it has run on one muted line under the name. Tapping it opens the agent.
+ */
+function HelperRow({
+  helper,
+  online,
+  onOpen,
+}: {
+  helper: AgentTask & { agentId: string }
+  online: boolean
+  onOpen: () => void
+}) {
+  const { c } = useTheme()
+  const say = useSay()
+  const { language } = useStore()
+  const time = useHelperTime(helper, online)
+  const { label, detail } = helperRole(helper)
+  const facts = [
+    translate(language, label) + (detail ? ` · ${translate(language, detail)}` : ''),
+    helper.summary ?? helper.lastTool,
+    time,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${helper.name}, ${say(helperStatusLabel(helper))}, ${facts}`}
+      onPress={() => {
+        tap()
+        onOpen()
+      }}
+      style={({ pressed }) => ({
+        paddingHorizontal: space.m,
+        paddingVertical: space.s + 2,
+        minHeight: 44,
+        gap: 2,
+        backgroundColor: pressed ? c.pressed : undefined,
+      })}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+        {helper.provider ? <ProviderIcon provider={helper.provider} size={16} /> : <Bot size={16} color={c.soft} />}
+        <T weight="500" numberOfLines={1} style={{ flex: 1 }}>
+          {helper.name}
+        </T>
+        {online && helperActive(helper) ? (
+          <ActivityText active size={font.caption}>
+            {say(helperStatusLabel(helper))}
+          </ActivityText>
+        ) : (
+          <T size={font.caption} tone={helper.status === 'failed' ? 'bad' : 'muted'}>
+            {say(helperStatusLabel(helper))}
+          </T>
+        )}
+      </View>
+      <T size={font.caption} tone="muted" numberOfLines={1} style={{ paddingLeft: 24 }}>
+        {facts}
+      </T>
+    </Pressable>
   )
 }
 export function HelperDetails({ task, chat, onClose }: { task: Helper | undefined; chat: Chat; onClose: () => void }) {
@@ -278,6 +347,22 @@ export function Helpers({
   ]
     .filter(Boolean)
     .join(' · ')
+  const details = (
+    <HelperDetails
+      key={`${chat.computerId}:${chat.sessionId}:${shownId}`}
+      task={agents.find((helper) => helper.agentId === shownId)}
+      chat={chat}
+      onClose={() => setShownId(null)}
+    />
+  )
+  // One sub-agent is its own row: a header naming it again above it said the same thing twice.
+  if (agents.length === 1 && !item.advisor && !item.earlier)
+    return (
+      <Card>
+        <HelperRow helper={agents[0]!} online={online} onOpen={() => setShownId(agents[0]!.agentId)} />
+        {details}
+      </Card>
+    )
   return (
     <Card>
       <Pressable
@@ -312,51 +397,11 @@ export function Helpers({
         {sortHelpers(agents).map((helper) => (
           <View key={helper.agentId}>
             <Divider inset={space.m} />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`${helper.name}, ${say(helperStatusLabel(helper))}`}
-              onPress={() => setShownId(helper.agentId)}
-              style={{ padding: space.m, minHeight: 44, gap: space.s }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
-                {helper.provider ? (
-                  <ProviderIcon provider={helper.provider} size={16} />
-                ) : (
-                  <Bot size={16} color={c.soft} />
-                )}
-                <T weight="500" numberOfLines={1} style={{ flex: 1 }}>
-                  {helper.name}
-                </T>
-                {online && helperActive(helper) ? (
-                  <ActivityText active size={font.caption}>
-                    {say(helperStatusLabel(helper))}
-                  </ActivityText>
-                ) : (
-                  <T size={font.caption} tone={helper.status === 'failed' ? 'bad' : 'muted'}>
-                    {say(helperStatusLabel(helper))}
-                  </T>
-                )}
-              </View>
-              {/* On a phone the role sits under the name, so a long name keeps its words. */}
-              <View style={{ flexDirection: 'row', paddingLeft: 24 }}>
-                <RoleTag task={helper} />
-              </View>
-              {helper.summary || helper.lastTool ? (
-                <T size={font.caption} tone="muted" numberOfLines={2}>
-                  {helper.summary ?? helper.lastTool}
-                </T>
-              ) : null}
-              <HelperTime task={helper} online={online} />
-            </Pressable>
+            <HelperRow helper={helper} online={online} onOpen={() => setShownId(helper.agentId)} />
           </View>
         ))}
       </Collapse>
-      <HelperDetails
-        key={`${chat.computerId}:${chat.sessionId}:${shownId}`}
-        task={agents.find((helper) => helper.agentId === shownId)}
-        chat={chat}
-        onClose={() => setShownId(null)}
-      />
+      {details}
     </Card>
   )
 }
