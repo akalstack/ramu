@@ -1069,11 +1069,20 @@ export class BrowserRuntime {
     })
   }
 
+  /**
+   * Closes a tab this thread owns. Closing acts on the tab rather than on what its page shows, so it needs no fresh
+   * observation, and a tab left by an earlier run of the thread can still be closed. A tab the person controls, or
+   * another run holds, stays open.
+   */
   async closeForAgent(id: string, runId: string, owner: Pick<BrowserOwner, 'hostId' | 'threadId'>): Promise<void> {
     const tab = this.tab(id)
-    return this.agentAction(id, runId, tab.lease.generation, owner, async () => {
-      this.close(id)
-    })
+    this.assertOwner(tab, owner)
+    const controller = tab.lease.controller
+    if (controller.kind === 'human')
+      throw new BrowserError('human-controlled', 'The person controls this tab. Leave it open for them.')
+    if (controller.kind === 'agent' && controller.runId !== runId)
+      throw new BrowserError('agent-controlled', 'Another run controls this tab.')
+    this.close(id)
   }
 
   private assertOwner(tab: Tab, owner: Pick<BrowserOwner, 'hostId' | 'threadId'>) {

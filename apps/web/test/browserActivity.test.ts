@@ -55,14 +55,19 @@ it('shows an owned browser tab without reopening the page, reusing its pane when
 })
 
 it('lists each tab with who controls it, qualifies stale activity and hides when there are no tabs', () => {
-  const html = renderToStaticMarkup(BrowserActivity({ state: { taskId: 'thread', tabs: [tab], stale: false } }))
+  const html = renderToStaticMarkup(
+    BrowserActivity({ state: { taskId: 'thread', tabs: [tab], stale: false, close: vi.fn() } }),
+  )
   expect(html).toContain('https://a.test')
   expect(html).toContain('Agent control')
   expect(html).toContain('New browser tab')
-  const stale = renderToStaticMarkup(BrowserActivity({ state: { taskId: 'thread', tabs: [tab], stale: true } }))
+  expect(html).toContain('aria-label="Close tab"')
+  const stale = renderToStaticMarkup(
+    BrowserActivity({ state: { taskId: 'thread', tabs: [tab], stale: true, close: vi.fn() } }),
+  )
   expect(stale).toContain('Last-known activity')
   expect(stale).not.toContain('New browser tab')
-  expect(BrowserActivity({ state: { taskId: 'thread', tabs: [], stale: false } })).toBeNull()
+  expect(BrowserActivity({ state: { taskId: 'thread', tabs: [], stale: false, close: vi.fn() } })).toBeNull()
 })
 
 it('reveals a deliberate agent presentation only in the active thread and host', () => {

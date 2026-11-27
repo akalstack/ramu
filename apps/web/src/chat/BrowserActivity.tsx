@@ -1,7 +1,7 @@
 import { keepReading, lastReading } from '../lib/lastReading'
 import { RowButton } from '@/components/row-button'
 import { useEffect, useState } from 'react'
-import { Globe, PictureInPicture2, Plus } from 'lucide-react'
+import { Globe, PictureInPicture2, Plus, X } from 'lucide-react'
 import type { BrowserTabInfo } from '@ramu/shared/types/browser'
 import { ramu } from '../ipc'
 import { ownHostId } from '../hosts'
@@ -38,7 +38,12 @@ export function useBrowserActivity(taskId: string | undefined, visible: boolean)
   const { id: host, invoke } = useHost()
   const events = useHostRuntime()
   const scope = `${host}:${taskId ?? ''}`
-  const [reading, setReading] = useState<{ scope: string; tabs: BrowserTabInfo[]; stale: boolean }>({
+  const [reading, setReading] = useState<{
+    scope: string
+    tabs: BrowserTabInfo[]
+    stale: boolean
+    hostBrowser?: boolean
+  }>({
     scope,
     tabs: [],
     stale: false,
@@ -50,10 +55,10 @@ export function useBrowserActivity(taskId: string | undefined, visible: boolean)
     const load = async () => {
       const mine = ++revision
       try {
-        const { tabs } = await readThreadTabs(invoke, host, taskId)
+        const { tabs, hostBrowser } = await readThreadTabs(invoke, host, taskId)
         if (!active || mine !== revision) return
         keepReading('browser', scope, tabs)
-        setReading({ scope, tabs, stale: false })
+        setReading({ scope, tabs, stale: false, hostBrowser })
       } catch {
         if (active && mine === revision)
           setReading((previous) =>
@@ -72,10 +77,20 @@ export function useBrowserActivity(taskId: string | undefined, visible: boolean)
       offHost()
     }
   }, [scope, host, taskId, visible, invoke, events])
+  const fresh = reading.scope === scope
   return {
     taskId,
-    tabs: reading.scope === scope ? reading.tabs : (lastReading<BrowserTabInfo[]>('browser', scope) ?? []),
-    stale: reading.scope !== scope || reading.stale,
+    tabs: fresh ? reading.tabs : (lastReading<BrowserTabInfo[]>('browser', scope) ?? []),
+    stale: !fresh || reading.stale,
+    /** Closes one tab where it lives: the host's browser while it is on, otherwise this desktop's own. */
+    close(tab: BrowserTabInfo): void {
+      if (!taskId) return
+      void (
+        fresh && reading.hostBrowser
+          ? invoke('hostBrowser.close', taskId, tab.id)
+          : ramu.invoke('browser.close', host, taskId, tab.id)
+      ).catch(() => {})
+    },
   }
 }
 
@@ -152,6 +167,17 @@ export function BrowserActivity({ state }: { state: ReturnType<typeof useBrowser
                 {t(controllerLabel(tab))} · {tab.url}
               </span>
             </RowButton>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="icon small-icon shrink-0"
+              aria-label={t('Close tab')}
+              title={t('Close tab')}
+              disabled={state.stale}
+              onClick={() => state.close(tab)}
+            >
+              <X size={14} />
+            </Button>
           </li>
         ))}
       </ul>

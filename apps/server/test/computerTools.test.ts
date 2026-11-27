@@ -203,3 +203,34 @@ it('tells an agent on a locked Mac that one app still works behind the lock scre
     lockedScreen: expect.stringMatching(/app target/),
   })
 })
+
+it('returns the screen an action left with a new observation, so actions chain without observing in between', async () => {
+  const backend = {
+    status: () => ({ available: true as const, computer: { id: 'local', name: 'Mac' } }),
+    capture: vi.fn(async () => ({ data: 'aGk=', mimeType: 'image/png' as const, width: 800, height: 600, scale: 1 })),
+    perform: vi.fn(async () => undefined),
+    releaseInput: vi.fn(),
+  }
+  const s = await setup(async () => true, new ComputerService(backend), true)
+  await s.client.callTool({ name: 'computer_open', arguments: { app: 'Calculator' } })
+  const read = (result: Awaited<ReturnType<typeof s.client.callTool>>) => {
+    const content = result.content as { type: string; text?: string }[]
+    return { json: JSON.parse(content[0]!.text!), image: content.some((part) => part.type === 'image') }
+  }
+  const first = read(await s.client.callTool({ name: 'computer_observe', arguments: {} }))
+  const clicked = await s.client.callTool({
+    name: 'computer_click',
+    arguments: { observationId: first.json.observationId, x: 10, y: 10 },
+  })
+  expect(clicked.isError).not.toBe(true)
+  const after = read(clicked)
+  expect(after.json.done).toBe(true)
+  expect(after.image).toBe(true)
+  expect(after.json.observationId).not.toBe(first.json.observationId)
+  const typed = await s.client.callTool({
+    name: 'computer_type',
+    arguments: { observationId: after.json.observationId, text: 'hi' },
+  })
+  expect(typed.isError).not.toBe(true)
+  expect(backend.perform).toHaveBeenCalledTimes(2)
+})

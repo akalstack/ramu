@@ -190,6 +190,25 @@ describe('ownership and agent actions', () => {
     )
   })
 
+  it('closes its own tab without a fresh observation, also after the run that opened it ended, but never a tab the person holds', async () => {
+    const { runtime, created } = setup()
+    const first = await runtime.open(user, 'https://a.test')
+    runtime.giveToAgent(first.tab.id, 'local', 'r1')
+    await runtime.closeForAgent(first.tab.id, 'r1', user)
+    expect(created[0]!.page.destroyed).toBe(true)
+    const left = await runtime.open(user, 'https://b.test')
+    runtime.giveToAgent(left.tab.id, 'local', 'r1')
+    runtime.endRun(run)
+    await runtime.closeForAgent(left.tab.id, 'r2', user)
+    expect(created[1]!.page.destroyed).toBe(true)
+    const held = await runtime.open(user, 'https://c.test')
+    await expect(runtime.closeForAgent(held.tab.id, 'r1', { hostId: 'h', threadId: 'another' })).rejects.toMatchObject({
+      code: 'wrong-owner',
+    })
+    await expect(runtime.closeForAgent(held.tab.id, 'r1', user)).rejects.toMatchObject({ code: 'human-controlled' })
+    expect(created[2]!.page.destroyed).toBe(false)
+  })
+
   it("a tab handed back with no run active is taken over by the thread's next run, not lost", async () => {
     const { runtime } = setup()
     const { tab } = await runtime.open(user, 'https://a.test')

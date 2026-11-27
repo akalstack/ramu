@@ -10,6 +10,7 @@ Agents can work in a browser, on your computer's screen or apps, and on iOS Simu
 - To check a responsive layout, the agent can resize a tab it controls to a phone, tablet or desktop size. The page returns to its normal layout when you take control.
 - To check a page in both themes, the agent can switch a tab it controls to light or dark mode, the same setting as **Display → Appearance** in the phone's browser viewer. **System** follows the computer again.
 - **Take control** pauses the agent so you can sign in or click. **Give control to agent** hands it back.
+- The agent closes its own tabs when it is done, even ones an earlier turn opened, but never a tab you control.
 - **Profiles:** **Default** keeps sign-ins on this host. **Temporary** is cleared after each run. **Import…** copies sign-in cookies from Chrome, Edge, Brave, Vivaldi, Arc (macOS) or Firefox into a new profile. On Windows only Firefox can be imported.
 - **Engine:** **Automatic** uses the desktop app's own browser when Ramu is open on the host, and the host's Chromium otherwise (as on a headless server).
 - **Downloads** need your approval first and are never opened automatically. **Uploads** take files from inside the workspace.
@@ -21,6 +22,7 @@ On the phone, the Browser pill opens a full-screen viewer. **Open on this phone*
 **Settings → Computer** is off by default. Once on, each thread still needs a screen or app grant, and paired devices need the host's **Computer use** permission. The Computer tray lists your paired devices and whether each can watch and control. **Allow** grants that permission there, and **Devices & access** takes it back or blocks it.
 
 - The agent calls `computer_open`, optionally naming one app. Main threads open automatically once computer use is on. Helpers ask.
+- Each click, keystroke, scroll or drag returns the screen it left, so the agent goes straight on to the next step without a separate look.
 - On desktop, the header's **Computer** button (⌘⌥M) opens the viewer. While you control the screen, your clicks and keys go to it. Escape returns the keyboard to Ramu.
 - On the phone, tap, hold, drag and pinch work like a remote desktop, with a keyboard button for text.
 - **Stop the agent** and **Stop computer use** are always one tap away.
