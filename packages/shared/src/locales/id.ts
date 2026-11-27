@@ -2181,6 +2181,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Matched by its limits': 'Dicocokkan dari batasnya',
   'Refreshes when this provider next runs.': 'Diperbarui saat provider ini berjalan lagi.',
   Limit: 'Batas',
+  'Drop to add to the message': 'Lepas untuk menambahkan ke pesan',
+  'Drop to add as a project': 'Lepas untuk menambahkan sebagai proyek',
   '{0} build daemons': '{0} daemon build',
   'Build daemons': 'Daemon build',
   'Stop build daemons': 'Hentikan daemon build',

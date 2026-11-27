@@ -160,6 +160,7 @@ import {
   type PendingSubmission as Submission,
   type SubmissionPayload,
 } from './agent/lib/pendingSubmission'
+import { DropOverlay } from '@/components/drop-overlay'
 import { loadFailedSubmissions, saveFailedSubmissions } from './agent/lib/failedSubmissions'
 
 /** A chat with an agent: its transcript, the message box and the side panels for sub-agents and asides. */
@@ -903,7 +904,7 @@ export const AgentView = memo(function AgentView({
     <RunCommandProvider taskId={session?.taskId}>
       <div
         ref={root}
-        className={`agent-view [&.dropping::after]:[content:'Drop_to_add_to_the_message'] [&.dropping::after]:absolute [&.dropping::after]:inset-1.5 [&.dropping::after]:z-20 [&.dropping::after]:grid [&.dropping::after]:place-items-center [&.dropping::after]:[border:1px_dashed_var(--line-strong)] [&.dropping::after]:rounded-(--radius-m) [&.dropping::after]:[background:color-mix(in_srgb,_var(--canvas)_78%,_transparent)] [&.dropping::after]:text-foreground [&.dropping::after]:text-control [&.dropping::after]:pointer-events-none flex flex-col flex-1 min-h-0 min-w-0 relative${dropping ? ' dropping' : ''}`}
+        className={`agent-view flex flex-col flex-1 min-h-0 min-w-0 relative${dropping ? ' dropping' : ''}`}
         data-state={session?.state}
         data-chat-visible={visible || undefined}
         onDragOver={(event) => {
@@ -928,6 +929,7 @@ export const AgentView = memo(function AgentView({
           )
         }}
       >
+        {dropping && <DropOverlay label={translate('Drop to add to the message')} />}
         {session?.parentId && <HelperBreadcrumb parentId={session.parentId} />}
         <AgentHeader
           history={history}

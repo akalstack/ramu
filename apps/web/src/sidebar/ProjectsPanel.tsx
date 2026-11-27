@@ -21,6 +21,7 @@ import { BulkThreadActionsContext, ThreadSelectionBar, useBulkThreadActions } fr
 import { SidebarDisclosureButton } from '@/components/sidebar-disclosure-button'
 import { archivedThreads, openArchivedThreads, sidebarThreads, threadProjectName } from './projects/threadLists'
 import { useSharedSidebarSection, useSidebarExpansion } from './projects/sidebarExpansion'
+import { DropOverlay } from '@/components/drop-overlay'
 import { EMBEDDED_THREAD_LIMIT, ThreadPreviewList, useThreadPreview } from './projects/ThreadPreviewList'
 
 export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
@@ -64,11 +65,13 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
   return (
     <BulkThreadActionsContext.Provider value={bulk}>
       <div
-        className={`panel [&_>_.hint]:m-[8px_0_12px] [&_>_.hint]:p-[4px_8px] [&_>_.hint]:leading-[1.55] [&_>_.hint]:[overflow-wrap:anywhere] [&_.scm-empty]:m-[8px_0] [&_.scm-empty]:p-2 [&_.scm-empty]:leading-[1.5] [&_.scm-empty]:[overflow-wrap:anywhere] ${embedded ? 'p-0' : 'p-[2px_8px_16px]'} tasks-panel${folderOver ? ' folder-drop' : ''}`}
+        className={`panel [&_>_.hint]:m-[8px_0_12px] [&_>_.hint]:p-[4px_8px] [&_>_.hint]:leading-[1.55] [&_>_.hint]:[overflow-wrap:anywhere] [&_.scm-empty]:m-[8px_0] [&_.scm-empty]:p-2 [&_.scm-empty]:leading-[1.5] [&_.scm-empty]:[overflow-wrap:anywhere] ${embedded ? 'p-0' : 'p-[2px_8px_16px]'} tasks-panel relative`}
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
       >
+        {/* The same drop look as files dragged into a chat. */}
+        {folderOver && <DropOverlay label={t('Drop to add as a project')} />}
         <ThreadSelectionBar actions={bulk} />
         {/* Threads started here while this host was away; each starts there once it is back. */}
         <PendingThreadsSection hostId={host.id} />

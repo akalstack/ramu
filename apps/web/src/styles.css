@@ -1638,14 +1638,6 @@ button.ghost.danger-text {
   }
 }
 
-/* A folder dragged over the project list: one outline says it will be added as a project. */
-.tasks-panel.folder-drop {
-  @apply [outline:2px_dashed_var(--accent)];
-  @apply [outline-offset:-4px];
-  @apply rounded-(--radius-m);
-  @apply [background:var(--accent-wash)];
-}
-
 /* Transcript text shares one size: messages, tool rows, thinking, tool output and sub-agent cards all follow the chat size. Timestamps and hover meta stay small. */
 :is(
   .msg.user,
