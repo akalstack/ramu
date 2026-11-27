@@ -34,7 +34,7 @@ describe('helperConversation', () => {
       { kind: 'agent', ...task },
       { kind: 'text', text: 'helper thought', agentId: 'a1' },
       { kind: 'text', text: 'other helper', agentId: 'a2' },
-      { kind: 'user', text: taskMessagePrompt('claude', task, 'look at tests') },
+      { kind: 'user', text: taskMessagePrompt('claude-code', task, 'look at tests') },
       { kind: 'text', text: 'main answer' },
     ] as AgentEvent[]
     expect(helperConversation(events, task)).toEqual([
