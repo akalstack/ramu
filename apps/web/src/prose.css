@@ -125,11 +125,16 @@
     font-weight: 500;
   }
   .ramu-prose :is(ul, ol) :is(ul, ol) {
-    margin: calc(var(--prose-item-gap) / 2) 0 0;
+    margin: var(--prose-item-gap) 0 0;
   }
+  /* The gap goes above each item after the first, as on the phone: margins split above and below would overlap and
+     leave half the gap between items. */
   .ramu-prose li {
-    margin: calc(var(--prose-item-gap) / 2) 0;
+    margin: 0;
     padding-left: 0.3em;
+  }
+  .ramu-prose li + li {
+    margin-top: var(--prose-item-gap);
   }
   .ramu-prose li::marker {
     color: var(--muted);
