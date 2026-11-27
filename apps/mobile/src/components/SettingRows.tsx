@@ -531,17 +531,21 @@ export function HostGroups({
   host,
   name,
   locked = false,
+  withPanels = false,
 }: {
   section: SettingsSection
   host: Host
   name?: string
   /** This device may read the host's settings but not change them. */
   locked?: boolean
+  /** The page has panels of its own, so a host with no plain settings for it needs no notice. */
+  withPanels?: boolean
 }) {
   const say = useSay()
   const { language } = useStore()
   if (host.state.status !== 'ready') return <HostNotice host={host} name={name} />
   const groups = visibleGroups(section, host.state.settings, host.read)
+  if (!groups.length && withPanels) return null
   if (!groups.length)
     return (
       <T tone="muted" style={{ padding: space.xl, textAlign: 'center' }}>

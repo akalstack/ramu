@@ -468,6 +468,22 @@ const desktopOnly: Partial<Record<SettingsSection, string>> = {
   git: 'Hosting accounts and their tokens are added in Ramu on the host.',
 }
 
+/** Sections that draw panels of their own beside the host's plain settings (skills and rules, memories, plugins…). */
+const SECTION_PANELS = new Set<string>([
+  'notifications',
+  'account',
+  'providers',
+  'chats',
+  'git',
+  'agent-setup',
+  'plugins',
+  'identities',
+  'models',
+  'memory',
+  'browser',
+  'access',
+])
+
 export default function SettingsSectionPage() {
   const edge = useScrolledUnderBar()
   const { section: param, target, from } = useLocalSearchParams<{ section: string; target?: string; from?: string }>()
@@ -530,7 +546,7 @@ export default function SettingsSectionPage() {
           <IdentitySettings key={`IdentitySettings:${selected}`} hostId={selected} locked={locked} />
         ) : null}
         {section.scope === 'host' && id !== 'computer' && id !== 'devices' ? (
-          <HostGroups section={id} host={host} name={name} locked={locked} />
+          <HostGroups section={id} host={host} name={name} locked={locked} withPanels={SECTION_PANELS.has(id)} />
         ) : null}
         {id === 'models' ? <AbilitySummary key={`AbilitySummary:${selected}`} hostId={selected} /> : null}
         {id === 'memory' ? <MemoryList key={`MemoryList:${selected}`} hostId={selected} /> : null}

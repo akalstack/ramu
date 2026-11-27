@@ -10107,3 +10107,16 @@ test('a queued message is named in its menu by its first line, clipped, so the a
   assert.ok(long.length <= 80 && long.endsWith('…'))
   assert.equal(queuedTitle('a   b\tc'), 'a b c')
 })
+
+test('a section with panels of its own does not say its host offers no settings there', () => {
+  const { HostGroups } = load('components/SettingRows.tsx', 'ios', {
+    '../runtime/store': { useStore: () => ({ language: 'en' }) },
+    '../runtime/settingsModel': { ...settingsModel, visibleGroups: () => [] },
+  })
+  const host = { state: { status: 'ready', settings: [], marks: [] }, read: () => {} }
+  const text = (tree) => JSON.stringify(nodes(tree).map((node) => node.props?.children))
+  // Agent setup lists skills and rules of its own: an empty notice under them read as a fault.
+  assert.equal(HostGroups({ section: 'agent-setup', host, name: 'Mac', withPanels: true }), null)
+  // A section with nothing else on it still says why it is empty.
+  assert.ok(text(HostGroups({ section: 'computer', host, name: 'Mac' })).includes('offers no settings here'))
+})
