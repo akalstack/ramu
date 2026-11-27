@@ -182,8 +182,13 @@ export function ProviderRouteChip({
         disabled={readOnly}
         label={t('{0} · Limit reached', { '0': providerName(settings.provider) })}
         className={`route-chip warn ${CHIP}`}
-        // The tray above the composer says "Limit reached" and when it lifts; the chip only marks it and keeps the switches.
-        icon={<Gauge size={13} />}
+        // The tray above the composer says "Limit reached" and when it lifts; the chip names it in a word and keeps the
+        // switches.
+        icon={
+          <>
+            <Gauge size={13} /> <span className="chip-label">{t('Limit')}</span>
+          </>
+        }
         items={[
           { key: 'about', heading: t('{0} · Limit reached', { '0': providerName(settings.provider) }) },
           ...continueItems(),

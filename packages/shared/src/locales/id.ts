@@ -2180,6 +2180,7 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Beberapa host tidak punya email login. Dicocokkan karena batas dan waktu resetnya sama persis.',
   'Matched by its limits': 'Dicocokkan dari batasnya',
   'Refreshes when this provider next runs.': 'Diperbarui saat provider ini berjalan lagi.',
+  Limit: 'Batas',
   'Limit reached': 'Batas tercapai',
   'Different in 1 project': 'Berbeda di 1 proyek',
   'Different in {count} projects': 'Berbeda di {count} proyek',
