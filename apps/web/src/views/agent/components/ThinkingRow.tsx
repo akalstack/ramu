@@ -10,7 +10,13 @@ import { scrollMotion } from '../../../workspace/panelMotion'
 import { useScrollFade } from '../hooks/useScrollFade'
 import { formatDuration } from '../lib/format'
 import { WorkingText } from './WorkingText'
-import { CARET_CLASS, TOOL_DISCLOSURE_PANEL_CLASS, TOOL_ICON_CLASS, TOOL_SUMMARY_CLASS } from '../styles'
+import {
+  CARET_CLASS,
+  DISCLOSURE_ROW_CLASS,
+  TOOL_DISCLOSURE_PANEL_CLASS,
+  TOOL_ICON_CLASS,
+  TOOL_SUMMARY_CLASS,
+} from '../styles'
 
 /**
  * Reasoning the provider shared, as one row led by the brain icon: closed, the thought itself on a single line that
@@ -39,11 +45,7 @@ export function ThinkingRow({ text, active = false }: { text: string; active?: b
     if (active && el) el.scrollTo({ top: el.scrollHeight, behavior: scrollMotion() })
   }, [text, active, body])
   return (
-    <Collapsible
-      open={open}
-      onOpenChange={setOpen}
-      className="thinking tool-group [&_>_[data-slot='collapsible-trigger']]:cursor-pointer [&_>_[data-slot='collapsible-trigger']]:[list-style:none] [&_>_[data-slot='collapsible-trigger']]:font-normal [&_>_[data-slot='collapsible-trigger']]:[transition:background_0.12s_var(--ease),_border-color_0.12s_var(--ease)] [&_>_[data-slot='collapsible-trigger']]:flex [&_>_[data-slot='collapsible-trigger']]:items-center [&_>_[data-slot='collapsible-trigger']]:justify-start [&_>_[data-slot='collapsible-trigger']]:gap-2 [&_>_[data-slot='collapsible-trigger']]:h-auto [&_>_[data-slot='collapsible-trigger']]:min-h-0 [&_>_[data-slot='collapsible-trigger']]:p-[3px_0] [&_>_[data-slot='collapsible-trigger']]:[border:0] [&_>_[data-slot='collapsible-trigger']]:[border-radius:0] [&_>_[data-slot='collapsible-trigger']]:bg-transparent [&_>_[data-slot='collapsible-trigger']]:text-muted-foreground [&_>_[data-slot='collapsible-trigger']]:text-chat [&_>_[data-slot='collapsible-trigger']::-webkit-details-marker]:hidden [&_>_[data-slot='collapsible-trigger']:hover]:bg-transparent [&_>_[data-slot='collapsible-trigger']:hover]:[border:0] [&_>_[data-slot='collapsible-trigger']:hover]:text-soft [&[data-open]_>_summary_.caret]:[transform:rotate(90deg)] [&[data-open]_>_summary]:bg-transparent [&[data-open]_>_summary]:[border:0] [&[data-open]_>_summary]:text-soft [&_>_[data-slot='collapsible-trigger']_.caret]:m-0 [&_>_[data-slot='collapsible-trigger']_.caret]:opacity-0 [&_>_[data-slot='collapsible-trigger']_.caret]:[transition:opacity_0.15s_var(--ease),_transform_0.15s_var(--ease)] text-control text-muted-foreground"
-    >
+    <Collapsible open={open} onOpenChange={setOpen} className={`thinking ${DISCLOSURE_ROW_CLASS}`}>
       {/* Full width, so a streaming thought ends in an ellipsis at the column's edge instead of overflowing it. */}
       <CollapsibleTrigger render={<Button variant="ghost" className="w-full min-w-0" />}>
         <Brain size={14} className={TOOL_ICON_CLASS} />

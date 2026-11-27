@@ -1,4 +1,5 @@
 import { ThreadMessageCard, ThreadsStartedCard } from './StartedThreads'
+import { RamuEventRow } from './RamuEventRow'
 import { LocalInlineAction } from '@/components/inline-action'
 import { ContinuedCard } from './ContinuedCard'
 import { CheckoutClashCard, CommandWaitNote } from './CheckoutClashCard'
@@ -219,6 +220,7 @@ export function EventRow({
         </div>
       )
     case 'user':
+      if (e.from?.kind === 'ramu') return <RamuEventRow from={e.from} />
       if (e.from) return <ThreadMessageCard from={e.from} at={e.at} />
       return (
         <UserMessage

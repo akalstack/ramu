@@ -98,7 +98,7 @@ const REPORT_TITLES: Record<ThreadReportOutcome, string> = {
  * A message another thread sent this one: its report when it finished, failed or needs you, or a note its agent wrote.
  * The agent here received the full message; the person reads who sent it and what it said, one click from that thread.
  */
-export function ThreadMessageCard({ from, at }: { from: MessageOrigin; at?: number }) {
+export function ThreadMessageCard({ from, at }: { from: Exclude<MessageOrigin, { kind: 'ramu' }>; at?: number }) {
   useLanguage()
   const ws = useWorkspace()
   const report = from.kind === 'thread-report'

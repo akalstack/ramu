@@ -4,6 +4,7 @@
 import { randomUUID } from 'node:crypto'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
+import { ramuMessage } from '@ramu/shared/chat/visibleMessage'
 import type { PullRequestFeedbackKind, PullRequestWaiting } from '@ramu/shared/types'
 import { parseForgeRemote } from '@ramu/shared/forgeRemote'
 import {
@@ -367,6 +368,7 @@ export class ShipService implements ShipRounds {
           'If they choose more rounds, call ship with moreRounds: true. If they choose to stop, call ship with stop: true.',
         ].join('\n'),
         { cwd: watch.cwd, branch: watch.branch },
+        ramuMessage('Ship used all its rounds on {0}', { '0': watch.url }),
       )
       return false
     }
@@ -541,6 +543,7 @@ export class ShipService implements ShipRounds {
         entry.sessionId,
         `The person undid the fix you pushed to ${entry.url} (${entry.from.slice(0, 7)}..${entry.to.slice(0, 7)}) with a revert commit, now pushed. Do not push that change again unless they ask. Reply in one line.`,
         { cwd: entry.cwd, branch: entry.branch },
+        ramuMessage('You undid the fix pushed to {0}', { '0': entry.url }),
       )
     } catch {
       // A thread that is gone has nothing to tell.
@@ -639,6 +642,7 @@ export class ShipService implements ShipRounds {
           'Tell the person in one line, and ask them to review again in one pull_request_reviewers call, which the person confirms.',
         ].join('\n'),
         { cwd, branch },
+        ramuMessage('An approval on {0} no longer stands', { '0': url }),
       )
       return
     }
@@ -653,6 +657,7 @@ export class ShipService implements ShipRounds {
           'Find who should: the repository’s CODEOWNERS for the files it changes, otherwise the people who last changed those files. Ask up to three of them in one pull_request_reviewers call, which the person confirms. If you cannot tell who, say so in one line and ask nobody.',
         ].join('\n'),
         { cwd, branch },
+        ramuMessage('Nobody was asked to review {0}', { '0': url }),
       )
       return
     }
@@ -716,10 +721,12 @@ export class ShipService implements ShipRounds {
     if (step === 'working' || step === 'waiting' || run.told[pr.url] === step) return
     if (pr.state === 'open' && !pr.checks.length && Date.now() - (firstSeen ?? Date.now()) < CHECKS_GRACE) return
     const branch = (await currentBranch(cwd)) ?? pr.headBranch
-    this.agents.enqueueBackground(run.sessionId, nextStep(step, run.finishLine, pr.url, optionsOf(run)), {
-      cwd,
-      branch,
-    })
+    this.agents.enqueueBackground(
+      run.sessionId,
+      nextStep(step, run.finishLine, pr.url, optionsOf(run)),
+      { cwd, branch },
+      ramuMessage(STEP_TITLE[step], { '0': pr.url }),
+    )
     this.update(run.id, (entry) => ({ ...entry, told: { ...entry.told, [pr.url]: step } }))
     const latest = this.runs().find((entry) => entry.id === runId)
     if (!latest || !TERMINAL.includes(step)) return
@@ -800,6 +807,16 @@ function firstReleaseInstructions(options: ShipOptions): string {
     '5. Call ship with liveAddress set to the production address. Ramu keeps it as the project’s live address, checks that it answers and tells you.',
     'When a step fails, fix the cause and go on. When you are done or blocked, say so in one line.',
   ].join('\n')
+}
+
+/** What happened, for the card in the thread; the message itself tells the agent what to do about it. */
+const STEP_TITLE: Record<ShipStep, string> = {
+  reached: '{0} reached the finish line',
+  merge: '{0} is approved and its checks pass',
+  deploy: '{0} is merged',
+  closed: '{0} was closed without merging',
+  working: '{0} is being worked on',
+  waiting: '{0} is waiting for review',
 }
 
 function nextStep(step: ShipStep, finishLine: FinishLine, url: string, options: ShipOptions): string {

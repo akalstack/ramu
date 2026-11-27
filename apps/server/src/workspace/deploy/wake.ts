@@ -2,6 +2,7 @@
 // failures: the message waits while the thread is busy and survives a restart.
 import type { AgentService } from '../../agent'
 import type { Db } from '../../db'
+import type { MessageOrigin } from '@ramu/shared/types'
 import { currentBranch } from '../git'
 import type { Workspace } from '../workspace'
 
@@ -28,13 +29,18 @@ export class ProjectWake {
    * Queues `text` for a thread that is still open, together with `alsoCommit` in one database transaction, so a
    * restart cannot deliver the same event twice. Returns false when the thread can no longer take it.
    */
-  async send(sessionId: string | null, text: string, alsoCommit: () => void = () => {}): Promise<boolean> {
+  async send(
+    sessionId: string | null,
+    text: string,
+    from: MessageOrigin,
+    alsoCommit: () => void = () => {},
+  ): Promise<boolean> {
     const session = sessionId ? this.open(sessionId) : null
     const branch = session ? await currentBranch(session.cwd) : null
     if (!session || !branch) return false
     this.db.exec('BEGIN IMMEDIATE')
     try {
-      this.agents.enqueueBackground(session.id, text, { cwd: session.cwd, branch })
+      this.agents.enqueueBackground(session.id, text, { cwd: session.cwd, branch }, from)
       alsoCommit()
       this.db.exec('COMMIT')
     } catch (error) {

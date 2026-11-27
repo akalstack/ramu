@@ -290,6 +290,15 @@ export type MessageOrigin =
       /** What the other thread's agent wrote, without the framing the agent here reads. */
       detail?: string
     }
+  | {
+      /** Ramu sent it on its own (a check failed, a review came, a site answers again), not the person. */
+      kind: 'ramu'
+      /** What happened, as a phrase translated on the device, with `{0}`-style places filled from `values`. */
+      title: string
+      values?: Record<string, string>
+      /** The message as the agent received it, without the parts only meant for the agent. */
+      detail?: string
+    }
 
 export interface QueuedMessage {
   id: string

@@ -27,3 +27,16 @@ export const CONTEXT_MARKER = '\n\n<ramu-context>\n'
 /** The text to send: what the person typed, then any hidden context for the agent in one block. */
 export const withHiddenContext = (typed: string, hidden: string): string =>
   hidden ? `${typed}${CONTEXT_MARKER}${hidden}\n</ramu-context>` : typed
+
+/** The origin of a message Ramu sends a thread by itself; `title` says what happened, the host adds the message. */
+export const ramuMessage = (title: string, values?: Record<string, string>) => ({
+  kind: 'ramu' as const,
+  title,
+  ...(values ? { values } : {}),
+})
+
+/** The whole message as the agent read it, its appended context as plain paragraphs, for the person to look into. */
+export const agentReadable = (text: string): string =>
+  text
+    .replace(/\n*<ramu-context>\n?([\s\S]*?)\n?<\/ramu-context>/g, (_all, context: string) => `\n\n${context.trim()}`)
+    .trim()

@@ -30,6 +30,7 @@ import {
   Copy,
   FileCode2,
   FilePen,
+  BellRing,
   GitFork,
   ChevronRight,
   FileDiff,
@@ -672,6 +673,7 @@ function ErrorCard({ message, last, chat, repeats }: { message: string; last: bo
 function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Chat; meta?: ItemMeta }) {
   switch (item.kind) {
     case 'user':
+      if (item.from?.kind === 'ramu') return <RamuEventRow from={item.from} />
       if (item.from) return <ThreadMessageCard from={item.from} chat={chat} />
       return (
         <MessageActions text={item.text} from="user" seq={item.seq} files={item.attachments}>
@@ -826,7 +828,13 @@ const REPORT_TITLES: Record<import('@ramu/shared/types').ThreadReportOutcome, st
 }
 
 /** A report or note another thread sent this one, as on the desktop: who sent it, its words folded, and a way there. */
-function ThreadMessageCard({ from, chat }: { from: import('@ramu/shared/types').MessageOrigin; chat: Chat }) {
+function ThreadMessageCard({
+  from,
+  chat,
+}: {
+  from: Exclude<import('@ramu/shared/types').MessageOrigin, { kind: 'ramu' }>
+  chat: Chat
+}) {
   const say = useSay()
   const { c } = useTheme()
   const store = useStore()
@@ -2687,6 +2695,48 @@ function InteractiveVersionRow({
  * is, the thought on one line ending in an ellipsis (its newest paragraph, shimmering, while it streams), after
  * "Thought for 4s" once it took a while; a tap opens the whole thought as Markdown under a "Thinking" or "Thought" title.
  */
+/**
+ * A message Ramu sent the thread by itself (a check failed, a review came, a site answers again), drawn as a thought
+ * or tool is: what happened on one line, and opened, the message the agent read. As on the desktop.
+ */
+function RamuEventRow({ from }: { from: Extract<import('@ramu/shared/types').MessageOrigin, { kind: 'ramu' }> }) {
+  const { c } = useTheme()
+  const say = useSay()
+  const [open, setOpen] = useState(false)
+  const toggled = useContext(RowToggle)
+  const title = say(from.title, from.values)
+  return (
+    <View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={title}
+        accessibilityState={{ expanded: open }}
+        disabled={!from.detail}
+        onPress={() => {
+          tap()
+          toggled()
+          setOpen((value) => !value)
+        }}
+        hitSlop={{ top: 4, bottom: 4 }}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, paddingVertical: 4 }}
+      >
+        <BellRing size={14} color={c.muted} />
+        <T size={font.control} tone="muted" numberOfLines={1} style={{ flex: 1, minWidth: 0 }}>
+          {title}
+        </T>
+        {from.detail ? <Disclosure open={open} color={c.muted} /> : null}
+      </Pressable>
+      {from.detail ? (
+        <Collapse open={open}>
+          <View style={{ paddingTop: space.xs }}>
+            <Markdown text={from.detail} density="compact" muted />
+          </View>
+        </Collapse>
+      ) : null}
+    </View>
+  )
+}
+
 function ThinkingRow({ text, live }: { text: string; live: boolean }) {
   const { c } = useTheme()
   const say = useSay()

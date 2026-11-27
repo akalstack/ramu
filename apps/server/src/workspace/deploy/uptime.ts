@@ -1,6 +1,7 @@
 // Watching a project's live address from the host: a check every five minutes, an incident thread after two failed
 // checks in a row, and a recap in that thread once the address answers again. The host can only vouch for time it was
 // awake and online, so a sleep between checks, or a check the host could not make, is reported as unknown.
+import { ramuMessage } from '@ramu/shared/chat/visibleMessage'
 import { randomUUID } from 'node:crypto'
 import type { UptimeCheck, UptimeFailure, UptimeStatus } from '@ramu/shared/types/deploy'
 import type { ProjectWake } from './wake'
@@ -292,8 +293,11 @@ export class UptimeWatches {
       record = { ...record, failures: 0, downSince: null, incident: null }
       if (!incident?.sessionId) return this.save(projectId, record)
       const closed = record
-      const sent = await this.wake.send(incident.sessionId, this.recap(url, check, incident, closed.gap), () =>
-        this.save(projectId, closed),
+      const sent = await this.wake.send(
+        incident.sessionId,
+        this.recap(url, check, incident, closed.gap),
+        ramuMessage('{0} answers again', { '0': url }),
+        () => this.save(projectId, closed),
       )
       if (!sent) this.save(projectId, closed)
       return

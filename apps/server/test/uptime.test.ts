@@ -1,3 +1,4 @@
+import type { MessageOrigin } from '@ramu/shared/types'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { describe, expect, it, vi } from 'vitest'
@@ -16,7 +17,7 @@ function setup(
   const probe = vi.fn(async (_url: string) => answers.shift() ?? { status: 200, ms: 120, failure: null })
   const openThread = vi.fn(async () => ({ taskId: 't-incident', sessionId: 's-incident' }))
   const notify = vi.fn()
-  const send = vi.fn(async (_session: string | null, _text: string, commit?: () => void) => {
+  const send = vi.fn(async (_session: string | null, _text: string, _from: MessageOrigin, commit?: () => void) => {
     commit?.()
     return true
   })
@@ -135,6 +136,11 @@ describe('uptime watch', () => {
     expect(send).toHaveBeenCalledTimes(1)
     expect(send.mock.calls[0]?.[0]).toBe('s-incident')
     expect(send.mock.calls[0]?.[1]).toContain('answers again')
+    expect(send.mock.calls[0]?.[2]).toEqual({
+      kind: 'ramu',
+      title: '{0} answers again',
+      values: { '0': 'https://shop.example/' },
+    })
     expect(watches.status('p1')).toMatchObject({ incident: null, downSince: null, last: { result: 'up' } })
   })
 

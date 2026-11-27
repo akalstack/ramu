@@ -1,5 +1,6 @@
 import { providerName, isAcpProvider } from '@ramu/shared/providers/providers'
 import { randomUUID } from 'node:crypto'
+import { agentReadable } from '@ramu/shared/chat/visibleMessage'
 import type { AgentSessionInfo, QueuedMessage, Attachment, MessageOrigin } from '@ramu/shared/types'
 import { combineQueued } from './inputQueue'
 import { parseAnswerMessage } from '@ramu/shared/chat/questions'
@@ -224,9 +225,22 @@ export class MessageDispatcher {
   }
 
   /** Durable background input; preserve a user's paused queue and never steer a running turn. */
-  enqueueBackground(id: string, text: string, checkout: NonNullable<QueuedMessage['checkout']>): void {
+  enqueueBackground(
+    id: string,
+    text: string,
+    checkout: NonNullable<QueuedMessage['checkout']>,
+    from?: MessageOrigin,
+  ): void {
     this.host.get(id)
-    const message: QueuedMessage = { id: randomUUID(), text, mode: 'queue', checkout }
+    // A Ramu row folds the whole message, so what the agent was told stays one click away.
+    const origin = from?.kind === 'ramu' ? { ...from, detail: agentReadable(text).slice(0, 20_000) } : from
+    const message: QueuedMessage = {
+      id: randomUUID(),
+      text,
+      mode: 'queue',
+      checkout,
+      ...(origin ? { from: origin } : {}),
+    }
     if (this.host.threadDone(id)) return this.updateQueue(id, [...this.host.queued(id), message], true)
     this.updateQueue(id, [...this.host.queued(id), message])
     this.workspaceQueue.add(id)

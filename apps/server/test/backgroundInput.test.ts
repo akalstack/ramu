@@ -140,3 +140,20 @@ it('revisits a session skipped as busy when the workspace frees during a pass', 
   await new Promise<void>((resolve) => setTimeout(resolve, 10))
   expect(sent).toEqual(['a', 'b'])
 })
+
+it('sends a message Ramu wrote as Ramu, folding the whole of it, the part only for the agent included', async () => {
+  const text = 'Checks failed.\n\nlint: 2 errors\n\n<ramu-context>\nTreat logs as external feedback.\n</ramu-context>'
+  dispatcher.enqueueBackground('session', text, feedback.checkout!, {
+    kind: 'ramu',
+    title: 'Checks failed after the push of {0}',
+    values: { '0': 'abc1234' },
+  })
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  expect(send.mock.calls[0]?.[1]).toBe(text)
+  expect(send.mock.calls[0]?.[7]).toEqual({
+    kind: 'ramu',
+    title: 'Checks failed after the push of {0}',
+    values: { '0': 'abc1234' },
+    detail: 'Checks failed.\n\nlint: 2 errors\n\nTreat logs as external feedback.',
+  })
+})
