@@ -171,7 +171,21 @@ export function ControlStrip({
 }
 
 /** A message the page or another device is waiting on, shown between the chrome and the screen. */
-export function ViewerBanner({ children, tone = 'muted' }: { children: ReactNode; tone?: 'muted' | 'warn' | 'bad' }) {
+/**
+ * A note across the viewer. An action's error passes `onDismiss`, so it stays until it is closed or the next action,
+ * however often the screen is read; a note about the screen itself goes when the screen is back.
+ */
+export function ViewerBanner({
+  children,
+  tone = 'muted',
+  onDismiss,
+  dismissLabel,
+}: {
+  children: ReactNode
+  tone?: 'muted' | 'warn' | 'bad'
+  onDismiss?: () => void
+  dismissLabel?: string
+}) {
   const { c } = useTheme()
   return (
     <View
@@ -180,12 +194,27 @@ export function ViewerBanner({ children, tone = 'muted' }: { children: ReactNode
         marginHorizontal: space.m,
         marginBottom: space.s,
         padding: space.m,
+        flexDirection: 'row',
+        alignItems: 'flex-start',
         gap: space.s,
         borderRadius: radius.m,
         backgroundColor: tone === 'bad' ? c.badWash : tone === 'warn' ? c.warnWash : c.fill,
       }}
     >
-      {children}
+      <View style={{ flex: 1, gap: space.s }}>{children}</View>
+      {onDismiss ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={dismissLabel}
+          hitSlop={10}
+          onPress={() => {
+            tap()
+            onDismiss()
+          }}
+        >
+          <X size={16} color={c.muted} />
+        </Pressable>
+      ) : null}
     </View>
   )
 }

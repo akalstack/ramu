@@ -125,6 +125,9 @@ export function BrowserViewer({
   const keyboard = useRef<RemoteKeyboardHandle>(null)
   const [typing, setTyping] = useState(false)
   const [error, setError] = useState('')
+  // Why the page cannot be shown, which the next read clears. An action's error (Take control, a page change) stays
+  // until it is closed or the next action: the page read every 750 ms cleared it before it could be read.
+  const [screenError, setScreenError] = useState('')
   const [frameError, setFrameError] = useState('')
   const [frameReady, setFrameReady] = useState(false)
   const inputQueue = useRef<BrowserInputQueue | null>(null)
@@ -233,9 +236,9 @@ export function BrowserViewer({
           setFrame('')
           setDialog(null)
         }
-        setError('')
+        setScreenError('')
       } catch (error) {
-        if (mounted) setError(error instanceof Error ? error.message : String(error))
+        if (mounted) setScreenError(error instanceof Error ? error.message : String(error))
       } finally {
         if (mounted && allowed()) timer = setTimeout(() => void poll(), 750)
       }
@@ -648,7 +651,7 @@ export function BrowserViewer({
   const nextControl = state ? controlAction(state) : null
   // A phone without the host's Browser permission is offered a request instead of a control the host would refuse.
   const browserAllowed = store.mayUse(chat.computerId, 'browser')
-  const message = error || frameError
+  const message = error || screenError || frameError
   return (
     <View style={{ flex: 1 }}>
       <ViewerHeader
@@ -750,7 +753,7 @@ export function BrowserViewer({
         </ViewerBanner>
       ) : null}
       {message ? (
-        <ViewerBanner tone="bad">
+        <ViewerBanner tone="bad" onDismiss={error ? () => setError('') : undefined} dismissLabel={t('Dismiss')}>
           <T size={font.control}>{t(viewerMessage(message))}</T>
           <RequestPermission computerId={chat.computerId} message={message} />
         </ViewerBanner>

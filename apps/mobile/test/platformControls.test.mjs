@@ -6781,6 +6781,72 @@ for (const os of ['ios', 'android']) {
     child.dispose()
     assert.deepEqual(calls, [])
   })
+
+  test(`${os} a failed Take control stays in the computer viewer until it is closed, however often the screen is read`, async () => {
+    const control = await import('../../../packages/shared/src/computerControl.ts')
+    const parent = hookHarness(),
+      timers = [],
+      react = { ...parent.react }
+    const session = {
+      generation: 1,
+      target: { kind: 'display', id: 'display', name: 'Shared display' },
+      runtime: { id: 'local' },
+      controller: { kind: 'agent' },
+      paused: false,
+    }
+    const store = {
+      language: 'en',
+      computers: [{ id: 'a', name: 'Host', access: 'owner' }],
+      isOnline: () => true,
+      mayUse: () => true,
+      invoke: async (_host, method) => {
+        if (method === 'computer.takeControl') throw new Error('The agent is in the middle of a step.')
+        return method === 'computer.frame'
+          ? { mimeType: 'image/png', data: 'AA', width: 10, height: 10, capturedAt: Date.now(), generation: 1 }
+          : session
+      },
+    }
+    const { ComputerActivity } = load(
+      'components/ComputerActivity.tsx',
+      os,
+      {
+        react,
+        '../runtime/store': { useStore: () => store },
+        '@ramu/shared/computerControl': control,
+        '@ramu/shared/computerBridge': { COMPUTER_FRAME_STALE_MS: 5000 },
+        '@ramu/shared/computerStatus': await import('../../../packages/shared/src/computerStatus.ts'),
+        './useComputerVideo': { useComputerVideo: () => ({ status: 'idle' }), webrtc: () => null },
+        'react-native': {
+          AppState: { currentState: 'active', addEventListener: () => ({ remove() {} }) },
+          PanResponder: { create: () => ({ panHandlers: {} }) },
+        },
+      },
+      { setTimeout: (run) => timers.push(run), clearTimeout() {}, setInterval: () => 1, clearInterval() {} },
+    )
+    const renderParent = () =>
+      parent.render(() => ComputerActivity({ chat: { computerId: 'a', taskId: 'task' }, open: true, onClose() {} }))
+    renderParent()
+    await settle()
+    const viewer = nodes(renderParent()).find((node) => node.type?.name === 'ComputerViewer')
+    parent.dispose()
+    const child = hookHarness()
+    Object.assign(react, child.react)
+    const render = () => child.render(() => viewer.type(viewer.props))
+    render()
+    await settle()
+    let tree = render()
+    find(tree, 'ControlStrip').props.action.onPress()
+    await settle()
+    const banner = () => nodes(render()).find((node) => node.type === 'ViewerBanner' && node.props.tone === 'bad')
+    assert.ok(banner(), 'the refusal is shown')
+    // The screen is read again, successfully: the refusal stays.
+    for (const run of timers.splice(0)) run()
+    await settle()
+    assert.ok(banner(), 'a successful screen read does not hide it')
+    banner().props.onDismiss()
+    assert.equal(banner(), undefined)
+    child.dispose()
+  })
 }
 
 function interactiveCardHarness(os, cached = true) {

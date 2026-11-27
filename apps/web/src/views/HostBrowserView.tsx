@@ -67,6 +67,9 @@ export function HostBrowserView({
     setUploadRef('')
   }, [selected])
   const [error, setError] = useState('')
+  // Why the page cannot be shown, which the next read clears. An action's own error stays above until the next action:
+  // the page read every few hundred milliseconds cleared it before it could be read.
+  const [screenError, setScreenError] = useState('')
   const [needed, setNeeded] = useState<DevicePermission | null>(null)
   const mayControl = useMayUse('browser')
   const [frameError, setFrameError] = useState('')
@@ -200,9 +203,9 @@ export function HostBrowserView({
             return dialog
           })
         } else setImage(null)
-        setError('')
+        setScreenError('')
       } catch (error) {
-        if (active) setError(t(errorText(error)))
+        if (active) setScreenError(t(errorText(error)))
       } finally {
         requested = false
         if (active && allowed())
@@ -480,9 +483,10 @@ export function HostBrowserView({
             <PermissionNeeded host={host.id} permission={needed ?? 'browser'} />
           </div>
         ) : null}
-        {!needed && (error || frameError || elsewhere) && (
+        {!needed && (error || screenError || frameError || elsewhere) && (
           <p role="status" className="m-0 px-3 py-1 text-caption">
             {error ||
+              screenError ||
               (frameError ? t(frameError) : t('Another of your devices has control. Take control to use it here.'))}
           </p>
         )}

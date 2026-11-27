@@ -88,6 +88,9 @@ function ComputerViewer({
   const [frame, setFrame] = useState<Frame | null>(null)
   const [now, setNow] = useState(Date.now())
   const [error, setError] = useState('')
+  // Why the screen cannot be shown, which the next read clears. An action's error (Take control, a key) stays until it
+  // is closed or the next action: the screen read every 600 ms cleared it before it could be read.
+  const [screenError, setScreenError] = useState('')
   const [asked, setAsked] = useState(false)
   // Pinch zooms and two fingers move the picture on the phone only; nothing is sent to the computer for them.
   const [view, setView] = useState<{ zoom: number; pan: { x: number; y: number } }>({ zoom: 1, pan: ORIGIN })
@@ -149,9 +152,9 @@ function ComputerViewer({
               },
         )
         if (summary) setCurrent(summary)
-        setError('')
+        setScreenError('')
       } catch (reason) {
-        if (mounted) setError(reason instanceof Error ? reason.message : String(reason))
+        if (mounted) setScreenError(reason instanceof Error ? reason.message : String(reason))
       } finally {
         if (mounted) {
           setNow(Date.now())
@@ -346,7 +349,7 @@ function ComputerViewer({
   // The banner explains an error; the header and the empty screen only say the screen is not there.
   const status = live
     ? t('Live video')
-    : error
+    : screenError
       ? t('Not available')
       : !frame
         ? t('Connecting…')
@@ -455,9 +458,14 @@ function ComputerViewer({
         </ViewerBanner>
       ) : null}
       {error ? (
-        <ViewerBanner tone="bad">
+        <ViewerBanner tone="bad" onDismiss={() => setError('')} dismissLabel={t('Dismiss')}>
           <T size={font.control}>{t(error)}</T>
           <RequestPermission computerId={chat.computerId} message={error} />
+        </ViewerBanner>
+      ) : screenError ? (
+        <ViewerBanner tone="bad">
+          <T size={font.control}>{t(screenError)}</T>
+          <RequestPermission computerId={chat.computerId} message={screenError} />
         </ViewerBanner>
       ) : null}
       {!viewOnly && current.handoffRequest ? (
