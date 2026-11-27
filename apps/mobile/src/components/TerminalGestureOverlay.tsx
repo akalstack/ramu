@@ -8,15 +8,15 @@ import { gestureOverlayPosition, type Direction, type TerminalGestureState } fro
 
 export type GestureDisplay = Pick<TerminalGestureState, 'active' | 'direction' | 'speed' | 'x' | 'y'>
 const SIZE = 112
-/** One arrow key of the pad; four sit around the centre like a keyboard's arrow cluster. */
-const KEY = 30
-const GAP = 4
-const CENTER = (SIZE - KEY) / 2
+/** Where each direction sits: on a ring around the centre, like the arrows of a remote's round pad. */
+const SPOT = 34
+const RING = 31
+const CENTER = (SIZE - SPOT) / 2
 const keys: Record<Direction, { left: number; top: number }> = {
-  up: { left: CENTER, top: CENTER - KEY - GAP },
-  down: { left: CENTER, top: CENTER + KEY + GAP },
-  left: { left: CENTER - KEY - GAP, top: CENTER },
-  right: { left: CENTER + KEY + GAP, top: CENTER },
+  up: { left: CENTER, top: CENTER - RING },
+  down: { left: CENTER, top: CENTER + RING },
+  left: { left: CENTER - RING, top: CENTER },
+  right: { left: CENTER + RING, top: CENTER },
 }
 const chevrons = { up: ChevronUp, down: ChevronDown, left: ChevronLeft, right: ChevronRight }
 
@@ -37,9 +37,10 @@ export function readGesture(value: Record<string, unknown>): GestureDisplay | nu
 }
 
 /**
- * The cursor pad shown while a held finger moves the terminal's cursor: four keycaps around a centre dot, fixed on the
- * right edge. The key being sent lights in the accent and stacks more chevrons as the cursor speeds up, so how far the
- * finger has travelled reads at a glance without following it.
+ * The cursor pad shown while a held finger moves the terminal's cursor: a round glass pad with an arrow on each side,
+ * fixed on the right edge. The arrow being sent sits on an accent disc that brightens and stacks more chevrons as the
+ * cursor speeds up, so how far the finger has travelled reads at a glance without following it. On Android, which has
+ * no glass, it is a raised surface over the terminal.
  */
 export function TerminalGestureOverlay({
   state,
@@ -59,8 +60,8 @@ export function TerminalGestureOverlay({
   }, [speed, strength])
   // On the UI thread: a drag keeps JavaScript busy sending keys, which made the key lag behind the finger.
   const lit = useAnimatedStyle(() => ({
-    opacity: interpolate(strength.value, [0, 1], [0.6, 1]),
-    transform: [{ scale: interpolate(strength.value, [0, 1], [1, 1.12]) }],
+    opacity: interpolate(strength.value, [0, 1], [0.7, 1]),
+    transform: [{ scale: interpolate(strength.value, [0, 1], [0.92, 1.08]) }],
   }))
   if (!state?.active) return null
   const level = state.speed < 0.34 ? 1 : state.speed < 0.67 ? 2 : 3
@@ -77,8 +78,8 @@ export function TerminalGestureOverlay({
           color={color}
           style={{
             position: 'absolute',
-            left: (KEY - 18) / 2 + (vertical ? 0 : offset),
-            top: (KEY - 18) / 2 + (vertical ? offset : 0),
+            left: (SPOT - 18) / 2 + (vertical ? 0 : offset),
+            top: (SPOT - 18) / 2 + (vertical ? offset : 0),
           }}
         />
       )
@@ -96,7 +97,7 @@ export function TerminalGestureOverlay({
         height: SIZE,
       }}
     >
-      <Glass radius={30} style={{ width: SIZE, height: SIZE, borderWidth: 0.5, borderColor: c.lineStrong }}>
+      <Glass radius={SIZE / 2} floating style={{ width: SIZE, height: SIZE }}>
         <View
           style={{
             position: 'absolute',
@@ -105,7 +106,8 @@ export function TerminalGestureOverlay({
             width: 6,
             height: 6,
             borderRadius: 3,
-            backgroundColor: state.direction ? c.accent : c.lineStrong,
+            backgroundColor: state.direction ? c.accent : c.muted,
+            opacity: state.direction ? 1 : 0.5,
           }}
         />
         {(Object.keys(keys) as Direction[]).map((direction) => {
@@ -117,9 +119,9 @@ export function TerminalGestureOverlay({
                 {
                   position: 'absolute',
                   ...keys[direction],
-                  width: KEY,
-                  height: KEY,
-                  borderRadius: 9,
+                  width: SPOT,
+                  height: SPOT,
+                  borderRadius: SPOT / 2,
                   backgroundColor: c.accent,
                 },
                 lit,
@@ -128,18 +130,8 @@ export function TerminalGestureOverlay({
               {glyphs(direction, '#ffffff', level)}
             </Reanimated.View>
           ) : (
-            <View
-              key={direction}
-              style={{
-                position: 'absolute',
-                ...keys[direction],
-                width: KEY,
-                height: KEY,
-                borderRadius: 9,
-                backgroundColor: c.fill,
-              }}
-            >
-              {glyphs(direction, c.muted, 1)}
+            <View key={direction} style={{ position: 'absolute', ...keys[direction], width: SPOT, height: SPOT }}>
+              {glyphs(direction, c.soft, 1)}
             </View>
           )
         })}
