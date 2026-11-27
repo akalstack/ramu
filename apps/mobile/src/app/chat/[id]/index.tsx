@@ -125,6 +125,12 @@ import { messageWithTerminal, readTerminalDraft, terminalDraftKey } from '../../
 
 /** Turns drawn at a time; a chat can have hundreds. */
 const TURN_PAGE = 15
+/**
+ * How long opening a thread keeps landing on its end. Its rows below the first screen are estimated until drawn, so the
+ * content keeps growing after the first aim and a single scroll fell short of the end. As T3 Code keeps its chat stuck to
+ * the bottom while it lays out, each growth re-aims until the reader touches the list.
+ */
+const OPENING_LANDING_MS = 3000
 
 const RowSeparator = () => <View style={{ height: space.m + 2 }} />
 
@@ -337,7 +343,8 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
    * drawn, so the first aim falls short and the content grows as the list lands; each growth re-aims, until the reader
    * touches the list.
    */
-  const landingUntil = useRef(0)
+  // Opening a thread lands the same way (see OPENING_LANDING_MS).
+  const landingUntil = useRef(Date.now() + OPENING_LANDING_MS)
   const toEnd = (animated: boolean) => {
     animated = animated && !reducedMotion
     if (!ios) return scroll.current?.scrollToEnd({ animated })
@@ -653,6 +660,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
     seen.current.clear()
     arrivalReady.current = false
     openedAt.current = Date.now()
+    landingUntil.current = Date.now() + OPENING_LANDING_MS
   }
   const initialItems = chat?.items
   if (!arrivalReady.current && initialItems?.length) {
@@ -1794,7 +1802,9 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                     metrics.current.content = height
                     settleReveal()
                     catchUp()
-                    if (Date.now() < landingUntil.current && following.current && !userScrolling.current) toEnd(true)
+                    // Still landing: under the opening cover it jumps; once shown it glides.
+                    if (Date.now() < landingUntil.current && following.current && !userScrolling.current)
+                      toEnd(revealed)
                   }}
                   keyboardDismissMode="on-drag"
                   keyboardShouldPersistTaps="handled"
