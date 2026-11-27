@@ -42,7 +42,7 @@ When a thread pushes (**Push** or **Sync** in Source Control, a `git push` the a
 - **All passed, a deploy among them:** a short note listing the checks with their links. The agent replies in one line with the deploy's address. When only CI passed there is nothing to report, so the thread is not woken.
 - **One failed:** the failing checks with the end of their logs, treated as external text, so the agent can find the cause and propose a fix. A fix for the default branch goes on a new branch.
 
-**Follow checks after a push** (Settings → Git, on by default, also on the phone) turns this off. This works on GitHub and GitLab. Only the newest push of a branch is followed. A push with no checks after 20 minutes, or checks still running after three hours, is dropped. A branch whose pull request is [watched](git-hosting.md#github) is left to that watch. Pushes made outside Ramu aren't followed.
+**Follow checks after a push** (Settings → Git, on by default, also on the phone) turns this off. This works on GitHub and GitLab. Only the newest push of a branch is followed. A push with no checks after 20 minutes, or checks still running after three hours, is dropped. A branch whose pull request is [watched](git-hosting.md#github), by you, **Automatically watch pull requests** or Ship, is left to that watch, even when the watch starts after the push, so its checks come back once and count as Ship's rounds. Pushes made outside Ramu aren't followed.
 
 ## Live address and uptime
 

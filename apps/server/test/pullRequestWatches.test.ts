@@ -353,6 +353,19 @@ describe('pushes from a thread', () => {
     expect(enqueue).toHaveBeenCalledOnce()
   })
 
+  it('leaves a pushed branch to its pull request’s watch, so Ship and the watch hand its checks over once', async () => {
+    vi.mocked(currentBranch).mockResolvedValue('fix')
+    vi.mocked(commitBranchInfo).mockResolvedValue({ branch: 'fix', defaultBranch: 'main' })
+    vi.mocked(commitChecks).mockResolvedValue(failing)
+    await push()
+    // The pull request for the branch is watched before the push's checks finish.
+    await watch()
+    await service.tick(0)
+    await service.tick(60_000)
+    expect(enqueue).toHaveBeenCalledOnce()
+    expect(String(enqueue.mock.calls[0]![1])).toContain('Feedback: checks')
+  })
+
   it('follows no push while Follow checks after a push is off', async () => {
     ws.setAppState('app-preferences', { followPushChecks: false })
     vi.mocked(commitChecks).mockResolvedValue(failing)

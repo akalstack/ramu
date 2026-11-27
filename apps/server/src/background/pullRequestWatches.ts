@@ -353,6 +353,12 @@ export class PullRequestWatchService {
    * passing alone needs no turn, and Source Control and the pull request already show it.
    */
   private async pollPush(push: PushWatch, now: number): Promise<void> {
+    // Once the branch's pull request is watched (by the person, Watch new pull requests or Ship), the watch hands over
+    // its checks, and Ship counts them as its rounds: following the push too would wake the thread twice.
+    if (this.list().some((watch) => watch.cwd === push.cwd && watch.branch === push.branch)) {
+      this.removePush((entry) => entry.id === push.id)
+      return
+    }
     const checks = await commitChecks(push.cwd, push.sha)
     if (checks === null || (!checks.length && now - push.since > NO_CHECKS_TTL)) {
       this.removePush((entry) => entry.id === push.id)
