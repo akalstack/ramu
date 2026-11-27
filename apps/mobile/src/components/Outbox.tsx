@@ -4,10 +4,11 @@ import { useSay, useT } from '../i18n'
 import { WorktreeBaseReview } from './WorktreeBaseReview'
 import { ActionSheetIOS, Alert, Platform, Pressable, View } from 'react-native'
 import { Clock, CornerDownRight, ListPlus } from 'lucide-react-native'
-import { font, radius, space, useTheme } from '../theme'
+import { font, useTheme } from '../theme'
 import { useStore, type OutboxItem } from '../runtime/store'
 import { T, tap } from './ui'
-import { LongMessage, MessageFooter } from './Transcript'
+import { MessageFooter, UserBubble } from './Transcript'
+import { visibleText } from '../runtime/transcript'
 
 /** Asks how to cancel an outbox item: edit puts the text back in the composer, delete drops it. */
 export function confirmCancel(
@@ -61,41 +62,16 @@ export function confirmCancel(
 }
 
 /** Where a message sent from here sits in the transcript: on the right, as the host's copy of it will. */
-export const SENT_ROW = { alignSelf: 'flex-end', maxWidth: '86%', alignItems: 'flex-end', gap: 4 } as const
+export const SENT_ROW = { alignSelf: 'stretch', alignItems: 'flex-end', gap: 4 } as const
 
 /**
- * The bubble of a message sent from here before the host has it. Drawn as the sent message will be (Markdown, long ones
- * cut to a preview), so the swap does not move the transcript, and a long message waiting offline does not grow taller
- * than iOS will draw. `waiting` marks one held on the phone.
+ * The bubble of a message sent from here before the host has it: the sent message's own bubble, given the words the
+ * host's copy will show, so the swap changes nothing on screen.
  */
 export function SentBubble({ text, waiting = false }: { text: string; waiting?: boolean }) {
-  const { c } = useTheme()
-  const say = useSay()
-  const [expanded, setExpanded] = useState(false)
-  return (
-    <View
-      style={{
-        backgroundColor: c.bubble,
-        opacity: waiting ? 0.6 : 1,
-        borderRadius: radius.l - 2,
-        borderBottomRightRadius: radius.xs,
-        paddingHorizontal: space.m + 2,
-        paddingVertical: space.s + 2,
-        ...(waiting ? { borderWidth: 1, borderStyle: 'dashed' as const, borderColor: c.lineStrong } : {}),
-      }}
-    >
-      <LongMessage
-        text={text}
-        expanded={expanded}
-        label={expanded ? say('Show less') : say('Show more')}
-        accent={c.accent}
-        onToggle={() => setExpanded((open) => !open)}
-      />
-    </View>
-  )
+  return <UserBubble text={visibleText(text)} waiting={waiting} />
 }
 
-/** A normal send shows nothing beyond its bubble; a mark appears only if the host is taking this long to answer. */
 /**
  * A message that is still on the phone. On its way it looks like the sent message that will replace it, as on the
  * desktop, and the words stay for what needs the person: it is held for a host, or its delivery is in doubt.
@@ -138,7 +114,7 @@ export function PendingBubble({
       >
         <SentBubble text={item.text} waiting={!delivering} />
         {delivering ? null : (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingRight: 4 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingRight: 4, maxWidth: '86%' }}>
             <ModeIcon size={12} color={c.muted} />
             <T size={font.caption} tone="muted">
               {item.state === 'review'
@@ -168,10 +144,10 @@ export function PendingBubble({
           </View>
         )}
       </Pressable>
-      {/* The row the sent message has (time, Copy, Edit), held from the start, so the bubble does not change height as
-          the host's copy takes its place. */}
+      {/* The row the sent message has, with the time it was sent, held from the start, so nothing changes as the
+          host's copy takes its place. */}
       {delivering ? (
-        <MessageFooter end status={say('Sending…')} text={item.text} copyLabel={say('Copy message')} />
+        <MessageFooter end at={item.createdAt} text={visibleText(item.text)} copyLabel={say('Copy message')} />
       ) : null}
       {!viewOnly && item.state === 'review' ? (
         <Pressable

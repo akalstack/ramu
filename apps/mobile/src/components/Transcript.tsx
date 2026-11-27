@@ -1295,7 +1295,21 @@ function TurnSummary({
   )
 }
 
-function UserBubble({ text, attachments, chat }: { text: string; attachments?: Attachment[]; chat: Chat }) {
+/**
+ * The person's message. A message still on its way is drawn by this same bubble, so the host's copy taking its place
+ * changes nothing on screen; `waiting` marks one held on the phone.
+ */
+export function UserBubble({
+  text,
+  attachments,
+  chat,
+  waiting = false,
+}: {
+  text: string
+  attachments?: Attachment[]
+  chat?: Chat
+  waiting?: boolean
+}) {
   const { c } = useTheme()
   const say = useSay()
   const [expanded, setExpanded] = useState(false)
@@ -1340,7 +1354,7 @@ function UserBubble({ text, attachments, chat }: { text: string; attachments?: A
         alignItems: wide ? 'stretch' : 'flex-end',
       }}
     >
-      {attachments?.length ? (
+      {attachments?.length && chat ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'flex-end' }}>
           {attachments.map((file) => (
             <AttachmentTile key={file.id} file={file} chat={chat} />
@@ -1351,11 +1365,16 @@ function UserBubble({ text, attachments, chat }: { text: string; attachments?: A
         <View
           style={{
             backgroundColor: c.bubble,
+            opacity: waiting ? 0.6 : 1,
             borderRadius: radius.l - 2,
             borderBottomRightRadius: radius.xs,
             paddingHorizontal: space.m + 2,
             paddingVertical: space.s + 2,
             gap: space.s,
+            // Drawn on every bubble, so marking one held on the phone does not change its size.
+            borderWidth: 1,
+            borderStyle: waiting ? 'dashed' : 'solid',
+            borderColor: waiting ? c.lineStrong : 'transparent',
           }}
         >
           {quotes.map((part, index) => (
@@ -1463,7 +1482,7 @@ function SentContextChips({ raw, computer }: { raw: string; computer: string }) 
 }
 
 /** A sent message, or only its beginning with a control to show the rest when it is long. */
-export function LongMessage({
+function LongMessage({
   text,
   expanded,
   label,

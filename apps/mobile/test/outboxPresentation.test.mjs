@@ -23,19 +23,23 @@ function load({ online = true, setState = () => {}, native = {} } = {}) {
         if (id === '../runtime/store') return { useStore: () => ({ language: 'en', isOnline: () => online }) }
         if (id === '../theme') return { useTheme: () => ({ c: {} }), radius: {}, space: {}, font: {} }
         if (id === '../i18n') return { useT: () => ({}), useSay: () => fill }
+        // What the host's copy shows: the message without the context Ramu sent with it.
+        if (id === '../runtime/transcript')
+          return { visibleText: (text) => text.replace(/\n<ramu-context>[\s\S]*$/, '') }
         return new Proxy({}, { get: (_, key) => key })
       },
     },
   )
   return module.exports
 }
-function bubble(online, state = 'sending', setState) {
+function pending(online, state = 'sending', setState) {
   return load({ online, setState }).PendingBubble({
-    item: { id: 'a', text: 'Hello', state },
+    item: { id: 'a', text: 'Hello', state, createdAt: 1_700_000_000_000 },
     computer: 'Mac',
     onEdit() {},
-  }).props.children[0]
+  }).props.children
 }
+const bubble = (...args) => pending(...args)[0]
 
 test('delivery shows the complete submitted text immediately without offering an ineffective cancel', () => {
   const tree = bubble(true)
@@ -66,15 +70,16 @@ test('a message held on the phone is marked as waiting', () => {
   assert.equal(bubble(false, 'waiting').props.children[0].props.waiting, true)
 })
 
-test('a long message still on its way opens and closes with Show more', () => {
-  const updates = []
-  const message = load({ setState: (update) => updates.push(update) }).SentBubble({ text: 'Hello' }).props.children
-    .props
-  assert.equal(message.expanded, false)
-  assert.equal(message.label, 'Show more')
-  message.onToggle()
-  assert.equal(updates.length, 1)
-  assert.equal(updates[0](false), true)
+test('a message on its way is the sent message’s own bubble and footer, with the time it was sent', () => {
+  const sent = load().SentBubble({ text: 'Hello\n<ramu-context>open files</ramu-context>' })
+  // The bubble the host's copy is drawn with, given the words that copy will show, so the swap changes nothing.
+  assert.equal(sent.type, 'UserBubble')
+  assert.equal(sent.props.text, 'Hello')
+  const footer = pending(true)[1]
+  assert.equal(footer.props.at, 1_700_000_000_000)
+  assert.equal(footer.props.status, undefined)
+  // Held on the phone, it says why under the bubble instead.
+  assert.equal(pending(false, 'waiting')[1], null)
 })
 
 for (const os of ['ios', 'android']) {
