@@ -905,7 +905,10 @@ export function Composer({
     mentions: helpers,
   })
   // Takes the editable body (without quotes) and keeps the quotes in front of it in the draft.
+  // Each change the person makes to the box, so a send put back after failing never covers what they typed since.
+  const edits = useRef(0)
   const save = (next: string) => {
+    edits.current++
     setText(next)
     if (draftKey) store.setDraft(draftKey, next)
   }
@@ -1050,6 +1053,7 @@ export function Composer({
   const [quoteOpen, setQuoteOpen] = useState<number | null>(null)
   const openQuote = quoteOpen === null ? undefined : split.quotes[quoteOpen]
   const append = (value: string) => {
+    edits.current++
     const next = text + value
     setText(next)
     if (draftKey) store.setDraft(draftKey, next)
@@ -1101,7 +1105,10 @@ export function Composer({
           store,
           pc,
           (a) => {
-            if (attachmentOwner.current === owner) setAttachments((old) => [...old, a])
+            if (attachmentOwner.current === owner) {
+              edits.current++
+              setAttachments((old) => [...old, a])
+            }
           },
           source,
         )
@@ -1114,7 +1121,14 @@ export function Composer({
     if (draftKey) store.setDraft(`${draftKey}:attachments`, JSON.stringify(attachments))
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [attachments] by design; the values it reads beyond these are current as of that run
   }, [attachments])
+  // Emptying the box on send already cleared the saved context; writing it again would erase a file Explorer added
+  // while the message was on its way.
+  const keepSavedContext = useRef(false)
   useEffect(() => {
+    if (keepSavedContext.current) {
+      keepSavedContext.current = false
+      return
+    }
     if (draftKey) store.setDraft(`${draftKey}:context`, JSON.stringify(context))
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [context] by design; the values it reads beyond these are current as of that run
   }, [context])
@@ -1173,12 +1187,6 @@ export function Composer({
     sending.current = true
     setBusy(true)
     const submittedOwner = origin.current
-    const submittedDraft = {
-      text,
-      attachments: JSON.stringify(attachments),
-      context: JSON.stringify(context),
-      mentions: JSON.stringify(mentions),
-    }
     try {
       // Keep the text visible until the destination accepts it into its local outbox.
       if (origin.current !== submittedOwner) return
@@ -1205,40 +1213,50 @@ export function Composer({
         if (origin.current !== submittedOwner) return
       }
       if (origin.current !== submittedOwner) return
-      const accepted = await onSend(
-        expanded,
-        running ? sendMode : 'send',
-        attachments.map((a) => a.id),
-        merged,
-      )
-      // Destination clarification is still composing; retain the reviewed draft and its attachments.
-      if (accepted === false) {
-        return
+      // As T3 Code does, the box empties the moment the message goes, and the words and files come back only if the send
+      // fails or is held back (a destination still being chosen). Clearing after the send left the sent text in the box
+      // whenever anything about the saved draft had shifted meanwhile.
+      const sentState = { text, attachments, context, mentions }
+      const clearBox = () => {
+        textInput.current?.clear()
+        setText('')
+        setAttachments([])
+        if (context.length) keepSavedContext.current = true
+        setContext([])
+        setMentions([])
+        setCaret(0)
+        setForced(undefined)
+        if (draftKey) {
+          store.clearComposerDraft(draftKey, {})
+          store.setDraft(draftKey, '')
+          store.setDraft(`${draftKey}:restored-attachments`, '')
+        }
       }
-      if (origin.current !== submittedOwner) return
-      // Words typed or files added while the send was on its way stay for the next message. This reads the box itself:
-      // the saved draft could differ from it without the person changing anything, and the sent text then stayed.
-      const now = composed.current
-      if (
-        now.text !== submittedDraft.text ||
-        now.attachments !== submittedDraft.attachments ||
-        now.context !== submittedDraft.context ||
-        now.mentions !== submittedDraft.mentions
-      )
-        return
-      // Explorer adds file references to the saved draft while its preview covers this box; those keep the draft.
-      if (draftKey && !store.clearComposerDraft(draftKey, { context: submittedDraft.context })) return
-      textInput.current?.clear()
-      setText('')
-      setAttachments([])
-      setContext([])
-      setMentions([])
-      setCaret(0)
-      setForced(undefined)
-      if (draftKey) {
-        store.setDraft(draftKey, '')
-        store.setDraft(`${draftKey}:restored-attachments`, '')
+      // Only into a box still empty: anything typed since stays.
+      const putBack = () => {
+        if (origin.current !== submittedOwner || edits.current !== editsAtSend) return
+        setText(sentState.text)
+        setAttachments(sentState.attachments)
+        setContext(sentState.context)
+        setMentions(sentState.mentions)
+        if (draftKey) store.setDraft(draftKey, sentState.text)
       }
+      clearBox()
+      const editsAtSend = edits.current
+      let accepted: void | false
+      try {
+        accepted = await onSend(
+          expanded,
+          running ? sendMode : 'send',
+          sentState.attachments.map((a) => a.id),
+          merged,
+        )
+      } catch (error) {
+        putBack()
+        throw error
+      }
+      // Destination clarification is still composing; the reviewed draft and its attachments come back.
+      if (accepted === false) putBack()
     } catch (error) {
       Alert.alert(say('Could not send'), error instanceof Error ? error.message : String(error))
     } finally {

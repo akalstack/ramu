@@ -483,7 +483,8 @@ test('a destination clarification keeps the composer draft instead of acknowledg
   button.props.onPress()
   await settle()
   assert.equal(sent, 1)
-  assert.equal(cleared, 0)
+  // The box empties as the message goes; a destination still to choose puts the words back for review.
+  assert.equal(cleared, 1)
   assert.equal(store.drafts['a:new:none'], 'Fix login')
   hooks.dispose()
 })
@@ -2403,7 +2404,7 @@ for (const os of ['ios', 'android']) {
   })
 }
 
-test('returning from Explorer updates only the mounted composer’s context and a late Send keeps newer work', async () => {
+test('returning from Explorer updates only the mounted composer’s context, and a file added during a send stays for the next message', async () => {
   const hooks = hookHarness()
   const request = deferred()
   let focus,
@@ -2486,9 +2487,13 @@ test('returning from Explorer updates only the mounted composer’s context and 
   focus()
   render()
   assert.equal(sent, 1)
-  assert.equal(store.drafts['a:chat:task'], 'Keep my original request')
-  assert.equal(JSON.parse(store.drafts['a:chat:task:context']).length, 2)
-  assert.equal(JSON.parse(store.drafts['a:chat:task:attachments'])[0].id, 'image')
+  // What was sent left the box at once; the file Explorer added while it was on its way is the next message's.
+  assert.equal(store.drafts['a:chat:task'], '')
+  assert.deepEqual(
+    JSON.parse(store.drafts['a:chat:task:context']).map((file) => file.path),
+    ['later.ts'],
+  )
+  assert.equal(store.drafts['a:chat:task:attachments'], '[]')
   hooks.dispose()
 })
 
@@ -5332,7 +5337,7 @@ test('the project picker uses the centered native title and menu actions preserv
 })
 
 for (const accepted of [true, false]) {
-  test(`composer retains visible text and the recovery draft until local acceptance (accepted: ${accepted})`, async () => {
+  test(`composer empties at once on send and puts the words back only if the send is held (accepted: ${accepted})`, async () => {
     const hooks = hookHarness()
     let acknowledge,
       nativeClears = 0,
@@ -5394,15 +5399,17 @@ for (const accepted of [true, false]) {
     assert.ok(!nodes(tree).some((node) => node.type === 'ThreadUsageChip'))
     steer.props.onPress()
     await settle()
-    assert.equal(nativeClears, 0)
-    assert.equal(store.drafts['a:chat:one'], 'Do the work')
-    assert.equal(find(render(), 'TextInput').props.editable, false)
+    // As T3 Code does: the box and its saved draft empty the moment the message goes, before the host answers.
+    assert.equal(nativeClears, 1)
+    assert.equal(store.drafts['a:chat:one'], '')
+    assert.equal(cleared, 1)
     acknowledge(accepted)
     await settle()
-    assert.equal(nativeClears, accepted ? 1 : 0)
-    if (!accepted)
+    // A send held back (a destination still being chosen) puts the words back in the box and its draft.
+    if (!accepted) {
+      assert.equal(store.drafts['a:chat:one'], 'Do the work')
       assert.ok(JSON.stringify(nodes(render()).map((node) => node.props?.children)).includes('Do the work'))
-    assert.equal(cleared, accepted ? 1 : 0)
+    } else assert.equal(store.drafts['a:chat:one'], '')
     hooks.dispose()
   })
 }
