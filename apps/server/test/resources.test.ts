@@ -1,6 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import { ResourceService } from '../src/background/resources'
 import { viewerMayInvoke } from '@ramu/shared/viewerAccess'
+import { idleAgents } from '@ramu/shared/resources'
 import { deviceMayInvoke, HOST_METHODS } from '../src/remote/access'
 
 const gb = 1024 ** 3
@@ -63,4 +64,30 @@ it('refuses writing tools to a read-only reviewer, even with full access', async
   await expect(canUse('Bash', { command: 'rm -rf x' }, { signal, toolUseID: 't' } as never)).resolves.toMatchObject({
     behavior: 'deny',
   })
+})
+
+it('marks each thread idle as of now, even from a cached reading, and counts only idle agents as freed', async () => {
+  const idle = new Set(['a'])
+  const roots = [
+    { pid: 10, taskId: 'a', item: { kind: 'agent' as const, id: 's-a', name: 'A' } },
+    { pid: 11, taskId: 'a', item: { kind: 'terminal' as const, id: 't-a', name: 'dev server' } },
+    { pid: 20, taskId: 'b', item: { kind: 'agent' as const, id: 's-b', name: 'B' } },
+  ]
+  const rows = [
+    { pid: 10, ppid: process.pid, rssBytes: 300, cpu: 0 },
+    { pid: 11, ppid: process.pid, rssBytes: 900, cpu: 0 },
+    { pid: 20, ppid: process.pid, rssBytes: 500, cpu: 5 },
+  ]
+  const service = new ResourceService(
+    { roots: () => roots, idleThreads: () => idle },
+    async () => null,
+    async () => rows,
+  )
+  const first = await service.snapshot()
+  expect(Object.fromEntries(first.threads.map((thread) => [thread.taskId, thread.idle]))).toEqual({ a: true, b: false })
+  // The terminal's memory stays: stopping idle agents leaves servers and terminals running.
+  expect(idleAgents(first.threads)).toEqual({ taskIds: ['a'], bytes: 300 })
+  // Thread a started a turn after the reading was taken.
+  idle.clear()
+  expect(idleAgents((await service.snapshot()).threads).taskIds).toEqual([])
 })

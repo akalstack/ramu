@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { View } from 'react-native'
 import {
   cpuPercent,
+  idleAgents,
   isBusy,
   isLowMemory,
   isWorkspaceContext,
@@ -15,6 +16,8 @@ import {
   type ThreadResources,
 } from '@ramu/shared/resources'
 import type { ThreadServer } from '@ramu/shared/servers'
+import { stopIdleThreads } from '@ramu/shared/chat/threadActions'
+import { showError } from '../runtime/toast'
 import { useSay } from '../i18n'
 import { useStore } from '../runtime/store'
 import { font, space, useTheme } from '../theme'
@@ -386,6 +389,40 @@ function ThreadRow({
 }
 
 /** The same meters, threads and Stop as the desktop's Resources panel; hidden when a host gives no reading. */
+/**
+ * Stops the agents of every thread with no turn in progress, which hold memory between turns; each starts again with the
+ * thread's next message. Servers and terminals keep running: they may be in use.
+ */
+function StopIdleAgents({ hostId, threads }: { hostId: string; threads: readonly ThreadResources[] }) {
+  const say = useSay()
+  const store = useStore()
+  const [stopping, setStopping] = useState(false)
+  const idle = idleAgents(threads)
+  if (!idle.taskIds.length) return null
+  return (
+    <View style={{ gap: space.xs }}>
+      <Button
+        kind="secondary"
+        title={
+          stopping
+            ? say('Stopping…')
+            : say('Stop {0} idle agents · {1}', { 0: idle.taskIds.length, 1: memorySize(idle.bytes) })
+        }
+        disabled={stopping}
+        onPress={() => {
+          setStopping(true)
+          void stopIdleThreads(store.invoke as Parameters<typeof stopIdleThreads>[0], hostId, idle.taskIds)
+            .catch((error) => showError(error instanceof Error ? error.message : String(error)))
+            .finally(() => setStopping(false))
+        }}
+      />
+      <T size={font.caption} tone="muted" style={{ textAlign: 'center' }}>
+        {say('Each starts again with its thread’s next message. Servers and terminals keep running.')}
+      </T>
+    </View>
+  )
+}
+
 export function HostResources({ host }: { host: string | null }) {
   const say = useSay()
   const store = useStore()
@@ -398,6 +435,7 @@ export function HostResources({ host }: { host: string | null }) {
         return (
           <Section key={id} title={store.computers.find((pc) => pc.id === id)?.name ?? ''}>
             <HostMeters data={data} />
+            <StopIdleAgents hostId={id} threads={data.threads} />
             <Group>
               {data.threads.map((thread, index) => (
                 <ThreadRow

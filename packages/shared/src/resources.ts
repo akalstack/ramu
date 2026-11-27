@@ -20,6 +20,21 @@ export interface ThreadResources {
   /** Percent of one core, summed over the thread's processes. */
   cpu: number
   items: ResourceItem[]
+  /** No turn in progress: its agent can be stopped without interrupting work, and starts again with the next message. */
+  idle?: boolean
+}
+
+/** The idle threads on a host and the memory their agents hold, which stopping them frees. */
+export function idleAgents(threads: readonly ThreadResources[]): { taskIds: string[]; bytes: number } {
+  const idle = threads.filter((thread) => thread.idle && thread.items.some((item) => item.kind === 'agent'))
+  return {
+    taskIds: idle.map((thread) => thread.taskId),
+    bytes: idle.reduce(
+      (sum, thread) =>
+        sum + thread.items.filter((item) => item.kind === 'agent').reduce((total, item) => total + item.rssBytes, 0),
+      0,
+    ),
+  }
 }
 
 export interface ResourceSnapshot {

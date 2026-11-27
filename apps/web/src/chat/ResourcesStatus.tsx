@@ -3,6 +3,7 @@ import { useQueries } from '@tanstack/react-query'
 import { ChevronDown, MemoryStick, Square, X } from 'lucide-react'
 import {
   cpuPercent,
+  idleAgents,
   isBusy,
   isLowMemory,
   isWorkspaceContext,
@@ -31,6 +32,7 @@ import { useHostOverviews } from '../workspace/hostOverview'
 import { useHost } from '../workspace/HostProvider'
 import { ServerRow, useOpenServer } from './ThreadServers'
 import { cn } from 'cn'
+import { stopIdleThreads } from '@ramu/shared/chat/threadActions'
 
 type Invoke = (hostId: string, method: string, ...args: unknown[]) => Promise<unknown>
 const anyHost = invokeOn as unknown as Invoke
@@ -449,6 +451,43 @@ function ThreadRow({
 }
 
 /**
+ * Stops the agents of every thread with no turn in progress, which hold memory between turns; each starts again with the
+ * thread's next message. Servers and terminals keep running: they may be in use.
+ */
+function StopIdleAgents({
+  hostId,
+  threads,
+  onStopped,
+}: {
+  hostId: string
+  threads: readonly ThreadResources[]
+  onStopped: () => void
+}) {
+  const [stopping, setStopping] = useState(false)
+  const idle = idleAgents(threads)
+  if (!idle.taskIds.length) return null
+  return (
+    <Button
+      variant="ghost"
+      size="xs"
+      className="h-6 min-h-6 px-1.5 text-caption text-muted-foreground"
+      disabled={stopping}
+      title={t('Each starts again with its thread’s next message. Servers and terminals keep running.')}
+      onClick={() => {
+        setStopping(true)
+        void stopIdleThreads(anyHost, hostId, idle.taskIds)
+          .then(onStopped, (error) => notifyError(errorText(error)))
+          .finally(() => setStopping(false))
+      }}
+    >
+      {stopping
+        ? t('Stopping…')
+        : t('Stop {0} idle agents · {1}', { 0: idle.taskIds.length, 1: memorySize(idle.bytes) })}
+    </Button>
+  )
+}
+
+/**
  * Each host's memory and CPU against everything running on it, then what Ramu's threads hold, heaviest first, with
  * Ramu's own share last. A failed reading hides figures, never shows zero.
  */
@@ -482,10 +521,13 @@ function ResourcesPanel() {
               cores={cores}
             />
             <div className="flex flex-col gap-1.5">
-              <h4 className="m-0 flex items-baseline gap-1.5 text-caption font-medium text-muted-foreground">
-                {t('Running in threads')}
-                {data.threads.length > 0 && <span className="tabular-nums">{data.threads.length}</span>}
-              </h4>
+              <div className="flex min-h-6 items-center gap-1.5">
+                <h4 className="m-0 flex flex-1 items-baseline gap-1.5 text-caption font-medium text-muted-foreground">
+                  {t('Running in threads')}
+                  {data.threads.length > 0 && <span className="tabular-nums">{data.threads.length}</span>}
+                </h4>
+                <StopIdleAgents hostId={id} threads={data.threads} onStopped={refetch} />
+              </div>
               {data.threads.length ? (
                 <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
                   {data.threads.map((thread) => (

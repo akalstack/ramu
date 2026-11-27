@@ -2181,6 +2181,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Matched by its limits': 'Dicocokkan dari batasnya',
   'Refreshes when this provider next runs.': 'Diperbarui saat provider ini berjalan lagi.',
   Limit: 'Batas',
+  'Stop {0} idle agents · {1}': 'Hentikan {0} agen menganggur · {1}',
+  'Each starts again with its thread’s next message. Servers and terminals keep running.':
+    'Masing-masing mulai lagi dengan pesan berikutnya di thread-nya. Server dan terminal tetap berjalan.',
   'Another thread left uncommitted changes in this checkout.': 'Thread lain meninggalkan perubahan yang belum di-commit di checkout ini.',
   '{0} threads left uncommitted changes in this checkout.': '{0} thread meninggalkan perubahan yang belum di-commit di checkout ini.',
   'Limit reached': 'Batas tercapai',

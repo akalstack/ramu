@@ -69,11 +69,16 @@ export class ResourceService {
     clearInterval(this.timer)
   }
 
-  snapshot(): Promise<ResourceSnapshot> {
-    if (this.cached && Date.now() - this.cached.at < FRESH_MS) return Promise.resolve(this.cached.value)
-    return (this.reading ??= this.read().finally(() => {
-      this.reading = null
-    }))
+  /** The processes, with each thread's idleness read now: a cached reading must not offer to stop a thread that started. */
+  async snapshot(): Promise<ResourceSnapshot> {
+    const value =
+      this.cached && Date.now() - this.cached.at < FRESH_MS
+        ? this.cached.value
+        : await (this.reading ??= this.read().finally(() => {
+            this.reading = null
+          }))
+    const idle = this.sources.idleThreads()
+    return { ...value, threads: value.threads.map((thread) => ({ ...thread, idle: idle.has(thread.taskId) })) }
   }
 
   /** Test device platforms ready here, refreshed by the host now and then; reported with the memory reading. */
