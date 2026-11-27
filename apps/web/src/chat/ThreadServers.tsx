@@ -11,8 +11,7 @@ import { useComputers } from '../workspace/computers'
 import { useHost } from '../workspace/HostProvider'
 import { useWorkspace } from '../workspace/workspace'
 import { notifyError } from './Notifications'
-
-const POLL_MS = 3000
+import { serversPollMs } from './serversPoll'
 
 /** The servers a thread's work is listening on, read only while its chat is on screen. */
 export function useThreadServers(taskId: string | undefined, visible = true) {
@@ -21,7 +20,7 @@ export function useThreadServers(taskId: string | undefined, visible = true) {
     queryKey: ['servers', hostId, taskId],
     queryFn: () => invoke('servers.list', taskId),
     enabled: !!taskId && visible && status === 'connected',
-    refetchInterval: POLL_MS,
+    refetchInterval: () => serversPollMs(document.hasFocus()),
     retry: false,
   })
   // Build daemons are not servers to open; Resources lists them, and Ramu stops them once the thread rests.
