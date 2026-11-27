@@ -1,13 +1,8 @@
-import { useEffect } from 'react'
-import { View, useWindowDimensions } from 'react-native'
+import { View } from 'react-native'
 import {
   BottomSheet,
   Button,
   Host,
-  HStack,
-  Image,
-  TextField,
-  useNativeState,
   NavigationStack,
   RNHostView,
   ScrollView,
@@ -16,13 +11,6 @@ import {
 } from '@expo/ui/swift-ui'
 import {
   background,
-  accessibilityLabel,
-  autocorrectionDisabled,
-  textInputAutocapitalization,
-  submitLabel,
-  onSubmit,
-  frame,
-  labelStyle,
   navigationBarTitleDisplayMode,
   navigationTitle,
   presentationBackground,
@@ -31,8 +19,8 @@ import {
   scrollEdgeEffectStyle,
 } from '@expo/ui/swift-ui/modifiers'
 import { space, useTheme } from '../theme'
-import type { NativeSheetProps, SheetSearchProps } from './NativeSheet'
-import { useSay } from '../i18n'
+import type { NativeSheetProps } from './NativeSheet'
+import { BottomSearch } from './BottomSearch'
 import { useHostedWidth } from './hostedWidth'
 
 /** Native presentation, navigation chrome, dismissal and scroll-edge material for every iOS dialog. */
@@ -50,6 +38,9 @@ export function NativeSheet({ open, onClose, title, children, scroll = true, pre
           ...(scroll ? { paddingBottom: space.l } : { flex: 1 }),
         }}
       >
+        {/* Under the title, as in every other search sheet: a bottom-bar field folded into a lone magnifier button
+            that floated over the list. */}
+        {search ? <BottomSearch {...search} inputOnly /> : null}
         {children}
       </View>
     </RNHostView>
@@ -77,49 +68,10 @@ export function NativeSheet({ open, onClose, title, children, scroll = true, pre
               <ToolbarItem placement="cancellationAction">
                 <Button role="close" onPress={onClose} />
               </ToolbarItem>
-              {search ? <NativeSheetSearch search={search} /> : null}
             </Toolbar.Content>
           </Toolbar>
         </NavigationStack>
       </BottomSheet>
     </Host>
-  )
-}
-
-function NativeSheetSearch({ search }: { search: SheetSearchProps }) {
-  const say = useSay()
-  const text = useNativeState(search.value)
-  const { width } = useWindowDimensions()
-  const { c } = useTheme()
-  useEffect(() => {
-    text.set(search.value)
-  }, [text, search.value])
-  return (
-    <ToolbarItem placement="bottomBar">
-      <HStack spacing={8} modifiers={[frame({ width: Math.min(600, Math.max(160, width - 64)) })]}>
-        <Image systemName="magnifyingglass" color={c.muted} />
-        <TextField
-          text={text}
-          placeholder={search.placeholder}
-          onTextChange={search.onChangeText}
-          modifiers={[
-            accessibilityLabel(search.label ?? search.placeholder),
-            autocorrectionDisabled(),
-            textInputAutocapitalization('never'),
-            submitLabel('search'),
-            frame({ minHeight: 44 }),
-            onSubmit(() => search.onSubmit?.()),
-          ]}
-        />
-        {/* Always there, so typing never rebuilds the row: a clear button appearing with the first character took the
-            fixed-width row's space and left the field with none, so only the magnifier showed. */}
-        <Button
-          label={say('Clear search')}
-          systemImage="xmark.circle.fill"
-          modifiers={[labelStyle('iconOnly'), frame({ width: 28 })]}
-          onPress={() => search.onChangeText('')}
-        />
-      </HStack>
-    </ToolbarItem>
   )
 }

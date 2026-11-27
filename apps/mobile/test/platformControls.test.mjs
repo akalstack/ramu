@@ -8287,14 +8287,7 @@ test('page searches use the native bottom search slot and preserve query, clear 
   hooks.dispose()
 })
 
-test('native dialog search stays in its own bottom toolbar and does not configure the page behind it', () => {
-  const hooks = hookHarness()
-  const shared = {
-    value: '',
-    set(value) {
-      this.value = value
-    },
-  }
+test('native dialog search sits under the title, above the results, and does not configure the page behind it', () => {
   const native = {
     Host: 'SwiftHost',
     BottomSheet: 'SwiftSheet',
@@ -8303,25 +8296,10 @@ test('native dialog search stays in its own bottom toolbar and does not configur
     ScrollView: 'SwiftScroll',
     Button: 'SwiftButton',
     ToolbarItem: 'SwiftToolbarItem',
-    HStack: 'SwiftRow',
-    TextField: 'SwiftInput',
-    Image: 'SwiftImage',
-    useNativeState: () => shared,
     Toolbar: Object.assign(() => null, { Content: 'SwiftToolbarContent' }),
   }
-  const search = {
-    value: '',
-    placeholder: 'Search models',
-    onChangeText(value) {
-      this.value = value
-    },
-  }
-  // Use a closure: native callbacks are passed directly, without a receiver.
-  search.onChangeText = (value) => {
-    search.value = value
-  }
+  const search = { value: '', placeholder: 'Search models', onChangeText() {} }
   const { NativeSheet } = load('components/NativeSheet.ios.tsx', 'ios', {
-    react: hooks.react,
     '@expo/ui/swift-ui': native,
     '@expo/ui/swift-ui/modifiers': new Proxy(
       {},
@@ -8331,21 +8309,18 @@ test('native dialog search stays in its own bottom toolbar and does not configur
           (...args) => ({ name, args }),
       },
     ),
+    './BottomSearch': { BottomSearch: 'BottomSearch' },
+    './hostedWidth': { useHostedWidth: () => ({ width: 390, onLayout() {} }) },
   })
   const root = NativeSheet({ open: true, title: 'Models', onClose() {}, search, children: 'Results' })
-  const body = nodes(root).find((node) => typeof node.type === 'function' && node.type.name === 'NativeSheetSearch')
-  const render = () => hooks.render(() => body.type(body.props))
-  let tree = render()
-  assert.equal(find(tree, 'SwiftToolbarItem').props.placement, 'bottomBar')
-  find(tree, 'SwiftInput').props.onTextChange('codex')
-  tree = render()
-  assert.equal(shared.value, 'codex')
-  find(tree, 'SwiftButton').props.onPress()
-  render()
-  assert.equal(search.value, '')
-  assert.equal(shared.value, '')
-  assert.equal(find(tree, 'NativeSearch'), undefined)
-  hooks.dispose()
+  const field = find(root, 'BottomSearch')
+  assert.equal(field.props.inputOnly, true)
+  assert.equal(field.props.placeholder, 'Search models')
+  // A bottom-bar field folded into a lone magnifier button floating over the list.
+  assert.ok(!nodes(root).some((node) => node.type === 'SwiftToolbarItem' && node.props.placement === 'bottomBar'))
+  const content = find(root, 'RNHost').props.children.props.children
+  assert.equal(content.at(-1), 'Results')
+  assert.equal(find(root, 'NativeSearch'), undefined)
 })
 
 for (const os of ['ios', 'android']) {
