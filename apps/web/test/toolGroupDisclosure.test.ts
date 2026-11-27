@@ -174,7 +174,8 @@ it('keeps a live group to one line under its headline, its latest thought cut to
     renderToStaticMarkup(
       createElement(ToolGroup, { tools: [tool, second], entries, results: done, cwd: '', active: true, live: true }),
     )
-  const thought = 'First I will read the file.\n\nThen I will check every place that calls it, one by one, and note each.'
+  const thought =
+    'First I will read the file.\n\nThen I will check every place that calls it, one by one, and note each.'
   const withThought = live([tool, { kind: 'thinking', text: thought }, second])
   expect(withThought).toContain('min-h-[1lh]')
   expect(withThought).not.toContain('line-clamp-3')
