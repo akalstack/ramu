@@ -36,7 +36,7 @@ import { useModelSets } from '../../models/ModelSets'
 import { WorkspaceNameDialog } from '../../workspace/WorkspaceNameDialog'
 import { ICON_BUTTON_CLASS, ROW_ACTIONS_CLASS, ROW_ERROR_CLASS } from './constants'
 import { InlineEdit } from './InlineEdit'
-import { TaskStateIcon } from './TaskStateIcon'
+import { TaskGutterMark, TaskStateIcon } from './TaskStateIcon'
 import { AgentStack } from './AgentStack'
 import { PullRequestIcon } from '../../git/PullRequestIcon'
 import { offerThreadUndo } from './threadUndo'
@@ -435,7 +435,7 @@ export function TaskRow({
                   contextMenu.onContextMenu(e)
                 }
           }
-          className={`task-row [&:hover_.row-actions]:opacity-100 [&:hover_.row-actions]:flex [&:focus-within_.row-actions]:opacity-100 [&:focus-within_.row-actions]:flex [&:hover]:bg-accent [&:hover]:text-foreground [&.active]:text-foreground [&.active]:bg-accent [&.active]:[box-shadow:none] [&.archived]:[opacity:0.6] [&_.row-actions]:hidden [&_.row-actions]:mr-0 [&_.row-actions:has([aria-expanded='true'])]:flex [&_>_:not(.task-title)]:mt-0 [&_.task-actions]:hidden [&_.task-actions]:opacity-100 [&_.task-actions]:gap-1 [&_.task-actions_button]:size-5 [&:hover_.task-actions]:flex [&:focus-within_.task-actions]:flex [&:hover_.task-trailing]:hidden [&:focus-within_.task-trailing]:hidden [&:hover_.task-head_.task-pin]:hidden [&:focus-within_.task-head_.task-pin]:hidden [&:hover_.task-head_.agent-stack]:hidden [&:focus-within_.task-head_.agent-stack]:hidden [transition:background-color_140ms_ease,_color_140ms_ease] flex items-center gap-2 text-soft cursor-default [transition:background_0.1s_var(--ease),_color_0.1s_var(--ease)] text-body leading-5 ${context ? 'min-h-11' : 'min-h-[30px]'} rounded-(--radius-s) p-[0_8px] ${active ? ' active' : ''}${selected ? ' selected bg-accent [box-shadow:inset_2px_0_0_var(--primary)]' : ''}${archived ? ' archived' : ''}${nested ? ' pl-[31px]' : ''}`}
+          className={`task-row [&:hover_.row-actions]:opacity-100 [&:hover_.row-actions]:flex [&:focus-within_.row-actions]:opacity-100 [&:focus-within_.row-actions]:flex [&:hover]:bg-accent [&:hover]:text-foreground [&.active]:text-foreground [&.active]:bg-accent [&.active]:[box-shadow:none] [&.archived]:[opacity:0.6] [&_.row-actions]:hidden [&_.row-actions]:mr-0 [&_.row-actions:has([aria-expanded='true'])]:flex [&_>_:not(.task-title)]:mt-0 [&_.task-actions]:hidden [&_.task-actions]:opacity-100 [&_.task-actions]:gap-1 [&_.task-actions_button]:size-5 [&:hover_.task-actions]:flex [&:focus-within_.task-actions]:flex [&:hover_.task-trailing]:hidden [&:focus-within_.task-trailing]:hidden [&:hover_.task-head_.task-pin]:hidden [&:focus-within_.task-head_.task-pin]:hidden [&:hover_.task-head_.agent-stack]:hidden [&:focus-within_.task-head_.agent-stack]:hidden [transition:background-color_140ms_ease,_color_140ms_ease] flex items-center gap-2 text-soft cursor-default [transition:background_0.1s_var(--ease),_color_0.1s_var(--ease)] text-body leading-5 ${context ? 'min-h-11' : 'min-h-[30px]'} rounded-(--radius-s) p-[0_8px] ${active ? ' active' : ''}${selected ? ' selected bg-accent [box-shadow:inset_2px_0_0_var(--primary)]' : ''}${archived ? ' archived' : ''}${nested ? ' relative pl-[31px]' : ''}`}
           role="button"
           tabIndex={0}
           aria-disabled={!openable || undefined}
@@ -462,6 +462,7 @@ export function TaskRow({
             if (openable && e.key === 'Enter' && !renaming) open()
           }}
         >
+          {nested && <TaskGutterMark task={task} unread={!!ws?.unread.has(task.id)} />}
           {done && <Check size={14} className="flex-none text-muted-foreground" aria-label={t('Done')} />}
           {/* Where the work lands goes on a second line only when there is something to say, so no row carries an
               empty one; titles keep one left edge either way. */}
@@ -529,7 +530,7 @@ export function TaskRow({
                   {archived ? <ArchiveRestore size={14} /> : done ? <RotateCcw size={14} /> : <Check size={14} />}
                 </Button>
               </span>
-              <TaskStateIcon task={task} unread={!!ws?.unread.has(task.id)} />
+              <TaskStateIcon task={task} unread={!!ws?.unread.has(task.id)} ageOnly={nested} />
               {/* Every icon sits in one group at the row's right edge, as on the context line of a two-line row. */}
               {!context && (
                 <span className="task-trailing flex flex-none items-center gap-1">

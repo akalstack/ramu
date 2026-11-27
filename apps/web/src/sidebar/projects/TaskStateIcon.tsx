@@ -50,24 +50,48 @@ export function StatusMark({ task, status }: { task: Task; status: ThreadStatus 
   return <StateDot kind="dot unread" label={t(status.full)} />
 }
 
-/**
- * The trailing status of a chat row: working, needs input, waiting, failed, unread, or its age, at its natural width so
- * a short age leaves the title its room. On hover the row's actions take its place.
- */
-export function TaskStateIcon({ task, unread }: { task: Task; unread: boolean }) {
-  useLanguage()
+/** A row's status mark: working, needs input, waiting, failed or unread; null when there is none. */
+function useStatusMark(task: Task, unread: boolean) {
   const status = threadStatus(task, unread, task.goalState)
   // Anything that needs the person shows at once; only a plain stop waits to see whether the turn carries on.
   const held = useHeld(isWorking(status))
+  return held && (!status || status.kind === 'finished') ? (
+    <WorkingDot label={t('Agent working')} />
+  ) : status ? (
+    <StatusMark task={task} status={status} />
+  ) : null
+}
+
+/**
+ * The trailing status of a chat row: working, needs input, waiting, failed, unread, or its age, at its natural width so
+ * a short age leaves the title its room. With `ageOnly` the mark is drawn in the row's gutter (TaskGutterMark) and this
+ * says only the age. On hover the row's actions take its place.
+ */
+export function TaskStateIcon({ task, unread, ageOnly = false }: { task: Task; unread: boolean; ageOnly?: boolean }) {
+  useLanguage()
+  const mark = useStatusMark(task, unread)
   return (
     <span className="task-trailing inline-flex min-w-5 flex-none items-center justify-center [&>.task-state]:mr-0">
-      {held && (!status || status.kind === 'finished') ? (
-        <WorkingDot label={t('Agent working')} />
-      ) : status ? (
-        <StatusMark task={task} status={status} />
+      {mark && !ageOnly ? (
+        mark
       ) : (
         <span className="task-time text-caption text-muted-foreground tabular-nums">{timeAgo(task.lastActiveAt)}</span>
       )}
+    </span>
+  )
+}
+
+/**
+ * A nested row's status mark in the indent under its project's folder icon, so every title keeps one edge and the age
+ * keeps its place at the right. The column is the folder icon's: 8px in and 15px wide.
+ */
+export function TaskGutterMark({ task, unread }: { task: Task; unread: boolean }) {
+  useLanguage()
+  const mark = useStatusMark(task, unread)
+  if (!mark) return null
+  return (
+    <span className="task-gutter pointer-events-none absolute top-0 left-2 flex h-[30px] w-[15px] items-center justify-center [&>.task-state]:mr-0 [&>span]:pointer-events-auto">
+      {mark}
     </span>
   )
 }
