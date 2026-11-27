@@ -214,6 +214,11 @@ interface Store extends State {
   subscribe(computerId: string, listener: (...args: PushArgs) => void): () => void
   /** Asks a host for on-demand channels (file changes, a thread's context size, terminal output) while a screen shows them. */
   watch(computerId: string, channels: readonly string[], keys?: Record<string, readonly string[]>): () => void
+  /**
+   * Resolves once the read a thread's screen started when it opened has caught that thread up (at once when none is
+   * running), so the screen can keep its cover until the rows it shows are the ones that stay.
+   */
+  caughtUp(computerId: string, sessionId: string): Promise<void>
   /** `full` re-reads every transcript (after a reconnect); otherwise chats already streaming keep their live transcript. */
   refresh(computerId: string, depth?: RefreshDepth): Promise<void>
   /** Finished threads on each host older than every one held, read a page at a time with `loadOlderDone`. */
@@ -408,6 +413,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const changeCursors = useRef(new Map<string, number>())
   // Threads on screen, by scoped session id: they always read in full.
   const shownSessions = useRef(new Set<string>())
+  const catchUps = useRef(new Map<string, Promise<void>>())
   const listeners = useRef(new Map<string, Set<(...args: PushArgs) => void>>())
   const refreshing = useRef(new Map<string, Promise<void>>())
   const buffers = useRef(new Map<string, PushEvents['agent:event'][]>())
@@ -2091,7 +2097,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         for (const sessionId of shown) {
           const chat = ref.current.chats.find((c) => c.computerId === id && c.sessionId === sessionId)
           // Opening a thread reads quietly; only a catch-up after the connection dropped says Syncing.
-          if (chat?.taskId) void reconcileThread(id, chat.taskId, sessionId).catch(report)
+          if (chat?.taskId) {
+            const key = scoped(id, sessionId)
+            const read = reconcileThread(id, chat.taskId, sessionId)
+              .catch(report)
+              .finally(() => {
+                if (catchUps.current.get(key) === read) catchUps.current.delete(key)
+              })
+            catchUps.current.set(key, read)
+          }
         }
       }
       return () => {
@@ -2099,6 +2113,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         for (const sessionId of shown) shownSessions.current.delete(scoped(id, sessionId))
       }
     },
+    caughtUp: (id, sessionId) => catchUps.current.get(scoped(id, sessionId)) ?? Promise.resolve(),
     subscribe: (id, listener) => {
       const set = listeners.current.get(id) ?? new Set()
       set.add(listener)

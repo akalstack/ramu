@@ -226,6 +226,9 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [mount only] by design; the router is stable
   }, [])
   const [revealed, setRevealed] = useState(!!arrival)
+  // The session whose opening reads (its catch-up and its change cards) have arrived.
+  const [openReady, setOpenReady] = useState<string | null>(null)
+  const reviewsRead = useRef<Promise<unknown>>(Promise.resolve())
   const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const revealCap = useRef<ReturnType<typeof setTimeout> | null>(null)
   /**
@@ -235,8 +238,9 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
    */
   const settleReveal = () => {
     if (revealed) return
-    // A started thread whose history is still on its way has nothing to show yet: wait for it, briefly.
-    const loading = !!chat?.sessionId && !chat.items?.length
+    // A started thread whose history is still on its way has nothing to show yet: wait for it, briefly. So does one
+    // whose catch-up read or change cards are still coming, which would rebuild its rows just after it showed.
+    const loading = !!chat?.sessionId && (!chat.items?.length || openReady !== chat.sessionId)
     revealCap.current ??= setTimeout(() => setRevealed(true), loading ? 2500 : 1000)
     if (loading) return
     if (revealTimer.current) clearTimeout(revealTimer.current)
@@ -614,7 +618,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
   useEffect(() => {
     if (!chat?.sessionId || chat.status === 'running' || !store.isOnline(chat.computerId)) return
     let alive = true
-    store
+    reviewsRead.current = store
       .invoke(chat.computerId, 'reviews.list', chat.sessionId)
       .then((list) => alive && setReviews(list))
       .catch(() => {})
@@ -623,6 +627,22 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [chat?.computerId, chat?.sessionId, chat?.status] by design; the values it reads beyond these are current as of that run
   }, [chat?.computerId, chat?.sessionId, chat?.status])
+  useEffect(() => {
+    const sessionId = chat?.sessionId
+    if (!sessionId) return
+    let alive = true
+    void Promise.all([store.caughtUp(chat.computerId, sessionId), reviewsRead.current]).finally(
+      () => alive && setOpenReady(sessionId),
+    )
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [chat?.computerId, chat?.sessionId] by design: the reads it waits for start with them
+  }, [chat?.computerId, chat?.sessionId])
+  useEffect(() => {
+    if (openReady) settleReveal()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the opening reads arrive; settleReveal reads the screen as it is then
+  }, [openReady])
   // Folded rows are rebuilt as new objects; keeping the unchanged ones lets each memoised row skip its render.
   const previousRows = useRef<TranscriptItem[]>([])
   const learningJobs = useAutomation().of(chat?.computerId ?? '').learning?.jobs
