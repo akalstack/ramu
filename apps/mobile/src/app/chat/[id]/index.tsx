@@ -1748,8 +1748,11 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                   ) : undefined
                 }
                 style={{ flex: 1 }}
-                contentInset={ios ? { bottom: cover } : undefined}
-                scrollIndicatorInsets={ios ? { bottom: cover } : undefined}
+                // UIKit adds the bottom safe area (the home indicator's strip) to this inset by itself, and `cover`
+                // already reaches the screen's edge, so the strip is taken back out. Counted twice, a scroll by hand
+                // went past the end the app lands on, and the chat showed empty room under its last row.
+                contentInset={ios ? { bottom: Math.max(0, cover - insets.bottom) } : undefined}
+                scrollIndicatorInsets={ios ? { bottom: Math.max(0, cover - insets.bottom) } : undefined}
                 contentContainerStyle={{
                   padding: space.l,
                   paddingBottom: ios
