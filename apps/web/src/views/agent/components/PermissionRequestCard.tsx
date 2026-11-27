@@ -1,7 +1,7 @@
 import { PRIMARY_ACTION_CLASS } from '@/components/button-classes'
 import { t as translate, useLanguage } from '../../../i18n'
 import { Button } from '@/components/desktop-button'
-import { FolderOpen, ShieldQuestion } from 'lucide-react'
+import { Check, FolderOpen, ShieldQuestion } from 'lucide-react'
 import { pickHostFolder } from '../../../workspace/addProject'
 import { useState } from 'react'
 import type { AgentEvent, PermissionScope } from '@ramu/shared/types'
@@ -33,10 +33,6 @@ export function PermissionRequestCard({
   const [pattern, setPattern] = useState(e.approvalPatterns?.[0] ?? 'exact')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // Hooks first: an approval arriving while the card is shown must not change the hook count.
-  if (outcome && (outcome.startsWith('allowed') || outcome === 'approved' || outcome === 'allow')) {
-    return null
-  }
   const act = async (allow: boolean, scope: PermissionScope = 'once') => {
     setBusy(true)
     setError(null)
@@ -81,6 +77,39 @@ export function PermissionRequestCard({
       setBusy(false)
     }
   }
+  // Allowed: one quiet line saying what ran on whose say, as on the phone, with Forget for an approval that was saved.
+  if (outcome && (outcome.startsWith('allowed') || outcome === 'approved' || outcome === 'allow'))
+    return (
+      <div
+        data-activity-request={e.requestId}
+        className="flex min-w-0 items-center gap-2 text-caption text-muted-foreground"
+        role="status"
+      >
+        <Check size={13} className="flex-none text-ok" aria-hidden />
+        <span className="min-w-0 truncate font-mono" title={e.approvalCommand ?? e.title}>
+          {translate(
+            savedScope === 'project'
+              ? 'Allowed for this project'
+              : savedScope === 'user'
+                ? 'Allowed for this user'
+                : 'Allowed',
+          )}
+          {` · ${e.approvalCommand ?? e.title}`}
+        </span>
+        {savedScope && (
+          <Button
+            variant="ghost"
+            size="xs"
+            className="h-5 flex-none px-1.5"
+            disabled={busy}
+            onClick={() => void forget()}
+          >
+            {translate('Forget')}
+          </Button>
+        )}
+        {error && <span className="text-bad">{error}</span>}
+      </div>
+    )
   return (
     <div data-activity-request={e.requestId} className={pending ? `${CARD_CLASS} pending` : CARD_CLASS}>
       <div className="card-title flex items-center gap-[7px] font-semibold">

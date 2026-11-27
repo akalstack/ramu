@@ -363,7 +363,12 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
         responseMode: e.responseMode,
         grouping: e.grouping,
       })
-    else if (e.kind === 'permission-request' && latestPermissions.get(e.requestId) === index)
+    // A request allowed on its own (a saved rule, full access) left nothing to decide; the tool row stands for it.
+    else if (
+      e.kind === 'permission-request' &&
+      latestPermissions.get(e.requestId) === index &&
+      resolved.get(e.requestId) !== 'allowed-auto'
+    )
       items.push({
         kind: 'permission',
         id: e.requestId,

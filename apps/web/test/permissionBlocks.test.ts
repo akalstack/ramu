@@ -35,7 +35,7 @@ const permissionEvent = (id: string, command = 'git status'): Extract<AgentEvent
 })
 
 describe('permission request visibility', () => {
-  it('omits approved permission requests from chat blocks', () => {
+  it('keeps requests the person allowed as quiet lines and leaves out ones allowed on their own', () => {
     const events: AgentEvent[] = [
       permissionEvent('req-1', 'git status'),
       { kind: 'request-resolved', requestId: 'req-1', outcome: 'allowed' },
@@ -48,8 +48,11 @@ describe('permission request visibility', () => {
     ]
 
     const blocks = toBlocks(events)
-    expect(blocks.some((b) => b.kind === 'event' && b.event.kind === 'permission-request')).toBe(false)
-    expect(blocks.filter((b) => b.kind === 'tools')).toHaveLength(1)
+    const kept = blocks.flatMap((b) =>
+      b.kind === 'event' && b.event.kind === 'permission-request' ? [b.event.requestId] : [],
+    )
+    // req-2 was allowed by a saved rule: nobody decided it, so its tool row stands for it.
+    expect(kept).toEqual(['req-1', 'req-3'])
   })
 
   it('preserves pending and denied permission requests in chat blocks', () => {
@@ -66,7 +69,7 @@ describe('permission request visibility', () => {
     expect(permissions.map((p) => p.requestId)).toEqual(['req-pending', 'req-denied'])
   })
 
-  it('renders nothing from PermissionRequestCard when approved, but shows prompt or outcome when pending/denied', () => {
+  it('an approved request is one quiet Allowed line, as on the phone, and a pending or denied one shows its prompt or outcome', () => {
     const event = permissionEvent('req-1', 'git status')
 
     const approvedMarkup = renderToStaticMarkup(
@@ -77,7 +80,14 @@ describe('permission request visibility', () => {
         outcome: 'allowed',
       }),
     )
-    expect(approvedMarkup).toBe('')
+    expect(approvedMarkup).toContain('Allowed · git status')
+    expect(approvedMarkup).not.toContain('Allow once')
+    // An approval saved for the project says so and can be forgotten.
+    const savedMarkup = renderToStaticMarkup(
+      createElement(PermissionRequestCard, { event, sessionId: 's-1', pending: false, outcome: 'allowed-project' }),
+    )
+    expect(savedMarkup).toContain('Allowed for this project · git status')
+    expect(savedMarkup).toContain('Forget')
 
     const pendingMarkup = renderToStaticMarkup(
       createElement(PermissionRequestCard, {

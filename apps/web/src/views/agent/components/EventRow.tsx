@@ -288,7 +288,6 @@ export function EventRow({
       )
     case 'permission-request': {
       const outcome = outcomes.get(e.requestId)
-      if (outcome && (outcome.startsWith('allowed') || outcome === 'approved' || outcome === 'allow')) return null
       return (
         <PermissionRequestCard
           event={e}

@@ -84,11 +84,9 @@ export function toBlocks(events: AgentEvent[]): Block[] {
       event.kind === 'question-state'
     )
       continue
-    // Approved permission requests are dismissed; the executed tool stands for them.
-    if (event.kind === 'permission-request') {
-      const outcome = outcomes.get(event.requestId)
-      if (outcome && (outcome.startsWith('allowed') || outcome === 'approved' || outcome === 'allow')) continue
-    }
+    // A request allowed on its own (a saved rule, full access) left nothing to decide; the executed tool stands for it.
+    // One the person allowed stays as a quiet line, as on the phone.
+    if (event.kind === 'permission-request' && outcomes.get(event.requestId) === 'allowed-auto') continue
     const last = blocks.at(-1)
     if (event.kind === 'tool-use') {
       if (last?.kind === 'tools') last.tools.push(event)
