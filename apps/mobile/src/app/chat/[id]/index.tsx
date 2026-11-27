@@ -756,9 +756,12 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
       if (needsChatDate(at, previous)) map.set(row.id, { date: formatChatDate(at!, Date.now(), store.language) })
       if (at) previous = at
     }
-    // From the end, one pass: a reply is its turn's last when the next user or reply row after it is a user's.
+    // From the end, one pass: a reply is its turn's last when the next user or reply row after it is a user's. As in
+    // T3 Code, a turn still running has none: its time and Copy appear once it ends, not under each reply as the
+    // next step arrives, which grew and shrank the rows while the agent worked.
     let nextIsUser = true
-    for (let index = pageRows.length - 1; index >= 0; index--) {
+    const settled = chat?.status === 'running' ? pageRows.findLastIndex((row) => row.kind === 'user') : pageRows.length
+    for (let index = Math.min(settled, pageRows.length) - 1; index >= 0; index--) {
       const row = pageRows[index]!
       if (row.kind === 'user') nextIsUser = true
       else if (row.kind === 'text') {
@@ -767,7 +770,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
       }
     }
     return map
-  }, [pageRows, store.language])
+  }, [pageRows, store.language, chat?.status])
   /**
    * What each row reads from the screen rather than from its own data. The list redraws a row only when its data or
    * this changes, so without it a tool group stayed live (shimmering) after newer rows arrived below it, and a reply kept
