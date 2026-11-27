@@ -316,6 +316,12 @@ kbd {
     transform: translateY(var(--chat-enter-rise, 4px));
   }
 }
+/* A label at work: opacity only, so the compositor draws it without repainting the text. */
+@keyframes working-breathe {
+  50% {
+    opacity: 0.45;
+  }
+}
 @keyframes shimmer {
   from {
     background-position: 100% 0;
