@@ -36,7 +36,7 @@ export interface SessionRecorderHost
   extends
     Pick<MessageDispatcher, 'dispatchQueued' | 'dispatchSteering' | 'wakeWorkspaceQueue' | 'workspaceQueue'>,
     Pick<GoalManager, 'getGoal' | 'saveGoal' | 'scheduleGoal'>,
-    Pick<SessionRegistry, 'draining' | 'finalizing' | 'live' | 'pendingBackground' | 'runners'>,
+    Pick<SessionRegistry, 'draining' | 'finalizing' | 'live' | 'pendingEditors' | 'runners'>,
     Pick<UserRequests, 'notifyWaiters' | 'applySavedPermission'>,
     Pick<SessionStore, 'emit' | 'events' | 'get' | 'hasRunningTasks' | 'latestEvent' | 'helperSummary' | 'list'>,
     Pick<SubagentRunner, 'children' | 'mirrorChild' | 'settleChild'>,
@@ -432,8 +432,10 @@ export class SessionRecorder {
     this.db.prepare('UPDATE agent_sessions SET state = ? WHERE id = ?').run(state, id)
     // Keep the checkout owned until the final snapshot is durable. Another chat
     // must not start writing between the provider result and review capture.
-    // Background agents may still be changing files after the turn ends; the capture waits for the last one.
-    if (['idle', 'failed', 'stopped'].includes(state) && !(state === 'idle' && this.host.pendingBackground(id)))
+    // Sub-agents may still be changing files after the turn ends; the capture waits for the last one. A background
+    // command does not hold it, as T3 Code captures a turn when it ends: a dev server would keep its changes from
+    // ever showing.
+    if (['idle', 'failed', 'stopped'].includes(state) && !(state === 'idle' && this.host.pendingEditors(id)))
       this.finalize(id)
     this.syncTaskStatus(id)
     if (!this.host.children.has(id) && ['failed', 'stopped'].includes(state)) {

@@ -7,7 +7,9 @@ import type { SessionStore } from './sessionStore'
 
 /** What SessionRegistry needs from the rest of the service. */
 export interface SessionRegistryHost
-  extends Pick<MessageDispatcher, 'wakeWorkspaceQueue'>, Pick<SessionStore, 'get' | 'hasRunningTasks' | 'rootOf'> {}
+  extends
+    Pick<MessageDispatcher, 'wakeWorkspaceQueue'>,
+    Pick<SessionStore, 'get' | 'hasRunningEditors' | 'hasRunningTasks' | 'rootOf'> {}
 
 /** Which sessions have a live process, are draining, switching provider or capturing changes, and who may write in a checkout. */
 export class SessionRegistry {
@@ -79,6 +81,11 @@ export class SessionRegistry {
   }
 
   /** The process is still alive and has sub-agents or background tasks running after its turn ended. */
+  /** Whether a sub-agent of this live chat may still edit files after its turn, so its changes wait to be captured. */
+  pendingEditors(id: string): boolean {
+    return (this.live.has(id) || this.runners.has(id)) && this.host.hasRunningEditors(id)
+  }
+
   pendingBackground(id: string): boolean {
     return (this.live.has(id) || this.runners.has(id)) && this.host.hasRunningTasks(id)
   }

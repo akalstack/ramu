@@ -361,6 +361,18 @@ export class SessionStore {
    * Whether work that lives inside the provider's own process is still running: its native sub-agents and background
    * commands. Helpers Ramu started run in their own sessions and outlive a restart of this one.
    */
+  /**
+   * Whether a task that may still edit files is running: a sub-agent. A background command (a dev server, a build) is
+   * left out; it rarely touches tracked files and may run for hours, so a turn's changes do not wait for it.
+   */
+  hasRunningEditors(id: string): boolean {
+    return !!this.db
+      .prepare(
+        "SELECT 1 FROM agent_events WHERE session_id = ? AND json_extract(event, '$.kind') = 'agent' AND json_extract(event, '$.status') = 'running' AND COALESCE(json_extract(event, '$.taskType'), '') != 'local_bash' LIMIT 1",
+      )
+      .get(id)
+  }
+
   hasNativeWork(id: string): boolean {
     return !!this.db
       .prepare(

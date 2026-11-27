@@ -209,3 +209,41 @@ it('marks where a background command finished or failed, once, and not one that 
   expect(events.indexOf(ends[0]!)).toBeGreaterThan(said)
   expect(events.findIndex((event) => event.kind === 'agent')).toBeLessThan(said)
 })
+
+it('captures a turn’s changes when it ends, past a background command still running, but waits for a sub-agent', async () => {
+  const session = await thread('t')
+  const completed: number[] = []
+  svc.reviewHooks = {
+    begin: async () => 'r',
+    bind: () => {},
+    abandon: () => {},
+    followup: async () => {},
+    complete: async () => {
+      completed.push(Date.now())
+    },
+  }
+  const parts = svc as unknown as { parts: { recorder: { setState(id: string, state: string): void } } }
+  const registry = (
+    svc as unknown as { parts: { registry: { live: Map<string, unknown>; finalizing: Map<string, unknown> } } }
+  ).parts.registry
+  const added = !registry.live.has(session.id)
+  if (added) registry.live.set(session.id, {})
+  // A dev server left running in the background, as T3 Code lets a turn end with one.
+  command(session.id, 'dev', { name: 'pnpm dev' })
+  parts.parts.recorder.setState(session.id, 'idle')
+  await until(() => completed.length === 1)
+  // A sub-agent may still be editing files, so its turn's changes wait for it.
+  update(session.id, 'helper', { name: 'Map auth', taskType: 'local_agent', status: 'running' })
+  parts.parts.recorder.setState(session.id, 'running')
+  parts.parts.recorder.setState(session.id, 'idle')
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(completed).toHaveLength(1)
+  update(session.id, 'helper', { status: 'completed' })
+  await until(() => completed.length === 2)
+  // The dev server is still running all along.
+  expect(svc.task(session.id, 'dev')?.status).toBe('running')
+  await until(() => registry.finalizing.size === 0)
+  if (added) registry.live.delete(session.id)
+  // Shutting down would capture once more, after the database has closed.
+  svc.reviewHooks = undefined
+})

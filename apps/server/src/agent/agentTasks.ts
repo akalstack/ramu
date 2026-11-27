@@ -23,7 +23,7 @@ export interface AgentTasksHost
     Pick<ClaudeStreamPump, 'agentCalls'>,
     Pick<SessionRecorder, 'finalize' | 'record' | 'syncTaskStatus'>,
     Pick<SessionRegistry, 'live' | 'runners'>,
-    Pick<SessionStore, 'emit' | 'events' | 'get' | 'hasRunningTasks' | 'task'>,
+    Pick<SessionStore, 'emit' | 'events' | 'get' | 'hasRunningEditors' | 'hasRunningTasks' | 'task'>,
     Pick<ProviderWaits, 'providerWait'>,
     Pick<SubagentRunner, 'children' | 'continueNative'> {}
 
@@ -54,15 +54,10 @@ export class AgentTasks {
     this.host.record(id, { ...next, kind: 'agent', ...(current?.at ? { at: current.at } : {}) })
     // The sidebar shows a chat as working while its agents run, and settles when they finish.
     if (this.host.syncTaskStatus(id)) this.host.emit(id, { kind: 'state', state: this.host.get(id).state })
-    // The last background agent finished after the turn: capture the changes now, and let other chats in.
-    if (
-      current?.status === 'running' &&
-      next.status !== 'running' &&
-      this.host.get(id).state === 'idle' &&
-      !this.host.hasRunningTasks(id)
-    ) {
-      this.host.finalize(id)
-      this.host.wakeWorkspaceQueue()
+    // The last sub-agent finished after the turn: capture the changes now. Other chats wait for every task to end.
+    if (current?.status === 'running' && next.status !== 'running' && this.host.get(id).state === 'idle') {
+      if (!this.host.hasRunningEditors(id)) this.host.finalize(id)
+      if (!this.host.hasRunningTasks(id)) this.host.wakeWorkspaceQueue()
     }
     if (
       current?.status === 'running' &&
