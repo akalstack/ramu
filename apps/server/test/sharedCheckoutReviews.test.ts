@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { openDb, type Db } from '../src/db'
 import { Workspace } from '../src/workspace/workspace'
 import { ReviewService } from '../src/review/reviews'
@@ -46,6 +46,23 @@ afterEach(() => {
   db.close()
   rmSync(dir, { recursive: true, force: true })
 })
+
+/**
+ * Writes files outside any tool and waits until the ledger has seen each. A watcher that started late on a busy machine
+ * misses a first write, so each poll writes the same content again until it is seen.
+ */
+const write = (files: Record<string, string>) =>
+  vi.waitFor(
+    () => {
+      const changes = (reviews as unknown as { ledger: { changes: Map<string, number[]> } }).ledger.changes
+      for (const [file, content] of Object.entries(files)) {
+        if ([...changes.keys()].some((path) => path.endsWith(`/${file}`))) continue
+        writeFileSync(join(cwd, file), content)
+        throw new Error(`${file} not seen yet`)
+      }
+    },
+    { timeout: 10_000, interval: 100 },
+  )
 
 const open = async (session: 'a' | 'b') => {
   const id = await reviews.begin(tasks[session]!, { cwd, additionalDirs: [], covers: [cwd] })
@@ -113,9 +130,7 @@ it('lets the person add a file set apart as someone else’s to this turn, which
   await open('b')
   // Written while both turns were open, by no tool either thread reported: nobody can say whose it is.
   reviews.observe('b', edit('1', 'b.txt'))
-  writeFileSync(join(cwd, 'b.txt'), 'from b\n')
-  writeFileSync(join(cwd, 'mystery.txt'), 'who wrote this?\n')
-  await new Promise((resolve) => setTimeout(resolve, 1_500))
+  await write({ 'b.txt': 'from b\n', 'mystery.txt': 'who wrote this?\n' })
   await reviews.complete('a')
   const before = reviews.get(first)
   const outside = before.elsewhere?.find((group) => !group.taskId)
@@ -149,12 +164,9 @@ it('names the changed files another thread wrote last, so a commit from this thr
   await open('a')
   await open('b')
   reviews.observe('a', edit('1', 'a.txt'))
-  writeFileSync(join(cwd, 'a.txt'), 'from a\n')
+  await write({ 'a.txt': 'from a\n' })
   reviews.observe('b', edit('2', 'b.txt'))
-  writeFileSync(join(cwd, 'b.txt'), 'from b\n')
-  writeFileSync(join(cwd, 'by-hand.txt'), 'nobody’s turn\n')
-  // File events arrive a moment after the write.
-  await new Promise((resolve) => setTimeout(resolve, 1_500))
+  await write({ 'b.txt': 'from b\n', 'by-hand.txt': 'nobody’s turn\n' })
   await reviews.complete('a')
   await reviews.complete('b')
   expect(await reviews.otherThreadPaths(tasks.a!, cwd)).toEqual(['b.txt'])
