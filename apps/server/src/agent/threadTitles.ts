@@ -42,7 +42,7 @@ export class ThreadTitles {
     private readonly workspace: Workspace,
     private readonly agents: Pick<AgentService, 'get' | 'list' | 'events' | 'draftTitleResult'>,
     private readonly changed: () => void,
-    private readonly deadlineMs = 15_000,
+    private readonly deadlineMs = 45_000,
     /**
      * Providers known to supply titles are given time before the fallback runs. By default a provider counts once one of
      * its sessions has delivered a title in this process, so the first thread of a run uses the fallback and later ones

@@ -1,4 +1,5 @@
 import { knownProviderAccount, providerAccountId } from '../providers/providerBinaries'
+import { nearestEffort } from '@ramu/shared/providers/routing'
 import { supportsProviderAccounts } from '@ramu/shared/providers/providers'
 import type { AgentRunner, AgentRunnerFactory } from './agentRunner'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -167,9 +168,15 @@ export class BackgroundAnalysis {
     const { users, replies } = this.host.titleContext(taskId)
     if (!users.length) return null
     const prompt = titlePrompt(users, replies, options.previousTitle)
+    // A title needs no reasoning: drafted on the thread's own model at its lightest effort, it answers in seconds, where
+    // the thread's effort (Opus at medium, say) ran past the title's time limit and every title failed.
+    const model = (await this.host.catalog())
+      .find((catalog) => catalog.provider === settings.provider)
+      ?.models.find((entry) => entry.id === settings.model)
+    const light = model ? { ...settings, effort: nearestEffort('low', model) } : settings
     return parseTitleDraft(
       (
-        await this.host.analyze(prompt, settings, 2000, {
+        await this.host.analyze(prompt, light, 2000, {
           timeoutMs: options.timeoutMs ?? 15_000,
           signal: options.signal,
           defer: false,
