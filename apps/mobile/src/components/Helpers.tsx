@@ -322,15 +322,7 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
     </Sheet>
   )
 }
-export function Helpers({
-  item,
-  chat,
-  onToggle,
-}: {
-  item: Extract<TranscriptItem, { kind: 'agents' }>
-  chat: Chat
-  onToggle?: () => void
-}) {
+export function Helpers({ item, chat }: { item: Extract<TranscriptItem, { kind: 'agents' }>; chat: Chat }) {
   const { c } = useTheme()
   const store = useStore()
   const say = useSay()
@@ -370,7 +362,6 @@ export function Helpers({
         accessibilityState={{ expanded: open }}
         onPress={() => {
           tap()
-          onToggle?.()
           setOpen((value) => !value)
         }}
         style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, padding: space.m, minHeight: 44 }}

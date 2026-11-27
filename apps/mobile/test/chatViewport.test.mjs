@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { appForeground, finishedAnswerRow, openingLanded, transcriptScrollState } from '../src/runtime/chatViewport.ts'
+import { appForeground, openingLanded, transcriptScrollState } from '../src/runtime/chatViewport.ts'
 import { transcript } from '../src/runtime/transcript.ts'
 
 test('jumping to latest stays hidden through intermediate animated scroll offsets', () => {
@@ -51,28 +51,6 @@ test('helper activity cannot publish a partial main-agent answer', () => {
     true,
   )
   assert.ok(!rows.some((row) => row.kind === 'text' && row.text === 'Partial'))
-})
-
-test('a finished answer taller than the room is read from its first line; one that fits stays at the end', () => {
-  const rows = [{ kind: 'user' }, { kind: 'summary' }, { kind: 'text' }, { kind: 'note' }]
-  assert.equal(
-    finishedAnswerRow(rows, () => 900, 600),
-    2,
-  )
-  assert.equal(
-    finishedAnswerRow(rows, () => 400, 600),
-    null,
-  )
-  // A turn that ended without answering the newest message has nothing to read from the top.
-  assert.equal(
-    finishedAnswerRow([{ kind: 'text' }, { kind: 'user' }, { kind: 'summary' }], () => 900, 600),
-    null,
-  )
-  assert.equal(
-    finishedAnswerRow(rows, () => 900, 0),
-    null,
-    'not measured yet',
-  )
 })
 
 test('an opening thread is shown only once rows measured in have left it on its end', () => {

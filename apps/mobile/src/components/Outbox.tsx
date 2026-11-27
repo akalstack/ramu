@@ -7,7 +7,7 @@ import { Clock, CornerDownRight, ListPlus } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
 import { useStore, type OutboxItem } from '../runtime/store'
 import { T, tap } from './ui'
-import { LongMessage } from './Transcript'
+import { LongMessage, MessageFooter } from './Transcript'
 
 /** Asks how to cancel an outbox item: edit puts the text back in the composer, delete drops it. */
 export function confirmCancel(
@@ -168,6 +168,11 @@ export function PendingBubble({
           </View>
         )}
       </Pressable>
+      {/* The row the sent message has (time, Copy, Edit), held from the start, so the bubble does not change height as
+          the host's copy takes its place. */}
+      {delivering ? (
+        <MessageFooter end status={say('Sending…')} text={item.text} copyLabel={say('Copy message')} />
+      ) : null}
       {!viewOnly && item.state === 'review' ? (
         <Pressable
           accessibilityRole="button"

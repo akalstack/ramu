@@ -18,6 +18,9 @@ import { Ellipsis, Hand, Hourglass, ListOrdered, Loader, Sparkles, Target, Users
 /** Pills the activity row shows before gathering the rest under "N more": enough for the usual goal, queue and agents. */
 const MAX_PILLS = 4
 
+/** The desktop's chip order: what needs the person, the goal, the agents, then (after the tools) the queue. */
+const PILL_ORDER: ActivityKind[] = ['connection', 'input', 'provider', 'goal', 'helpers', 'advisor', 'working', 'queue']
+
 const KIND_ICON: Record<ActivityKind | 'more', Icon> = {
   connection: WifiOff,
   input: Hand,
@@ -131,16 +134,28 @@ export function ThreadActivity({
   const primaryKind: ActivityKind | 'more' = primary ?? 'more'
   // Each thing keeps its own pill, most urgent first, as the desktop's chips do: a goal, the queue and the agents stay in
   // view. Only past MAX_PILLS does the rest gather under one "N more" pill, which opens all of them.
+  // In the desktop's order: what needs the person first, then the goal and the agents, then the thread's tools (browser,
+  // computer, servers and terminals, passed in), and the queue last.
   const ordered = [
     ...new Set<ActivityKind>([
       ...(primary && primary !== 'working' ? [primary] : []),
       ...activity.model.secondary.filter((kind) => kind !== 'working'),
       ...(activity.groups.length ? ['helpers' as const] : []),
     ]),
-  ]
+  ].sort((a, b) => PILL_ORDER.indexOf(a) - PILL_ORDER.indexOf(b))
   const folded = ordered.length > MAX_PILLS ? ordered.length - (MAX_PILLS - 1) : 0
   // The working line before these pills says what the agent is doing, compaction included.
   const kinds: (ActivityKind | 'more')[] = folded ? [...ordered.slice(0, MAX_PILLS - 1), 'more'] : ordered
+  const pill = (kind: ActivityKind | 'more') => (
+    <ActivityPill
+      key={kind}
+      icon={KIND_ICON[kind]}
+      label={kind === 'more' ? say('{0} more', { 0: folded }) : label(kind)}
+      tone={kind === 'connection' ? 'off' : kind === 'input' || kind === 'provider' ? 'attention' : 'quiet'}
+      emphasis={kind === primaryKind}
+      onPress={() => setOpened(kind)}
+    />
+  )
   return (
     <>
       <ChromeScroll>
@@ -155,7 +170,9 @@ export function ThreadActivity({
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
             {inlineStatus ? null : <WorkingLine chat={chat} onPress={() => setOpened('working')} />}
+            {kinds.filter((kind) => kind !== 'queue' && kind !== 'more').map(pill)}
             {leading}
+            {children}
             {actions.map(({ label, icon, onPress }) => (
               <ActivityPill
                 key={label}
@@ -166,17 +183,7 @@ export function ThreadActivity({
                 onPress={onPress}
               />
             ))}
-            {children}
-            {kinds.map((kind) => (
-              <ActivityPill
-                key={kind}
-                icon={KIND_ICON[kind]}
-                label={kind === 'more' ? say('{0} more', { 0: folded }) : label(kind)}
-                tone={kind === 'connection' ? 'off' : kind === 'input' || kind === 'provider' ? 'attention' : 'quiet'}
-                emphasis={kind === primaryKind}
-                onPress={() => setOpened(kind)}
-              />
-            ))}
+            {kinds.filter((kind) => kind === 'queue' || kind === 'more').map(pill)}
           </View>
         </ScrollView>
       </ChromeScroll>

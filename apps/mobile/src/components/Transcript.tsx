@@ -72,6 +72,7 @@ import {
   AppWindow,
   FolderOpen,
   MessageCircleQuestion,
+  Pencil,
   Minimize2,
   RotateCcw,
   OctagonX,
@@ -118,9 +119,7 @@ const toolIcons: Record<ToolKind, Icon> = {
   other: Wrench,
 }
 
-export { RowToggle } from './rowToggle'
 import { messagePreview } from '../runtime/messagePreview'
-import { RowToggle } from './rowToggle'
 import { RamuGlyph } from './AnimatedMark'
 import { PullRequestWritesCard } from './PullRequestWritesCard'
 import { TestDeviceWaitCard } from './TestDeviceWaitCard'
@@ -598,7 +597,24 @@ export function TranscriptItemView({ item, chat, meta }: { item: TranscriptItem;
 }
 
 /** Time of an answer and a copy button, like the desktop's row under each reply. */
-const AnswerFooter = memo(function AnswerFooter({ at, text }: { at?: number; text: string }) {
+/** The row under a message: its time and Copy, and on the person's own message Edit; one height in every state. */
+export const MessageFooter = memo(function MessageFooter({
+  at,
+  text,
+  copyLabel,
+  end = false,
+  status,
+  onEdit,
+}: {
+  at?: number
+  text: string
+  copyLabel: string
+  /** Lined up at the right, under the person's own bubble. */
+  end?: boolean
+  /** Said in place of the time and buttons while the message is still on its way ("Sending…"). */
+  status?: string
+  onEdit?: () => void
+}) {
   const say = useSay()
   const { c } = useTheme()
   const store = useStore()
@@ -616,27 +632,82 @@ const AnswerFooter = memo(function AnswerFooter({ at, text }: { at?: number; tex
       })
     : ''
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs, marginTop: space.xs }}>
-      {time ? (
-        <T size={font.caption} tone="muted" style={{ fontVariant: ['tabular-nums'] }}>
-          {time}
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: end ? 'flex-end' : 'flex-start',
+        gap: space.xs,
+        marginTop: space.xs,
+        height: 28,
+      }}
+    >
+      {status ? (
+        <T size={font.caption} tone="muted" numberOfLines={1}>
+          {status}
         </T>
-      ) : null}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={copied ? say('Copied') : say('Copy reply')}
-        hitSlop={10}
-        onPress={() => {
-          tap()
-          void Clipboard.setStringAsync(text).then(() => setCopied(true))
-        }}
-        style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}
-      >
-        {copied ? <Check size={14} color={c.ok} /> : <Copy size={14} color={c.muted} />}
-      </Pressable>
+      ) : (
+        <>
+          {time ? (
+            <T size={font.caption} tone="muted" style={{ fontVariant: ['tabular-nums'] }}>
+              {time}
+            </T>
+          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={copied ? say('Copied') : copyLabel}
+            hitSlop={10}
+            onPress={() => {
+              tap()
+              void Clipboard.setStringAsync(text).then(() => setCopied(true))
+            }}
+            style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}
+          >
+            {copied ? <Check size={14} color={c.ok} /> : <Copy size={14} color={c.muted} />}
+          </Pressable>
+          {onEdit ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={say('Edit from here')}
+              hitSlop={10}
+              onPress={() => {
+                tap()
+                onEdit()
+              }}
+              style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Pencil size={14} color={c.muted} />
+            </Pressable>
+          ) : null}
+        </>
+      )}
     </View>
   )
 })
+
+/** Under a turn's last answer: its time and Copy. */
+function ReplyFooter({ at, text }: { at?: number; text: string }) {
+  const say = useSay()
+  return <MessageFooter at={at} text={text} copyLabel={say('Copy reply')} />
+}
+
+/** The person's own message: its time, Copy and, where the thread can be changed, Edit from here, as on the desktop. */
+function UserFooter({ at, text, seq, files }: { at?: number; text: string; seq?: number; files?: Attachment[] }) {
+  const say = useSay()
+  const menu = useContext(MessageMenu)
+  const latest = useRef(menu)
+  latest.current = menu
+  const editable = !!menu && !menu.readOnly && seq !== undefined
+  return (
+    <MessageFooter
+      end
+      at={at}
+      text={text}
+      copyLabel={say('Copy message')}
+      onEdit={editable ? () => !latest.current?.readOnly && latest.current?.edit(seq!, text, files ?? []) : undefined}
+    />
+  )
+}
 
 const RESUME_PROMPT = '\n\n<ramu-context>\nContinue where you left off.\n</ramu-context>'
 
@@ -728,6 +799,7 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
         <MessageActions text={item.text} from="user" seq={item.seq} files={item.attachments}>
           <UserBubble text={item.text} attachments={item.attachments} chat={chat} />
           {item.raw ? <SentContextChips raw={item.raw} computer={chat.computerId} /> : null}
+          <UserFooter at={item.at} text={item.text} seq={item.seq} files={item.attachments} />
         </MessageActions>
       )
     case 'error':
@@ -738,7 +810,7 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
       return (
         <MessageActions text={item.text} from="assistant">
           <Markdown text={item.text} streaming={meta?.streaming} fresh={meta?.fresh} />
-          {meta?.footer && !meta.streaming ? <AnswerFooter at={item.at} text={item.text} /> : null}
+          {meta?.footer && !meta.streaming ? <ReplyFooter at={item.at} text={item.text} /> : null}
         </MessageActions>
       )
     case 'thinking':
@@ -1189,7 +1261,6 @@ function TurnSummary({
     const timer = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(timer)
   }, [since])
-  const toggled = useContext(RowToggle)
   return (
     <View style={{ gap: space.m }}>
       <Pressable
@@ -1198,7 +1269,6 @@ function TurnSummary({
         disabled={empty}
         onPress={() => {
           tap()
-          toggled()
           setOpen((o) => !o)
         }}
         style={{
@@ -1228,7 +1298,6 @@ function TurnSummary({
 function UserBubble({ text, attachments, chat }: { text: string; attachments?: Attachment[]; chat: Chat }) {
   const { c } = useTheme()
   const say = useSay()
-  const toggled = useContext(RowToggle)
   const [expanded, setExpanded] = useState(false)
   const actions = useContext(ReferenceContext)
   const segments = composerDraft(text + ' ', useContext(ChatMentions)).segments
@@ -1304,7 +1373,6 @@ function UserBubble({ text, attachments, chat }: { text: string; attachments?: A
               accent={c.accent}
               onToggle={() => {
                 tap()
-                toggled()
                 setExpanded((open) => !open)
               }}
             />
@@ -1452,7 +1520,6 @@ function ToolGroup({ item, live }: { item: Extract<TranscriptItem, { kind: 'tool
   const { language } = useStore()
   const say = useSay()
   const [open, setOpen] = useState(false)
-  const toggled = useContext(RowToggle)
   const { current, running, failed } = toolActivity(item.tools, (tool) =>
     tool.status === 'in_progress' ? 'running' : tool.status === 'failed' ? 'failed' : 'done',
   )
@@ -1505,7 +1572,6 @@ function ToolGroup({ item, live }: { item: Extract<TranscriptItem, { kind: 'tool
         accessibilityState={{ expanded: open }}
         onPress={() => {
           tap()
-          toggled()
           setOpen((value) => !value)
         }}
         style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}
@@ -1558,17 +1624,15 @@ function ToolGroup({ item, live }: { item: Extract<TranscriptItem, { kind: 'tool
       {/* Opens and closes at once, as T3 Code's work log does, and rows that arrive while it is open simply appear: a
           height animation here would replay with every new call and move the reply below while the person reads. */}
       {open ? (
-        <RowToggle.Provider value={toggled}>
-          <View style={{ gap: space.xs }}>
-            {item.entries.map((entry, index) =>
-              entry.kind === 'thinking' ? (
-                <ThinkingRow key={entry.id} text={entry.text} live={live && index === item.entries.length - 1} />
-              ) : (
-                <ToolRow key={entry.id} item={entry} />
-              ),
-            )}
-          </View>
-        </RowToggle.Provider>
+        <View style={{ gap: space.xs }}>
+          {item.entries.map((entry, index) =>
+            entry.kind === 'thinking' ? (
+              <ThinkingRow key={entry.id} text={entry.text} live={live && index === item.entries.length - 1} />
+            ) : (
+              <ToolRow key={entry.id} item={entry} />
+            ),
+          )}
+        </View>
       ) : null}
     </View>
   )
@@ -1578,7 +1642,6 @@ function PlanCard({ item }: { item: Extract<TranscriptItem, { kind: 'plan' }> })
   const { c } = useTheme()
   const { language } = useStore()
   const [open, setOpen] = useState(true)
-  const toggled = useContext(RowToggle)
   const completed = item.entries.filter((entry) => entry.status === 'completed').length
   return (
     <View style={{ gap: space.s }}>
@@ -1587,7 +1650,6 @@ function PlanCard({ item }: { item: Extract<TranscriptItem, { kind: 'plan' }> })
         accessibilityState={{ expanded: open }}
         onPress={() => {
           tap()
-          toggled()
           setOpen((value) => !value)
         }}
         style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}
@@ -1671,7 +1733,6 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
   const { language: storeLanguage } = useStore()
   const [open, setOpen] = useState(false)
   const [full, setFull] = useState(false)
-  const toggled = useContext(RowToggle)
   const references = useContext(ReferenceContext)
   // Reads and edits name a file; tapping it opens that file like the desktop's tool rows do.
   const filePath =
@@ -1701,7 +1762,6 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
         disabled={!openable}
         onPress={() => {
           tap()
-          toggled()
           setOpen((o) => !o)
         }}
         // Compact like the rows around it; the full-width row and the slop keep it easy to hit.
@@ -1854,8 +1914,7 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
 }
 
 function AgentsGroup({ item, chat }: { item: Extract<TranscriptItem, { kind: 'agents' }>; chat: Chat }) {
-  const onToggle = useContext(RowToggle)
-  return <Helpers item={item} chat={chat} onToggle={onToggle} />
+  return <Helpers item={item} chat={chat} />
 }
 
 function QuestionHistory({ item }: { item: QuestionItem }) {
@@ -1891,7 +1950,6 @@ function QuestionHistoryEntry({ question, answer }: { question: AgentQuestion; a
   const { c } = useTheme()
   const { language } = useStore()
   const [open, setOpen] = useState(false)
-  const toggled = useContext(RowToggle)
   const selected = new Set(answer ? (question.multiSelect ? answer.split(', ') : [answer]) : [])
   return (
     <View style={{ gap: space.s }}>
@@ -1901,7 +1959,6 @@ function QuestionHistoryEntry({ question, answer }: { question: AgentQuestion; a
         accessibilityState={question.options.length ? { expanded: open } : undefined}
         onPress={() => {
           tap()
-          toggled()
           setOpen((value) => !value)
         }}
         style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.s }}
@@ -2460,7 +2517,6 @@ function ChangesCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: '
   const router = useRouter()
   const { language } = useStore()
   const [expanded, setExpanded] = useState(false)
-  const toggled = useContext(RowToggle)
   const say = (text: string, values?: Record<string, string | number>) => translate(language, text, values)
   const open = (fileId?: string) => {
     tap()
@@ -2568,7 +2624,6 @@ function ChangesCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: '
           accessibilityRole="button"
           onPress={() => {
             tap()
-            toggled()
             setExpanded((value) => !value)
           }}
           style={{
@@ -2596,7 +2651,6 @@ function GoalNote({ item }: { item: Extract<TranscriptItem, { kind: 'note' }> })
   const { c } = useTheme()
   const say = useSay()
   const [open, setOpen] = useState(false)
-  const toggled = useContext(RowToggle)
   const type = item.goalNote!
   const warn = type === 'blocked' || type === 'stalled' || type === 'verify-failed' || type === 'turn-limit'
   const Icon = warn
@@ -2618,7 +2672,6 @@ function GoalNote({ item }: { item: Extract<TranscriptItem, { kind: 'note' }> })
         accessibilityState={{ expanded: open }}
         onPress={() => {
           tap()
-          toggled()
           setOpen((value) => !value)
         }}
         style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}
@@ -2651,7 +2704,6 @@ function GoalDone({ item }: { item: Extract<TranscriptItem, { kind: 'goal' }> })
   const { c } = useTheme()
   const say = useSay()
   const [open, setOpen] = useState(false)
-  const toggled = useContext(RowToggle)
   return (
     <View style={{ gap: space.s }}>
       <Pressable
@@ -2659,7 +2711,6 @@ function GoalDone({ item }: { item: Extract<TranscriptItem, { kind: 'goal' }> })
         accessibilityState={{ expanded: open }}
         onPress={() => {
           tap()
-          toggled()
           setOpen((value) => !value)
         }}
         style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}
@@ -2946,7 +2997,6 @@ function RamuEventRow({ from }: { from: Extract<import('@ramu/shared/types').Mes
   const { c } = useTheme()
   const say = useSay()
   const [open, setOpen] = useState(false)
-  const toggled = useContext(RowToggle)
   const title = say(from.title, from.values)
   return (
     <View>
@@ -2957,7 +3007,6 @@ function RamuEventRow({ from }: { from: Extract<import('@ramu/shared/types').Mes
         disabled={!from.detail}
         onPress={() => {
           tap()
-          toggled()
           setOpen((value) => !value)
         }}
         hitSlop={{ top: 4, bottom: 4 }}
@@ -2984,7 +3033,6 @@ function ThinkingRow({ text, live }: { text: string; live: boolean }) {
   const { c } = useTheme()
   const say = useSay()
   const [open, setOpen] = useState(false)
-  const toggled = useContext(RowToggle)
   const line = useMemo(() => thoughtLine(text, live), [text, live])
   const [timing, setTiming] = useState(() => tickThought(NEW_THOUGHT, live, Date.now()))
   useEffect(() => setTiming((current) => tickThought(current, live, Date.now())), [live])
@@ -3002,7 +3050,6 @@ function ThinkingRow({ text, live }: { text: string; live: boolean }) {
         accessibilityState={{ expanded: open }}
         onPress={() => {
           tap()
-          toggled()
           setOpen((value) => !value)
         }}
         hitSlop={{ top: 4, bottom: 4 }}

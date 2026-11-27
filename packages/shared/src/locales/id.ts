@@ -427,6 +427,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Show details': 'Tampilkan detail',
   'Still working': 'Masih bekerja',
   'Edit from here': 'Edit dari sini',
+  'Copy message': 'Salin pesan',
   'Reconnect to {0} to edit from here.': 'Sambungkan ulang ke {0} untuk mengedit dari sini.',
   'Rewound to before your message. Change it and send.': 'Dikembalikan ke sebelum pesanmu. Ubah lalu kirim.',
   'Started by another thread': 'Dimulai oleh thread lain',

@@ -5463,6 +5463,8 @@ test('each activity keeps its own pill, and only past four does the rest gather 
       .map((node) => node.props.label)
   }
   assert.deepEqual(render(['goal', 'queue']), ['Goal', '1 queued'])
+  // The desktop's order, whatever order the activity arrives in: the goal and the agents first, the queue last.
+  assert.deepEqual(render(['queue', 'advisor', 'goal']), ['Goal', 'Advisor', '1 queued'])
   const many = render(['goal', 'queue', 'advisor', 'provider', 'input'])
   assert.equal(many.length, 4)
   assert.equal(many.at(-1), '2 more')

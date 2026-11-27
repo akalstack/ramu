@@ -1,6 +1,6 @@
 import { projectIdentity, useHostIdentities } from '../../../runtime/identities'
 import { deliveryVisible, visibleText } from '../../../runtime/transcript'
-import { finishedAnswerRow, openingLanded, transcriptScrollState } from '../../../runtime/chatViewport'
+import { openingLanded, transcriptScrollState } from '../../../runtime/chatViewport'
 import { goBackOrHome, type ThreadArrival } from '../../../runtime/navigation'
 import { shareRows } from '../../../runtime/shareRows'
 import { VIEW_ONLY_WRITE_NOTICE } from '../../../runtime/viewerAccess'
@@ -98,7 +98,6 @@ import {
   ChatDateLabel,
   ChatMentions,
   MessageMenu,
-  RowToggle,
   TranscriptListRow,
   type ItemMeta,
 } from '../../../components/Transcript'
@@ -291,8 +290,8 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
       settling.current = false
       setFollowPaused(false)
       if (!keyboardMoved) return
-      // Rows that arrived meanwhile were not followed; glide to them once.
-      if (following.current && !userScrolling.current) toEnd(true)
+      // Rows that arrived meanwhile were not followed; land on them.
+      if (following.current && !userScrolling.current) toEnd(false)
     }, ms)
   }
   useEffect(
@@ -369,8 +368,8 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
     const was = overflowing
     setOverflowing(listFollows)
     if (end === null || followPaused || !following.current || userScrolling.current) return
-    // Lands on the end at once while opening; afterwards a reply or a sent message glides into view.
-    if (!listFollows || !was) toEnd(revealed && Date.now() >= landingUntil.current)
+    // Lands on the end at once, as T3 Code's list follows its end without motion.
+    if (!listFollows || !was) toEnd(false)
   }
   /**
    * Sending closes the keyboard and brings the end into view, as T3 Code does, so the message just sent (a steer
@@ -392,12 +391,6 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
   }, [composerHeight])
   // A row opened or closed by hand is what the reader is looking at: it keeps its place, and the list stops following
   // the end until they tap Scroll to latest or scroll back down themselves, so the transcript never glides away from it.
-  const holdScroll = useCallback(() => {
-    pauseFollow(600, false)
-    following.current = false
-    setAway(true)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- pauseFollow only touches refs and stable setters
-  }, [])
   const [restore, setRestore] = useState<{ text: string; n: number }>()
   const computer = store.computers.find((x) => x.id === chat?.computerId)
   const viewOnly = computer?.access === 'viewer'
@@ -752,38 +745,6 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
     toTop(match.index, true)
     setFound({ id: match.id, at: Date.now(), mark: [query] })
   }
-  // When a turn finishes while the reader follows its end, an answer taller than the screen is read from its first line:
-  // the list glides to its top and stops following, rather than leaving the reader at its last line.
-  const latestRows = useRef(pageRows)
-  latestRows.current = pageRows
-  const isRunning = chat?.status === 'running'
-  const wasRunning = useRef(isRunning)
-  useEffect(() => {
-    const finished = wasRunning.current && !isRunning
-    wasRunning.current = isRunning
-    if (!finished || !revealed || !following.current || userScrolling.current) return
-    // After the finished turn folds under Worked for and its answer is measured.
-    const timer = setTimeout(() => {
-      if (!following.current || userScrolling.current) return
-      const m = metrics.current
-      const index = finishedAnswerRow(
-        latestRows.current,
-        (at) => scroll.current?.getState().sizeAtIndex(at) ?? 0,
-        m.viewport ? m.viewport - m.cover - topInset - space.l : 0,
-      )
-      if (index === null) return
-      following.current = false
-      pauseFollow(800, false)
-      scroll.current?.scrollToIndex({
-        index,
-        animated: !reducedMotion,
-        viewPosition: 0,
-        viewOffset: topInset + space.s,
-      })
-    }, 350)
-    return () => clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the turn stops; the rest is read from refs then
-  }, [isRunning])
   // Where each message sits in time and in its turn: date labels above turns, time and copy under each turn's last answer.
   const itemMeta = useMemo(() => {
     const map = new Map<string, ItemMeta>()
@@ -1710,504 +1671,496 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
         >
           <ChatMentions.Provider value={composerMentions.mentions}>
             <CancelPendingSettings.Provider value={() => setStaged(null)}>
-              <RowToggle.Provider value={holdScroll}>
-                <PageLegendList
-                  key={chat.id}
-                  ref={scroll}
-                  contentInsetAdjustmentBehavior="automatic"
-                  automaticallyAdjustsScrollIndicatorInsets
-                  ListHeaderComponent={
-                    <View style={{ gap: space.s, paddingBottom: space.m }}>
-                      {chat.branchNamingFallback ? (
-                        <T size={font.caption} tone="muted">
-                          {t.branchNamingFallback}
-                        </T>
-                      ) : null}
-                      {hiddenTurns > 0 ? (
-                        <Pressable
-                          accessibilityRole="button"
-                          onPress={() => {
-                            tap()
-                            following.current = false
-                            setPagedBack(true)
-                            setTurnsShown((n) => n + TURN_PAGE)
-                          }}
-                          style={{
-                            alignSelf: 'center',
-                            minHeight: 44,
-                            paddingHorizontal: space.l,
-                            borderRadius: radius.full,
-                            justifyContent: 'center',
-                            backgroundColor: c.fill,
-                          }}
-                        >
-                          <T size={font.control} weight="500" tone="soft">
-                            {tr('Show earlier turns')}
-                          </T>
-                        </Pressable>
-                      ) : null}
-                    </View>
-                  }
-                  data={listRows}
-                  extraData={rowContext}
-                  viewabilityConfig={contentViewability}
-                  onViewableItemsChanged={contentViewabilityChanged}
-                  // Earlier turns arrive above what you are reading; they must not move it.
-                  maintainVisibleContentPosition={pagedBack ? { data: true, size: true } : undefined}
-                  keyExtractor={rowKey}
-                  renderItem={renderRow}
-                  // Each kind keeps its own measured size, so unmeasured rows above and below are estimated closely.
-                  // A message on its way is measured as the sent message it becomes.
-                  // A tool or thought that becomes a group keeps its key; one type for all three keeps it in its place instead of
-                  // moving it to another recycled container, which flashed the row as the group formed.
-                  getItemType={(item) =>
-                    item.kind === 'pending' || item.kind === 'steering'
-                      ? 'user'
-                      : item.kind === 'tool' || item.kind === 'tools' || item.kind === 'thinking'
-                        ? 'work'
-                        : item.kind
-                  }
-                  estimatedItemSize={260}
-                  drawDistance={400}
-                  // Lays out the newest rows first instead of the whole page from the top.
-                  initialScrollAtEnd
-                  // Pinned to the end without motion: each change lands where it ends instead of gliding there, which
-                  // would read as the transcript scrolling up and down while a reply streams, a tool row grows or a
-                  // message is sent. It stops following once the reader scrolls up, and a chat that fits on screen is
-                  // left where UIKit rests it.
-                  maintainScrollAtEnd={overflowing && !followPaused ? { animated: false } : false}
-                  ItemSeparatorComponent={RowSeparator}
-                  refreshControl={
-                    chat?.taskId ? (
-                      <RefreshControl refreshing={pulling} onRefresh={pullToRefresh} tintColor={c.muted} />
-                    ) : undefined
-                  }
-                  style={{ flex: 1 }}
-                  contentInset={ios ? { bottom: cover } : undefined}
-                  scrollIndicatorInsets={ios ? { bottom: cover } : undefined}
-                  contentContainerStyle={{
-                    padding: space.l,
-                    paddingBottom: ios
-                      ? space.l
-                      : (floatingChrome ? composerHeight + space.l : space.l) + keyboard.height,
-                  }}
-                  onLayout={(event) => {
-                    metrics.current.viewport = event.nativeEvent.layout.height
-                    catchUp()
-                  }}
-                  onScroll={(event) => {
-                    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent
-                    metrics.current.offset = contentOffset.y
-                    settleReveal()
-                    if (
-                      ios &&
-                      !userScrolling.current &&
-                      contentOffset.y < 0 &&
-                      contentSize.height + metrics.current.cover <= layoutMeasurement.height + contentOffset.y
-                    ) {
-                      measuredRest.current = contentOffset.y
-                      restTop.current = contentOffset.y
-                    }
-                    const gap = contentSize.height - contentOffset.y - layoutMeasurement.height + metrics.current.cover
-                    // Only the reader's own scrolling decides whether to follow the end. The list's first, programmatic offset
-                    // (resting at the top before it is measured) used to switch following off, so a chat opened at its top.
-                    const position = transcriptScrollState(
-                      following.current,
-                      gap,
-                      userScrolling.current,
-                      !!settling.current,
-                    )
-                    following.current = position.following
-                    setAway(position.away)
-                    setScrolled(contentOffset.y > 8 - topInset)
-                  }}
-                  scrollEventThrottle={16}
-                  onScrollBeginDrag={() => {
-                    userScrolling.current = true
-                    scrollBusy.set(true)
-                    landingUntil.current = 0
-                  }}
-                  onScrollEndDrag={(event) => {
-                    if (!event.nativeEvent.velocity?.y) {
-                      userScrolling.current = false
-                      scrollBusy.set(false)
-                    }
-                  }}
-                  onMomentumScrollEnd={() => {
-                    userScrolling.current = false
-                    scrollBusy.set(false)
-                  }}
-                  onContentSizeChange={(_, height) => {
-                    metrics.current.content = height
-                    settleReveal()
-                    catchUp()
-                    // Stuck to the end while the reader is there, as T3 Code keeps its chat: every growth is followed
-                    // here, not left to the list's own end tracking, which the message box laid over the list's bottom
-                    // threw off, so a reply streaming in at the bottom stopped being followed. Each growth lands at
-                    // once, without a glide that read as the transcript moving up and down; while landing that holds
-                    // even when following is paused. Otherwise paused while the keyboard moves and right after a row
-                    // is opened by hand.
-                    if (!following.current || userScrolling.current) return
-                    if (Date.now() < landingUntil.current || !followPaused) toEnd(false)
-                  }}
-                  keyboardDismissMode="on-drag"
-                  keyboardShouldPersistTaps="handled"
-                  ListFooterComponent={
-                    <View style={{ gap: space.m, paddingTop: space.m, zIndex: 2 }}>
-                      {/* The running turn's status at its end, as on the desktop: a shimmering label, unless the newest row
-                        (reasoning, or a tool group at work) already says what the agent is doing. */}
-                      <WorkingLine
-                        inline
-                        quiet={lastShowsWork}
-                        timed={!turnCounts}
-                        chat={chat}
-                        sending={pending.length > 0}
-                      />
-                    </View>
-                  }
-                />
-                {/* Covers the transcript while it settles at its end, then fades away; the composer stays above it. */}
-                <OpeningCover
-                  visible={!revealed}
-                  color={c.window}
-                  spinner={c.muted}
-                  top={topInset}
-                  bottom={composerHeight}
-                />
-                {/* Beside the thread list the header is part of the page, and a fade from the top would wash it out. */}
-                {ios || inPane ? null : <TopFade belowBar visible={scrolled} color={c.window} />}
-                {finding ? (
-                  <ChatFindBar
-                    rows={pageRows}
-                    onJump={jumpToMatch}
-                    onClose={() => {
-                      setFinding(false)
-                      // The highlight belongs to the find; closing it leaves plain text.
-                      setFound(null)
-                    }}
-                  />
-                ) : null}
-                <KeyboardLift keyboard={keyboard}>
-                  <BottomFade height={composerHeight * 0.75} color={c.window} />
-                  {/* iOS/web: the glass composer floats over the transcript, which scrolls beneath it. */}
-                  <ComposerDock onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
-                    {chat.status === 'archived' && !viewer ? (
-                      // An archived thread takes no messages; it is unarchived first, which is offered right here.
-                      <Glass
-                        radius={radius.xl}
+              <PageLegendList
+                key={chat.id}
+                ref={scroll}
+                contentInsetAdjustmentBehavior="automatic"
+                automaticallyAdjustsScrollIndicatorInsets
+                ListHeaderComponent={
+                  <View style={{ gap: space.s, paddingBottom: space.m }}>
+                    {chat.branchNamingFallback ? (
+                      <T size={font.caption} tone="muted">
+                        {t.branchNamingFallback}
+                      </T>
+                    ) : null}
+                    {hiddenTurns > 0 ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => {
+                          tap()
+                          following.current = false
+                          setPagedBack(true)
+                          setTurnsShown((n) => n + TURN_PAGE)
+                        }}
                         style={{
-                          marginHorizontal: space.s + 2,
-                          padding: space.m,
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: space.m,
+                          alignSelf: 'center',
+                          minHeight: 44,
+                          paddingHorizontal: space.l,
+                          borderRadius: radius.full,
+                          justifyContent: 'center',
+                          backgroundColor: c.fill,
                         }}
                       >
-                        <Archive size={18} color={c.muted} />
-                        <T tone="soft" style={{ flex: 1 }}>
-                          {tr('This thread is archived.')}
+                        <T size={font.control} weight="500" tone="soft">
+                          {tr('Show earlier turns')}
                         </T>
-                        <Button
-                          kind="secondary"
-                          title={tr('Unarchive')}
-                          onPress={() =>
-                            void store
-                              .invoke(chat.computerId, 'tasks.archive', chat.taskId, false)
-                              .then(() => store.refresh(chat.computerId))
-                              .catch((error) =>
-                                Alert.alert(tr('Unarchive'), error instanceof Error ? error.message : String(error)),
-                              )
-                          }
-                        />
-                      </Glass>
-                    ) : (
-                      <Composer
-                        activity={
-                          <>
-                            {startSwitch ? (
-                              <T
-                                size={font.caption}
-                                tone="warn"
-                                accessibilityRole="alert"
-                                style={{ paddingHorizontal: space.l, paddingVertical: space.xs }}
-                              >
-                                {startSwitch}
-                              </T>
-                            ) : null}
-                            <ThreadActivity
-                              inlineStatus
-                              // A done thread's goal is paused with it; it shows again when the thread is reopened.
-                              chat={chat.doneAt ? { ...chat, goal: null } : chat}
-                              onEditQueued={offline ? undefined : editQueued}
-                              leading={
-                                <>
-                                  <ComputerUseNotice chat={chat} onOpen={() => setTool('computer')} />
-                                  <BrowserNotice
-                                    chat={chat}
-                                    tabs={browserTabs.tabs}
-                                    onOpen={() => setTool('browser')}
-                                  />
-                                </>
-                              }
-                              actions={[
-                                ...(toolActivity.terminal
-                                  ? [{ label: tr('Terminal'), icon: SquareTerminal, onPress: openTerminal }]
-                                  : []),
-                              ]}
-                            >
-                              <ThreadServers
-                                key={`servers:${chat.computerId}:${chat.taskId}`}
-                                chat={chat}
-                                open={serversFor === chat.id}
-                                onOpen={() => setServersFor(chat.id)}
-                                onClose={() => setServersFor((current) => (current === chat.id ? null : current))}
-                                onOpenPage={(url) => {
-                                  setPageToOpen(url)
-                                  // iOS presents the browser only once the sheet has gone.
-                                  setTimeout(() => setTool('browser'), 300)
-                                }}
-                              />
-                              <BackgroundTerminals
-                                key={`${chat.computerId}:${chat.taskId}`}
-                                chat={chat}
-                                open={backgroundFor === chat.id}
-                                onOpen={() => setBackgroundFor(chat.id)}
-                                onClose={() => setBackgroundFor((current) => (current === chat.id ? null : current))}
-                              />
-                            </ThreadActivity>
-                          </>
-                        }
-                        running={running}
-                        model={staged?.chatId === chat.id ? staged.model : currentModel}
-                        onModel={changeModel}
-                        onSend={async (text, mode, attachments, context) => {
-                          if (queuedEdit.edit) return queuedEdit.submit(text)
-                          if (editing) return submitEdit(text, mode, attachments, context)
-                          if (staged?.chatId === chat.id) {
-                            const m = staged.model
-                            setStaged(null)
-                            await store.setModel(chat.id, m.provider, m.model, m.effort, m.settings)
-                          }
-                          // "/aside question" (or "/btw") asks beside the chat: the agent keeps working and never sees it.
-                          const side = /^\/(?:aside|btw)\s+(\S[\s\S]*)$/.exec(text.trim())
-                          if (side && !attachments?.length && chat.sessionId)
-                            // One side chat per thread: /btw continues it rather than starting another.
-                            return store
-                              .invoke(chat.computerId, 'aside.list', chat.sessionId)
-                              .then((asides) => {
-                                const latest = asides.find((aside) => aside.id === sideChat(asides).continueId)
-                                return store.invoke(
-                                  chat.computerId,
-                                  'aside.ask',
-                                  chat.sessionId!,
-                                  latest?.id ?? null,
-                                  latest?.quote ?? '',
-                                  latest?.quoteFrom ?? 'assistant',
-                                  side[1]!.trim(),
-                                )
-                              })
-                              .then(() => {
-                                router.push({ pathname: '/chat/[id]/aside', params: { id: chat.id } })
-                              })
-                          followSend()
-                          // The message queues behind the compaction and goes out once it finishes, as after a typed /compact.
-                          if (compactFirst) await store.send(chat.id, '/compact', 'queue')
-                          setKeepHistoryFor(null)
-                          const terminalKey = terminalDraftKey(composerDraftKey(chat))
-                          const excerpts = readTerminalDraft(store.drafts, terminalKey)
-                          const sent = await store.send(
-                            chat.id,
-                            messageWithTerminal(text, excerpts),
-                            mode,
-                            attachments,
-                            context,
-                          )
-                          if (excerpts.length) store.setDraft(terminalKey, '[]')
-                          return sent
-                        }}
-                        extraContent={
-                          readTerminalDraft(store.drafts, terminalDraftKey(composerDraftKey(chat))).length > 0
-                        }
-                        header={
-                          readTerminalDraft(store.drafts, terminalDraftKey(composerDraftKey(chat))).length ? (
-                            <TerminalExcerpts draftKey={terminalDraftKey(composerDraftKey(chat))} />
-                          ) : undefined
-                        }
-                        compaction={
-                          compactOffer !== null
-                            ? {
-                                tokens: compactOffer,
-                                compact: compactFirst,
-                                onChange: (compact) => setKeepHistoryFor(compact ? null : chat.id),
-                              }
-                            : undefined
-                        }
-                        taskId={chat.taskId || undefined}
-                        chatId={chat.id}
-                        onFindQuote={findQuote}
-                        helpers={composerMentions}
-                        computerId={chat.computerId}
-                        draftKey={queuedEdit.draftKey}
-                        nextMessages={nextMessages}
-                        onStop={() => store.stop(chat.id)}
-                        goal={chat.doneAt ? null : chat.goal}
-                        queue={chat.queue?.filter((message) => message.mode !== 'steer')}
-                        queuePaused={chat.queuePaused}
-                        onResumeQueue={
-                          chat.sessionId
-                            ? () =>
-                                void store
-                                  .invoke(chat.computerId, 'agent.resumeQueue', chat.sessionId!)
-                                  .then(() => store.refresh(chat.computerId))
-                                  .catch(() => {})
-                            : undefined
-                        }
-                        onToggleGoal={() => store.toggleGoal(chat.id)}
-                        onClearGoal={() => confirmClearGoal(tr, () => store.clearGoal(chat.id))}
-                        onVerifyGoal={chat.sessionId ? (command) => store.setGoalVerify(chat.id, command) : undefined}
-                        onRemoveQueued={(q) => store.removeQueued(chat.id, q)}
-                        onSendQueuedNow={offline ? undefined : (q) => store.sendQueuedNow(chat.id, q)}
-                        onSteerQueued={offline ? undefined : (q) => store.steerQueued(chat.id, q)}
-                        onEditQueued={offline ? undefined : editQueued}
-                        onMoveQueued={
-                          offline || !chat.sessionId
-                            ? undefined
-                            : (queuedId: string, delta: -1 | 1) => {
-                                const order = moveQueued(
-                                  (chat.queue ?? []).map((message) => message.id),
-                                  (chat.queue ?? [])
-                                    .filter((message) => message.mode !== 'steer')
-                                    .map((message) => message.id),
-                                  queuedId,
-                                  delta,
-                                )
-                                if (!order) return
-                                tap()
-                                void store
-                                  .invoke(chat.computerId, 'agent.reorderQueued', chat.sessionId!, order)
-                                  .then(() => store.refresh(chat.computerId))
-                                  .catch((error) => showError(error instanceof Error ? error.message : String(error)))
-                              }
-                        }
-                        offline={offline}
-                        restore={restore}
-                        limited={!!limit && !running}
-                        resumeLabel={
-                          limit && !stopped ? (limit.action === 'resume' ? t.resume : t.tryAgain) : undefined
-                        }
-                        onResume={
-                          limit && !running && limit.primary && !stopped
-                            ? () => {
-                                followSend()
-                                void store.retryLimitNow(chat.id)
-                              }
-                            : stopped
-                              ? () => {
-                                  followSend()
-                                  void store.send(
-                                    chat.id,
-                                    '\n\n<ramu-context>\nContinue where you left off.\n</ramu-context>',
-                                    'steer',
-                                  )
-                                }
-                              : undefined
-                        }
-                        editing={
-                          queuedEdit.edit
-                            ? {
-                                label: tr(
-                                  queuedEdit.edit.kind === 'steer'
-                                    ? 'Editing a steering message · held until you save'
-                                    : 'Editing a queued message · held until you save',
-                                ),
-                              }
-                            : editing
-                              ? { label: tr('Rewound to before your message. Change it and send.') }
-                              : undefined
-                        }
-                        onCancelEdit={() => {
-                          if (queuedEdit.edit) return queuedEdit.cancel()
-                          setEditing(null)
-                          setRestore((r) => ({ text: '', n: (r?.n ?? 0) + 1 }))
-                        }}
-                        placeholder={
-                          offline
-                            ? tr('Message · sends when {0} is back', { 0: computer?.name ?? tr('the host') })
-                            : limit && !running
-                              ? fill(
-                                  t[limitPlaceholderKey(limit)],
-                                  limit.resetAt !== undefined
-                                    ? new Date(limit.resetAt).toLocaleTimeString([], {
-                                        hour: '2-digit',
-                                        minute: '2-digit',
-                                      })
-                                    : '',
-                                )
-                              : undefined
+                      </Pressable>
+                    ) : null}
+                  </View>
+                }
+                data={listRows}
+                extraData={rowContext}
+                viewabilityConfig={contentViewability}
+                onViewableItemsChanged={contentViewabilityChanged}
+                // Earlier turns arrive above what you are reading; they must not move it.
+                maintainVisibleContentPosition={pagedBack ? { data: true, size: true } : undefined}
+                keyExtractor={rowKey}
+                renderItem={renderRow}
+                // Each kind keeps its own measured size, so unmeasured rows above and below are estimated closely.
+                // A message on its way is measured as the sent message it becomes.
+                // A tool or thought that becomes a group keeps its key; one type for all three keeps it in its place instead of
+                // moving it to another recycled container, which flashed the row as the group formed.
+                getItemType={(item) =>
+                  item.kind === 'pending' || item.kind === 'steering'
+                    ? 'user'
+                    : item.kind === 'tool' || item.kind === 'tools' || item.kind === 'thinking'
+                      ? 'work'
+                      : item.kind
+                }
+                estimatedItemSize={260}
+                drawDistance={400}
+                // Lays out the newest rows first instead of the whole page from the top.
+                initialScrollAtEnd
+                // Pinned to the end without motion: each change lands where it ends instead of gliding there, which
+                // would read as the transcript scrolling up and down while a reply streams, a tool row grows or a
+                // message is sent. It stops following once the reader scrolls up, and a chat that fits on screen is
+                // left where UIKit rests it.
+                maintainScrollAtEnd={overflowing && !followPaused ? { animated: false } : false}
+                ItemSeparatorComponent={RowSeparator}
+                refreshControl={
+                  chat?.taskId ? (
+                    <RefreshControl refreshing={pulling} onRefresh={pullToRefresh} tintColor={c.muted} />
+                  ) : undefined
+                }
+                style={{ flex: 1 }}
+                contentInset={ios ? { bottom: cover } : undefined}
+                scrollIndicatorInsets={ios ? { bottom: cover } : undefined}
+                contentContainerStyle={{
+                  padding: space.l,
+                  paddingBottom: ios
+                    ? space.l
+                    : (floatingChrome ? composerHeight + space.l : space.l) + keyboard.height,
+                }}
+                onLayout={(event) => {
+                  metrics.current.viewport = event.nativeEvent.layout.height
+                  catchUp()
+                }}
+                onScroll={(event) => {
+                  const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent
+                  metrics.current.offset = contentOffset.y
+                  settleReveal()
+                  if (
+                    ios &&
+                    !userScrolling.current &&
+                    contentOffset.y < 0 &&
+                    contentSize.height + metrics.current.cover <= layoutMeasurement.height + contentOffset.y
+                  ) {
+                    measuredRest.current = contentOffset.y
+                    restTop.current = contentOffset.y
+                  }
+                  const gap = contentSize.height - contentOffset.y - layoutMeasurement.height + metrics.current.cover
+                  // Only the reader's own scrolling decides whether to follow the end. The list's first, programmatic offset
+                  // (resting at the top before it is measured) used to switch following off, so a chat opened at its top.
+                  const position = transcriptScrollState(
+                    following.current,
+                    gap,
+                    userScrolling.current,
+                    !!settling.current,
+                  )
+                  following.current = position.following
+                  setAway(position.away)
+                  setScrolled(contentOffset.y > 8 - topInset)
+                }}
+                scrollEventThrottle={16}
+                onScrollBeginDrag={() => {
+                  userScrolling.current = true
+                  scrollBusy.set(true)
+                  landingUntil.current = 0
+                }}
+                onScrollEndDrag={(event) => {
+                  if (!event.nativeEvent.velocity?.y) {
+                    userScrolling.current = false
+                    scrollBusy.set(false)
+                  }
+                }}
+                onMomentumScrollEnd={() => {
+                  userScrolling.current = false
+                  scrollBusy.set(false)
+                }}
+                onContentSizeChange={(_, height) => {
+                  metrics.current.content = height
+                  settleReveal()
+                  catchUp()
+                  // Stuck to the end while the reader is there, as T3 Code keeps its chat: every growth is followed
+                  // here, not left to the list's own end tracking, which the message box laid over the list's bottom
+                  // threw off, so a reply streaming in at the bottom stopped being followed. Each growth lands at
+                  // once, without a glide that read as the transcript moving up and down; while landing that holds
+                  // even when following is paused. Otherwise paused while the keyboard moves and right after a row
+                  // is opened by hand.
+                  if (!following.current || userScrolling.current) return
+                  if (Date.now() < landingUntil.current || !followPaused) toEnd(false)
+                }}
+                keyboardDismissMode="on-drag"
+                keyboardShouldPersistTaps="handled"
+                ListFooterComponent={
+                  <View style={{ gap: space.m, paddingTop: space.m, zIndex: 2 }}>
+                    {/* The running turn's status at its end, as on the desktop: a shimmering label, unless the newest row
+                        (reasoning, or a tool group at work) already says what the agent is doing. */}
+                    <WorkingLine
+                      inline
+                      quiet={lastShowsWork}
+                      timed={!turnCounts}
+                      chat={chat}
+                      sending={pending.length > 0}
+                    />
+                  </View>
+                }
+              />
+              {/* Covers the transcript while it settles at its end, then fades away; the composer stays above it. */}
+              <OpeningCover
+                visible={!revealed}
+                color={c.window}
+                spinner={c.muted}
+                top={topInset}
+                bottom={composerHeight}
+              />
+              {/* Beside the thread list the header is part of the page, and a fade from the top would wash it out. */}
+              {ios || inPane ? null : <TopFade belowBar visible={scrolled} color={c.window} />}
+              {finding ? (
+                <ChatFindBar
+                  rows={pageRows}
+                  onJump={jumpToMatch}
+                  onClose={() => {
+                    setFinding(false)
+                    // The highlight belongs to the find; closing it leaves plain text.
+                    setFound(null)
+                  }}
+                />
+              ) : null}
+              <KeyboardLift keyboard={keyboard}>
+                <BottomFade height={composerHeight * 0.75} color={c.window} />
+                {/* iOS/web: the glass composer floats over the transcript, which scrolls beneath it. */}
+                <ComposerDock onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
+                  {chat.status === 'archived' && !viewer ? (
+                    // An archived thread takes no messages; it is unarchived first, which is offered right here.
+                    <Glass
+                      radius={radius.xl}
+                      style={{
+                        marginHorizontal: space.s + 2,
+                        padding: space.m,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: space.m,
+                      }}
+                    >
+                      <Archive size={18} color={c.muted} />
+                      <T tone="soft" style={{ flex: 1 }}>
+                        {tr('This thread is archived.')}
+                      </T>
+                      <Button
+                        kind="secondary"
+                        title={tr('Unarchive')}
+                        onPress={() =>
+                          void store
+                            .invoke(chat.computerId, 'tasks.archive', chat.taskId, false)
+                            .then(() => store.refresh(chat.computerId))
+                            .catch((error) =>
+                              Alert.alert(tr('Unarchive'), error instanceof Error ? error.message : String(error)),
+                            )
                         }
                       />
-                    )}
-                  </ComposerDock>
-                  {/* Floats just above the message box, where Scroll to latest does, and over it when that shows, so
-                      the transcript never moves for it. */}
-                  {syncShown ? (
-                    <View
-                      pointerEvents="none"
-                      style={{
-                        position: 'absolute',
-                        left: 0,
-                        right: 0,
-                        alignItems: 'center',
-                        bottom: composerHeight + space.s + (away ? 34 + space.s : 0),
+                    </Glass>
+                  ) : (
+                    <Composer
+                      activity={
+                        <>
+                          {startSwitch ? (
+                            <T
+                              size={font.caption}
+                              tone="warn"
+                              accessibilityRole="alert"
+                              style={{ paddingHorizontal: space.l, paddingVertical: space.xs }}
+                            >
+                              {startSwitch}
+                            </T>
+                          ) : null}
+                          <ThreadActivity
+                            inlineStatus
+                            // A done thread's goal is paused with it; it shows again when the thread is reopened.
+                            chat={chat.doneAt ? { ...chat, goal: null } : chat}
+                            onEditQueued={offline ? undefined : editQueued}
+                            leading={
+                              <>
+                                <BrowserNotice chat={chat} tabs={browserTabs.tabs} onOpen={() => setTool('browser')} />
+                                <ComputerUseNotice chat={chat} onOpen={() => setTool('computer')} />
+                              </>
+                            }
+                            actions={[
+                              ...(toolActivity.terminal
+                                ? [{ label: tr('Terminal'), icon: SquareTerminal, onPress: openTerminal }]
+                                : []),
+                            ]}
+                          >
+                            <ThreadServers
+                              key={`servers:${chat.computerId}:${chat.taskId}`}
+                              chat={chat}
+                              open={serversFor === chat.id}
+                              onOpen={() => setServersFor(chat.id)}
+                              onClose={() => setServersFor((current) => (current === chat.id ? null : current))}
+                              onOpenPage={(url) => {
+                                setPageToOpen(url)
+                                // iOS presents the browser only once the sheet has gone.
+                                setTimeout(() => setTool('browser'), 300)
+                              }}
+                            />
+                            <BackgroundTerminals
+                              key={`${chat.computerId}:${chat.taskId}`}
+                              chat={chat}
+                              open={backgroundFor === chat.id}
+                              onOpen={() => setBackgroundFor(chat.id)}
+                              onClose={() => setBackgroundFor((current) => (current === chat.id ? null : current))}
+                            />
+                          </ThreadActivity>
+                        </>
+                      }
+                      running={running}
+                      model={staged?.chatId === chat.id ? staged.model : currentModel}
+                      onModel={changeModel}
+                      onSend={async (text, mode, attachments, context) => {
+                        if (queuedEdit.edit) return queuedEdit.submit(text)
+                        if (editing) return submitEdit(text, mode, attachments, context)
+                        if (staged?.chatId === chat.id) {
+                          const m = staged.model
+                          setStaged(null)
+                          await store.setModel(chat.id, m.provider, m.model, m.effort, m.settings)
+                        }
+                        // "/aside question" (or "/btw") asks beside the chat: the agent keeps working and never sees it.
+                        const side = /^\/(?:aside|btw)\s+(\S[\s\S]*)$/.exec(text.trim())
+                        if (side && !attachments?.length && chat.sessionId)
+                          // One side chat per thread: /btw continues it rather than starting another.
+                          return store
+                            .invoke(chat.computerId, 'aside.list', chat.sessionId)
+                            .then((asides) => {
+                              const latest = asides.find((aside) => aside.id === sideChat(asides).continueId)
+                              return store.invoke(
+                                chat.computerId,
+                                'aside.ask',
+                                chat.sessionId!,
+                                latest?.id ?? null,
+                                latest?.quote ?? '',
+                                latest?.quoteFrom ?? 'assistant',
+                                side[1]!.trim(),
+                              )
+                            })
+                            .then(() => {
+                              router.push({ pathname: '/chat/[id]/aside', params: { id: chat.id } })
+                            })
+                        followSend()
+                        // The message queues behind the compaction and goes out once it finishes, as after a typed /compact.
+                        if (compactFirst) await store.send(chat.id, '/compact', 'queue')
+                        setKeepHistoryFor(null)
+                        const terminalKey = terminalDraftKey(composerDraftKey(chat))
+                        const excerpts = readTerminalDraft(store.drafts, terminalKey)
+                        const sent = await store.send(
+                          chat.id,
+                          messageWithTerminal(text, excerpts),
+                          mode,
+                          attachments,
+                          context,
+                        )
+                        if (excerpts.length) store.setDraft(terminalKey, '[]')
+                        return sent
                       }}
-                    >
-                      <SyncLine />
-                    </View>
-                  ) : null}
-                  <Presence
-                    visible={away}
-                    fade={false}
-                    // While the agent works it turns into a spinner, so a reader scrolled up still sees the turn is running.
+                      extraContent={
+                        readTerminalDraft(store.drafts, terminalDraftKey(composerDraftKey(chat))).length > 0
+                      }
+                      header={
+                        readTerminalDraft(store.drafts, terminalDraftKey(composerDraftKey(chat))).length ? (
+                          <TerminalExcerpts draftKey={terminalDraftKey(composerDraftKey(chat))} />
+                        ) : undefined
+                      }
+                      compaction={
+                        compactOffer !== null
+                          ? {
+                              tokens: compactOffer,
+                              compact: compactFirst,
+                              onChange: (compact) => setKeepHistoryFor(compact ? null : chat.id),
+                            }
+                          : undefined
+                      }
+                      taskId={chat.taskId || undefined}
+                      chatId={chat.id}
+                      onFindQuote={findQuote}
+                      helpers={composerMentions}
+                      computerId={chat.computerId}
+                      draftKey={queuedEdit.draftKey}
+                      nextMessages={nextMessages}
+                      onStop={() => store.stop(chat.id)}
+                      goal={chat.doneAt ? null : chat.goal}
+                      queue={chat.queue?.filter((message) => message.mode !== 'steer')}
+                      queuePaused={chat.queuePaused}
+                      onResumeQueue={
+                        chat.sessionId
+                          ? () =>
+                              void store
+                                .invoke(chat.computerId, 'agent.resumeQueue', chat.sessionId!)
+                                .then(() => store.refresh(chat.computerId))
+                                .catch(() => {})
+                          : undefined
+                      }
+                      onToggleGoal={() => store.toggleGoal(chat.id)}
+                      onClearGoal={() => confirmClearGoal(tr, () => store.clearGoal(chat.id))}
+                      onVerifyGoal={chat.sessionId ? (command) => store.setGoalVerify(chat.id, command) : undefined}
+                      onRemoveQueued={(q) => store.removeQueued(chat.id, q)}
+                      onSendQueuedNow={offline ? undefined : (q) => store.sendQueuedNow(chat.id, q)}
+                      onSteerQueued={offline ? undefined : (q) => store.steerQueued(chat.id, q)}
+                      onEditQueued={offline ? undefined : editQueued}
+                      onMoveQueued={
+                        offline || !chat.sessionId
+                          ? undefined
+                          : (queuedId: string, delta: -1 | 1) => {
+                              const order = moveQueued(
+                                (chat.queue ?? []).map((message) => message.id),
+                                (chat.queue ?? [])
+                                  .filter((message) => message.mode !== 'steer')
+                                  .map((message) => message.id),
+                                queuedId,
+                                delta,
+                              )
+                              if (!order) return
+                              tap()
+                              void store
+                                .invoke(chat.computerId, 'agent.reorderQueued', chat.sessionId!, order)
+                                .then(() => store.refresh(chat.computerId))
+                                .catch((error) => showError(error instanceof Error ? error.message : String(error)))
+                            }
+                      }
+                      offline={offline}
+                      restore={restore}
+                      limited={!!limit && !running}
+                      resumeLabel={limit && !stopped ? (limit.action === 'resume' ? t.resume : t.tryAgain) : undefined}
+                      onResume={
+                        limit && !running && limit.primary && !stopped
+                          ? () => {
+                              followSend()
+                              void store.retryLimitNow(chat.id)
+                            }
+                          : stopped
+                            ? () => {
+                                followSend()
+                                void store.send(
+                                  chat.id,
+                                  '\n\n<ramu-context>\nContinue where you left off.\n</ramu-context>',
+                                  'steer',
+                                )
+                              }
+                            : undefined
+                      }
+                      editing={
+                        queuedEdit.edit
+                          ? {
+                              label: tr(
+                                queuedEdit.edit.kind === 'steer'
+                                  ? 'Editing a steering message · held until you save'
+                                  : 'Editing a queued message · held until you save',
+                              ),
+                            }
+                          : editing
+                            ? { label: tr('Rewound to before your message. Change it and send.') }
+                            : undefined
+                      }
+                      onCancelEdit={() => {
+                        if (queuedEdit.edit) return queuedEdit.cancel()
+                        setEditing(null)
+                        setRestore((r) => ({ text: '', n: (r?.n ?? 0) + 1 }))
+                      }}
+                      placeholder={
+                        offline
+                          ? tr('Message · sends when {0} is back', { 0: computer?.name ?? tr('the host') })
+                          : limit && !running
+                            ? fill(
+                                t[limitPlaceholderKey(limit)],
+                                limit.resetAt !== undefined
+                                  ? new Date(limit.resetAt).toLocaleTimeString([], {
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })
+                                  : '',
+                              )
+                            : undefined
+                      }
+                    />
+                  )}
+                </ComposerDock>
+                {/* Floats just above the message box, where Scroll to latest does, and over it when that shows, so
+                      the transcript never moves for it. */}
+                {syncShown ? (
+                  <View
+                    pointerEvents="none"
                     style={{
                       position: 'absolute',
-                      alignSelf: 'center',
-                      bottom: composerHeight + space.s,
+                      left: 0,
+                      right: 0,
+                      alignItems: 'center',
+                      bottom: composerHeight + space.s + (away ? 34 + space.s : 0),
                     }}
                   >
-                    <NativePressable
-                      accessibilityRole="button"
-                      accessibilityLabel={running ? tr('Agent is working. Scroll to latest') : tr('Scroll to latest')}
-                      // The send button's size, so the two round controls match; the slop keeps the target at 44 points.
-                      hitSlop={5}
-                      onPress={() => {
-                        tap()
-                        following.current = true
-                        userScrolling.current = false
-                        setAway(false)
-                        landingUntil.current = Date.now() + 2000
-                        toEnd(true)
-                      }}
-                    >
-                      {({ pressed }) => (
-                        <PressGrow pressed={pressed}>
-                          {/* Not interactive glass: its press bulge balloons a button this small over the transcript. */}
-                          <Glass
-                            floating
-                            radius={radius.full}
-                            style={{ width: 34, height: 34, alignItems: 'center', justifyContent: 'center' }}
-                          >
-                            {running ? (
-                              <LoadingDots color={c.text} />
-                            ) : (
-                              <ArrowDown size={18} color={c.text} strokeWidth={2.4} />
-                            )}
-                          </Glass>
-                        </PressGrow>
-                      )}
-                    </NativePressable>
-                  </Presence>
-                </KeyboardLift>
-              </RowToggle.Provider>
+                    <SyncLine />
+                  </View>
+                ) : null}
+                <Presence
+                  visible={away}
+                  fade={false}
+                  // While the agent works it turns into a spinner, so a reader scrolled up still sees the turn is running.
+                  style={{
+                    position: 'absolute',
+                    alignSelf: 'center',
+                    bottom: composerHeight + space.s,
+                  }}
+                >
+                  <NativePressable
+                    accessibilityRole="button"
+                    accessibilityLabel={running ? tr('Agent is working. Scroll to latest') : tr('Scroll to latest')}
+                    // The send button's size, so the two round controls match; the slop keeps the target at 44 points.
+                    hitSlop={5}
+                    onPress={() => {
+                      tap()
+                      following.current = true
+                      userScrolling.current = false
+                      setAway(false)
+                      landingUntil.current = Date.now() + 2000
+                      toEnd(true)
+                    }}
+                  >
+                    {({ pressed }) => (
+                      <PressGrow pressed={pressed}>
+                        {/* Not interactive glass: its press bulge balloons a button this small over the transcript. */}
+                        <Glass
+                          floating
+                          radius={radius.full}
+                          style={{ width: 34, height: 34, alignItems: 'center', justifyContent: 'center' }}
+                        >
+                          {running ? (
+                            <LoadingDots color={c.text} />
+                          ) : (
+                            <ArrowDown size={18} color={c.text} strokeWidth={2.4} />
+                          )}
+                        </Glass>
+                      </PressGrow>
+                    )}
+                  </NativePressable>
+                </Presence>
+              </KeyboardLift>
             </CancelPendingSettings.Provider>
           </ChatMentions.Provider>
         </MessageMenu.Provider>

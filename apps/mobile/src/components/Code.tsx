@@ -1,4 +1,4 @@
-import { memo, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { memo, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import { Check, Copy, Play } from 'lucide-react-native'
@@ -8,7 +8,6 @@ import { grammarFor, highlightLines, type Token } from '../runtime/highlight'
 import { tap } from './ui'
 import { FileIcon } from './FileIcon'
 import { useSay } from '../i18n'
-import { RowToggle } from './rowToggle'
 import { runnableCommand } from '@ramu/shared/chat/runnableCommand'
 import { useRunCommand } from '../runtime/runCommand'
 
@@ -139,7 +138,6 @@ export function CodeBlock({ source: raw, hint }: { source: string; hint?: string
     const timer = setTimeout(() => setCopied(false), 2000)
     return () => clearTimeout(timer)
   }, [copied])
-  const toggled = useContext(RowToggle)
   const source = useMemo(() => dedentCode(raw), [raw])
   const header = codeBlockLabel(source, hint)
   // In a thread, a shell block runs in its terminal; elsewhere it is only shown.
@@ -260,7 +258,6 @@ export function CodeBlock({ source: raw, hint }: { source: string; hint?: string
           accessibilityState={{ expanded }}
           onPress={() => {
             tap()
-            toggled()
             setExpanded((open) => !open)
           }}
           style={({ pressed }) => ({
