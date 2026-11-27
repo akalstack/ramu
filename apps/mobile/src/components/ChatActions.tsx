@@ -26,8 +26,11 @@ import {
   Trash2,
   UsersRound,
   CalendarClock,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
+import { moveProject } from '../runtime/threadGroups'
 import type { MobileProject } from '../runtime/types'
 import { newComposerKey } from '../runtime/composerDrafts'
 import { LAUNCH_DECK_PROMPT, RELEASE_NOTE_PROMPT } from '@ramu/shared/artifacts'
@@ -484,6 +487,9 @@ export function ProjectActionsSheet({
     }
   }, [open, project.name])
   const raw = project.id.slice(project.id.indexOf(':') + 1)
+  const hostProjects = store.projects
+    .filter((entry) => entry.computerId === project.computerId)
+    .map((entry) => entry.id.slice(entry.id.indexOf(':') + 1))
   const identities = useHostIdentities(project.computerId)
   const identity = projectIdentity(identities, project.id)
   const run = async (fn: () => Promise<unknown>) => {
@@ -595,6 +601,21 @@ export function ProjectActionsSheet({
         if (writable()) setRenaming(true)
       },
     },
+    // The host keeps one order for its projects, the one the desktop's list is dragged into, so a move here shows there.
+    ...([-1, 1] as const).flatMap((by) => {
+      const order = moveProject(hostProjects, raw, by)
+      return order
+        ? [
+            {
+              key: by < 0 ? 'move-up' : 'move-down',
+              group: 'edit' as const,
+              icon: by < 0 ? ArrowUp : ArrowDown,
+              label: say(by < 0 ? 'Move up' : 'Move down'),
+              onPress: () => void run(() => store.invoke(project.computerId, 'projects.reorder', order)),
+            },
+          ]
+        : []
+    }),
     {
       key: 'copy',
       group: 'edit',

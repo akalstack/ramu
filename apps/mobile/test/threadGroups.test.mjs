@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { groupKey, groupThreads, readThreadList, splitDone } from '../src/runtime/threadGroups.ts'
+import { groupKey, groupThreads, moveProject, readThreadList, splitDone } from '../src/runtime/threadGroups.ts'
 import { resolveLayered } from '../src/runtime/busyMode.ts'
 
 const thread = (id, projectId, lastActiveAt, status = 'idle', computerId = 'a') => ({
@@ -12,7 +12,7 @@ const thread = (id, projectId, lastActiveAt, status = 'idle', computerId = 'a') 
 })
 const none = { limit: 3, expanded: new Set(), collapsed: new Set() }
 
-test('home groups threads by project, newest first, then empty projects, with standalone threads at the bottom', () => {
+test('home groups threads by project in the host’s own order, whatever is newest, with standalone threads at the bottom', () => {
   const projects = [
     { id: 'a:quiet', computerId: 'a' },
     { id: 'a:old', computerId: 'a' },
@@ -26,14 +26,14 @@ test('home groups threads by project, newest first, then empty projects, with st
   assert.deepEqual(
     groups.map((group) => [group.projectId, group.threads.map((x) => x.id)]),
     [
-      ['a:new', ['n']],
-      ['a:old', ['o']],
       ['a:quiet', []],
+      ['a:old', ['o']],
+      ['a:new', ['n']],
       ['standalone', ['s']],
     ],
   )
   assert.equal(groups[3].project, undefined)
-  assert.equal(groups[0].project, projects[2])
+  assert.equal(groups[2].project, projects[2])
 })
 
 test('a capped group keeps every running, waiting or failed thread and reports what is hidden', () => {
@@ -108,4 +108,12 @@ test("the thread list follows this phone, then all your phones, then the host's 
   // A cleared phone choice is stored as '' and falls through to the host.
   assert.equal(mode('', undefined, true), 'recent')
   assert.equal(mode(undefined, 'yes', undefined), 'projects')
+})
+
+test('a project moves one place in its host’s order, and not past either end', () => {
+  assert.deepEqual(moveProject(['a', 'b', 'c'], 'b', -1), ['b', 'a', 'c'])
+  assert.deepEqual(moveProject(['a', 'b', 'c'], 'b', 1), ['a', 'c', 'b'])
+  assert.equal(moveProject(['a', 'b', 'c'], 'a', -1), null)
+  assert.equal(moveProject(['a', 'b', 'c'], 'c', 1), null)
+  assert.equal(moveProject(['a', 'b'], 'gone', 1), null)
 })

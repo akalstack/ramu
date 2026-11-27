@@ -42,9 +42,10 @@ export type ThreadGroup<T, P> = {
 }
 
 /**
- * Home's project view: every project gets a group (empty ones too, so its menu stays reachable),
- * ordered by its newest thread, with threads outside any project last. Each group shows its newest `limit` threads plus any active one,
- * all of them once expanded, and none while collapsed.
+ * Home's project view: every project gets a group (empty ones too, so its menu stays reachable), in the order given,
+ * which is the host's own (the one the desktop shows and reorders), so a new message never moves a project. Threads
+ * outside any project come last. Each group shows its newest `limit` threads plus any active one, all of them once
+ * expanded, and none while collapsed.
  */
 export function groupThreads<
   T extends { computerId: string; projectId: string; status: string; lastActiveAt: number },
@@ -68,7 +69,7 @@ export function groupThreads<
     bucket.threads.push(thread)
     buckets.set(key, bucket)
   }
-  const latest = (list: T[]) => list.reduce((max, thread) => Math.max(max, thread.lastActiveAt), -Infinity)
+  // Projects first in the order given; a project the device no longer lists, then standalone threads, follow.
   return (
     [...buckets.entries()]
       .map(([key, bucket]) => {
@@ -88,11 +89,19 @@ export function groupThreads<
           hidden: sorted.length - visible.length,
           running: sorted.filter((thread) => thread.status === 'running').length,
           attention: sorted.filter((thread) => thread.status === 'needs-input' || thread.status === 'failed').length,
-          latest: latest(sorted),
         }
       })
-      // Projects first, newest activity on top; standalone threads (no project) always sit at the bottom.
-      .sort((a, b) => Number(!a.project) - Number(!b.project) || b.latest - a.latest)
-      .map(({ latest: _, ...group }) => group)
+      // The sort is stable, so listed projects keep the order they were given in.
+      .sort((a, b) => Number(!a.project) - Number(!b.project))
   )
+}
+
+/** A host's project ids with one moved a place up (-1) or down (1); null at the edge, where there is nowhere to go. */
+export function moveProject(ids: readonly string[], id: string, by: -1 | 1): string[] | null {
+  const at = ids.indexOf(id)
+  const to = at + by
+  if (at < 0 || to < 0 || to >= ids.length) return null
+  const next = [...ids]
+  ;[next[at], next[to]] = [next[to]!, next[at]!]
+  return next
 }

@@ -146,7 +146,12 @@ export default function Threads() {
       return next
     })
   }
-  const projectList = projects.filter((p) => merged || p.computerId === selected)
+  // In each host's own order, the one the desktop shows, with hosts in the order this phone lists them: a host read
+  // again moves to the end of the store's list, which must not move its projects here.
+  const hostRank = new Map(computers.map((computer, index) => [computer.id, index]))
+  const projectList = projects
+    .filter((p) => merged || p.computerId === selected)
+    .sort((a, b) => (hostRank.get(a.computerId) ?? 0) - (hostRank.get(b.computerId) ?? 0))
   const nameOf = (id: string) => projectList.find((p) => p.id === id)?.name
   const hostName = (id: string) => {
     const name = computers.find((x) => x.id === id)?.name
