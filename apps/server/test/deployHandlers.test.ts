@@ -24,7 +24,9 @@ const setup = (local: boolean) => {
 
 it('saves the production database address only on the host itself', async () => {
   const { methods, migrations } = setup(false)
-  expect(() => methods['deploy.setProductionDatabase']!.run('p1', 'postgres://u:p@db/x')).toThrow('Change settings over an encrypted connection')
+  expect(() => methods['deploy.setProductionDatabase']!.run('p1', 'postgres://u:p@db/x')).toThrow(
+    'Change settings over an encrypted connection',
+  )
   expect(migrations.save).not.toHaveBeenCalled()
   const host = setup(true)
   await host.methods['deploy.setProductionDatabase']!.run('p1', 'postgres://u:p@db/x')
