@@ -13,7 +13,11 @@ export interface Project {
   /** Other names people use for the project; Auto matches them as whole words. */
   aliases?: string[]
   /** One short line about what the project is, shared with Auto's routing model call. */
-  description?: string
+  description?: string /**
+   * Which repository the project is a checkout of (`github.com/owner/repo`), from its remote: the same on every host
+   * that has it, so lists across hosts show it once. Absent without a remote, or from a host that does not say.
+   */
+  repository?: string
 }
 
 /** A saved command for a project, run from the window bar in a new terminal at the chat's workspace. */

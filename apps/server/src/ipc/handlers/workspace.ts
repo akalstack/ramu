@@ -6,6 +6,7 @@ import { generateBranchName } from '../../workspace/branchNaming'
 import { currentBranch } from '../../workspace/git'
 import { projectActionSchema } from '../../workspace/projectConfig'
 import { ProjectActions } from '../../workspace/projectActions'
+import { ProjectRepositories } from '../../workspace/projectRepositories'
 import { projectAgentDefaults } from '../../workspace/projectAgentDefaults'
 import { createProjectFolder, runCommand } from '../../workspace/projectCreate'
 import { PROJECT_NAME, STACK_IDS, type StackId } from '@ramu/shared/stacks'
@@ -136,6 +137,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
     }
   }
   const projectActions = new ProjectActions(workspace, projectConfiguration)
+  const projectRepositories = new ProjectRepositories((projectId) => workspace.listRepositories(projectId))
   /** `thread`: the model and login the thread being started will run on, which Same as thread names its branch with. */
   const generate = (title: string, intent: BranchNamingIntent, signal?: AbortSignal, thread?: WorkModel) => {
     const prefs = loadPreferences()
@@ -306,7 +308,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
     })
   }
   return {
-    'projects.list': { args: z.tuple([]), run: () => workspace.listProjects() },
+    'projects.list': { args: z.tuple([]), run: () => projectRepositories.label(workspace.listProjects()) },
     'projects.route': {
       args: z.tuple([
         z.string().min(1).max(20_000),
