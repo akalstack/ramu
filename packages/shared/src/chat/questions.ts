@@ -1,4 +1,5 @@
 import type { AgentEvent, AgentQuestion } from '../types'
+import { visibleMessage } from './visibleMessage'
 
 export type QuestionRequest = Extract<AgentEvent, { kind: 'question' }>
 export interface QuestionInput {
@@ -51,7 +52,8 @@ export function answerMessage(requestId: string, answers: { question: string; an
 }
 export function parseAnswerMessage(text: string): { requestId: string; body: string } | null {
   const match = ANSWERS.exec(text)
-  return match ? { requestId: match[1]!, body: match[2]! } : null
+  // The context Ramu appends for the agent is not part of what the person answered.
+  return match ? { requestId: match[1]!, body: visibleMessage(match[2]!) } : null
 }
 
 /**

@@ -2,6 +2,7 @@ import { View } from 'react-native'
 import { Pencil, Trash2 } from 'lucide-react-native'
 import type { QueuedMessage } from '@ramu/shared/types'
 import { visibleMessage } from '@ramu/shared/chat/visibleMessage'
+import { answerPairs, parseAnswerMessage } from '@ramu/shared/chat/questions'
 import { font, radius, space, useTheme } from '../theme'
 import { useSay } from '../i18n'
 import { useStore } from '../runtime/store'
@@ -29,21 +30,35 @@ export function SteeringBubble({
   const { c } = useTheme()
   const say = useSay()
   const { removeQueued } = useStore()
-  const text = visibleMessage(message.text)
+  // An answer on its way to the agent reads as the line it becomes once sent, not the delivery note the agent reads.
+  // It is not the person's to edit, and removing it would leave the question answered with the agent never told.
+  const answers = parseAnswerMessage(message.text)
+  const count = answers ? answerPairs(answers.body).length : 0
+  const text = answers
+    ? count === 1
+      ? say('Answered 1 question')
+      : say('Answered {0} questions', { 0: count })
+    : visibleMessage(message.text)
   return (
     <View style={{ alignSelf: 'flex-end', maxWidth: '86%', alignItems: 'flex-end', gap: 4 }}>
-      <View
-        accessibilityLabel={`${say('Steer')}: ${text}`}
-        style={{
-          backgroundColor: c.bubble,
-          borderRadius: radius.l - 2,
-          borderBottomRightRadius: radius.xs,
-          paddingHorizontal: space.m + 2,
-          paddingVertical: space.s + 2,
-        }}
-      >
-        <T style={{ lineHeight: 21 }}>{text}</T>
-      </View>
+      {answers ? (
+        <T size={font.control} tone="muted">
+          {text}
+        </T>
+      ) : (
+        <View
+          accessibilityLabel={`${say('Steer')}: ${text}`}
+          style={{
+            backgroundColor: c.bubble,
+            borderRadius: radius.l - 2,
+            borderBottomRightRadius: radius.xs,
+            paddingHorizontal: space.m + 2,
+            paddingVertical: space.s + 2,
+          }}
+        >
+          <T style={{ lineHeight: 21 }}>{text}</T>
+        </View>
+      )}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, paddingRight: 2 }}>
         <T size={font.caption} tone={editing ? 'accent' : 'muted'}>
           {editing
@@ -52,7 +67,7 @@ export function SteeringBubble({
               ? say('Held while editing')
               : say('Steering · sends after the current tool call')}
         </T>
-        {readOnly || editing ? null : (
+        {readOnly || editing || answers ? null : (
           <>
             <IconButton icon={Pencil} label={say('Edit steering message')} size={28} tone="muted" onPress={onEdit} />
             <IconButton

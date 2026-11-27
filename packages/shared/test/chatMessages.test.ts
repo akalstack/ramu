@@ -15,6 +15,12 @@ describe('thread messages Ramu writes for the user', () => {
       body: 'Which database?\nSQLite\n\nWhich region?\nJakarta',
     })
     expect(parseAnswerMessage(answerMessage('req-2', [{ question: 'Q', answer: 'A' }]))?.body).toBe('Q\nA')
+    // The context Ramu appends for the agent is no part of the answer.
+    expect(
+      parseAnswerMessage(
+        `${answerMessage('req-3', [{ question: 'Q', answer: 'A' }])}\n\n<ramu-context>\nThis project's repositories are exactly: ramu\n</ramu-context>`,
+      )?.body,
+    ).toBe('Q\nA')
     expect(parseAnswerMessage('Answer to your earlier question, please')).toBeNull()
   })
   it('sets each late answer apart from the question it answers', () => {

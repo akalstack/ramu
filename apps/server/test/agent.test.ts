@@ -33,6 +33,7 @@ import {
 } from '@ramu/shared/types'
 import { fakeCodex, fakeQuery as demoQuery } from '../src/providers/fakeAgent'
 import { USER_MESSAGE_PREAMBLE } from '../src/agent/agentInstructions'
+import { answerMessage } from '@ramu/shared/chat/questions'
 
 /** Minimal stand-in for the SDK: echoes each user message, asks permission once for the first one. */
 function fakeQuery(calls: Options[]): QueryFn {
@@ -2065,6 +2066,16 @@ describe('busy agent messages', () => {
     expect(steer).toHaveBeenCalledWith('redirect now', [])
     expect(send).not.toHaveBeenCalled()
     expect(service.queued(session.id).map((m) => m.text)).toEqual(['later'])
+    service.stopAll()
+  })
+
+  it('steers an answer to a question as its own message, apart from what the person typed next', async () => {
+    const { service, session, steer } = setup()
+    const answer = answerMessage('req-1', [{ question: 'Which database?', answer: 'SQLite' }])
+    await service.submit(session.id, answer, 'steer')
+    await service.submit(session.id, 'and fix the scroll', 'steer')
+    await until(() => steer.mock.calls.length === 2)
+    expect(steer.mock.calls.map((call) => call[0])).toEqual([answer, 'and fix the scroll'])
     service.stopAll()
   })
 
