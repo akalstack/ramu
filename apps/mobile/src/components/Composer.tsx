@@ -20,6 +20,7 @@ import {
 } from 'react-native'
 import { Pressable as NativePressable } from 'react-native-gesture-handler'
 import { attachmentPreview, keepAttachment, keepAttachmentPreview } from '../runtime/attachmentPreviews'
+import { toBase64 } from '@ramu/shared/accountCrypto'
 import { usePastedFiles, type PastedFile } from '../runtime/paste'
 import { MenuView } from '@react-native-menu/menu'
 import { markdownRuns, type MarkdownMark } from '@ramu/shared/chat/markdownRuns'
@@ -1943,16 +1944,53 @@ async function pickAttachment(
       const picker = await import('expo-image-picker')
       if (kind === 'camera' && !(await picker.requestCameraPermissionsAsync()).granted)
         throw new Error(say('Camera permission is required to take a photo.'))
+      // Videos as well as photos, from the library and the camera.
       const result =
         kind === 'camera'
-          ? await picker.launchCameraAsync({ quality: 0.8 })
-          : await picker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 })
+          ? await picker.launchCameraAsync({ mediaTypes: ['images', 'videos'], quality: 0.8 })
+          : await picker.launchImageLibraryAsync({ mediaTypes: ['images', 'videos'], quality: 0.8 })
       if (result.canceled) return
-      const photo = result.assets[0]!
-      asset = { uri: photo.uri, name: photo.fileName ?? `photo-${Date.now()}.jpg`, size: photo.fileSize }
+      const picked = result.assets[0]!
+      const video = picked.type === 'video'
+      asset = {
+        uri: picked.uri,
+        name: picked.fileName ?? (video ? `video-${Date.now()}.mov` : `photo-${Date.now()}.jpg`),
+        size: picked.fileSize,
+      }
     }
-    if ((asset.size ?? 0) > 10_000_000) throw new Error(say('Attachments must be 10 MB or smaller.'))
+    const limit = LARGE_ATTACHMENT.test(asset.name) ? 100_000_000 : 10_000_000
+    if ((asset.size ?? 0) > limit)
+      throw new Error(
+        limit > 10_000_000 ? say('Videos must be 100 MB or smaller.') : say('Attachments must be 10 MB or smaller.'),
+      )
     const { File } = await import('expo-file-system')
+    // A file too large for one request (a video, mostly) goes to the host in parts, as it reads it from storage.
+    if (!asset.base64 && !asset.file && (asset.size ?? 0) > PART_BYTES) {
+      const size = asset.size!
+      let token: string
+      try {
+        token = await store.invoke(computerId, 'attachments.begin', asset.name, size)
+      } catch (error) {
+        if (String(error).includes('Unknown method'))
+          throw new Error(say('Update this host to send files larger than 10 MB.'), { cause: error })
+        throw error
+      }
+      const handle = new File(asset.uri).open()
+      try {
+        for (let index = 0, sent = 0; sent < size; index++) {
+          const bytes = await handle.readBytes(Math.min(PART_BYTES, size - sent))
+          if (!bytes.length) throw new Error(say('The file changed while it was being sent.'))
+          await store.invoke(computerId, 'attachments.part', token, index, toBase64(bytes))
+          sent += bytes.length
+        }
+      } finally {
+        handle.close()
+      }
+      const added = await store.invoke(computerId, 'attachments.finish', token)
+      keepAttachment(added)
+      add(added)
+      return
+    }
     const base64 = asset.base64
       ? asset.base64
       : asset.file
@@ -1973,6 +2011,11 @@ async function pickAttachment(
     Alert.alert(say('Attachment failed'), error instanceof Error ? error.message : String(error))
   }
 }
+
+/** Videos and 3D models may run to 100 MB on the host; other files to 10 MB. */
+const LARGE_ATTACHMENT = /\.(mov|mp4|m4v|webm|glb|gltf)$/i
+/** Each part of a large upload, under the host's limit for one part. */
+const PART_BYTES = 4_000_000
 
 /** Quoted passages ("> line" blocks) leave the text field and show as chips above it, as on the desktop; the body is what stays editable. */
 function splitQuotes(text: string) {

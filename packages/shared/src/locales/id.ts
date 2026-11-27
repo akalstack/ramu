@@ -7964,6 +7964,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Reconnect this host to upload an attachment.': 'Hubungkan kembali host ini untuk mengunggah lampiran.',
   'Camera permission is required to take a photo.': 'Izin kamera diperlukan untuk mengambil foto.',
   'Attachments must be 10 MB or smaller.': 'Lampiran maksimal 10 MB.',
+  'Videos must be 100 MB or smaller.': 'Video maksimal 100 MB.',
+  'Update this host to send files larger than 10 MB.': 'Perbarui host ini untuk mengirim file lebih dari 10 MB.',
+  'The file changed while it was being sent.': 'File berubah saat sedang dikirim.',
   'Attachment failed': 'Lampiran gagal',
   'Fast mode · higher usage': 'Mode cepat · pemakaian lebih tinggi',
   'Reconnect this host to browse its files and skills.':
