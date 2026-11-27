@@ -9,6 +9,13 @@ import { createProjectFolder, runCommand } from '../../workspace/projectCreate'
 import { PROJECT_NAME, STACK_IDS, type StackId } from '@ramu/shared/stacks'
 import { z } from 'zod'
 import {
+  doneOrder,
+  listedThreads,
+  olderDoneThreads,
+  type DoneCursor,
+  type ThreadListOptions,
+} from '@ramu/shared/doneThreads'
+import {
   DEFAULT_AGENT_SETTINGS,
   type ModelPreferences,
   type AgentSettings,
@@ -33,6 +40,11 @@ import type { TaskRemovalReview } from '@ramu/shared/chat/taskRemoval'
 
 let lastSnapshotAt = 0
 /** Never moves backwards, even if the clock does, so clients can order two reads of one task. */
+type HostTask = ReturnType<Workspace['listTasks']>[number]
+const threadListOptions = z
+  .object({ recentDone: z.number().int().min(0).max(500), keep: z.array(id).max(2000).optional() })
+  .strict()
+const doneCursorSchema = z.object({ doneAt: z.number().int().nonnegative(), id }).strict()
 const nextSnapshotAt = () => (lastSnapshotAt = Math.max(lastSnapshotAt + 1, Date.now()))
 
 const namingIntent = z.object({
@@ -211,6 +223,58 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
       })
     })
   }
+  /** Threads as the lists show them, for the ones `pick` chooses from all of them. */
+  const threadSummaries = async (pick: (tasks: HostTask[]) => HostTask[]) => {
+    // Branches are read first: everything after the snapshot is read without yielding, so it is one moment.
+    const listed = pick(workspace.listTasks())
+    const branches = listed.length ? await workspace.threadBranches(listed) : new Map<string, string>()
+    const snapshotAt = nextSnapshotAt()
+    const tasks = pick(workspace.listTasks())
+    const helpers = tasks.length ? agents.helperSummaries() : new Map<string, never>()
+    const advice = tasks.length ? agents.unreadAdvice() : new Map<string, number>()
+    const sessionsByTask = tasks.length ? agents.listByTask() : new Map<string, AgentSessionInfo[]>()
+    const uses = tasks.length ? agents.providerUses() : new Map<string, ProviderUse[]>()
+    return tasks.map((task) => {
+      const sessions = sessionsByTask.get(task.id) ?? []
+      const main = sessions.at(-1)
+      const inputSummary = mergeInputSummaries(sessions.map((session) => session.inputSummary))
+      const goal = main ? agents.goalOf(main.id) : null
+      const executionState = main?.state
+      // The thread's cast: each session (the main agent and its helpers) at its creation, plus every provider a
+      // session handed off between, with the main agent's provider leading.
+      const providers = threadProviders(
+        sessions.flatMap((session) => [
+          { provider: session.settings.provider, at: session.createdAt },
+          ...(uses.get(session.id) ?? []),
+        ]),
+        main?.settings.provider ?? null,
+      )
+      const base = {
+        ...task,
+        providers,
+        inputSummary,
+        executionState,
+        helperSummary: helpers.get(task.id) ?? null,
+        ...(advice.get(task.id) ? { unreadAdvice: advice.get(task.id) } : {}),
+        pullRequest: pullRequestIndex?.forTask(task) ?? null,
+        branch: branches.get(task.id) ?? null,
+        snapshotAt,
+      }
+      if (!goal || goal.status === 'completed') return { ...base, goalState: null }
+      return {
+        ...base,
+        goalState: {
+          status: goal.status,
+          ...(goal.pausedBy ? { pausedBy: goal.pausedBy } : {}),
+          objective: goal.objective.slice(0, 300),
+          sessionId: main!.id,
+          ...(goal.claim ? { verifying: true } : {}),
+          ...(goal.check && !goal.check.ok ? { verificationFailed: true } : {}),
+          ...(goal.reason ? { reason: goal.reason.slice(0, 300) } : {}),
+        },
+      }
+    })
+  }
   return {
     'projects.list': { args: z.tuple([]), run: () => workspace.listProjects() },
     'projects.route': {
@@ -372,57 +436,19 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
         workspace.renameWorktreeWorkspace(workspaceId, name, before),
     },
     'tasks.list': {
-      args: z.tuple([]),
-      run: async () => {
-        // Branches are read first: everything after the snapshot is read without yielding, so it is one moment.
-        const listed = workspace.listTasks()
-        const branches = listed.length ? await workspace.threadBranches(listed) : new Map<string, string>()
-        const snapshotAt = nextSnapshotAt()
-        const tasks = workspace.listTasks()
-        const helpers = tasks.length ? agents.helperSummaries() : new Map<string, never>()
-        const advice = tasks.length ? agents.unreadAdvice() : new Map<string, number>()
-        const sessionsByTask = tasks.length ? agents.listByTask() : new Map<string, AgentSessionInfo[]>()
-        const uses = tasks.length ? agents.providerUses() : new Map<string, ProviderUse[]>()
-        return tasks.map((task) => {
-          const sessions = sessionsByTask.get(task.id) ?? []
-          const main = sessions.at(-1)
-          const inputSummary = mergeInputSummaries(sessions.map((session) => session.inputSummary))
-          const goal = main ? agents.goalOf(main.id) : null
-          const executionState = main?.state
-          // The thread's cast: each session (the main agent and its helpers) at its creation, plus every provider a
-          // session handed off between, with the main agent's provider leading.
-          const providers = threadProviders(
-            sessions.flatMap((session) => [
-              { provider: session.settings.provider, at: session.createdAt },
-              ...(uses.get(session.id) ?? []),
-            ]),
-            main?.settings.provider ?? null,
-          )
-          const base = {
-            ...task,
-            providers,
-            inputSummary,
-            executionState,
-            helperSummary: helpers.get(task.id) ?? null,
-            ...(advice.get(task.id) ? { unreadAdvice: advice.get(task.id) } : {}),
-            pullRequest: pullRequestIndex?.forTask(task) ?? null,
-            branch: branches.get(task.id) ?? null,
-            snapshotAt,
-          }
-          if (!goal || goal.status === 'completed') return { ...base, goalState: null }
-          return {
-            ...base,
-            goalState: {
-              status: goal.status,
-              ...(goal.pausedBy ? { pausedBy: goal.pausedBy } : {}),
-              objective: goal.objective.slice(0, 300),
-              sessionId: main!.id,
-              ...(goal.claim ? { verifying: true } : {}),
-              ...(goal.check && !goal.check.ok ? { verificationFailed: true } : {}),
-              ...(goal.reason ? { reason: goal.reason.slice(0, 300) } : {}),
-            },
-          }
+      args: z.union([z.tuple([]), z.tuple([threadListOptions])]),
+      run: (options?: ThreadListOptions) => threadSummaries((tasks) => listedThreads(tasks, options)),
+    },
+    'tasks.olderDone': {
+      args: z.tuple([doneCursorSchema, z.number().int().min(0).max(50)]),
+      run: async (cursor: DoneCursor, limit: number) => {
+        let remaining = 0
+        const tasks = await threadSummaries((all) => {
+          const older = olderDoneThreads(all, cursor, limit)
+          remaining = older.remaining
+          return older.page
         })
+        return { tasks: tasks.sort(doneOrder), remaining }
       },
     },
     'tasks.workspaceOptions': {

@@ -1285,7 +1285,10 @@ export interface RamuMethods extends ArtifactMethods {
   'repos.pick'(purpose?: 'project' | 'repository'): string | null
   'workspaces.list'(): WorktreeWorkspace[]
   'workspaces.rename'(workspaceId: string, name: string, before: string): WorktreeWorkspace
-  'tasks.list'(): Task[]
+  /** Every thread; with options, open threads, the newest finished ones and those kept, the rest paged by `tasks.olderDone`. */
+  'tasks.list'(options?: import('./doneThreads').ThreadListOptions): Task[]
+  /** Finished threads after the cursor, newest first, and how many are left after them; `limit` 0 reads only the count. */
+  'tasks.olderDone'(cursor: import('./doneThreads').DoneCursor, limit: number): { tasks: Task[]; remaining: number }
   'tasks.agentDefaults'(
     projectId: string,
     defaultProvider: AgentSettings['provider'],
@@ -2070,6 +2073,10 @@ export interface RamuMethods extends ArtifactMethods {
   'agent.chooseDuplicate'(sessionId: string, connectionId: string, use: 'native' | 'both'): void
   'agent.reloadMcp'(sessionId: string): Promise<void>
   'agent.reconnectMcp'(sessionId: string, name: string): Promise<void>
+  /** Starts the provider's sign-in for an MCP server that needs one and gives the page to open. */
+  'agent.signInMcp'(sessionId: string, name: string): Promise<import('./types').McpSignIn>
+  /** Hands the provider the address the browser ended on after an MCP sign-in, when it could not return to the host. */
+  'agent.finishMcpSignIn'(sessionId: string, name: string, callbackUrl: string): Promise<void>
   'agent.providerHold'(sessionId: string): 'message' | 'chat' | 'picked' | null
   /** Where the thread's next message would run under the host's routing, without changing anything. */
   'agent.nextRoute'(sessionId: string): Promise<NextMessageRoute>

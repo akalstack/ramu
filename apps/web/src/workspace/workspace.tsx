@@ -24,6 +24,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from 'react'
+import { DONE_PAGE, doneCursor, isDoneThread, readOlderDone, readThreadList } from '@ramu/shared/doneThreads'
 import { NO_PROJECT, type TaskStatus } from '@ramu/shared/types'
 import type {
   Project,
@@ -99,6 +100,10 @@ export interface WorkspaceApi {
   workspaces: WorktreeWorkspace[]
   composingWorkspace: string | null
   tasks: Task[]
+  /** Finished threads on the host older than every one held, read a page at a time with `loadOlderDone`. */
+  doneRemaining: number
+  /** Reads the next page of older finished threads into `tasks`. */
+  loadOlderDone(): Promise<void>
   ui: WorkspaceUiState
   taskUi: Record<string, TaskUiState>
   bindings: Record<string, RepositoryBinding[]>
@@ -457,6 +462,48 @@ const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: 
   useEffect(() => () => persistence.dispose(), [persistence])
   const snapshot = useRef({ loaded, ui, taskUi, dirty, composing, composingWorkspace })
   snapshot.current = { loaded, ui, taskUi, dirty, composing, composingWorkspace }
+  const heldTasks = useRef(tasks)
+  heldTasks.current = tasks
+  // Open threads, the newest finished ones and every finished one this window holds (an open tab, a page read), so a
+  // finished thread never drops out from under a tab or a list that showed it.
+  const listThreads = useCallback(
+    (extra: string[] = []) =>
+      readThreadList(
+        (options) => (options ? invoke('tasks.list', options) : invoke('tasks.list')),
+        [
+          ...heldTasks.current.filter(isDoneThread).map((task) => task.id),
+          ...snapshot.current.ui.openTaskIds.filter((id) => !isWorkspaceCtx(id)),
+          ...extra,
+        ],
+      ),
+    [invoke],
+  )
+  const [doneRemaining, setDoneRemaining] = useState(0)
+  const oldestDone = doneCursor(tasks)
+  const heldDone = tasks.filter(isDoneThread).length
+  useEffect(() => {
+    if (!oldestDone) return setDoneRemaining(0)
+    let stale = false
+    void readOlderDone((cursor, limit) => invoke('tasks.olderDone', cursor, limit), oldestDone, 0).then(
+      ({ remaining }) => !stale && setDoneRemaining(remaining),
+      () => undefined,
+    )
+    return () => {
+      stale = true
+    }
+    // Asked again only when the oldest finished thread held, or how many are held, changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoke, oldestDone?.doneAt, oldestDone?.id, heldDone])
+  const loadOlderDone = useCallback(async () => {
+    const cursor = doneCursor(heldTasks.current)
+    if (!cursor) return
+    const page = await readOlderDone((from, limit) => invoke('tasks.olderDone', from, limit), cursor, DONE_PAGE)
+    setTasks((current) => {
+      const held = new Set(current.map((task) => task.id))
+      return [...current, ...page.tasks.filter((task) => !held.has(task.id))]
+    })
+    setDoneRemaining(page.remaining)
+  }, [invoke])
   useEffect(
     () =>
       registerWorkspaceCheckpoint(async () => {
@@ -486,11 +533,7 @@ const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: 
   const refresh = useCallback(async () => {
     const newest = startRefresh()
     // A remote host answers each call a round trip later, so the lists are read together rather than in turn.
-    const [ps, chats, isolated] = await Promise.all([
-      invoke('projects.list'),
-      invoke('tasks.list'),
-      invoke('workspaces.list'),
-    ])
+    const [ps, chats, isolated] = await Promise.all([invoke('projects.list'), listThreads(), invoke('workspaces.list')])
     const rs: Record<string, Repository[]> = Object.fromEntries(
       await mapBounded(ps, HOST_READ_CONCURRENCY, async (p) => [p.id, await invoke('repos.list', p.id)] as const),
     )
@@ -524,7 +567,7 @@ const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: 
     })
     return { projects: ps, tasks: chats, workspaces: isolated }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [invoke] by design; the values it reads beyond these are current as of that run
-  }, [invoke, hostId])
+  }, [invoke, hostId, listThreads])
 
   const refreshBindings = useCallback(
     async (taskId: string) => {
@@ -572,7 +615,7 @@ const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: 
         }
         const lists = read ?? {
           projects: await invoke('projects.list'),
-          tasks: await invoke('tasks.list'),
+          tasks: await listThreads(),
           workspaces: await invoke('workspaces.list'),
         }
         let resume: {
@@ -593,8 +636,13 @@ const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: 
         saved.tasks = Object.fromEntries(
           Object.entries(saved.tasks).map(([id, state]) => [id, persistentTaskUi(state)]),
         )
+        // A tab on a finished thread older than the newest ones is read back with them.
+        const listedIds = new Set(lists.tasks.map((task) => task.id))
+        const missing = saved.workspace.openTaskIds.filter((id) => !isWorkspaceCtx(id) && !listedIds.has(id))
+        const restoredTasks = missing.length ? await listThreads(missing) : lists.tasks
+        if (missing.length) setTasks((current) => keepNewerTasks(current, restoredTasks))
         const known = new Set([
-          ...lists.tasks.map((t) => t.id),
+          ...restoredTasks.map((t) => t.id),
           ...lists.projects.map((p) => projectCtx(p.id)),
           ...lists.workspaces.map((w) => worktreeCtx(w.id)),
         ])
@@ -609,7 +657,7 @@ const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: 
           sidebar: resume ? saved.workspace.sidebar : 'projects',
         })
         const contextsToRestore = new Set(openTaskIds.filter(isWorkspaceCtx))
-        for (const task of lists.tasks) {
+        for (const task of restoredTasks) {
           const own = saved.tasks[task.id]
           if (!own || task.projectId === NO_PROJECT) continue
           const ctx = workspaceOfTask(task)
@@ -744,7 +792,7 @@ const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: 
         clearTimeout(timer)
         timer = setTimeout(() => {
           const current = ++request
-          void invoke('tasks.list').then(
+          void listThreads().then(
             (chats) => {
               if (!disposed && current === request) setTasks((now) => keepNewerTasks(now, chats))
             },
@@ -762,7 +810,7 @@ const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: 
       clearTimeout(timer)
       clearTimeout(pending)
     }
-  }, [refresh, runtime, invoke])
+  }, [refresh, runtime, invoke, listThreads])
 
   // Branch switches and worktree changes are picked up when bindings are re-read.
   useEffect(
@@ -895,6 +943,8 @@ const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: 
       projects,
       repos,
       tasks,
+      doneRemaining,
+      loadOlderDone,
       workspaces,
       composingWorkspace,
       ui,
@@ -1256,6 +1306,8 @@ const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: 
     projects,
     repos,
     tasks,
+    doneRemaining,
+    loadOlderDone,
     workspaces,
     composingWorkspace,
     ui,

@@ -109,6 +109,7 @@ import { GOAL_VERIFY_METHOD } from './goalVerify'
 import { mergeTranscript, transcriptRows, updateThreadMetadata, readTranscriptBundle } from './transcriptChanges'
 import { STANDALONE, type Chat, type Computer, type MobileProject } from './types'
 import type { Task } from '@ramu/shared/types'
+import { DONE_PAGE, doneCursor, isDoneThread, readOlderDone, readThreadList } from '@ramu/shared/doneThreads'
 
 const expoFetch = nativeFetch as unknown as typeof globalThis.fetch
 
@@ -215,6 +216,10 @@ interface Store extends State {
   watch(computerId: string, channels: readonly string[], keys?: Record<string, readonly string[]>): () => void
   /** `full` re-reads every transcript (after a reconnect); otherwise chats already streaming keep their live transcript. */
   refresh(computerId: string, depth?: RefreshDepth): Promise<void>
+  /** Finished threads on each host older than every one held, read a page at a time with `loadOlderDone`. */
+  doneRemaining: Record<string, number>
+  /** Reads the next page of a host's older finished threads into `chats`. */
+  loadOlderDone(computerId: string): Promise<void>
   send(
     id: string,
     text: string,
@@ -410,6 +415,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const pushToken = useRef<string | null>(null)
   const [notifications, setNotifications] = useState<Store['notifications']>([])
   const [activity, setActivity] = useState<Record<string, BackgroundActivity[]>>({})
+  const [doneRemaining, setDoneRemaining] = useState<Record<string, number>>({})
+  // Older finished threads read by page, per host, so later reads of the list keep them.
+  const pagedDone = useRef(new Map<string, Set<string>>())
+  // The oldest finished thread each host's count was read below, so the count is asked again only when it moves.
+  const doneCounted = useRef(new Map<string, string>())
+  /** Finished threads to keep listed past the newest ones: pages read, threads on screen and threads being opened. */
+  const keptThreads = (id: string, depth: RefreshDepth) => {
+    const onScreen = ref.current.chats.filter(
+      (chat) => chat.computerId === id && chat.sessionId && shownSessions.current.has(scoped(id, chat.sessionId)),
+    )
+    return [
+      ...(pagedDone.current.get(id) ?? []),
+      ...onScreen.flatMap((chat) => (chat.taskId ? [chat.taskId] : [])),
+      ...(typeof depth === 'object' ? depth : []),
+    ]
+  }
+  const countOlderDone = (id: string, tasks: readonly { id: string; status: string; doneAt?: number | null }[]) => {
+    const cursor = doneCursor(tasks)
+    const key = cursor ? `${cursor.doneAt}:${cursor.id}:${tasks.filter(isDoneThread).length}` : ''
+    if (doneCounted.current.get(id) === key) return
+    doneCounted.current.set(id, key)
+    if (!cursor) return setDoneRemaining((counts) => ({ ...counts, [id]: 0 }))
+    void readOlderDone((from, limit) => invoke(id, 'tasks.olderDone', from, limit), cursor, 0).then(
+      ({ remaining }) => setDoneRemaining((counts) => ({ ...counts, [id]: remaining })),
+      () => doneCounted.current.delete(id),
+    )
+  }
   const [syncing, setSyncing] = useState<ReadonlySet<string>>(() => new Set())
   const [threadReads, setThreadReads] = useState<Record<string, ThreadListRead>>({})
   const markThreadRead = (id: string, read?: ThreadListRead) =>
@@ -778,11 +810,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const known = ref.current
       const [projects, tasks, allSessions, catalogs, usage] = await Promise.all([
         read('projects.list'),
-        read('tasks.list'),
+        readThreadList(
+          (options) => (options ? read('tasks.list', options) : read('tasks.list')),
+          keptThreads(id, depth),
+        ),
         read('agent.all'),
         depth !== true && known.catalogs[id] ? known.catalogs[id] : read('agent.catalog'),
         depth !== true && known.usage[id] ? known.usage[id] : read('usage.get'),
       ])
+      countOlderDone(id, tasks)
       // One read for the host's sessions, not one per thread: a phone pays a round trip for each.
       const newestSessions = new Map<string, (typeof allSessions)[number]>()
       for (const candidate of allSessions) {
@@ -1773,6 +1809,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       await Promise.all(ref.current.computers.map((c) => invoke(c.id, 'notifications.unregister')))
       pushToken.current = null
       change((s) => ({ ...s, drafts: { ...s.drafts, 'push-enabled': '' } }))
+    },
+    doneRemaining,
+    loadOlderDone: async (computerId) => {
+      const held = ref.current.chats.flatMap((chat) =>
+        chat.computerId === computerId && chat.taskId
+          ? [{ id: chat.taskId, status: chat.status, doneAt: chat.doneAt }]
+          : [],
+      )
+      const cursor = doneCursor(held)
+      if (!cursor) return
+      const page = await readOlderDone(
+        (from, limit) => invoke(computerId, 'tasks.olderDone', from, limit),
+        cursor,
+        DONE_PAGE,
+      )
+      const paged = pagedDone.current.get(computerId) ?? new Set<string>()
+      for (const task of page.tasks) paged.add(task.id)
+      pagedDone.current.set(computerId, paged)
+      // The list is read again with these kept, so each arrives as a thread like the rest, with its preview. A read
+      // already under way started without them, so this one follows it.
+      await refreshing.current.get(computerId)?.catch(() => {})
+      await refresh(computerId)
     },
     resolveChat: (computerId, taskId) =>
       ref.current.chats.find((c) => c.computerId === computerId && c.taskId === taskId)?.id ??

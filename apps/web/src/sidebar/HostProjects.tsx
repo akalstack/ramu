@@ -32,6 +32,7 @@ import { t, useLanguage } from '../i18n'
 import { FadeText } from '../FadeText'
 import { ProjectsPanel } from './ProjectsPanel'
 import { TaskRow } from './projects/TaskRow'
+import { OlderDoneRow } from './projects/OlderDoneRow'
 import { WorkingDot } from './projects/TaskStateIcon'
 import { LiveAppDialog } from './projects/LiveAppDialog'
 import { CiSetupDialog } from './projects/CiSetup'
@@ -234,7 +235,7 @@ function OtherHostProjects({ computer, embedded }: { computer: Computer; embedde
         <SectionHead
           title={t(name)}
           icon={name === 'Done' ? CheckCheck : name === 'Pinned' ? Pin : MessageCircle}
-          count={name === 'Done' ? tasks.length : undefined}
+          count={name === 'Done' ? tasks.length + (rows.store?.doneRemaining ?? 0) : undefined}
           open={open}
           onToggle={() => (shared ? doneSection.setOpen(!open) : tree.setExpanded(id, !open))}
           controls={key}
@@ -251,6 +252,7 @@ function OtherHostProjects({ computer, embedded }: { computer: Computer; embedde
                 projectName={name === 'Threads' ? undefined : threadProjectName(projects, task.projectId)}
               />
             ))}
+          {shared && rows.store && <OlderDoneRow hosts={[rows.store]} />}
         </Collapse>
       </>
     )
@@ -524,6 +526,7 @@ function MergedSection({
   icon,
   threads,
   order,
+  paged = false,
 }: {
   computers: Computer[]
   id: string
@@ -531,16 +534,20 @@ function MergedSection({
   icon: LucideIcon
   threads: (source: HostThreads) => Task[]
   order: (a: Task, b: Task) => number
+  /** Finished threads are paged: the count includes the ones not read yet, and a row reads the next page. */
+  paged?: boolean
 }) {
   const { open, setOpen } = useSharedSidebarSection(`section:${id}`)
-  const rows = mergedThreads(useHostThreads(computers), threads).sort((a, b) => order(a.task, b.task))
+  const sources = useHostThreads(computers)
+  const rows = mergedThreads(sources, threads).sort((a, b) => order(a.task, b.task))
+  const stores = paged ? sources.flatMap((source) => (source.store ? [source.store] : [])) : []
   if (!rows.length) return null
   return (
     <section className="min-w-0">
       <SectionHead
         title={title}
         icon={icon}
-        count={rows.length}
+        count={rows.length + stores.reduce((sum, store) => sum + store.doneRemaining, 0)}
         open={open}
         onToggle={() => setOpen(!open)}
         controls={`all-hosts-${id}`}
@@ -549,6 +556,7 @@ function MergedSection({
         {rows.map(({ task, source }) => (
           <MergedRow key={`${source.host}:${task.id}`} task={task} source={source} />
         ))}
+        {paged && <OlderDoneRow hosts={stores} />}
       </Collapse>
     </section>
   )
@@ -578,6 +586,7 @@ function MergedDone({ computers }: { computers: Computer[] }) {
       icon={CheckCheck}
       threads={(source) => source.done}
       order={(a, b) => b.doneAt! - a.doneAt!}
+      paged
     />
   )
 }

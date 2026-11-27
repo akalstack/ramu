@@ -30,6 +30,7 @@ import type {
   AgentSessionInfo,
   AgentTask,
   McpConnection,
+  McpSignIn,
 } from '@ramu/shared/types'
 import type { HelperHistory } from '../agent/helperHistory'
 import { mcpCallSkipsCard } from '../agent/toolApprovals'
@@ -279,7 +280,15 @@ class CodexSession implements CodexRunner {
       if (cursor) seen.add(cursor)
       if (seen.size >= 100) throw new Error('Codex MCP inventory exceeded the page limit')
     } while (cursor)
-    return { supported: true, live: true, source: 'live' as const, canReload: true, servers }
+    return { supported: true, live: true, source: 'live' as const, canReload: true, canAuthenticate: true, servers }
+  }
+
+  async signInMcp(name: string): Promise<McpSignIn> {
+    if (!this.rpc || !this.threadId || this.stopped) throw new Error('Codex session is not running')
+    const answer = await this.rpc.request('mcpServer/oauth/login', { name, threadId: this.threadId })
+    const authUrl = typeof answer?.authorizationUrl === 'string' ? answer.authorizationUrl : undefined
+    // Codex listens for the page's return on the host itself, as Claude Code does.
+    return { ...(authUrl ? { authUrl } : {}), returnsToHost: !!authUrl }
   }
 
   async reloadMcp(): Promise<void> {

@@ -3,6 +3,8 @@ import { mcpStatusLabel } from '@ramu/shared/mcp'
 import type { AgentMcpStatus } from '@ramu/shared/types'
 import { Dialog } from '../../../Menu'
 import { Button } from '@/components/desktop-button'
+import { Input } from '@/components/desktop-input'
+import { ramu } from '../../../ipc'
 import { RefreshCw, Settings } from 'lucide-react'
 import { useHost } from '../../../workspace/HostProvider'
 import { t, useLanguage } from '../../../i18n'
@@ -25,7 +27,7 @@ const dot = (status: string) =>
 
 export function McpStatusDialog({ sessionId, onClose }: { sessionId: string; onClose: () => void }) {
   useLanguage()
-  const { invoke } = useHost()
+  const { invoke, isLocal } = useHost()
   const [status, setStatus] = useState<AgentMcpStatus | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -64,6 +66,54 @@ export function McpStatusDialog({ sessionId, onClose }: { sessionId: string; onC
       if (revision.current === request) setBusy(false)
     }
   }
+  // A sign-in under way: its page is open in the browser. From another device the page cannot return to the host,
+  // so the address it ended on is pasted here instead.
+  const [signingIn, setSigningIn] = useState<{ name: string; paste: boolean } | null>(null)
+  const [returned, setReturned] = useState('')
+  const signIn = async (name: string) => {
+    setBusy(true)
+    setError(null)
+    try {
+      const started = await invoke('agent.signInMcp', sessionId, name)
+      if (!started.authUrl) return void (await load())
+      await ramu.invoke('app.openExternal', started.authUrl)
+      setReturned('')
+      setSigningIn({ name, paste: started.returnsToHost && !isLocal })
+    } catch (reason) {
+      setError(errorText(reason))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const finishSignIn = async () => {
+    if (!signingIn) return
+    setBusy(true)
+    setError(null)
+    try {
+      await invoke('agent.finishMcpSignIn', sessionId, signingIn.name, returned.trim())
+      setSigningIn(null)
+      await load()
+    } catch (reason) {
+      setError(errorText(reason))
+    } finally {
+      setBusy(false)
+    }
+  }
+  // While the page is open, the status is read again every few seconds, so the server turns ready once signed in.
+  const signingName = signingIn?.name
+  useEffect(() => {
+    if (!signingName) return
+    const timer = setInterval(() => void load(), 3000)
+    const give = setTimeout(() => setSigningIn(null), 5 * 60_000)
+    return () => {
+      clearInterval(timer)
+      clearTimeout(give)
+    }
+  }, [signingName, load])
+  useEffect(() => {
+    if (signingName && status?.servers.some((server) => server.name === signingName && server.status === 'connected'))
+      setSigningIn(null)
+  }, [signingName, status])
   const label = (value: string) => t(mcpStatusLabel(value))
   // What the status can and cannot tell, said once in a quiet line instead of a paragraph per caveat.
   const notes = status?.supported
@@ -141,7 +191,12 @@ export function McpStatusDialog({ sessionId, onClose }: { sessionId: string; onC
                           {server.toolCount !== undefined && ` · ${t('{0} tools', { '0': server.toolCount })}`}
                         </span>
                       </span>
-                      {status.live &&
+                      {status.live && status.canAuthenticate && server.status === 'needs-auth' ? (
+                        <Button variant="secondary" size="sm" disabled={busy} onClick={() => void signIn(server.name)}>
+                          {t('Sign in')}
+                        </Button>
+                      ) : (
+                        status.live &&
                         status.canReconnect &&
                         (server.status === 'failed' || server.status === 'needs-auth') && (
                           <Button
@@ -152,12 +207,44 @@ export function McpStatusDialog({ sessionId, onClose }: { sessionId: string; onC
                           >
                             {t('Reconnect')}
                           </Button>
-                        )}
+                        )
+                      )}
                     </div>
-                    {server.status === 'needs-auth' && (
+                    {server.status === 'needs-auth' && signingIn?.name !== server.name && (
                       <p className="m-0 pl-[18px] text-caption text-muted-foreground">
-                        {t('Authenticate this server in your provider, then refresh.')}
+                        {status.live && status.canAuthenticate
+                          ? t('Sign in opens the server’s page in your browser.')
+                          : t('Authenticate this server in your provider, then refresh.')}
                       </p>
+                    )}
+                    {signingIn?.name === server.name && (
+                      <div className="flex flex-col gap-1.5 pl-[18px]">
+                        <p className="m-0 text-caption text-muted-foreground">
+                          {signingIn.paste
+                            ? t('After you allow access, copy the address your browser ended on and paste it here.')
+                            : t('Finish signing in in your browser. This updates when it is done.')}
+                        </p>
+                        {signingIn.paste && (
+                          <form
+                            className="flex items-center gap-2"
+                            onSubmit={(event) => {
+                              event.preventDefault()
+                              void finishSignIn()
+                            }}
+                          >
+                            <Input
+                              className="min-w-0 flex-1"
+                              value={returned}
+                              placeholder="http://localhost:…"
+                              aria-label={t('Address your browser ended on')}
+                              onChange={(event) => setReturned(event.target.value)}
+                            />
+                            <Button type="submit" size="sm" disabled={busy || !returned.trim()}>
+                              {t('Finish')}
+                            </Button>
+                          </form>
+                        )}
+                      </div>
                     )}
                     {server.error && <p className="m-0 pl-[18px] text-caption break-words text-bad">{server.error}</p>}
                   </li>

@@ -28,6 +28,7 @@ export interface AgentRunner {
   readonly steerInterrupts?: boolean
   mcpStatus?(): Promise<AgentMcpStatus>
   reconnectMcp?(name: string): Promise<void>
+  signInMcp?(name: string): Promise<import('@ramu/shared/types').McpSignIn>
   reloadMcp?(): Promise<void>
   setTools?(connection: McpConnection): void
   /** Serves the runtime's client-terminal requests; given only to providers whose adapter enables `native.terminals`. */

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, View } from 'react-native'
+import { ActivityIndicator, Linking, TextInput, View } from 'react-native'
 import { mcpStatusLabel } from '@ramu/shared/mcp'
 import type { AgentMcpStatus } from '@ramu/shared/types'
 import { useSay } from '../i18n'
 import { useStore } from '../runtime/store'
-import { font, space, useTheme } from '../theme'
+import { font, radius, space, useTheme } from '../theme'
 import { Button, Card, Divider, Sheet, T } from './ui'
 
 /**
@@ -53,6 +53,28 @@ export function McpStatusSheet({
   useEffect(() => {
     if (open) void load()
   }, [open, load])
+  // A sign-in under way. Its page opens in this phone's browser, which cannot return to the host by itself when the
+  // provider waits on the host's own address, so the address it ended on is pasted here.
+  const [signingIn, setSigningIn] = useState<{ name: string; paste: boolean } | null>(null)
+  const [returned, setReturned] = useState('')
+  const signIn = (name: string) =>
+    load(async () => {
+      const started = await latest.current.invoke(computerId, 'agent.signInMcp', sessionId, name)
+      if (!started.authUrl) return
+      setReturned('')
+      setSigningIn({ name, paste: started.returnsToHost })
+      await Linking.openURL(started.authUrl)
+    })
+  const signingName = signingIn?.name
+  useEffect(() => {
+    if (!signingName || !open) return
+    const timer = setInterval(() => void load(), 3000)
+    return () => clearInterval(timer)
+  }, [signingName, open, load])
+  useEffect(() => {
+    if (signingName && status?.servers.some((server) => server.name === signingName && server.status === 'connected'))
+      setSigningIn(null)
+  }, [signingName, status])
   const tone = (value: string) =>
     value === 'connected' ? c.ok : value === 'failed' || value === 'needs-auth' ? c.bad : c.muted
   return (
@@ -103,14 +125,72 @@ export function McpStatusSheet({
                           {server.error}
                         </T>
                       ) : null}
-                      {server.status === 'needs-auth' ? (
+                      {server.status === 'needs-auth' && signingName !== server.name ? (
                         <T size={font.caption} tone="muted">
-                          {say('Authenticate this server in your provider, then refresh.')}
+                          {status.live && status.canAuthenticate
+                            ? say('Sign in opens the server’s page in your browser.')
+                            : say('Authenticate this server in your provider, then refresh.')}
                         </T>
                       ) : null}
-                      {status.canReconnect &&
-                      !readOnly &&
-                      (server.status === 'failed' || server.status === 'needs-auth') ? (
+                      {signingIn && signingName === server.name ? (
+                        <View style={{ gap: space.s }}>
+                          <T size={font.caption} tone="muted">
+                            {signingIn.paste
+                              ? say('After you allow access, copy the address your browser ended on and paste it here.')
+                              : say('Finish signing in in your browser. This updates when it is done.')}
+                          </T>
+                          {signingIn.paste ? (
+                            <View style={{ flexDirection: 'row', gap: space.s, alignItems: 'center' }}>
+                              <TextInput
+                                value={returned}
+                                onChangeText={setReturned}
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                                keyboardType="url"
+                                accessibilityLabel={say('Address your browser ended on')}
+                                placeholder="http://localhost:…"
+                                placeholderTextColor={c.placeholder}
+                                style={{
+                                  flex: 1,
+                                  color: c.text,
+                                  fontSize: font.body,
+                                  padding: space.m,
+                                  borderRadius: radius.m,
+                                  backgroundColor: c.raised2,
+                                }}
+                              />
+                              <Button
+                                title={say('Finish')}
+                                disabled={busy || !returned.trim()}
+                                onPress={() =>
+                                  void load(async () => {
+                                    await latest.current.invoke(
+                                      computerId,
+                                      'agent.finishMcpSignIn',
+                                      sessionId,
+                                      server.name,
+                                      returned.trim(),
+                                    )
+                                    setSigningIn(null)
+                                  })
+                                }
+                              />
+                            </View>
+                          ) : null}
+                        </View>
+                      ) : null}
+                      {status.live && status.canAuthenticate && !readOnly && server.status === 'needs-auth' ? (
+                        <View style={{ flexDirection: 'row' }}>
+                          <Button
+                            kind="secondary"
+                            title={say('Sign in')}
+                            disabled={busy}
+                            onPress={() => void signIn(server.name)}
+                          />
+                        </View>
+                      ) : status.canReconnect &&
+                        !readOnly &&
+                        (server.status === 'failed' || server.status === 'needs-auth') ? (
                         <View style={{ flexDirection: 'row' }}>
                           <Button
                             kind="secondary"

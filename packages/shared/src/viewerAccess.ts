@@ -45,6 +45,7 @@ const viewerMethods = new Set([
   'projects.list',
   'repos.list',
   'tasks.list',
+  'tasks.olderDone',
   'tasks.get',
   'tasks.bindings',
   'workspaces.list',

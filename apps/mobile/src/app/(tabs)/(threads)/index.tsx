@@ -67,6 +67,8 @@ type HomeRow = { key: string } & Position &
     | { kind: 'done'; count: number; closed: boolean }
     // `group` set: show the rest of one project (or fewer again); unset: more of the flat filtered list.
     | { kind: 'more'; group?: string; hidden?: number }
+    // Finished threads the hosts hold back, read a page at a time.
+    | { kind: 'older'; count: number }
   )
 
 /** Newest threads each project shows before "Show more"; running, waiting and failed ones always show. */
@@ -116,6 +118,7 @@ export default function Threads() {
     return () => back.remove()
   }, [selection.on])
   const [usageOpen, setUsageOpen] = useState(false)
+  const [loadingOlder, setLoadingOlder] = useState(false)
   const [resourcesOpen, setResourcesOpen] = useState(false)
 
   type StatusFilter = 'all' | 'running' | 'needs-input' | 'failed' | 'archived'
@@ -189,6 +192,16 @@ export default function Threads() {
   const { open, done } = useMemo(
     () => (filter === 'archived' ? { open: mine, done: [] } : splitDone(mine)),
     [mine, filter],
+  )
+  // Hosts that hold back older finished threads; the Done section counts them and reads them a page at a time.
+  const olderDone = useMemo(
+    () =>
+      filter === 'archived'
+        ? []
+        : (merged ? store.computers.map((computer) => computer.id) : [selected])
+            .map((id) => ({ id, count: store.doneRemaining[id] ?? 0 }))
+            .filter((host) => host.count > 0),
+    [filter, merged, store.computers, store.doneRemaining, selected],
   )
   const pinned = open
     .filter((x) => x.pinnedAt !== null && filter !== 'archived')
@@ -323,15 +336,19 @@ export default function Threads() {
       const closed = collapsed.has(DONE_KEY)
       const all = expanded.has(DONE_KEY)
       const shown = closed ? [] : all ? done : done.slice(0, DONE_PAGE)
+      const older = olderDone.reduce((sum, host) => sum + host.count, 0)
       group(
         'done',
         [
-          { key: 'head', kind: 'done', count: done.length, closed } as HomeRow,
+          { key: 'head', kind: 'done', count: done.length + older, closed } as HomeRow,
           ...shown.map(
             (chat, i) => ({ key: chat.id, kind: 'chat', chat, project: labelOf(chat), divider: i > 0 }) as HomeRow,
           ),
           ...(!closed && done.length > DONE_PAGE
             ? [{ key: 'more', kind: 'more', group: DONE_KEY, hidden: all ? 0 : done.length - DONE_PAGE } as HomeRow]
+            : []),
+          ...(!closed && older && (all || done.length <= DONE_PAGE)
+            ? [{ key: 'older', kind: 'older', count: older } as HomeRow]
             : []),
         ],
         groups.length ? space.m : 0,
@@ -344,6 +361,7 @@ export default function Threads() {
     pinned,
     unpinned,
     done,
+    olderDone,
     projectList,
     historyLimit,
     filtering,
@@ -451,6 +469,23 @@ export default function Threads() {
             ) : null}
           </View>
         </Pressable>
+      ) : row.kind === 'older' ? (
+        <Row
+          onPress={() => {
+            if (loadingOlder) return
+            setLoadingOlder(true)
+            void Promise.all(olderDone.map((host) => store.loadOlderDone(host.id)))
+              .catch(() => {})
+              .finally(() => setLoadingOlder(false))
+          }}
+          style={{ paddingVertical: 11, paddingLeft: ROW_INSET }}
+        >
+          <T size={font.control} tone="muted">
+            {loadingOlder
+              ? translate(store.language, 'Loading…')
+              : translate(store.language, 'Show {count} more', { count: row.count })}
+          </T>
+        </Row>
       ) : row.kind === 'more' ? (
         <Row
           onPress={() => (row.group ? toggle(setExpanded, row.group) : setHistoryLimit((limit) => limit + 20))}

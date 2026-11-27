@@ -15,6 +15,7 @@ import { ICON_BUTTON_CLASS, pinnedFirst } from './projects/constants'
 import { useProjectsDragDrop } from './projects/dnd'
 import { ProjectGroup } from './projects/ProjectGroup'
 import { SectionHead } from './projects/SectionHead'
+import { OlderDoneRow } from './projects/OlderDoneRow'
 import { TaskRow } from './projects/TaskRow'
 import { BulkThreadActionsContext, ThreadSelectionBar, useBulkThreadActions } from './projects/ThreadSelectionBar'
 import { SidebarDisclosureButton } from '@/components/sidebar-disclosure-button'
@@ -184,7 +185,7 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
             <SectionHead
               title={t('Done')}
               icon={CheckCheck}
-              count={done.length}
+              count={done.length + ws.doneRemaining}
               open={showDone}
               onToggle={() => doneSection.setOpen(!showDone)}
               controls="done-chats"
@@ -193,6 +194,7 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
               {done.map((task) => (
                 <TaskRow key={task.id} task={task} projectName={threadProjectName(ws.projects, task.projectId)} />
               ))}
+              <OlderDoneRow hosts={[ws]} />
             </Collapse>
           </>
         )}

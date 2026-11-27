@@ -161,6 +161,14 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id, z.string().min(1).max(500)]),
       run: (s: string, name: string) => agents.reconnectMcp(s, name),
     },
+    'agent.signInMcp': {
+      args: z.tuple([id, z.string().min(1).max(500)]),
+      run: (s: string, name: string) => agents.signInMcp(s, name),
+    },
+    'agent.finishMcpSignIn': {
+      args: z.tuple([id, z.string().min(1).max(500), z.string().url().max(8192)]),
+      run: (s: string, name: string, callbackUrl: string) => agents.finishMcpSignIn(s, name, callbackUrl),
+    },
     'agent.scope': { args: z.tuple([id]), run: (taskId: string) => workspace.agentScope(taskId) },
     'agent.catalog': { args: z.tuple([z.boolean().optional()]), run: (refresh?: boolean) => agents.catalog(refresh) },
     'models.news': { args: z.tuple([]), run: () => agents.modelNews?.notices() ?? [] },

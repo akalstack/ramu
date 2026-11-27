@@ -4588,6 +4588,7 @@ describe('MCP connection status', () => {
       live: true,
       source: 'live',
       canReconnect: true,
+      canAuthenticate: false,
       servers: [{ name: 'pentools-atlassian', status: 'connected', toolCount: 1 }],
     })
     await svc.reconnectMcp(chat.id, 'pentools-atlassian')
@@ -4597,6 +4598,36 @@ describe('MCP connection status', () => {
     svc.stopAll()
     expect(await svc.mcpStatus(chat.id)).toMatchObject({ supported: true, live: false })
     await expect(svc.reconnectMcp(chat.id, 'pentools-atlassian')).rejects.toThrow('while a Claude session is active')
+  })
+
+  it('starts a Claude Code sign-in for a server that needs one, and passes back where the browser ended', async () => {
+    const mcpServerStatus = vi.fn(async () => [{ name: 'linear', status: 'needs-auth' }])
+    const mcpAuthenticate = vi.fn(async () => ({
+      authUrl: 'https://mcp.linear.app/authorize?state=s1',
+      requiresUserAction: true,
+      callbackExpected: true,
+      redirectScheme: 'localhost',
+      callbackPort: 53111,
+    }))
+    const mcpSubmitOAuthCallbackUrl = vi.fn(async () => ({}))
+    const query: QueryFn = (options) =>
+      Object.assign(fakeQuery([])(options), { mcpServerStatus, mcpAuthenticate, mcpSubmitOAuthCallbackUrl })
+    const svc = new AgentService(db, () => {}, query)
+    const chat = svc.start('t', scopeOf(cwd), 'hello', full)
+    await until(() => svc.get(chat.id).state === 'idle')
+    expect(await svc.mcpStatus(chat.id)).toMatchObject({ canAuthenticate: true })
+    expect(await svc.signInMcp(chat.id, 'linear')).toEqual({
+      authUrl: 'https://mcp.linear.app/authorize?state=s1',
+      returnsToHost: true,
+    })
+    expect(mcpAuthenticate).toHaveBeenCalledExactlyOnceWith('linear')
+    await svc.finishMcpSignIn(chat.id, 'linear', 'http://localhost:53111/callback?code=c1&state=s1')
+    expect(mcpSubmitOAuthCallbackUrl).toHaveBeenCalledExactlyOnceWith(
+      'linear',
+      'http://localhost:53111/callback?code=c1&state=s1',
+    )
+    svc.stopAll()
+    await expect(svc.signInMcp(chat.id, 'linear')).rejects.toThrow('while the thread is running')
   })
 
   it('routes native runner status and recovery controls without returning raw configuration', async () => {

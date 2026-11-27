@@ -23,6 +23,7 @@ import type { Db } from './db'
 import type {
   ContextUsage,
   AgentMcpStatus,
+  McpSignIn,
   AgentModel,
   AppPreferences,
   AgentEvent,
@@ -40,6 +41,7 @@ import type { UsageService } from './providers/usage'
 import { loadHelperHistory, type HelperHistoryLoader } from './agent/helperHistory'
 import { realGoalProbes, type GoalProbes } from './agent/goalProbes'
 import type { QueryFn, SubagentResult } from './agent/types'
+import { z } from 'zod'
 import { SessionStore } from './agent/sessionStore'
 import { readHelperSummaries } from './agent/helperSummaries'
 import { markAdviceRead, readUnreadAdvice } from './agent/adviceUnread'
@@ -71,6 +73,26 @@ export { isUsageLimit } from './agent/usageLimit'
 
 /** No model signals yet; one object, so the catalog's classified result is reused. */
 const NO_SIGNALS = {}
+/**
+ * Claude Code's MCP sign-in. The SDK's query runs it, though its declarations leave it out, so it is checked for before use.
+ */
+interface ClaudeMcpAuth {
+  mcpAuthenticate(serverName: string): Promise<unknown>
+  mcpSubmitOAuthCallbackUrl(serverName: string, callbackUrl: string): Promise<unknown>
+}
+function claudeMcpAuth(query: unknown): ClaudeMcpAuth | null {
+  const candidate = query as Partial<ClaudeMcpAuth> | null | undefined
+  return typeof candidate?.mcpAuthenticate === 'function' && typeof candidate.mcpSubmitOAuthCallbackUrl === 'function'
+    ? (candidate as ClaudeMcpAuth)
+    : null
+}
+const claudeSignIn = z
+  .object({
+    authUrl: z.string().url().optional(),
+    callbackExpected: z.boolean().optional(),
+    redirectScheme: z.string().optional(),
+  })
+  .passthrough()
 
 /**
  * A helper's settings on a named model: the parent's own (access and fallback), on that model at its default effort.
@@ -937,7 +959,14 @@ export class AgentService {
       const servers = mcpServerDetails(await mcpRequest(query.mcpServerStatus()))
       if (this.parts.registry.live.get(id)?.query !== query)
         throw new Error('The provider changed. Refresh MCP status.')
-      return { supported: true, live: true, source: 'live', canReconnect: true, servers }
+      return {
+        supported: true,
+        live: true,
+        source: 'live',
+        canReconnect: true,
+        canAuthenticate: !!claudeMcpAuth(query),
+        servers,
+      }
     }
     const init = this.events(id).findLast((event) => event.kind === 'init')
     return {
@@ -966,6 +995,26 @@ export class AgentService {
     if (this.parts.registry.live.get(id)?.query !== query) throw new Error('The provider changed. Refresh MCP status.')
     if (!servers.some((server) => server.name === name)) throw new Error('Unknown MCP server')
     await mcpRequest(query.reconnectMcpServer(name), 70_000)
+  }
+
+  async signInMcp(id: string, name: string): Promise<McpSignIn> {
+    const session = this.get(id)
+    const runner = this.parts.registry.runners.get(id)
+    if (runner?.signInMcp) return mcpRequest(runner.signInMcp(name), 70_000)
+    const query = this.parts.registry.live.get(id)?.query
+    const auth = session.provider === 'claude-code' ? claudeMcpAuth(query) : null
+    if (!auth) throw new Error('Signing in is available while the thread is running. Send a message to start it.')
+    const answer = claudeSignIn.safeParse(await mcpRequest(auth.mcpAuthenticate(name), 70_000))
+    if (!answer.success) throw new Error('The provider answered the sign-in in a shape Ramu does not know.')
+    const { authUrl, callbackExpected, redirectScheme } = answer.data
+    return { ...(authUrl ? { authUrl } : {}), returnsToHost: !!callbackExpected && redirectScheme === 'localhost' }
+  }
+
+  async finishMcpSignIn(id: string, name: string, callbackUrl: string): Promise<void> {
+    const session = this.get(id)
+    const auth = session.provider === 'claude-code' ? claudeMcpAuth(this.parts.registry.live.get(id)?.query) : null
+    if (!auth) throw new Error('This provider finishes the sign-in by itself.')
+    await mcpRequest(auth.mcpSubmitOAuthCallbackUrl(name, callbackUrl), 70_000)
   }
 
   async reloadMcp(id: string): Promise<void> {

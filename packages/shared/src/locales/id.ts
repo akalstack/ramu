@@ -1236,6 +1236,12 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Thread baru memakai akun ini setelah disimpan. Thread yang sudah ada tetap memakai akun sebelumnya.',
   'Updating…': 'Memperbarui…',
   'Finish sign-in in your browser…': 'Selesaikan login di browser…',
+  'Sign in opens the server’s page in your browser.': 'Masuk membuka halaman server di browser Anda.',
+  'After you allow access, copy the address your browser ended on and paste it here.':
+    'Setelah Anda mengizinkan akses, salin alamat terakhir di browser Anda dan tempel di sini.',
+  'Finish signing in in your browser. This updates when it is done.':
+    'Selesaikan masuk di browser Anda. Ini diperbarui setelah selesai.',
+  'Address your browser ended on': 'Alamat terakhir di browser Anda',
   'Update CLI': 'Perbarui CLI',
   'Provider website ↗': 'Situs provider ↗',
   'Auto-update CLI': 'Perbarui CLI otomatis',
@@ -2503,6 +2509,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Shortcut: {0}': 'Pintasan: {0}',
   'Show browser': 'Tampilkan browser',
   'Show {0} more': 'Tampilkan {0} lagi',
+  'Could not load older threads. Try again': 'Thread lama tidak bisa dimuat. Coba lagi',
   'Showing the first {0}. Narrow your search to see the rest.':
     'Menampilkan {0} pertama. Persempit pencarian untuk melihat sisanya.',
   'Skills Ramu created, updated or archived.': 'Skill yang dibuat, diperbarui, atau diarsipkan Ramu.',

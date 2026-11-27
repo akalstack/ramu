@@ -36,6 +36,19 @@ export interface AgentMcpStatus {
   source?: 'live' | 'snapshot' | 'configuration'
   canReconnect?: boolean
   canReload?: boolean
+  /** A server that needs a sign-in can start it from Ramu: the provider gives the page to open. */
+  canAuthenticate?: boolean
+}
+
+/** A sign-in the provider started for an MCP server. */
+export interface McpSignIn {
+  /** The page to open; absent when the server took the sign-in it already had. */
+  authUrl?: string
+  /**
+   * The page sends the browser back to the provider on the host's own `localhost`. From another device it cannot get
+   * there, so the person pastes the address the browser ended on (`agent.finishMcpSignIn`).
+   */
+  returnsToHost: boolean
 }
 
 export interface AgentModel {
