@@ -302,7 +302,7 @@ interface Store extends State {
   setDraft(key: string, text: string): void
   rememberExplorer(host: string, context: string, navigation: Omit<ExplorerNavigation, 'at'>): void
   addExplorerFile(input: ExplorerFileInput): Promise<ExplorerDestination>
-  clearComposerDraft(key: string, expected: ComposerSnapshot): boolean
+  clearComposerDraft(key: string, expected: Partial<ComposerSnapshot>): boolean
 
   dismissError(): void
   enablePush(): Promise<void>

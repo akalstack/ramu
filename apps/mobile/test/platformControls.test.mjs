@@ -2485,6 +2485,67 @@ test('returning from Explorer updates only the mounted composer’s context and 
   hooks.dispose()
 })
 
+test('Send clears the message box even when the saved draft no longer matches it', async () => {
+  const hooks = hookHarness()
+  const store = {
+    selected: 'a',
+    computers: [{ id: 'a', status: 'online' }],
+    projects: [{ id: 'a:p', computerId: 'a' }],
+    chats: [{ id: 'a:chat', taskId: 'task', computerId: 'a', projectId: 'a:p' }],
+    missingMethods: {},
+    appPreferences: {},
+    drafts: { 'a:chat:task': 'Ship it' },
+    isOnline: () => true,
+    mayUse: () => true,
+    setDraft: (key, value) => {
+      store.drafts[key] = value
+    },
+    clearComposerDraft: (key, expected) => {
+      const next = explorerDrafts.consumeComposerDraft(store.drafts, key, expected)
+      if (!next) return false
+      store.drafts = next
+      return true
+    },
+  }
+  const { Composer } = load('components/Composer.tsx', 'ios', {
+    react: hooks.react,
+    'expo-router': { useFocusEffect() {} },
+    './ui': new Proxy({}, { get: (_, key) => (key === 'tap' ? () => {} : String(key)) }),
+    '@ramu/shared/chat/composerDraft': {
+      composerDraft: (text) => ({ chips: [], segments: [{ kind: 'text', source: text }] }),
+    },
+    '../runtime/store': { useStore: () => store },
+    '../i18n': { useT: () => ({}) },
+    '../runtime/goalVerify': { canEditVerify: () => false },
+    './ComposerSuggest': { useComposerSuggest: () => ({ visible: false }) },
+  })
+  const sent = []
+  const props = {
+    computerId: 'a',
+    taskId: 'task',
+    draftKey: 'a:chat:task',
+    running: false,
+    model: { provider: 'claude-code', model: 'opus' },
+    onModel() {},
+    onSend: async (text) => {
+      sent.push(text)
+    },
+  }
+  const render = () => hooks.render(() => Composer(props))
+  let tree = render()
+  // Written behind the box's back: the box still shows what the person typed.
+  store.drafts['a:chat:task'] = 'Ship it now'
+  nodes(tree)
+    .find((node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Send')
+    .props.onPress()
+  await settle()
+  tree = render()
+  assert.deepEqual(sent, ['Ship it'])
+  assert.equal(store.drafts['a:chat:task'], '')
+  assert.equal(find(tree, 'TextInput').props.value ?? '', '')
+  hooks.dispose()
+})
+
 for (const [initial, path] of [
   ['all', 'README.md'],
   ['file', 'image.png'],

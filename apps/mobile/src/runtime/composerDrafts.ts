@@ -128,17 +128,20 @@ export interface ComposerSnapshot {
   mentions: string
 }
 
-/** A late send acknowledgement cannot consume edits or file additions made after submission began. */
+/**
+ * A late send acknowledgement cannot consume edits or file additions made after submission began. Only the parts given
+ * are compared; the rest are cleared regardless.
+ */
 export function consumeComposerDraft(
   drafts: Record<string, string>,
   key: string,
-  expected: ComposerSnapshot,
+  expected: Partial<ComposerSnapshot>,
 ): Record<string, string> | null {
   if (
-    (drafts[key] ?? '') !== expected.text ||
-    (drafts[`${key}:attachments`] ?? '[]') !== expected.attachments ||
-    (drafts[`${key}:context`] ?? '[]') !== expected.context ||
-    (drafts[`${key}:mentions`] ?? '[]') !== expected.mentions
+    (expected.text !== undefined && (drafts[key] ?? '') !== expected.text) ||
+    (expected.attachments !== undefined && (drafts[`${key}:attachments`] ?? '[]') !== expected.attachments) ||
+    (expected.context !== undefined && (drafts[`${key}:context`] ?? '[]') !== expected.context) ||
+    (expected.mentions !== undefined && (drafts[`${key}:mentions`] ?? '[]') !== expected.mentions)
   )
     return null
   return { ...drafts, [key]: '', [`${key}:attachments`]: '[]', [`${key}:context`]: '[]', [`${key}:mentions`]: '[]' }

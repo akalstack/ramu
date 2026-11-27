@@ -1131,6 +1131,13 @@ export function Composer({
   const nextRoute = useNextRoute(routeChat)
   const has = text.trim().length > 0 || attachments.length > 0 || context.length > 0 || !!extraContent
   const viewOnly = store.computers?.find((computer) => computer.id === pc)?.access === 'viewer'
+  const composed = useRef({ text, attachments: '', context: '', mentions: '' })
+  composed.current = {
+    text,
+    attachments: JSON.stringify(attachments),
+    context: JSON.stringify(context),
+    mentions: JSON.stringify(mentions),
+  }
   const submit = async (sendMode: 'queue' | 'steer' = mode) => {
     if (!has || viewOnly || sending.current || uploading || dictating) return
 
@@ -1180,9 +1187,18 @@ export function Composer({
         return
       }
       if (origin.current !== submittedOwner) return
-      if (draftKey && !store.clearComposerDraft(draftKey, submittedDraft)) {
+      // Words typed or files added while the send was on its way stay for the next message. This reads the box itself:
+      // the saved draft could differ from it without the person changing anything, and the sent text then stayed.
+      const now = composed.current
+      if (
+        now.text !== submittedDraft.text ||
+        now.attachments !== submittedDraft.attachments ||
+        now.context !== submittedDraft.context ||
+        now.mentions !== submittedDraft.mentions
+      )
         return
-      }
+      // Explorer adds file references to the saved draft while its preview covers this box; those keep the draft.
+      if (draftKey && !store.clearComposerDraft(draftKey, { context: submittedDraft.context })) return
       textInput.current?.clear()
       setText('')
       setAttachments([])
