@@ -324,6 +324,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [keyboard.height] by design; the values it reads beyond these are current as of that run
   }, [keyboard.height])
   const cover = ios ? coverFor(keyboard.height) : 0
+  const bottomInset = Math.max(0, cover - (keyboard.height ? 0 : insets.bottom))
   metrics.current.cover = cover
   // Native scroll-edge chrome overlays the list; UIKit supplies its top inset. Beside the thread list the page draws its
   // own header above the list instead, as on Android.
@@ -1748,11 +1749,12 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                   ) : undefined
                 }
                 style={{ flex: 1 }}
-                // UIKit adds the bottom safe area (the home indicator's strip) to this inset by itself, and `cover`
-                // already reaches the screen's edge, so the strip is taken back out. Counted twice, a scroll by hand
-                // went past the end the app lands on, and the chat showed empty room under its last row.
-                contentInset={ios ? { bottom: Math.max(0, cover - insets.bottom) } : undefined}
-                scrollIndicatorInsets={ios ? { bottom: Math.max(0, cover - insets.bottom) } : undefined}
+                // With the keyboard down UIKit adds the bottom safe area (the home indicator's strip) to this inset by
+                // itself, and `cover` already reaches the screen's edge, so the strip is taken back out: counted twice,
+                // a scroll by hand went past the end the app lands on and left empty room under the last row. With the
+                // keyboard up it adds nothing, and taking it out hid the last line under the message box.
+                contentInset={ios ? { bottom: bottomInset } : undefined}
+                scrollIndicatorInsets={ios ? { bottom: bottomInset } : undefined}
                 contentContainerStyle={{
                   padding: space.l,
                   paddingBottom: ios
