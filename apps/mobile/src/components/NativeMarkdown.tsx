@@ -130,8 +130,16 @@ export function NativeMarkdown({
               attribute: '#0550ae',
             },
       },
-      // A quote steps back in colour, not so far that it stops reading as text, as on the desktop.
-      blockquote: { ...body, color: c.soft, borderColor: c.lineStrong, borderWidth: 2, gapWidth: 12 },
+      // A quote steps back in colour, not so far that it stops reading as text, as on the desktop: a rule at its side and
+      // no fill. The library's own fill is near white, which left a quote's light text unreadable in dark mode.
+      blockquote: {
+        ...body,
+        color: c.soft,
+        borderColor: c.lineStrong,
+        borderWidth: 2,
+        gapWidth: 12,
+        backgroundColor: 'transparent',
+      },
       // As on the desktop: numbers line up in their own column, read a little stronger than bullets, and keep room
       // before the text; items get a little air between them.
       list: {
