@@ -3,12 +3,14 @@ import { t as translate, useLanguage } from '../../../i18n'
 import { Button } from '@/components/desktop-button'
 import { MessageCircle, MessageSquarePlus, Paperclip, Quote, X, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import type { AgentSettings, Aside, Attachment } from '@ramu/shared/types'
+import { DEFAULT_AGENT_SETTINGS, type AgentSettings, type Aside, type Attachment } from '@ramu/shared/types'
 import { asideDraft } from '@ramu/shared/chat/asideDraft'
 import { quotedQuestion, sideChat } from '@ramu/shared/chat/sideChat'
 import { Composer } from '../../../composer/Composer'
 import { focusComposer } from '../../../composer/ComposerInput'
-import { ModelChoice, type ModelChoiceValue } from '../../../settings/ModelChoice'
+import { ModelBar } from '../../../models/ModelBar'
+import { useModelSets } from '../../../models/ModelSets'
+import { resolveWorkModel, withWorkModel } from '@ramu/shared/providers/workModel'
 import { useAppSettings } from '../../../settings/AppSettings'
 import { errorText } from '../../../lib/errors'
 import { useHost } from '../../../workspace/HostProvider'
@@ -69,10 +71,14 @@ export function AsidePanel({
   const composer = useRef<HTMLDivElement>(null),
     body = useRef<HTMLDivElement>(null)
   const [files, setFiles] = useState<Attachment[]>([])
-  // The model that answers starts as the one Settings names for asides; empty means the thread's own. A pick here
-  // lasts while the panel is open, so a follow-up keeps the model the person chose.
+  // The model and login that answer start as the thread's current choice in its composer, or the one Settings names
+  // for asides, and follow the thread until one is picked here with the thread's own picker. A pick lasts while the
+  // panel is open, so a follow-up keeps the model and login the person chose.
   const asideModel = useAppSettings().preferences.asideModel ?? null
-  const [picked, setPicked] = useState<ModelChoiceValue>(asideModel)
+  const { preferences: models } = useModelSets()
+  const thread = settings ?? DEFAULT_AGENT_SETTINGS
+  const [picked, setPicked] = useState<AgentSettings | null>(null)
+  const answering = picked ?? withWorkModel(thread, resolveWorkModel(asideModel, { thread, models }))
   useEffect(() => {
     setPassage(open.quote)
     setError(null)
@@ -105,7 +111,16 @@ export function AsidePanel({
       latest ? quotedQuestion(question, passage) : question,
       settings,
       {
-        ...(picked ? { model: picked } : {}),
+        ...(picked
+          ? {
+              model: {
+                provider: picked.provider,
+                model: picked.model,
+                effort: picked.effort,
+                ...(picked.accountId ? { accountId: picked.accountId } : {}),
+              },
+            }
+          : {}),
         ...(files.length ? { attachmentIds: files.map((file) => file.id) } : {}),
       },
     )
@@ -274,7 +289,7 @@ export function AsidePanel({
           attachments={files}
           onAttachmentsChange={readOnly ? undefined : setFiles}
           allowEmpty={files.length > 0}
-          controls={<ModelChoice label={translate('Aside model')} value={picked} onChange={setPicked} />}
+          controls={<ModelBar settings={answering} onChange={setPicked} disabled={readOnly || waiting} />}
         />
       </div>
     </aside>

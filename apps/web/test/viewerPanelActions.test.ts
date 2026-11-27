@@ -49,9 +49,10 @@ vi.mock('../src/chat/AgentContentView', () => ({ AgentContentView: () => null })
 vi.mock('../src/chat/MarkdownText', () => ({ MarkdownText: () => null }))
 vi.mock('../src/models/ModelSets', () => ({
   modelDisplayName: (name: string) => name,
-  useModelSets: () => ({ catalogs: [] }),
+  useModelSets: () => ({ catalogs: [], preferences: null }),
 }))
 vi.mock('../src/composer/Composer', () => ({ Composer: () => null }))
+vi.mock('../src/models/ModelBar', () => ({ ModelBar: () => null }))
 vi.mock('../src/composer/ComposerInput', () => ({ focusComposer() {} }))
 vi.mock('../src/settings/AppSettings', () => ({ useAppSettings: () => ({ preferences: { asideModel: null } }) }))
 vi.mock('../src/models/AccountPicker', () => ({ useLoginChoices: () => null }))
@@ -168,6 +169,46 @@ it('asks an aside with the model chosen in the thread, so it is answered by that
     'Why this way?',
     settings,
     {},
+  )
+})
+
+it('answers an aside on the model and login picked with the thread’s own picker, which starts on the thread’s', async () => {
+  const settings = { provider: 'claude-code', model: 'fable', effort: 'high', accountId: 'work' } as never
+  const RenderAside = () => {
+    state.index = 0
+    return AsidePanel({
+      sessionId: 's',
+      asides: [],
+      open: { quote: 'Quoted', from: 'assistant' },
+      settings,
+      onClose: vi.fn(),
+      onQuote: vi.fn(),
+      onPromote: vi.fn(),
+    })
+  }
+  const picker = () => (asideBox(RenderAside()).controls as { props: Record<string, unknown> }).props
+  // Until something is picked, the picker shows what the thread runs on, its login included.
+  expect(picker().settings).toEqual(settings)
+  ;(picker().onChange as (next: unknown) => void)({
+    provider: 'codex',
+    model: 'gpt',
+    effort: 'low',
+    accountId: 'personal',
+  })
+  expect(picker().settings).toMatchObject({ provider: 'codex', accountId: 'personal' })
+  ;(asideBox(RenderAside()).onChange as (value: string) => void)('Why this way?')
+  await (asideBox(RenderAside()).onSubmit as () => Promise<void>)()
+  expect(state.invoke).toHaveBeenLastCalledWith(
+    'aside.ask',
+    's',
+    null,
+    'Quoted',
+    'assistant',
+    'Why this way?',
+    settings,
+    {
+      model: { provider: 'codex', model: 'gpt', effort: 'low', accountId: 'personal' },
+    },
   )
 })
 
