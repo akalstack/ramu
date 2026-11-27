@@ -1805,9 +1805,15 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                     metrics.current.content = height
                     settleReveal()
                     catchUp()
-                    // Still landing: under the opening cover it jumps; once shown it glides.
-                    if (Date.now() < landingUntil.current && following.current && !userScrolling.current)
-                      toEnd(revealed)
+                    // Stuck to the end while the reader is there, as T3 Code keeps its chat: every growth is followed
+                    // here, not left to the list's own end tracking, which the message box laid over the list's bottom
+                    // threw off, so a reply streaming in at the bottom stopped being followed. Still landing, under the
+                    // opening cover it jumps and once shown it glides; afterwards each growth lands at once, without a
+                    // glide that read as the transcript moving up and down. Paused while the keyboard moves and right
+                    // after a row is opened by hand.
+                    if (!following.current || userScrolling.current) return
+                    if (Date.now() < landingUntil.current) toEnd(revealed)
+                    else if (!followPaused) toEnd(false)
                   }}
                   keyboardDismissMode="on-drag"
                   keyboardShouldPersistTaps="handled"
