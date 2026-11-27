@@ -24,10 +24,12 @@ import {
   REACHES,
   type ListenDraft,
   type Reach,
+  STATUS_LINE,
   type TunnelDraft,
 } from './reach'
 import { StayReachableSwitch } from './StayReachableSwitch'
 import { TunnelChoiceRows, tunnelName, TunnelStatus } from './TunnelSettings'
+import { TriangleAlert } from 'lucide-react'
 
 const DEFAULT_PORT = 7788
 const validPort = (port: number) => Number.isInteger(port) && port >= 1024 && port <= 65535
@@ -215,34 +217,40 @@ export function ReachableFrom({
         </SegmentedControl>
       }
     >
-      {status.enabled && (
-        <p className="muted text-muted-foreground small text-caption m-[0_0_12px]" role="status">
-          {listening
-            ? t('Listening on {0}', { 0: listening })
-            : status.error
-              ? t('Cannot listen on {0}:{1} ({2}). Local use still works, and Ramu keeps retrying.', {
-                  0: status.host,
-                  1: status.port,
-                  2: status.error,
-                })
-              : t('Starting…')}
-        </p>
-      )}
-      {!status.tls && status.enabled && !isLoopback(status.host) && (
-        <p className="muted text-muted-foreground small text-caption m-[0_0_12px]">
-          {t('Ramu does not encrypt this connection. Use it on a VPN or a network you trust.')}
-        </p>
-      )}
-      {reach === 'anywhere' && status.publicAddress && (
-        <TunnelStatus
-          status={status}
-          tunnel={tunnel}
-          saved={saved}
-          signedIn={signedIn}
-          onChoose={chooseRoute}
-          onRelease={() => void invoke('network.releaseLink').then(onStatus).catch(fail)}
-          onReleaseOther={(hostId) => invoke('network.releaseOtherLink', hostId).then(onStatus).catch(fail)}
-        />
+      {/* What the connection is doing now, as one card of rows rather than loose lines between the controls. */}
+      {(status.enabled || (reach === 'anywhere' && status.publicAddress)) && (
+        <div className="mb-3 flex flex-col divide-y divide-(--line) overflow-hidden rounded-(--radius-m) bg-fill">
+          {status.enabled && (
+            <p className={STATUS_LINE} role="status">
+              {listening
+                ? t('Listening on {0}', { 0: listening })
+                : status.error
+                  ? t('Cannot listen on {0}:{1} ({2}). Local use still works, and Ramu keeps retrying.', {
+                      0: status.host,
+                      1: status.port,
+                      2: status.error,
+                    })
+                  : t('Starting…')}
+            </p>
+          )}
+          {!status.tls && status.enabled && !isLoopback(status.host) && (
+            <p className={`${STATUS_LINE} text-warn`}>
+              <TriangleAlert size={13} className="flex-none" aria-hidden />
+              {t('Ramu does not encrypt this connection. Use it on a VPN or a network you trust.')}
+            </p>
+          )}
+          {reach === 'anywhere' && status.publicAddress && (
+            <TunnelStatus
+              status={status}
+              tunnel={tunnel}
+              saved={saved}
+              signedIn={signedIn}
+              onChoose={chooseRoute}
+              onRelease={() => void invoke('network.releaseLink').then(onStatus).catch(fail)}
+              onReleaseOther={(hostId) => invoke('network.releaseOtherLink', hostId).then(onStatus).catch(fail)}
+            />
+          )}
+        </div>
       )}
       <SettingsAdvanced className="mt-0">
         {!managed && listen.enabled && (

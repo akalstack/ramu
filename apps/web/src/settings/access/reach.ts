@@ -54,3 +54,6 @@ export function chooseReach(
   if (tunnel.mode !== 'off') return { listen: open, tunnel }
   return { listen: open, tunnel: { ...tunnel, mode: runsTunnels ? 'link' : 'manual' } }
 }
+
+/** A row of the reachability card: what one part of the connection is doing right now. */
+export const STATUS_LINE = 'm-0 flex flex-wrap items-center gap-x-1.5 px-3 py-2.5 text-caption text-muted-foreground'

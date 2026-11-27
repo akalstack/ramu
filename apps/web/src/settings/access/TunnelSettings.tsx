@@ -7,7 +7,7 @@ import { ramu } from '../../ipc'
 import { t } from '../../i18n'
 import { CopyButton } from '../CopyAddressButton'
 import { RamuLinkState, type RouteChoice } from '../RamuLinkState'
-import type { TunnelDraft, TunnelMode } from './reach'
+import { STATUS_LINE, type TunnelDraft, type TunnelMode } from './reach'
 
 const TUNNEL_MODES: TunnelMode[] = ['off', 'link', 'quick', 'tailscale', 'ngrok', 'manual']
 const TUNNEL_LABEL: Record<TunnelMode, string> = {
@@ -48,8 +48,6 @@ const TOOL_INSTALL: Record<'cloudflared' | 'tailscale' | 'ngrok', { brew?: strin
 /** The tunnel's name in a sentence, such as "Anywhere, through Tailscale Funnel". */
 export const tunnelName = (mode: TunnelMode) => t(TUNNEL_LABEL[mode])
 
-const line = 'muted text-muted-foreground small text-caption m-[0_0_12px] flex flex-wrap items-center gap-x-1.5'
-
 /** What the chosen tunnel is doing: its address once it runs, why it stopped, or what to install for it. */
 function TunnelState({ status, mode, staged }: { status: NetworkStatus; mode: TunnelMode; staged: boolean }) {
   const tunnel = status.tunnel
@@ -59,7 +57,7 @@ function TunnelState({ status, mode, staged }: { status: NetworkStatus; mode: Tu
   const mac = navigator.userAgent.includes('Mac')
   if (tunnel.state === 'missing' || !tunnel.tools[tool])
     return (
-      <p className={line} role="status">
+      <p className={STATUS_LINE} role="status">
         {t('{0} is not installed on this computer.', { 0: tool })}
         {mac && install.brew ? (
           <>
@@ -78,19 +76,19 @@ function TunnelState({ status, mode, staged }: { status: NetworkStatus; mode: Tu
   if (mode === 'link') return null
   if (tunnel.state === 'running' && tunnel.url)
     return (
-      <p className={line} role="status">
+      <p className={STATUS_LINE} role="status">
         {t('Reachable at {0}', { 0: tunnel.url })}
         <CopyButton text={tunnel.url} label={t('Copy the tunnel address')} />
       </p>
     )
   if (tunnel.state === 'failed')
     return (
-      <p className={`${line} text-warn`} role="status">
+      <p className={`${STATUS_LINE} text-warn`} role="status">
         {t('The tunnel stopped: {0}. Ramu will try again shortly.', { 0: tunnel.error ?? tool })}
       </p>
     )
   return (
-    <p className={line} role="status">
+    <p className={STATUS_LINE} role="status">
       {t('Starting {0}…', { 0: tool })}
     </p>
   )
@@ -122,7 +120,7 @@ export function TunnelStatus({
   return (
     <>
       {tunnel.mode === 'link' && staged && signedIn === false && (
-        <p className={line} role="status">
+        <p className={STATUS_LINE} role="status">
           {t('Ramu Link needs the Ramu account on this computer.')}
           <LocalInlineAction
             onClick={() => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'account' } }))}
@@ -131,7 +129,8 @@ export function TunnelStatus({
           </LocalInlineAction>
         </p>
       )}
-      {tunnel.mode === 'link' && (
+      {/* Signed out, the slots are not this computer's to take yet; signing in comes first. */}
+      {tunnel.mode === 'link' && !(staged && signedIn === false) && (
         <RamuLinkState
           status={status}
           staged={staged}

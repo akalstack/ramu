@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { LocalInlineAction } from '@/components/inline-action'
 import { CopyButton } from './CopyAddressButton'
 import { ramu } from '../ipc'
+import { STATUS_LINE } from './access/reach'
 import { t } from '../i18n'
 
 /** A route the person can switch to from here: a tunnel choice, or a page to open. */
@@ -36,8 +37,6 @@ const LINK_REASON: Record<string, string> = {
 export const OWN_RELAY_GUIDE = 'https://github.com/akalstack/ramu/tree/main/apps/link#run-your-own'
 const TAILSCALE_DOWNLOAD = 'https://tailscale.com/download'
 
-const line = 'muted text-muted-foreground small text-caption m-[0_0_12px] flex flex-wrap items-center gap-x-1.5'
-
 const openSignIn = () => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'account' } }))
 const open = (url: string) => void ramu.invoke('app.openExternal', url).catch(() => {})
 
@@ -54,8 +53,8 @@ function OtherRoutes({ status, onChoose }: { status: NetworkStatus; onChoose: (r
     tools: tunnel.tools,
   }).filter((option) => option.kind !== 'link')
   return (
-    <div className="mb-3 flex flex-col gap-2" role="group" aria-label={t('Other ways to reach this host')}>
-      <p className="muted text-muted-foreground small text-caption m-0">{t('Meanwhile, you can use:')}</p>
+    <div className="flex flex-col gap-2 px-3 py-2.5" role="group" aria-label={t('Other ways to reach this host')}>
+      <p className="m-0 text-caption text-muted-foreground">{t('Meanwhile, you can use:')}</p>
       {options.map((option) => (
         <div
           key={option.kind}
@@ -110,7 +109,7 @@ function LinkHolders({
   const holders = link.holders ?? []
   if (!holders.length)
     return (
-      <p className={line} role="status">
+      <p className={STATUS_LINE} role="status">
         {t(
           'Your Ramu account’s link is used by {0}. Give it back there (Settings → Devices & access), or use another way here.',
           { 0: link.takenBy ?? t('another computer') },
@@ -118,8 +117,8 @@ function LinkHolders({
       </p>
     )
   return (
-    <div className="mb-3 flex flex-col gap-2" role="group" aria-label={t('Hosts using your Ramu Links')}>
-      <p className="muted text-muted-foreground small text-caption m-0" role="status">
+    <div className="flex flex-col gap-2 px-3 py-2.5" role="group" aria-label={t('Hosts using your Ramu Links')}>
+      <p className="m-0 text-caption text-muted-foreground" role="status">
         {t(
           'Your Ramu account has a link for {0} hosts, and all are in use. Give one back to use it here; that host keeps working on your network and VPN.',
           { 0: LINK_LIMITS.hostsPerAccount },
@@ -175,11 +174,11 @@ export function RamuLinkState({
   if (staged) {
     if (!full)
       return pool ? (
-        <p className={line}>{t('{0} free slots. Save to take one.', { 0: pool.capacity - pool.used })}</p>
+        <p className={STATUS_LINE}>{t('{0} free slots. Save to take one.', { 0: pool.capacity - pool.used })}</p>
       ) : null
     return (
       <>
-        <p className={line} role="status">
+        <p className={STATUS_LINE} role="status">
           {t(
             'Ramu Link is full right now. Saving puts this computer on the waitlist; it switches on its own when a slot frees.',
           )}
@@ -190,13 +189,13 @@ export function RamuLinkState({
   }
   if (!link || (link.state === 'unavailable' && !link.reason && tunnel.state === 'starting'))
     return (
-      <p className={line} role="status">
+      <p className={STATUS_LINE} role="status">
         {t('Asking Ramu Link for an address…')}
       </p>
     )
   if (link.state === 'signed-out')
     return (
-      <p className={line} role="status">
+      <p className={STATUS_LINE} role="status">
         {t('Ramu Link needs the Ramu account on this computer.')}
         <LocalInlineAction onClick={openSignIn}>{t('Sign in')}</LocalInlineAction>
       </p>
@@ -204,7 +203,7 @@ export function RamuLinkState({
   if (link.state === 'waitlisted')
     return (
       <>
-        <p className={line} role="status">
+        <p className={STATUS_LINE} role="status">
           {t(
             'Ramu Link is full right now. This computer is number {0} in line and switches on its own when a slot frees.',
             {
@@ -219,7 +218,7 @@ export function RamuLinkState({
   if (link.state === 'suspended')
     return (
       <>
-        <p className={`${line} text-warn`} role="status">
+        <p className={`${STATUS_LINE} text-warn`} role="status">
           {t('Ramu Link used this month’s {0} and is paused until {1}. Your network and VPN still work.', {
             0: formatSize(LINK_LIMITS.monthlyBytes),
             1: new Date(link.until ?? 0).toLocaleDateString(),
@@ -243,7 +242,7 @@ export function RamuLinkState({
     const reason = known ? t(known) : link.reason
     return (
       <>
-        <p className={`${line} text-warn`} role="status">
+        <p className={`${STATUS_LINE} text-warn`} role="status">
           {t('Ramu Link can’t be reached right now{0}. Ramu will ask again.', { 0: reason ? `: ${reason}` : '' })}
         </p>
         <OtherRoutes status={status} onChoose={onChoose} />
@@ -255,14 +254,14 @@ export function RamuLinkState({
   return (
     <div className="mb-3 flex flex-col gap-1" role="status">
       {tunnel.state === 'running' && tunnel.url ? (
-        <p className={`${line} m-0`}>
+        <p className={STATUS_LINE}>
           {t('Reachable at {0}', { 0: tunnel.url })}
           <CopyButton text={tunnel.url} label={t('Copy the tunnel address')} />
         </p>
       ) : (
-        <p className={`${line} m-0`}>{t('Connecting to Ramu Link…')}</p>
+        <p className={STATUS_LINE}>{t('Connecting to Ramu Link…')}</p>
       )}
-      <p className={`${line} m-0 ${level === 'ok' ? '' : 'text-warn'}`}>
+      <p className={`${STATUS_LINE} ${level === 'ok' ? '' : 'text-warn'}`}>
         {t('{0} of {1} this month · {2} connected through it now', {
           0: formatSize(usage),
           1: formatSize(LINK_LIMITS.monthlyBytes),
@@ -270,7 +269,7 @@ export function RamuLinkState({
         })}
       </p>
       {link.releasesAt ? (
-        <p className={`${line} m-0`}>
+        <p className={STATUS_LINE}>
           {t('Kept while you use it. Unused, the address is released on {0}.', {
             0: new Date(link.releasesAt).toLocaleDateString(),
           })}
