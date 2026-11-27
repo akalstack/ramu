@@ -1242,6 +1242,10 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Finish signing in in your browser. This updates when it is done.':
     'Selesaikan masuk di browser Anda. Ini diperbarui setelah selesai.',
   'Address your browser ended on': 'Alamat terakhir di browser Anda',
+  '{0} of {1} websites selected': '{0} dari {1} situs dipilih',
+  'Search websites': 'Cari situs',
+  'Select shown': 'Pilih yang tampil',
+  'No website matches “{0}”.': 'Tidak ada situs yang cocok dengan “{0}”.',
   'Checks failed after the push of {0}': 'Pemeriksaan gagal setelah push {0}',
   'Checks passed after the push of {0}': 'Pemeriksaan lolos setelah push {0}',
   'Failing checks on {0}': 'Pemeriksaan gagal di {0}',

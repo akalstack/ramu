@@ -1,10 +1,12 @@
-import { expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   canImport,
   defaultImportName,
   resultLines,
   selectedCookieCount,
   toggleDomain,
+  matchingDomains,
+  toggleAll,
 } from '../src/settings/browserImportModel'
 
 const profile = (name: string) => ({ id: name, name, builtin: false, temporary: false, createdAt: 1 })
@@ -48,4 +50,24 @@ it('describes the result with exact counts and reasons', () => {
     'Skipped 2: Already expired.',
     '1 could not be saved.',
   ])
+})
+
+describe('choosing websites in a long list', () => {
+  const domains = [
+    { domain: 'google.com', cookies: 141 },
+    { domain: 'meshy.ai', cookies: 43 },
+    { domain: 'docs.google.com', cookies: 3 },
+  ]
+
+  it('searches by address, ignoring case and outer spaces', () => {
+    expect(matchingDomains(domains, ' GOOGLE ').map((entry) => entry.domain)).toEqual(['google.com', 'docs.google.com'])
+    expect(matchingDomains(domains, '')).toHaveLength(3)
+  })
+
+  it('selects what the search shows, keeps other picks, and clears them once all are picked', () => {
+    const shown = matchingDomains(domains, 'google')
+    const picked = toggleAll(new Set(['meshy.ai']), shown)
+    expect([...picked].sort()).toEqual(['docs.google.com', 'google.com', 'meshy.ai'])
+    expect([...toggleAll(picked, shown)]).toEqual(['meshy.ai'])
+  })
 })

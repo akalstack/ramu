@@ -17,6 +17,23 @@ export function canImport(selected: ReadonlySet<string>, name: string): boolean 
   return selected.size > 0 && trimmed.length > 0 && trimmed.length <= 80
 }
 
+/** Sites whose address contains the search, as typed; an empty search keeps them all. */
+export function matchingDomains<T extends { domain: string }>(domains: readonly T[], search: string): T[] {
+  const words = search.trim().toLowerCase()
+  return words ? domains.filter((entry) => entry.domain.toLowerCase().includes(words)) : [...domains]
+}
+
+/** Selects every one of `shown`, or, when all of them are selected already, clears just those. */
+export function toggleAll(selected: ReadonlySet<string>, shown: readonly { domain: string }[]): Set<string> {
+  const next = new Set(selected)
+  const all = shown.length > 0 && shown.every((entry) => next.has(entry.domain))
+  for (const entry of shown) {
+    if (all) next.delete(entry.domain)
+    else next.add(entry.domain)
+  }
+  return next
+}
+
 export function toggleDomain(selected: ReadonlySet<string>, domain: string): Set<string> {
   const next = new Set(selected)
   if (!next.delete(domain)) next.add(domain)

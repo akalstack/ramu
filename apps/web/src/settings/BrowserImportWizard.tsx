@@ -10,6 +10,7 @@ import type {
 } from '@ramu/shared/types/browser'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
+import { SearchField } from '@/components/search-field'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { invokeOn, ramu } from '../ipc'
 import { t, useLanguage } from '../i18n'
@@ -21,6 +22,8 @@ import {
   resultLines,
   selectedCookieCount,
   toggleDomain,
+  matchingDomains,
+  toggleAll,
 } from './browserImportModel'
 
 /** Where the copy lands: the desktop's own browser, or the Chromium this host runs. */
@@ -74,6 +77,9 @@ export function BrowserImportWizard({
   const [token, setToken] = useState('')
   const [domains, setDomains] = useState<BrowserImportDomain[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  // Long cookie lists are searched by address; Select all acts on what the search shows.
+  const [search, setSearch] = useState('')
+  const shown = useMemo(() => matchingDomains(domains, search), [domains, search])
   const [name, setName] = useState('')
   const [staged, setStaged] = useState<BrowserImportStaged | null>(null)
   const [error, setError] = useState('')
@@ -202,10 +208,29 @@ export function BrowserImportWizard({
         {step === 'sites' && (
           <div className="flex flex-col gap-2">
             <span className="text-caption text-muted-foreground">
-              {t('Choose the websites to copy. None are selected yet.')}
+              {selected.size
+                ? t('{0} of {1} websites selected', { 0: selected.size, 1: domains.length })
+                : t('Choose the websites to copy. None are selected yet.')}
             </span>
+            {domains.length > 0 && (
+              <div className="flex items-center gap-2">
+                <SearchField className="flex-1" value={search} onChange={setSearch} label={t('Search websites')} />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={!shown.length}
+                  onClick={() => setSelected((current) => toggleAll(current, shown))}
+                >
+                  {shown.length && shown.every((entry) => selected.has(entry.domain))
+                    ? t('Clear')
+                    : search.trim()
+                      ? t('Select shown')
+                      : t('Select all')}
+                </Button>
+              </div>
+            )}
             <ul className="m-0 flex max-h-64 list-none flex-col gap-1 overflow-y-auto p-0">
-              {domains.map((entry) => (
+              {shown.map((entry) => (
                 <li key={entry.domain}>
                   <label className="flex cursor-pointer items-center gap-2 text-control">
                     <input
@@ -219,6 +244,11 @@ export function BrowserImportWizard({
                 </li>
               ))}
               {!domains.length && <li className="text-caption">{t('This profile has no sign-in cookies to copy.')}</li>}
+              {domains.length > 0 && !shown.length && (
+                <li className="text-caption text-muted-foreground">
+                  {t('No website matches “{0}”.', { 0: search.trim() })}
+                </li>
+              )}
             </ul>
             <Input
               aria-label={t('New profile name')}
