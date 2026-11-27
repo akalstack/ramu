@@ -1,6 +1,6 @@
 import { translate } from '@ramu/shared/i18n'
 import { useEffect, useState } from 'react'
-import { Alert, Platform, Pressable, TextInput, View } from 'react-native'
+import { ActivityIndicator, Alert, Platform, Pressable, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Stack, useLocalSearchParams } from 'expo-router'
 import { ChevronDown, ChevronRight, MessageSquarePlus, Undo2, X } from 'lucide-react-native'
@@ -197,6 +197,8 @@ export default function Changes() {
   const openFile = useOpenFile(chat)
   const [changes, setChanges] = useState<ChangedFile[]>([])
   const [reviews, setReviews] = useState<ChangeReview[]>([])
+  // Until the host answers, the screen says it is loading rather than "no changes" or "0 files changed".
+  const [listed, setListed] = useState(false)
   const [reviewId, setReviewId] = useState(initialReview ?? '')
   const [pickingRun, setPickingRun] = useState(false)
   const runLabel = (index: number) => {
@@ -221,12 +223,16 @@ export default function Changes() {
     if (!chat?.sessionId) return
     const list = await store.invoke(chat.computerId, 'reviews.list', chat.sessionId)
     setReviews(list)
+    setListed(true)
     if (!reviewId && list[0]) setReviewId(list[0].id)
   }
   const review = reviews.find((r) => r.id === reviewId)
   const drafts = review?.comments.filter((x) => x.author === 'human' && x.state === 'draft') ?? []
   useEffect(() => {
-    void load().catch((e) => setError(e.message))
+    void load().catch((e) => {
+      setError(e.message)
+      setListed(true)
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [chat?.computerId, chat?.sessionId] by design; the values it reads beyond these are current as of that run
   }, [chat?.computerId, chat?.sessionId])
   // `reviews.list` leaves file contents out to stay light (as desktop does); the opened review's diffs come from
@@ -349,6 +355,7 @@ export default function Changes() {
     : drafts.length === 1
       ? say('Send 1 comment')
       : say('Send {count} comments', { count: drafts.length })
+  const loading = !!chat?.sessionId && !error && (!listed || (!!reviewId && detail?.id !== reviewId))
   const add = changes.reduce((n, f) => n + f.additions, 0)
   const del = changes.reduce((n, f) => n + f.deletions, 0)
   return (
@@ -357,7 +364,7 @@ export default function Changes() {
         title={translate(store.language, 'Changes')}
         subtitle={
           chat
-            ? [chat.branch, translate(store.language, '{count} files', { count: changes.length })]
+            ? [chat.branch, loading ? null : translate(store.language, '{count} files', { count: changes.length })]
                 .filter(Boolean)
                 .join(' · ')
             : undefined
@@ -373,7 +380,14 @@ export default function Changes() {
         }}
       >
         {error ? <T tone="bad">{error}</T> : null}
-        {!reviews.length ? <T tone="muted">{say('No recorded changes for this thread yet.')}</T> : null}
+        {loading ? (
+          <View accessibilityRole="progressbar" style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+            <ActivityIndicator color={c.muted} />
+            <T tone="muted">{say('Loading changes…')}</T>
+          </View>
+        ) : !reviews.length ? (
+          <T tone="muted">{say('No recorded changes for this thread yet.')}</T>
+        ) : null}
         {/* Which run's changes are shown: one row that opens the list, newest first. */}
         {reviews.length ? (
           <Pressable
@@ -424,7 +438,15 @@ export default function Changes() {
           placeholderTextColor={c.muted}
           style={{ padding: space.m, color: c.text, backgroundColor: c.fill, borderRadius: radius.m }}
         />
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, paddingBottom: space.s }}>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: space.s,
+            paddingBottom: space.s,
+            opacity: loading ? 0 : 1,
+          }}
+        >
           <T size={font.control} tone="muted" style={{ flex: 1 }}>
             {say('{count} files changed', { count: changes.length })}
           </T>
@@ -435,7 +457,7 @@ export default function Changes() {
             −{del}
           </T>
         </View>
-        {changes.map((f) => (
+        {(loading ? [] : changes).map((f) => (
           <FileDiff
             key={f.path}
             file={f}
