@@ -11,6 +11,7 @@ import {
 } from '@expo/ui/swift-ui'
 import {
   background,
+  labelStyle,
   navigationBarTitleDisplayMode,
   navigationTitle,
   presentationBackground,
@@ -22,10 +23,21 @@ import { space, useTheme } from '../theme'
 import type { NativeSheetProps } from './NativeSheet'
 import { BottomSearch } from './BottomSearch'
 import { useHostedWidth } from './hostedWidth'
+import { useSay } from '../i18n'
 
 /** Native presentation, navigation chrome, dismissal and scroll-edge material for every iOS dialog. */
-export function NativeSheet({ open, onClose, title, children, scroll = true, presentation, search }: NativeSheetProps) {
+export function NativeSheet({
+  open,
+  onClose,
+  title,
+  children,
+  scroll = true,
+  presentation,
+  search,
+  onBack,
+}: NativeSheetProps) {
   const { c, scheme } = useTheme()
+  const say = useSay()
   const hosted = useHostedWidth()
   const content = (
     <RNHostView matchContents={scroll ? { vertical: true } : false} onLayout={hosted.onLayout}>
@@ -65,9 +77,25 @@ export function NativeSheet({ open, onClose, title, children, scroll = true, pre
           >
             {scroll ? <ScrollView modifiers={[scrollEdgeEffectStyle('soft', 'top')]}>{content}</ScrollView> : content}
             <Toolbar.Content>
+              {/* At the sheet's first level Close leads, as iOS sheets have it. A level down, the back arrow takes that
+                  place and Close moves to the trailing side, so one sheet goes deep instead of stacking another. */}
               <ToolbarItem placement="cancellationAction">
-                <Button role="close" onPress={onClose} />
+                {onBack ? (
+                  <Button
+                    label={say('Back')}
+                    systemImage="chevron.left"
+                    modifiers={[labelStyle('iconOnly')]}
+                    onPress={onBack}
+                  />
+                ) : (
+                  <Button role="close" onPress={onClose} />
+                )}
               </ToolbarItem>
+              {onBack ? (
+                <ToolbarItem placement="primaryAction">
+                  <Button role="close" onPress={onClose} />
+                </ToolbarItem>
+              ) : null}
             </Toolbar.Content>
           </Toolbar>
         </NavigationStack>

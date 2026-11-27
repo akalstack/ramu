@@ -16,6 +16,8 @@ export interface NativeSheetProps {
   scroll?: boolean
   presentation?: 'sheet' | 'screen'
   search?: SheetSearchProps
+  /** One level down inside the sheet: a back arrow leads the header, and Close moves to its far side. */
+  onBack?: () => void
 }
 
 /** iOS resolves NativeSheet.ios.tsx; other platforms use their own sheet implementation. */

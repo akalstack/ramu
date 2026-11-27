@@ -37,7 +37,7 @@ import {
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
 import * as Clipboard from 'expo-clipboard'
-import { ChevronDown, X, type LucideProps } from 'lucide-react-native'
+import { ChevronDown, X, type LucideProps, ChevronLeft } from 'lucide-react-native'
 import { font, radius, space, TEXT_SCALE, useTheme } from '../theme'
 import type { ComputerStatus } from '../runtime/types'
 import { MaterialSheet } from './MaterialSheet'
@@ -455,6 +455,8 @@ type SheetProps = {
   /** Complex workflows use a full-screen layout with room for keyboard input. */
   presentation?: 'sheet' | 'screen'
   search?: SheetSearchProps
+  /** One level down inside the sheet: a back arrow leads the header, and Close stays at its far side. */
+  onBack?: () => void
 }
 
 /** What every sheet shows: an optional drag handle (iOS draws its own; Android's Material sheet has one), the title, the content. */
@@ -465,8 +467,10 @@ function SheetBody({
   handle,
   drag,
   search,
+  onBack,
 }: Omit<SheetProps, 'open' | 'onClose'> & { handle: boolean; drag?: object }) {
   const { c } = useTheme()
+  const say = useSay()
   const [scrolled, setScrolled] = useState(false)
   const onScroll = (event: SheetScrollEvent) =>
     setScrolled(pastScrollEdge(event.nativeEvent.contentOffset.y, event.nativeEvent.contentInset?.top))
@@ -486,14 +490,24 @@ function SheetBody({
             <View style={{ width: 36, height: 5, borderRadius: 3, backgroundColor: c.lineStrong }} />
           </View>
         ) : null}
-        {title ? (
-          <T
-            size={font.heading}
-            weight="600"
-            style={{ paddingHorizontal: space.l + 4, paddingTop: space.m, paddingBottom: space.s }}
-          >
-            {title}
-          </T>
+        {title || onBack ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: onBack ? space.s : 0 }}>
+            {onBack ? <IconButton icon={ChevronLeft} label={say('Back')} onPress={onBack} /> : null}
+            <T
+              size={font.heading}
+              weight="600"
+              numberOfLines={1}
+              style={{
+                flex: 1,
+                paddingLeft: onBack ? space.xs : space.l + 4,
+                paddingRight: space.l + 4,
+                paddingTop: space.m,
+                paddingBottom: space.s,
+              }}
+            >
+              {title}
+            </T>
+          </View>
         ) : null}
       </View>
       {scroll ? (
@@ -572,7 +586,7 @@ function ScreenSheet({ open, onClose, ...props }: SheetProps) {
     </Modal>
   )
 }
-function ScreenSheetBody({ title, children, scroll = true, onClose, search }: Omit<SheetProps, 'open'>) {
+function ScreenSheetBody({ title, children, scroll = true, onClose, search, onBack }: Omit<SheetProps, 'open'>) {
   const say = useSay()
   const { c } = useTheme()
   const insets = useSafeAreaInsets()
@@ -595,7 +609,11 @@ function ScreenSheetBody({ title, children, scroll = true, onClose, search }: Om
               gap: space.m,
             }}
           >
-            <View style={{ width: 36 }} accessibilityElementsHidden importantForAccessibility="no" />
+            {onBack ? (
+              <IconButton icon={ChevronLeft} label={say('Back')} onPress={onBack} />
+            ) : (
+              <View style={{ width: 36 }} accessibilityElementsHidden importantForAccessibility="no" />
+            )}
             <T
               accessibilityRole="header"
               size={font.heading}
@@ -651,7 +669,7 @@ function SheetPanel({ children }: { children: ReactNode }) {
   )
 }
 
-function FloatingSheet({ open, onClose, title, children, scroll, search }: SheetProps) {
+function FloatingSheet({ open, onClose, title, children, scroll, search, onBack }: SheetProps) {
   const say = useSay()
   const [mounted, setMounted] = useState(open)
   const progress = useRef(new Animated.Value(0)).current
@@ -672,7 +690,7 @@ function FloatingSheet({ open, onClose, title, children, scroll, search }: Sheet
     }),
   ).current
   const body = (
-    <SheetBody title={title} scroll={scroll} search={search} handle drag={pan.panHandlers}>
+    <SheetBody title={title} scroll={scroll} search={search} onBack={onBack} handle drag={pan.panHandlers}>
       {children}
     </SheetBody>
   )
