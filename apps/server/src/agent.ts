@@ -63,6 +63,7 @@ import { SessionStarter } from './agent/sessionStarter'
 import { RestartRecovery } from './agent/restartRecovery'
 import { ContextUsageTracker } from './agent/contextUsage'
 import type { AgentHost, Collaborators } from './agent/hosts'
+import { reportedStop } from '@ramu/shared/chat/turnResult'
 
 export type { QueryFn } from './agent/types'
 export { stripRouterLine, cleanTitle, splitBranchLine } from './agent/text'
@@ -335,6 +336,8 @@ export class AgentService {
       setGoal: (...a) => parts.goals.setGoal(...a),
       setVerify: (...a) => parts.goals.setVerify(...a),
       setState: (...a) => parts.recorder.setState(...a),
+      requestStop: (...a) => parts.recorder.requestStop(...a),
+      turnResult: (...a) => parts.recorder.turnResult(...a),
       settleChild: (...a) => parts.subagents.settleChild(...a),
       settleTasks: (...a) => parts.tasks.settleTasks(...a),
       shutdown: () => this.shutdown,
@@ -821,6 +824,12 @@ export class AgentService {
 
   searchMessages(...args: Parameters<SessionStore['searchMessages']>) {
     return this.parts.store.searchMessages(...args)
+  }
+
+  /** Whether the session rests after a turn the person stopped, which the thread lists show as stopped, not finished. */
+  stoppedByPerson(sessionId: string): boolean {
+    const result = this.parts.store.latestEvent(sessionId, 'result')
+    return !!result && reportedStop(result)
   }
 
   tail(...args: Parameters<SessionStore['tail']>) {

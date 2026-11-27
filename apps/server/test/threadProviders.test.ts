@@ -24,6 +24,7 @@ it('lists every agent that worked in a thread, from handoffs and helpers, with t
       helperSummaries: () => new Map(),
       unreadAdvice: () => new Map(),
       goalOf: () => null,
+      stoppedByPerson: () => false,
       // A Cursor helper started first; the main session began on Claude and handed off to Codex.
       listByTask: () => new Map([['t', [session('helper', 'cursor', 2), session('main', 'codex', 3)]]]),
       providerUses: () =>

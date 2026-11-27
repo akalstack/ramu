@@ -24,7 +24,7 @@ export interface ClaudeStreamPumpHost
   extends
     Pick<ContextUsageTracker, 'refreshContext' | 'context' | 'setContext' | 'noteRequest'>,
     Pick<SessionProcess, 'fail'>,
-    Pick<SessionRecorder, 'record' | 'setState'>,
+    Pick<SessionRecorder, 'record' | 'setState' | 'turnResult'>,
     Pick<SessionRegistry, 'live'>,
     Pick<FallbackRouter, 'fallback'>,
     Pick<SessionStore, 'events' | 'get'>,
@@ -281,17 +281,18 @@ export class ClaudeStreamPump {
       }
       case 'result': {
         textStream.finishMainTurn()
-        this.host.record(id, {
+        const { result, state } = this.host.turnResult(id, {
           kind: 'result',
           isError: msg.is_error,
           text: msg.subtype === 'success' ? msg.result : msg.subtype,
           costUsd: msg.total_cost_usd ?? null,
           ...claudeTokens(msg.usage),
         })
+        this.host.record(id, result)
         const current = this.host.live.get(id)?.query
         if (current) this.host.refreshContext(id, current)
         // The agent's claim that it finished; checks and review decide readiness.
-        this.host.setState(id, msg.is_error ? 'failed' : 'idle')
+        this.host.setState(id, state)
         return
       }
       default:

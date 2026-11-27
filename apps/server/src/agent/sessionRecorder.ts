@@ -47,6 +47,9 @@ export interface SessionRecorderHost
 }
 
 /** Persists events and state transitions: appends or updates log entries, tracks running tools, and reacts to a session changing state. */
+/** How soon after the person asks to stop a turn its result still counts as that stop. */
+const STOP_RESULT_MS = 60_000
+
 export class SessionRecorder {
   constructor(
     private readonly host: SessionRecorderHost,
@@ -63,6 +66,32 @@ export class SessionRecorder {
    * pieces its provider streams, so every client shows complete paragraphs, list items, tables and code blocks.
    */
   private readonly unsettled = new Map<string, Map<string, HeldReply>>()
+
+  /** When the person last asked each session's turn to stop. */
+  private readonly stopsRequested = new Map<string, number>()
+
+  /** The person asked this session's turn to stop: the result it ends with is a stop, not a failure. */
+  requestStop(id: string): void {
+    this.stopsRequested.set(id, Date.now())
+  }
+
+  /**
+   * A turn's result as it is kept, and the state it leaves. Providers end a turn the person stopped with an error
+   * (Claude Code's `error_during_execution`), which read as "Agent failed" and marked the thread failed. A result that
+   * arrives soon after the person asked to stop is that stop: it is kept as `interrupted`, which every view reads as
+   * stopped, and the agent rests ready for the next message. A request with no turn running expires instead of hiding a
+   * later failure.
+   */
+  turnResult(
+    id: string,
+    result: Extract<AgentEvent, { kind: 'result' }>,
+  ): { result: Extract<AgentEvent, { kind: 'result' }>; state: 'idle' | 'failed' } {
+    const requested = this.stopsRequested.get(id)
+    this.stopsRequested.delete(id)
+    if (requested !== undefined && Date.now() - requested < STOP_RESULT_MS)
+      return { result: { ...result, isError: false, text: 'interrupted' }, state: 'idle' }
+    return { result, state: result.isError ? 'failed' : 'idle' }
+  }
 
   record(id: string, recorded: AgentEvent, replacesMessageId?: string): void {
     if (recorded.kind === 'tool-use' || recorded.kind === 'tool-result')

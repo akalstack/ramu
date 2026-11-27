@@ -89,6 +89,7 @@ it('returns bounded identity/origin summaries through agent lists and task RPC w
       providerUses: () => new Map(),
       events: () => [],
       goalOf: () => null,
+      stoppedByPerson: () => false,
     },
   } as unknown as Services)
   try {
@@ -136,6 +137,7 @@ it('exposes bounded verification context without leaking command output into tas
       providerUses: () => new Map(),
       events: () => [],
       goalOf: () => goal,
+      stoppedByPerson: () => false,
     },
   } as unknown as Services)
   try {

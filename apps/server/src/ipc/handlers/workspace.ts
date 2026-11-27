@@ -267,7 +267,8 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
       const main = sessions.at(-1)
       const inputSummary = mergeInputSummaries(sessions.map((session) => session.inputSummary))
       const goal = main ? agents.goalOf(main.id) : null
-      const executionState = main?.state
+      // Resting after a turn the person stopped reads as stopped, as it does in the transcript, not as finished.
+      const executionState = main?.state === 'idle' && agents.stoppedByPerson(main.id) ? 'stopped' : main?.state
       // The thread's cast: each session (the main agent and its helpers) at its creation, plus every provider a
       // session handed off between, with the main agent's provider leading.
       const providers = threadProviders(

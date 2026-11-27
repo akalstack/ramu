@@ -75,7 +75,7 @@ export interface SessionProcessHost
     Pick<GoalManager, 'controlGoal' | 'getGoal' | 'goalPreferences' | 'saveGoal' | 'setGoal'>,
     Pick<ProviderWaits, 'clearProviderWait' | 'waitForGoalProvider'>,
     Pick<ClaudeStreamPump, 'pump'>,
-    Pick<SessionRecorder, 'record' | 'setState'>,
+    Pick<SessionRecorder, 'record' | 'requestStop' | 'setState' | 'turnResult'>,
     Pick<
       SessionRegistry,
       'draining' | 'finalizing' | 'live' | 'revisions' | 'runners' | 'trackDrain' | 'transitioning'
@@ -488,13 +488,12 @@ export class SessionProcess {
             else if (event.kind === 'agent') {
               const { kind: _, at: __, ...task } = event
               if (this.host.task(id, task.agentId)?.status !== 'stopped') this.host.updateTask(id, task.agentId, task)
-            } else {
-              this.host.record(id, event.kind === 'init' ? { ...event, provider: s.provider } : event)
-              if (event.kind === 'result') {
-                if (limit && event.isError) void this.host.fallback(id, limit === 'low' ? 'low' : 'high')
-                else this.host.setState(id, event.isError ? 'failed' : 'idle')
-              }
-            }
+            } else if (event.kind === 'result') {
+              const { result, state } = this.host.turnResult(id, event)
+              this.host.record(id, result)
+              if (limit && state === 'failed') void this.host.fallback(id, limit === 'low' ? 'low' : 'high')
+              else this.host.setState(id, state)
+            } else this.host.record(id, event.kind === 'init' ? { ...event, provider: s.provider } : event)
           },
           readOnly,
         )
@@ -685,6 +684,7 @@ export class SessionProcess {
   }
 
   async interrupt(id: string): Promise<void> {
+    this.host.requestStop(id)
     this.host.clearProviderWait(id)
     if (this.host.getGoal(id) && this.host.getGoal(id)?.status !== 'completed') this.host.controlGoal(id, 'pause')
     this.host.pauseQueue(id)
