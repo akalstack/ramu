@@ -1025,6 +1025,8 @@ export class AgentService {
 
   async finishMcpSignIn(id: string, name: string, callbackUrl: string): Promise<void> {
     const session = this.get(id)
+    const runner = this.parts.registry.runners.get(id)
+    if (runner?.finishMcpSignIn) return mcpRequest(runner.finishMcpSignIn(name, callbackUrl), 30_000)
     const auth = session.provider === 'claude-code' ? claudeMcpAuth(this.parts.registry.live.get(id)?.query) : null
     if (!auth) throw new Error('This provider finishes the sign-in by itself.')
     await mcpRequest(auth.mcpSubmitOAuthCallbackUrl(name, callbackUrl), 70_000)

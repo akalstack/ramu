@@ -197,6 +197,7 @@ export async function codexUsage(accountId?: string): Promise<UsageReading[]> {
 export type { AgentRunnerFactory as CodexFactory } from '../agent/agentRunner'
 import type { AgentRunner as CodexRunner, AgentRunnerFactory as CodexFactory } from '../agent/agentRunner'
 import { SessionInUse } from '../agent/agentRunner'
+import { deliverLoopbackCallback, loopbackRedirect } from '../agent/mcpCallback'
 
 export const createCodexRunner: CodexFactory = (scope, settings, emit, readOnly, onTitle) =>
   new CodexSession(scope, settings, emit, readOnly, onTitle)
@@ -209,6 +210,8 @@ class CodexSession implements CodexRunner {
   /** Ends dynamic tool calls still waiting when the chat stops. */
   private readonly toolCalls = new AbortController()
   private threadId = ''
+  /** Where each sign-in under way waits for its page to return on this host. */
+  private readonly mcpReturns = new Map<string, URL>()
   private turnId = ''
   /** Tokens the current turn's model calls used so far; null outside a turn or before Codex reports any. */
   private turnUsage: { input: number; output: number } | null = null
@@ -288,7 +291,17 @@ class CodexSession implements CodexRunner {
     const answer = await this.rpc.request('mcpServer/oauth/login', { name, threadId: this.threadId })
     const authUrl = typeof answer?.authorizationUrl === 'string' ? answer.authorizationUrl : undefined
     // Codex listens for the page's return on the host itself, as Claude Code does.
-    return { ...(authUrl ? { authUrl } : {}), returnsToHost: !!authUrl }
+    const redirect = authUrl ? loopbackRedirect(authUrl) : undefined
+    if (redirect) this.mcpReturns.set(name, redirect)
+    else this.mcpReturns.delete(name)
+    return { ...(authUrl ? { authUrl } : {}), returnsToHost: !!redirect }
+  }
+
+  async finishMcpSignIn(name: string, callbackUrl: string): Promise<void> {
+    const expected = this.mcpReturns.get(name)
+    if (!expected) throw new Error('No sign-in is waiting for this server. Start the sign-in again.')
+    await deliverLoopbackCallback(expected, callbackUrl)
+    this.mcpReturns.delete(name)
   }
 
   async reloadMcp(): Promise<void> {

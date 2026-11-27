@@ -29,6 +29,8 @@ export interface AgentRunner {
   mcpStatus?(): Promise<AgentMcpStatus>
   reconnectMcp?(name: string): Promise<void>
   signInMcp?(name: string): Promise<import('@ramu/shared/types').McpSignIn>
+  /** Completes a sign-in from the address its page ended on, pasted on a device that could not return to the host. */
+  finishMcpSignIn?(name: string, callbackUrl: string): Promise<void>
   reloadMcp?(): Promise<void>
   setTools?(connection: McpConnection): void
   /** Serves the runtime's client-terminal requests; given only to providers whose adapter enables `native.terminals`. */
