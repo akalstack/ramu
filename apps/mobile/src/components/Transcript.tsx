@@ -961,6 +961,7 @@ const NOTE_ICONS: Record<NoteIcon, LucideIcon> = {
   compaction: Minimize2,
   recovery: RotateCcw,
   stop: OctagonX,
+  command: SquareTerminal,
   schedule: CalendarClock,
   advice: Lightbulb,
   message: Send,

@@ -2,6 +2,7 @@ import { expect, it } from 'vitest'
 import type { AgentEvent } from '@ramu/shared/types'
 import { latestTasks } from '@ramu/shared/chat/agentTasks'
 import { holdsTurn } from '@ramu/shared/chat/helperPresentation'
+import { toBlocks } from '../src/views/agent/lib/blocks'
 import { toTurns, turnParts } from '../src/views/agent/lib/turns'
 
 const turnsOf = (events: AgentEvent[]) =>
@@ -184,4 +185,16 @@ it('keeps the last turn at work while a command the agent waits on runs, and end
   // A command the agent never said it was waiting on runs beside the turn.
   expect(held(events({ status: 'running' }))).toBe(false)
   expect(turn(events({ status: 'completed', endedAt: 60_000 })).endedAt).toBe(4000)
+})
+
+it('shows a background command ending after the answer as a note in that turn, not as a new turn', () => {
+  const events: AgentEvent[] = [
+    { kind: 'user', text: 'run the tests in the background' },
+    { kind: 'text', text: 'Started them.' },
+    result('done'),
+    { kind: 'background-command-end', commandId: 'b', command: 'pnpm test', failed: false },
+  ]
+  const blocks = toBlocks(events)
+  expect(blocks.at(-1)).toMatchObject({ kind: 'event', event: { kind: 'background-command-end' } })
+  expect(toTurns(blocks, events)).toHaveLength(1)
 })

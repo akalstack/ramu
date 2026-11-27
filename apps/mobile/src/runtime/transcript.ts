@@ -439,6 +439,16 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
     // These notes read as the desktop's rows do.
     else if (e.kind === 'background-terminal-stop')
       items.push({ kind: 'note', id, icon: 'stop', ...noteTitle('You requested a stop for {0}', { 0: e.command }) })
+    else if (e.kind === 'background-command-end')
+      items.push({
+        kind: 'note',
+        id,
+        icon: 'command',
+        ...noteTitle(e.failed ? 'Background command failed: {0}' : 'Background command finished: {0}', {
+          0: e.command,
+        }),
+        failed: e.failed,
+      })
     else if (e.kind === 'recovery')
       items.push({ kind: 'note', id, icon: 'recovery', ...noteTitle('Resumed after restart') })
     else if (e.kind === 'compaction' && e.state !== 'started') {

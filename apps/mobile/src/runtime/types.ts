@@ -238,7 +238,8 @@ export type TranscriptItem = (
 ) & { at?: number; requestSource?: { sessionId: string; agentId: string; name: string; requestId?: string } }
 
 /** What a status line is about, for its mark. */
-export type NoteIcon = 'compaction' | 'recovery' | 'stop' | 'schedule' | 'advice' | 'message' | 'answers' | 'card'
+export type NoteIcon =
+  'compaction' | 'recovery' | 'stop' | 'command' | 'schedule' | 'advice' | 'message' | 'answers' | 'card'
 
 export interface Chat extends Task {
   executionState?: import('@ramu/shared/types').AgentSessionState

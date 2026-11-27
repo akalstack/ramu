@@ -563,6 +563,8 @@ test('status lines carry the mark of what they are about, as the desktop rows do
     { kind: 'compaction', state: 'completed', at: 1_000 },
     { kind: 'recovery', state: 'resumed', at: 2_000 },
     { kind: 'background-terminal-stop', command: 'pnpm dev', at: 3_000 },
+    { kind: 'background-command-end', commandId: 'b', command: 'pnpm test', failed: false, at: 4_000 },
+    { kind: 'background-command-end', commandId: 'c', command: 'pnpm lint', failed: true, at: 5_000 },
   ]).filter((item) => item.kind === 'note')
   assert.deepEqual(
     notes.map((note) => [note.title, note.icon]),
@@ -570,6 +572,8 @@ test('status lines carry the mark of what they are about, as the desktop rows do
       ['Context compacted', 'compaction'],
       ['Resumed after restart', 'recovery'],
       ['You requested a stop for pnpm dev', 'stop'],
+      ['Background command finished: pnpm test', 'command'],
+      ['Background command failed: pnpm lint', 'command'],
     ],
   )
 })

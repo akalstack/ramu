@@ -473,6 +473,8 @@ type AgentEventBody =
   /** This thread continues on another host. The original stays and links to it. */
   | { kind: 'continued'; hostId: string; host: string; taskId: string; title: string }
   | { kind: 'background-terminal-stop'; terminalId: string; command: string }
+  /** A background command the agent started finished on its own, recorded where it ended. */
+  | { kind: 'background-command-end'; commandId: string; command: string; failed: boolean }
   | {
       kind: 'init'
       model: string

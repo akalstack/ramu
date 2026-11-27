@@ -348,6 +348,8 @@ export class SessionRecorder {
         if (event.kind === 'tool-use' && previous.event) event.at = (JSON.parse(previous.event) as AgentEvent).at
         this.db.prepare(UPDATE_EVENT_SQL).run(JSON.stringify(event), id, id, previous.seq)
         this.host.emit(id, event, previous.seq)
+        if (event.kind === 'agent' && previous.event)
+          this.noteCommandEnd(id, JSON.parse(previous.event) as AgentTask, event)
         return
       }
     }
@@ -365,6 +367,22 @@ export class SessionRecorder {
   }
 
   /** With a threshold set, a Claude command still running in the foreground after that long moves to the background on its own. */
+  /**
+   * A background command's task is updated where it started, so nothing in the conversation marked when it ended. Its
+   * end is recorded where it happened, as a stop the person asked for is.
+   */
+  private noteCommandEnd(id: string, earlier: AgentTask, task: AgentTask): void {
+    if (task.taskType !== 'local_bash' || task.recovered || earlier.status !== 'running') return
+    if (task.status !== 'completed' && task.status !== 'failed') return
+    this.persist(id, {
+      kind: 'background-command-end',
+      // Not `agentId`, which marks a sub-agent's own events and keeps them out of the conversation.
+      commandId: task.agentId,
+      command: task.name,
+      failed: task.status === 'failed',
+    })
+  }
+
   private armAutoBackground(id: string, toolUseId: string): void {
     const seconds = this.host.preferences()?.autoBackgroundSeconds ?? 0
     if (!seconds || !this.host.live.has(id)) return

@@ -321,6 +321,15 @@ export function EventRow({
           <RepeatCount count={repeats} />
         </div>
       )
+    case 'background-command-end':
+      return (
+        <div className={TURN_END_CLASS} role="status">
+          {translate(e.failed ? 'Background command failed: {0}' : 'Background command finished: {0}', {
+            0: e.command,
+          })}
+          <RepeatCount count={repeats} />
+        </div>
+      )
     case 'continued':
       return <ContinuedCard event={e} sessionId={sessionId} taskId={taskId} />
     case 'checkout-clash':

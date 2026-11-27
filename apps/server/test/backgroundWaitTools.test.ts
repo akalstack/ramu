@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
-import { DEFAULT_AGENT_SETTINGS, type AgentTask } from '@ramu/shared/types'
+import { DEFAULT_AGENT_SETTINGS, type AgentEvent, type AgentTask } from '@ramu/shared/types'
 import { holdsTurn } from '@ramu/shared/chat/helperPresentation'
 import { AgentService } from '../src/agent'
 import { registerBackgroundWaitTools } from '../src/agent/backgroundWaitTools'
@@ -183,4 +183,29 @@ it('tells the agent about the wait only where its provider reports background co
   }
   expect(sessionGuidance(sections)).not.toContain('background_wait')
   expect(sessionGuidance({ ...sections, backgroundWait: true })).toContain('background_wait')
+})
+
+it('marks where a background command finished or failed, once, and not one that was stopped', async () => {
+  const session = await thread('t')
+  command(session.id, 'build')
+  command(session.id, 'lint', { name: 'pnpm lint' })
+  command(session.id, 'dev', { name: 'pnpm dev' })
+  ;(svc as unknown as { record(id: string, event: AgentEvent): void }).record(session.id, {
+    kind: 'text',
+    text: 'Waiting on them.',
+  })
+  update(session.id, 'build', { status: 'completed' })
+  update(session.id, 'build', { status: 'completed', summary: 'done' })
+  update(session.id, 'lint', { status: 'failed' })
+  update(session.id, 'dev', { status: 'stopped' })
+  const events = svc.events(session.id)
+  const ends = events.filter((event) => event.kind === 'background-command-end')
+  expect(ends).toMatchObject([
+    { command: 'pnpm test', failed: false },
+    { command: 'pnpm lint', failed: true },
+  ])
+  // Recorded where they ended, after what the agent said meanwhile; the tasks themselves stay where they started.
+  const said = events.findIndex((event) => event.kind === 'text' && event.text === 'Waiting on them.')
+  expect(events.indexOf(ends[0]!)).toBeGreaterThan(said)
+  expect(events.findIndex((event) => event.kind === 'agent')).toBeLessThan(said)
 })
