@@ -770,16 +770,17 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
   /**
    * What each row reads from the screen rather than from its own data. The list redraws a row only when its data or
    * this changes, so without it a tool group stayed live (shimmering) after newer rows arrived below it, and a reply kept
-   * the footer that had moved to the next. Rows are memoised, so only those whose props changed render again.
+   * the footer that had moved to the next. It is a string of just those things, so a reply streaming into the last row,
+   * which changes none of them, does not send the list through every row again.
    */
   const rowContext = useMemo(
-    () => ({
-      itemMeta,
-      found,
-      visibleContentRows,
-      contentScreenFocused,
-      live: chat?.status === 'running' ? rows.at(-1) : undefined,
-    }),
+    () =>
+      [
+        chat?.status === 'running' ? rows.at(-1)?.id : '',
+        found ? `${found.id}:${found.at}` : '',
+        contentScreenFocused ? [...visibleContentRows].join(',') : '',
+        [...itemMeta].map(([id, meta]) => `${id}:${meta.date ?? ''}:${meta.footer ? 1 : 0}`).join(','),
+      ].join('|'),
     [itemMeta, found, visibleContentRows, contentScreenFocused, chat?.status, rows],
   )
   // New rows fade in on their own (`fresh` below). A screen-wide layout animation is not used here: it left the list's

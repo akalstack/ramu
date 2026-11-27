@@ -2442,6 +2442,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }
   return <Context.Provider value={store}>{children}</Context.Provider>
 }
+/**
+ * Screens that another screen covers still re-rendered on every store change, which while a thread streams is several
+ * times a second: the thread list and its tabs under an open thread did that work unseen, and the phone ran warm. While
+ * `hold` is set they keep the store as it was; they take the current one again the moment it clears.
+ */
+export function HoldStore({ hold, children }: { hold: boolean; children: ReactNode }) {
+  const store = useStore()
+  const held = useRef(store)
+  if (!hold) held.current = store
+  return <Context.Provider value={held.current}>{children}</Context.Provider>
+}
 export function useStore() {
   const store = useContext(Context)
   if (!store) throw new Error('StoreProvider missing')

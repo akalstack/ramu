@@ -9840,7 +9840,7 @@ test('a thread’s servers show as a pill, open in its browser on the host and s
       throw new Error(`Unexpected ${args[1]}`)
     },
   }
-  const { ThreadServers } = load(
+  const { ThreadServers, pollEvery } = load(
     'components/ThreadServers.tsx',
     'ios',
     {
@@ -9849,7 +9849,7 @@ test('a thread’s servers show as a pill, open in its browser on the host and s
       '../i18n': { useSay: () => say },
       '../runtime/store': { useStore: () => ({ ...store, computers: [{ ...store.computers[0], access }] }) },
     },
-    { setInterval: () => 1, clearInterval() {} },
+    { setTimeout: () => 1, clearTimeout() {} },
   )
   let open = false
   const opened = []
@@ -9863,6 +9863,10 @@ test('a thread’s servers show as a pill, open in its browser on the host and s
         onOpenPage: (url) => opened.push(url),
       }),
     )
+  // Read every few seconds only while the list is open; otherwise now and then, so the radio rests.
+  assert.equal(pollEvery(true, false), 3000)
+  assert.equal(pollEvery(false, true), 20_000)
+  assert.equal(pollEvery(false, false), 60_000)
   render()
   await settle()
   const pill = find(render(), 'ActivityPill')
@@ -9902,7 +9906,7 @@ test('a thread’s servers show as a pill, open in its browser on the host and s
       '../i18n': { useSay: () => say },
       '../runtime/store': { useStore: () => ({ ...store, computers: [{ ...store.computers[0], access }] }) },
     },
-    { setInterval: () => 1, clearInterval() {} },
+    { setTimeout: () => 1, clearTimeout() {} },
   )
   const tree = viewer.render(() =>
     ViewerServers({

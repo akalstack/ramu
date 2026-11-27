@@ -9,7 +9,12 @@ import { font, space, useTheme } from '../theme'
 import { ActivityPill } from './ActivityPill'
 import { Button, Card, Divider, Row, Sheet, T } from './ui'
 
-const POLL_MS = 3000
+/**
+ * How often the thread's servers are read. Every few seconds only while the person has the list open: a request that
+ * often, for as long as a thread is on screen, keeps a phone's radio awake and the phone warm. A working thread, where
+ * a server may start, is read now and then, and a resting one rarely.
+ */
+export const pollEvery = (open: boolean, running: boolean): number => (open ? 3000 : running ? 20_000 : 60_000)
 
 /** "localhost:3000", as the person would type it. */
 export const serverAddress = (server: Pick<ThreadServer, 'port' | 'host'>) => serverUrl(server).replace('http://', '')
@@ -44,6 +49,9 @@ export function ThreadServers({
   invoke.current = store.invoke
   const sheet = useRef({ open, onClose })
   sheet.current = { open, onClose }
+  const every = useRef(0)
+  every.current = pollEvery(open, chat.status === 'running')
+  const readNow = useRef<(() => void) | null>(null)
   const [servers, setServers] = useState<ThreadServer[]>([])
   const [stopping, setStopping] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -68,12 +76,26 @@ export function ThreadServers({
         },
       )
     read()
-    const timer = setInterval(read, POLL_MS)
+    readNow.current = read
+    // Rescheduled each time, so the pace follows the sheet opening and the thread starting or resting.
+    let timer: ReturnType<typeof setTimeout>
+    const next = () => {
+      timer = setTimeout(() => {
+        read()
+        next()
+      }, every.current)
+    }
+    next()
     return () => {
       active = false
-      clearInterval(timer)
+      readNow.current = null
+      clearTimeout(timer)
     }
   }, [hostId, taskId, online, owner, revision])
+  // Opening the list reads it at once rather than at the slower pace it was on.
+  useEffect(() => {
+    if (open) readNow.current?.()
+  }, [open])
   if (!servers.length && !open) return null
   const key = (server: ThreadServer) => `${server.pid}:${server.port}`
   const stop = (server: ThreadServer) => {
