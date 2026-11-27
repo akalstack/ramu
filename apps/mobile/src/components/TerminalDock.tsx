@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { Pressable, ScrollView, View } from 'react-native'
 import {
   ArrowDown,
@@ -21,12 +22,16 @@ import { DEFAULT_RAIL } from '../runtime/terminalKeys'
 import { useSay } from '../i18n'
 
 const railIcons: Record<string, Icon> = { left: ArrowLeft, up: ArrowUp, down: ArrowDown, right: ArrowRight }
+/** Keys that repeat while held, as a keyboard's arrows do: moving along a line or through history takes one hold. */
+const REPEATS = new Set(['left', 'right', 'up', 'down'])
+/** How long a hold waits before repeating, and how often it repeats then, at a keyboard's usual pace. */
+const REPEAT_DELAY_MS = 400
+const REPEAT_EVERY_MS = 70
 
 /**
- * The terminal's controls, in two places as terminal apps lay them out: `top`, a bar under the status bar with Back, the
- * workspace switcher (project on top, host and folder below), Copy and Add to chat; `keys`, one slim bar above the
- * keyboard with the key rail, more keys, paste and the keyboard itself. Shells (select, open, close) live in the tab
- * strip under the top bar, so they are not repeated here.
+ * The terminal's controls, at the bottom where the thumb is: `top`, a row with Back, the workspace switcher (project on
+ * top, host and folder below), Copy and Add to chat; `keys`, one slim bar right above the keyboard with the key rail,
+ * more keys, paste and the keyboard itself. Shells (select, open, close) live in the tab strip above them.
  */
 export function TerminalDock({
   part,
@@ -73,6 +78,18 @@ export function TerminalDock({
   rail?: readonly string[]
 }) {
   const say = useSay()
+  // A held arrow: the wait before it repeats, then the repeat itself, and whether it repeated (its tap is then spent).
+  const hold = useRef<{
+    wait?: ReturnType<typeof setTimeout>
+    beat?: ReturnType<typeof setInterval>
+    repeated: boolean
+  }>({ repeated: false })
+  const release = () => {
+    clearTimeout(hold.current.wait)
+    clearInterval(hold.current.beat)
+    hold.current.wait = hold.current.beat = undefined
+  }
+  useEffect(() => release, [])
   const { c } = useTheme()
   const button = (I: Icon, label: string, onPress: () => void, disabled = false) => (
     <Pressable
@@ -207,7 +224,21 @@ export function TerminalDock({
                 accessibilityLabel={label === 'paste' ? say('Paste into terminal') : label}
                 aria-pressed={label === 'ctrl' || label === 'alt' ? latch === label : undefined}
                 accessibilityState={label === 'ctrl' || label === 'alt' ? { selected: latch === label } : undefined}
-                onPress={() => onKey(label)}
+                onPressIn={() => {
+                  if (!REPEATS.has(label)) return
+                  release()
+                  hold.current.repeated = false
+                  hold.current.wait = setTimeout(() => {
+                    hold.current.repeated = true
+                    onKey(label)
+                    hold.current.beat = setInterval(() => onKey(label), REPEAT_EVERY_MS)
+                  }, REPEAT_DELAY_MS)
+                }}
+                onPressOut={release}
+                onPress={() => {
+                  if (REPEATS.has(label) && hold.current.repeated) return
+                  onKey(label)
+                }}
                 style={({ pressed }) => ({
                   opacity: !connected || exited ? 0.4 : 1,
                   minWidth: 42,

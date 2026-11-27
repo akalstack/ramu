@@ -465,21 +465,6 @@ export function TerminalScreen({
     >
       <Stack.Screen options={{ headerShown: false }} />
       <StatusBar style="light" />
-      {dock('top')}
-      <TerminalTabs
-        tabs={tabs}
-        active={active}
-        busy={opening || !connected || computer?.access === 'viewer' || !terminalAllowed}
-        onNew={() => void open()}
-        onSelect={(index) => {
-          tap()
-          keepKeyboard()
-          setActive(index)
-          setKeyAction(undefined)
-          setLatch(null)
-        }}
-        onClose={(value) => void close(value)}
-      />
       <View style={{ flex: 1 }}>
         {error ? (
           <T tone="bad" style={{ padding: space.m }}>
@@ -542,6 +527,20 @@ export function TerminalScreen({
             />
           )}
         </View>
+        <TerminalTabs
+          tabs={tabs}
+          active={active}
+          busy={opening || !connected || computer?.access === 'viewer' || !terminalAllowed}
+          onNew={() => void open()}
+          onSelect={(index) => {
+            tap()
+            keepKeyboard()
+            setActive(index)
+            setKeyAction(undefined)
+            setLatch(null)
+          }}
+          onClose={(value) => void close(value)}
+        />
         <View
           style={{
             paddingHorizontal: 10,
@@ -549,7 +548,10 @@ export function TerminalScreen({
             paddingBottom: keyboardVisible || keysOpen ? 6 : Math.max(insets.bottom, 10),
           }}
         >
-          {dock('keys')}
+          <View style={{ gap: 6 }}>
+            {dock('top')}
+            {dock('keys')}
+          </View>
         </View>
         {keysOpen || keyboardRoom ? (
           <View style={{ height: keysOpen ? Math.max(keyboardRoom, keyPanelHeight) : keyboardRoom }}>
