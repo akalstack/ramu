@@ -5142,7 +5142,7 @@ for (const os of ['ios', 'android']) {
 for (const os of ['ios', 'android']) {
   test(`${os} thread rows expose approval priority, old-host input and offline last-known status without changing navigation`, () => {
     let destination
-    let online = true
+    let host = 'online'
     const goalHold = load('../../../packages/shared/src/chat/goalHold.ts', os)
     const status = load('../../../packages/shared/src/chat/threadStatus.ts', os, { './goalHold': goalHold })
     const providers = load('../../../packages/shared/src/chat/threadProviders.ts', os)
@@ -5167,7 +5167,11 @@ for (const os of ['ios', 'android']) {
       '@ramu/shared/chat/threadProviders': providers,
       '../i18n': { useT: () => strings, ago: () => 'now' },
       '../runtime/store': {
-        useStore: () => ({ isOnline: () => online, inbox: { a: [{ kind: 'done', sessionId: 's' }] } }),
+        useStore: () => ({
+          isOnline: () => host === 'online',
+          computers: [{ id: 'a', status: host }],
+          inbox: { a: [{ kind: 'done', sessionId: 's' }] },
+        }),
       },
       './ChatActions': { useChatCommands: () => ({}), ChatActionsSheet: 'ChatActionsSheet' },
       './SwipeRow': { SwipeRow: 'SwipeRow' },
@@ -5201,7 +5205,11 @@ for (const os of ['ios', 'android']) {
     // What the thread needs from the person comes first; its reply waits.
     tree = ChatRow({ chat: { ...chat, lastReply: reply } })
     assert.ok(!nodes(tree).some((node) => node.props?.children === reply))
-    online = false
+    // Still connecting after the app opens is not offline: the sync pill above the list says it once, not every row.
+    host = 'connecting'
+    tree = ChatRow({ chat })
+    assert.ok(!nodes(tree).some((node) => node.props?.label === 'Offline'))
+    host = 'offline'
     tree = ChatRow({ chat })
     assert.match(find(tree, 'Row').props.accessibilityLabel, /Offline · last-known activity/)
     // Offline is a named fact on the detail line, so the host's state is not mistaken for the thread's.

@@ -100,7 +100,10 @@ export const ChatRow = memo(function ChatRow({
         unread && (chat.status === 'idle' || chat.status === 'ready-for-review'),
         chat.goal && { ...chat.goal, verifying: !!chat.goal.claim },
       )
-  const online = store.isOnline(chat.computerId)
+  // Only a host that cannot be reached marks its rows Offline. One still connecting after the app opens is said once,
+  // by the sync pill above the list; every row saying Offline for those seconds read as all of them being down.
+  const hostState = store.computers.find((pc) => pc.id === chat.computerId)?.status
+  const online = hostState === 'online' || hostState === 'connecting'
   const selection = useThreadSelection()
   // Beside an open thread, a row opens its thread in place of that one, and the open thread's row stays marked.
   const picker = useThreadPicker()
