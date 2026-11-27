@@ -286,14 +286,14 @@ export function ProviderSettings({
     })
   // A sign-in in the setup terminal shows here once the login holds, without returning to the window or refreshing.
   const signing = useRef<{ provider: AgentProvider; accountId: string } | null>(null)
-  const watchSignIn = useSignInWatch(async () => {
-    const target = signing.current
-    if (!target) return true
-    const answer = await invoke('providers.statusOf', target.provider, config)
-    const signedIn = !!answer.signIn?.[target.accountId]?.signedIn
-    if (signedIn) void refresh(false, true, [target.provider])
-    return signedIn
-  })
+  const watchSignIn = useSignInWatch(
+    async () => {
+      const target = signing.current
+      if (!target) return undefined
+      return (await invoke('providers.statusOf', target.provider, config)).signIn?.[target.accountId]
+    },
+    () => signing.current && refresh(false, true, [signing.current.provider]),
+  )
   const login = async (provider: AgentProvider, accountId = config[provider]?.accountId || 'default') => {
     if (!allowed()) return
     const target =

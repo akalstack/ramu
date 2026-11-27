@@ -5,7 +5,9 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/desktop-button'
 import { TerminalView } from '../views/TerminalView'
 import { ramu } from '../ipc'
-import { signInLinkIn } from './signInLink'
+import { cliOpensBrowser, signInLinkIn } from './signInLink'
+import { useHost } from '../workspace/HostProvider'
+import type { ProviderSignIn } from '@ramu/shared/providers/providers'
 
 type SetupCommand = { id: string; title: string; command: string }
 const OPEN = 'ramu:provider-terminal'
@@ -23,19 +25,31 @@ export function runProviderCommand(title: string, command: string, onClosed?: ()
   window.dispatchEvent(new CustomEvent<SetupCommand>(OPEN, { detail: { id: crypto.randomUUID(), title, command } }))
 }
 
+/** Who is signed in, so a sign-in that only repeats the login already there is not taken for the new one. */
+const signInKey = (signIn: ProviderSignIn | undefined) =>
+  signIn?.signedIn ? `in:${signIn.accountKey ?? signIn.email ?? ''}:${signIn.apiKey ? 'key' : ''}` : 'out'
+
 /**
  * Follows a sign-in started in the setup terminal, so the account shows as signed in without a manual refresh: `check`
- * runs every few seconds and once more when the terminal closes; when it reports success the terminal closes itself.
+ * runs every few seconds and once more when the terminal closes. The terminal closes itself only when the login changed
+ * from what it was when the sign-in started: one already signed in (switching login, signing in again) stays open
+ * until the command finishes, which closes it.
  */
-export function useSignInWatch(check: () => Promise<boolean>) {
-  const latest = useRef(check)
-  latest.current = check
+export function useSignInWatch(check: () => Promise<ProviderSignIn | undefined>, signedIn: () => unknown) {
+  const latest = useRef({ check, signedIn })
+  latest.current = { check, signedIn }
   const stop = useRef<(() => void) | null>(null)
   useEffect(() => () => stop.current?.(), [])
   return () => {
     stop.current?.()
     const started = Date.now()
     let done = false
+    // Read before the command can change anything; until it answers, nothing is taken as the new login.
+    let before: string | null = null
+    void latest.current.check().then(
+      (signIn) => (before = signInKey(signIn)),
+      () => (before = 'unknown'),
+    )
     const finish = () => {
       done = true
       clearInterval(timer)
@@ -44,14 +58,19 @@ export function useSignInWatch(check: () => Promise<boolean>) {
     const closed = () => {
       if (done) return
       finish()
-      void latest.current().catch(() => false)
+      void latest.current.check().then(
+        (signIn) => signIn?.signedIn && latest.current.signedIn(),
+        () => {},
+      )
     }
     const timer = setInterval(() => {
       if (Date.now() - started > WATCH_MS) return finish()
-      void latest.current().then(
-        (signedIn) => {
-          if (!signedIn || done) return
+      if (before === null) return
+      void latest.current.check().then(
+        (signIn) => {
+          if (!signIn?.signedIn || done || signInKey(signIn) === before) return
           finish()
+          void latest.current.signedIn()
           window.dispatchEvent(new Event(CLOSE))
         },
         () => {},
@@ -65,6 +84,7 @@ export function useSignInWatch(check: () => Promise<boolean>) {
 /** A regular interactive PTY, kept separate from project terminals and the Settings draft. */
 export function ProviderSetupTerminal() {
   useLanguage()
+  const { isLocal } = useHost()
   const [setup, setSetup] = useState<SetupCommand | null>(null)
   // The sign-in page opens by itself the first time the command prints its link, so nobody has to click it.
   const output = useRef('')
@@ -93,6 +113,9 @@ export function ProviderSetupTerminal() {
     const link = signInLinkIn(output.current)
     if (!link) return
     opened.current = true
+    // On this machine a CLI that opens the browser itself has already done so (or will when Enter is pressed); a second
+    // page would start a second sign-in. On another host its browser opens there, so the page opens here instead.
+    if (isLocal && cliOpensBrowser(output.current)) return
     void ramu.invoke('app.openExternal', link).catch(() => {})
   }
   return (

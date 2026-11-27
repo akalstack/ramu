@@ -81,11 +81,8 @@ export function AgentsStep({
   const signingIn = useRef<AgentProvider | null>(null)
   const watchSignIn = useSignInWatch(async () => {
     const provider = signingIn.current
-    if (!provider) return true
-    const signedIn = !!(await invoke('providers.statusOf', provider)).signIn?.default?.signedIn
-    if (signedIn) await onRefresh()
-    return signedIn
-  })
+    return provider ? (await invoke('providers.statusOf', provider)).signIn?.default : undefined
+  }, onRefresh)
   const signIn = async (status: ProviderStatus) => {
     onError('')
     try {
