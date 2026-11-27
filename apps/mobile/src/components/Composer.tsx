@@ -109,6 +109,7 @@ import {
   useVoiceCapability,
   useVoiceSettings,
 } from '../runtime/useDictation'
+import { ImagePreview } from './ImagePreview'
 import { AttachmentTextSheet } from './AttachmentTextSheet'
 import { NextMessageChips } from './NextMessageChips'
 
@@ -1971,11 +1972,14 @@ function AttachmentThumb({ uri, name, remove }: { uri: string; name: string; rem
   const say = useSay()
   return (
     <View style={{ width: 56, height: 56 }}>
-      <Image
-        source={{ uri }}
-        accessibilityLabel={name}
-        style={{ width: 56, height: 56, borderRadius: radius.row, backgroundColor: c.fill }}
-      />
+      {/* Opens full size before sending, as a picture in the thread does and the desktop's preview. */}
+      <ImagePreview uri={uri} alt={name}>
+        <Image
+          source={{ uri }}
+          accessibilityLabel={name}
+          style={{ width: 56, height: 56, borderRadius: radius.row, backgroundColor: c.fill }}
+        />
+      </ImagePreview>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={say('Remove {0}', { '0': name })}
