@@ -100,7 +100,8 @@ it('layers repository actions and branch defaults through the API without execut
   })
   const dispatcher = createDispatcher({ userData: data, send: () => {}, native: async () => null }, {
     workspace,
-  } as Services)
+    reviews: { uncommittedThreads: async () => new Set<string>() },
+  } as unknown as Services)
   cleanup.push(() => dispatcher.close())
   expect(await dispatcher.invoke('tasks.workspaceOptions', [project.id])).toMatchObject({
     defaultCheckoutMode: 'worktree',
