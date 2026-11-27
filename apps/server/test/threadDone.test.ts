@@ -67,7 +67,7 @@ it('gives back what a thread holds when it is marked done, and leaves other thre
       { pid: 42, port: 17038, owner: agentItem, orphaned: false, daemon: 'Gradle daemon' },
       { pid: 42, port: 17039, owner: agentItem, orphaned: false, daemon: 'Gradle daemon' },
     ]),
-    stopLeftBehind: vi.fn(async () => 2),
+    release: vi.fn(async () => 2),
   }
   const table = registerWorkspaceHandlers({
     workspace,
@@ -98,7 +98,7 @@ it('gives back what a thread holds when it is marked done, and leaves other thre
   expect(testDevices.releaseThread).toHaveBeenCalledWith(task.id)
   expect(watchers.release).toHaveBeenCalledWith(task.id)
   expect(hostBrowser.closeThread).toHaveBeenCalledWith(task.id)
-  expect(servers.stopLeftBehind).toHaveBeenCalledWith(task.id, { all: true })
+  expect(servers.release).toHaveBeenCalledWith(task.id)
   await until(() => browser.view.mock.calls.length === 3)
   expect(browser.view.mock.calls.slice(1).map(([, command]) => command)).toEqual([
     { kind: 'close', tabId: 'tab-1' },

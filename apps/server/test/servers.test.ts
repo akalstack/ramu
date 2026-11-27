@@ -17,6 +17,9 @@ function service(roots: () => ProcessRoot[]) {
     ],
     detached: async () => ({ owners: new Map(), daemons: new Map() }),
     answersHttp: async ({ port }) => port === 5173,
+    daemons: async () => [],
+    cpuTimes: async () => new Map(),
+    sampleMs: 0,
   })
 }
 
@@ -43,41 +46,55 @@ it('refuses to stop a process that is not one of the thread’s servers', async 
   await expect(servers.stop('t2', 21, 5173)).rejects.toThrow('not one this thread started')
 })
 
-it('names build daemons a thread left behind and stops them alone, or with every server left behind once it is done', async () => {
+it('stops only idle build daemons, listening or not, and leaves one in the middle of a build for the next look', async () => {
   const { spawn } = await import('node:child_process')
-  // Real processes, so stopping them is real: one a Gradle daemon, one a dev server started with nohup.
-  const daemon = spawn('sleep', ['30'])
+  // Real processes, so stopping them is real: a Gradle daemon on a port, an Nx daemon on a local socket, and a Kotlin
+  // daemon that is compiling.
+  const gradle = spawn('sleep', ['30'])
+  const nx = spawn('sleep', ['30'])
+  const kotlin = spawn('sleep', ['30'])
   const devServer = spawn('sleep', ['30'])
   const agent: ProcessRoot = { pid: 10, taskId: 't1', item: { kind: 'agent', id: 's1', name: 'Agent' } }
+  let compiled = 0
   const servers = new ServerService(() => [agent], {
     listening: async () =>
-      [daemon, devServer]
+      [gradle, devServer]
         .filter((child) => child.exitCode === null && child.signalCode === null)
         .map((child) => ({
           pid: child.pid!,
-          port: child === daemon ? 17038 : 3000,
-          process: child === daemon ? 'java' : 'node',
+          port: child === gradle ? 17038 : 3000,
+          process: child === gradle ? 'java' : 'node',
           host: '127.0.0.1' as const,
         })),
     processes: async () => [{ pid: 10, ppid: 1, rssBytes: 0, cpu: 0 }],
     detached: async (pids) => ({
       owners: new Map(pids.map((pid) => [pid, 's1'])),
-      daemons: new Map([[daemon.pid!, 'Gradle daemon']]),
+      daemons: new Map([[gradle.pid!, 'Gradle daemon']]),
     }),
     answersHttp: async () => true,
+    daemons: async () => [
+      { pid: gradle.pid!, daemon: 'Gradle daemon', owner: 's1', cpu: 5 },
+      { pid: nx.pid!, daemon: 'Nx daemon', owner: 's1', cpu: 1 },
+      { pid: kotlin.pid!, daemon: 'Kotlin daemon', owner: 's1', cpu: 40 },
+      // Another thread's, which this one never touches.
+      { pid: process.pid, daemon: 'Gradle daemon', owner: 'other', cpu: 0 },
+    ],
+    // The Kotlin daemon keeps compiling while it is watched.
+    cpuTimes: async (pids) =>
+      new Map(pids.map((pid) => [pid, pid === kotlin.pid ? 40 + ++compiled * 3 : pid === gradle.pid ? 5 : 1])),
+    sampleMs: 10,
   })
   const listed = await servers.list('t1')
-  expect(listed.find((server) => server.pid === daemon.pid)).toMatchObject({ daemon: 'Gradle daemon', web: false })
-  expect(listed.find((server) => server.pid === devServer.pid)?.daemon).toBeUndefined()
-  // Resting: only the daemon goes; the dev server may be open in a browser.
-  expect(await servers.stopLeftBehind('t1')).toBe(1)
+  expect(listed.find((server) => server.pid === gradle.pid)).toMatchObject({ daemon: 'Gradle daemon', web: false })
+  expect(await servers.stopDaemons('t1')).toEqual({ stopped: 2, busy: 1 })
   await new Promise((resolve) => setTimeout(resolve, 200))
-  expect(daemon.signalCode).toBe('SIGTERM')
-  expect(devServer.exitCode ?? devServer.signalCode).toBeNull()
-  // Done: what was left behind goes too.
-  expect(await servers.stopLeftBehind('t1', { all: true })).toBe(1)
+  expect([gradle.signalCode, nx.signalCode]).toEqual(['SIGTERM', 'SIGTERM'])
+  expect(kotlin.signalCode).toBeNull()
+  // The dev server may be open in a browser: only marking the thread done stops it, with the busy daemon.
+  expect(devServer.signalCode).toBeNull()
+  await servers.release('t1')
   await new Promise((resolve) => setTimeout(resolve, 200))
-  expect(devServer.signalCode).toBe('SIGTERM')
+  expect([devServer.signalCode, kotlin.signalCode]).toEqual(['SIGTERM', 'SIGTERM'])
 })
 
 describe('answersHttp', () => {

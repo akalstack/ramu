@@ -605,21 +605,29 @@ if (workspace.getAppState<boolean>('computer:enabled', false) === true) computer
 // Made once plugins and Shared MCP are, below; events from before then suggest nothing.
 const suggestions: { service?: ToolSuggestions } = {}
 /**
- * Build daemons a thread's work started (Gradle, Kotlin, Bazel…) are stopped once the thread has rested ten minutes, as
- * the person would from Resources; the next build starts them again. A new turn calls it off.
+ * Build daemons a thread's work started (Gradle, Kotlin, Nx…) are stopped once the thread and the daemon have rested ten
+ * minutes, as the person would from Resources; the next build starts them again. A long build keeps them: while the
+ * thread works, runs a background command, or a daemon used CPU, it looks again ten minutes later. A new turn calls
+ * it off.
  */
 const daemonSweeps = new Map<string, NodeJS.Timeout>()
 function sweepDaemonsLater(taskId: string, state: AgentSessionState) {
   clearTimeout(daemonSweeps.get(taskId))
   daemonSweeps.delete(taskId)
   if (!['idle', 'failed', 'stopped'].includes(state)) return
-  const timer = setTimeout(() => {
-    daemonSweeps.delete(taskId)
-    if (agents.list(taskId).some((session) => ['starting', 'running', 'needs-input'].includes(session.state))) return
-    void servers.stopLeftBehind(taskId).catch(() => {})
-  }, AGENT_DAEMON_IDLE_MS)
-  timer.unref()
-  daemonSweeps.set(taskId, timer)
+  const look = () => {
+    const timer = setTimeout(async () => {
+      daemonSweeps.delete(taskId)
+      const working =
+        agents.list(taskId).some((session) => ['starting', 'running', 'needs-input'].includes(session.state)) ||
+        terminals.listBackground(taskId).some((command) => command.state === 'running')
+      const { busy } = working ? { busy: 1 } : await servers.stopDaemons(taskId).catch(() => ({ busy: 0 }))
+      if (busy && !daemonSweeps.has(taskId)) look()
+    }, AGENT_DAEMON_IDLE_MS)
+    timer.unref()
+    daemonSweeps.set(taskId, timer)
+  }
+  look()
 }
 const agents = new AgentService(
   db,
@@ -841,7 +849,7 @@ const resources = new ResourceService(
           !agents.queued(session.id).length
         )
           await agents.stopAndWait(session.id)
-      for (const taskId of taskIds) await servers.stopLeftBehind(taskId).catch(() => 0)
+      for (const taskId of taskIds) await servers.stopDaemons(taskId).catch(() => null)
     },
   },
   undefined,

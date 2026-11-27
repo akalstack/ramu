@@ -181,7 +181,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
         }
       }
     // Servers that outlived the command that started them, and build daemons, would otherwise run until the host stops.
-    void servers?.stopLeftBehind(taskId, { all: true }).catch(() => 0)
+    void servers?.release(taskId).catch(() => 0)
     computer?.revoke(taskId)
     void testDevices?.releaseThread(taskId)
     watchers.release(taskId)

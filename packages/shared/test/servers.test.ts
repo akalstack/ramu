@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest'
 import {
   buildDaemon,
+  cpuSeconds,
   attributeServers,
   ownerFromEnvironment,
   parseListening,
@@ -96,6 +97,20 @@ it('recognises build daemons by their command line, and nothing else, even with 
     'Gradle worker',
   )
   expect(buildDaemon('/usr/local/bin/sccache')).toBe('sccache')
+  expect(buildDaemon('node /repo/node_modules/nx/src/daemon/server/start.js')).toBe('Nx daemon')
+  expect(buildDaemon('/repo/node_modules/.bin/turbo --skip-infer daemon')).toBe('Turborepo daemon')
+  expect(buildDaemon('node /usr/local/bin/eslint_d start')).toBe('Lint daemon')
+  // A Node dev server, a test run and a build are not daemons.
+  expect(buildDaemon('node node_modules/.bin/vite')).toBeNull()
+  expect(buildDaemon('node node_modules/.bin/turbo run build')).toBeNull()
   // A dev server whose environment carries the agent's Gradle options is still a server.
   expect(buildDaemon('node vite.js GRADLE_OPTS=-Dorg.gradle.daemon.idletimeout=600000 RAMU_OWNER=s1')).toBeNull()
+})
+
+it('reads CPU time as macOS and Linux print it', () => {
+  expect(cpuSeconds('0:01.23')).toBeCloseTo(1.23)
+  expect(cpuSeconds('12:05.50')).toBeCloseTo(725.5)
+  expect(cpuSeconds('01:02:03')).toBe(3723)
+  expect(cpuSeconds('2-00:00:01')).toBe(172_801)
+  expect(cpuSeconds('soon')).toBeNull()
 })

@@ -5,6 +5,7 @@ import type { ProcessRoot } from '@ramu/shared/resources'
 import {
   attributeServers,
   buildDaemon,
+  cpuSeconds,
   ownerFromEnvironment,
   parseListening,
   parseSs,
@@ -76,6 +77,57 @@ async function readDetached(pids: number[]): Promise<{ owners: Map<number, strin
   return { owners, daemons }
 }
 
+/** A build daemon running anywhere on the host: who started it, and the CPU it has used so far. */
+export interface RunningDaemon {
+  pid: number
+  daemon: string
+  owner: string | null
+  cpu: number
+}
+
+/**
+ * Every build daemon on the host, listening or not (Nx and Turborepo answer on local sockets), with the owner its
+ * environment names. One `ps` of the whole table, read only when a thread's daemons are about to be stopped.
+ */
+async function readDaemons(): Promise<RunningDaemon[]> {
+  if (process.platform !== 'darwin' && process.platform !== 'linux') return []
+  const darwin = process.platform === 'darwin'
+  const { stdout } = await run(
+    '/bin/ps',
+    darwin ? ['-axEww', '-o', 'pid=,time=,command='] : ['-axww', '-o', 'pid=,time=,args='],
+    { timeout: 5000, maxBuffer: 64_000_000 },
+  ).catch(() => ({ stdout: '' }))
+  const found: RunningDaemon[] = []
+  for (const line of stdout.split('\n')) {
+    const match = /^\s*(\d+)\s+(\S+)\s+(.*)$/.exec(line)
+    const daemon = match && buildDaemon(match[3]!)
+    const cpu = match && cpuSeconds(match[2]!)
+    if (!match || !daemon || cpu === null) continue
+    const pid = Number(match[1])
+    const environment = darwin ? match[3]! : await readFile(`/proc/${pid}/environ`, 'utf8').catch(() => '')
+    found.push({ pid, daemon, owner: ownerFromEnvironment(environment), cpu })
+  }
+  return found
+}
+
+/** CPU seconds each of these processes has used; one that has exited is left out. */
+async function readCpuTimes(pids: number[]): Promise<Map<number, number>> {
+  const times = new Map<number, number>()
+  if (!pids.length) return times
+  const { stdout } = await run('/bin/ps', ['-o', 'pid=,time=', '-p', pids.join(',')], { timeout: 3000 }).catch(() => ({
+    stdout: '',
+  }))
+  for (const line of stdout.split('\n')) {
+    const match = /^\s*(\d+)\s+(\S+)/.exec(line)
+    const cpu = match && cpuSeconds(match[2]!)
+    if (match && cpu !== null) times.set(Number(match[1]), cpu)
+  }
+  return times
+}
+
+/** How long a daemon is watched before it is stopped: a build between two tasks still shows here. */
+const SAMPLE_MS = 3000
+
 /** Statuses that say "not for a browser": the listener wants a credential or another protocol, so a tab shows nothing. */
 const NOT_A_PAGE = new Set([401, 403, 407, 426])
 
@@ -114,8 +166,58 @@ export class ServerService {
       processes: readProcesses,
       detached: readDetached,
       answersHttp,
+      daemons: readDaemons,
+      cpuTimes: readCpuTimes,
+      sampleMs: SAMPLE_MS,
     },
   ) {}
+
+  /** CPU each daemon had used when it was last looked at, so work done between two looks is seen. */
+  private readonly cpuSeen = new Map<number, number>()
+
+  private remember(roots: ProcessRoot[]) {
+    for (const root of roots) {
+      this.ended.delete(root.item.id)
+      this.ended.set(root.item.id, root)
+    }
+    // Owners are kept for servers that outlive them, the most recent few hundred.
+    for (const id of [...this.ended.keys()].slice(0, Math.max(0, this.ended.size - 500))) this.ended.delete(id)
+  }
+
+  /**
+   * Stops the build daemons a thread's work started, listening or not. Unless `force` (the thread is done), only idle
+   * ones: a daemon that used CPU since it was last looked at, or during a short look now, is in the middle of a build,
+   * perhaps one a background command is running, and is left for the next look. `busy` says how many were.
+   */
+  async stopDaemons(taskId: string, { force = false } = {}): Promise<{ stopped: number; busy: number }> {
+    this.remember(this.roots())
+    const owners = new Set(
+      [...this.ended.values()].filter((root) => root.taskId === taskId).map((root) => root.item.id),
+    )
+    const found = (await this.sources.daemons()).filter((entry) => entry.owner && owners.has(entry.owner))
+    if (!found.length) return { stopped: 0, busy: 0 }
+    let idle = found
+    let busy = 0
+    if (!force) {
+      await new Promise((resolve) => setTimeout(resolve, this.sources.sampleMs))
+      const now = await this.sources.cpuTimes(found.map((entry) => entry.pid))
+      idle = found.filter((entry) => {
+        const cpu = now.get(entry.pid)
+        if (cpu === undefined) return false
+        const before = this.cpuSeen.get(entry.pid)
+        this.cpuSeen.set(entry.pid, cpu)
+        const working = cpu - entry.cpu > 0.2 || (before !== undefined && cpu - before > 2)
+        if (working) busy++
+        return !working
+      })
+    }
+    for (const entry of idle) {
+      await terminate(entry.pid)
+      this.cpuSeen.delete(entry.pid)
+    }
+    this.cached = null
+    return { stopped: idle.length, busy }
+  }
 
   async list(taskId?: string): Promise<ThreadServer[]> {
     const all =
@@ -136,42 +238,27 @@ export class ServerService {
     const server = (await this.list(taskId)).find((entry) => entry.pid === pid && entry.port === port)
     if (!server || pid === process.pid || this.roots().some((root) => root.pid === pid && root.item.kind === 'agent'))
       throw new Error('That server has already stopped, or it is not one this thread started.')
-    process.kill(pid, 'SIGTERM')
-    const deadline = Date.now() + STOP_WAIT_MS
-    while (Date.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, 100))
-      if (!alive(pid)) break
-    }
-    if (alive(pid)) process.kill(pid, 'SIGKILL')
+    await terminate(pid)
     this.cached = null
   }
 
   /**
-   * Stops a thread's build daemons, which only speed up its next build; with `all`, every server the thread started, as
-   * when it is marked done and gives back what it holds.
+   * Gives back everything the thread's work left running, as when it is marked done: every server it started, and its
+   * build daemons whether busy or not.
    */
-  async stopLeftBehind(taskId: string, { all = false } = {}): Promise<number> {
+  async release(taskId: string): Promise<number> {
     this.cached = null
-    const servers = (await this.list(taskId)).filter((server) => all || server.daemon)
     // A daemon listens on several ports; each process is stopped once.
-    const pids = [...new Map(servers.map((server) => [server.pid, server])).values()]
-    let stopped = 0
-    for (const server of pids)
-      await this.stop(taskId, server.pid, server.port).then(
-        () => stopped++,
-        () => {},
-      )
-    return stopped
+    const pids = [...new Set((await this.list(taskId)).map((server) => server.pid))]
+    for (const pid of pids) if (pid !== process.pid) await terminate(pid)
+    const { stopped } = await this.stopDaemons(taskId, { force: true })
+    this.cached = null
+    return pids.length + stopped
   }
 
   private async read(): Promise<ThreadServer[]> {
     const roots = this.roots()
-    for (const root of roots) {
-      this.ended.delete(root.item.id)
-      this.ended.set(root.item.id, root)
-    }
-    // Owners are kept for servers that outlive them, the most recent few hundred.
-    for (const id of [...this.ended.keys()].slice(0, Math.max(0, this.ended.size - 500))) this.ended.delete(id)
+    this.remember(roots)
     const [sockets, rows] = await Promise.all([this.sources.listening(), this.sources.processes()])
     const owners = processOwners(rows, roots)
     const detached = [...new Set(sockets.map((socket) => socket.pid).filter((pid) => !owners.has(pid)))]
@@ -194,6 +281,21 @@ export class ServerService {
     this.cached = { at: Date.now(), value }
     return value
   }
+}
+
+/** SIGTERM, then SIGKILL if it is still there after a moment. */
+async function terminate(pid: number): Promise<void> {
+  try {
+    process.kill(pid, 'SIGTERM')
+  } catch {
+    return
+  }
+  const deadline = Date.now() + STOP_WAIT_MS
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    if (!alive(pid)) return
+  }
+  if (alive(pid)) process.kill(pid, 'SIGKILL')
 }
 
 function alive(pid: number): boolean {

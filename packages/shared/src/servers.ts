@@ -38,8 +38,15 @@ const BUILD_DAEMONS: readonly [RegExp, string][] = [
   [/org\.gradle\.launcher\.daemon\.bootstrap\.GradleDaemon/, 'Gradle daemon'],
   [/worker\.org\.gradle\.process\.internal\.worker\.GradleWorkerMain/, 'Gradle worker'],
   [/org\.jetbrains\.kotlin\.daemon\.KotlinCompileDaemon/, 'Kotlin daemon'],
+  [/org\.mvndaemon\.mvnd\.daemon\.DaemonMain/, 'Maven daemon'],
   [/A-server\.jar|--server_jvm_out/, 'Bazel server'],
+  [/(^|\/)buck2d(\s|$)/, 'Buck2 daemon'],
   [/(^|\/)sccache(\s|$)/, 'sccache'],
+  // Node tools that stay up between runs to answer the next one faster.
+  [/nx\/src\/daemon\/server\/start\.js/, 'Nx daemon'],
+  [/(^|\/)turbo(\s.*)?\sdaemon(\s|$)/, 'Turborepo daemon'],
+  [/(^|\/)(eslint_d|prettierd|prettier_d_slim)(\s|\/|$)/, 'Lint daemon'],
+  [/(^|\/)gopls(\s.*)?\s(serve|-listen)/, 'gopls daemon'],
 ]
 
 /** The build daemon a process is, from its command line, or null for anything else. */
@@ -161,4 +168,14 @@ export function parseSs(text: string): ListeningSocket[] {
       if (local) lines.push(`p${user[2]}`, `c${user[1]}`, `n${local.replace(/%[^:\]]+/, '')}`)
   }
   return parseListening(lines.join('\n'))
+}
+
+/** Seconds of CPU from `ps -o time=`: `[[dd-]hh:]mm:ss[.ss]` as macOS and Linux print it. */
+export function cpuSeconds(text: string): number | null {
+  const match = /^\s*(?:(\d+)-)?(?:(\d+):)?(\d+):(\d+(?:[.,]\d+)?)\s*$/.exec(text)
+  if (!match) return null
+  const [, days, hours, minutes, seconds] = match
+  return (
+    Number(days ?? 0) * 86_400 + Number(hours ?? 0) * 3600 + Number(minutes) * 60 + Number(seconds!.replace(',', '.'))
+  )
 }
