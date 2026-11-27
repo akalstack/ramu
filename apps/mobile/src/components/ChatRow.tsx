@@ -1,4 +1,4 @@
-import { memo, useState, type ReactNode } from 'react'
+import { memo, useEffect, useState, type ReactNode } from 'react'
 import { View, useWindowDimensions } from 'react-native'
 import {
   Archive,
@@ -251,8 +251,12 @@ export const ChatRow = memo(function ChatRow({
               ) : null}
               {chat.pinnedAt !== null ? <Pin size={11} color={c.muted} /> : null}
               {detail ? null : <AgentStack agents={agents} />}
-              {/* A thread at work is current by definition; every other row says when it last moved. */}
-              {chat.pending || working ? null : (
+              {/* A thread at work says how long its turn has run; every other row says when it last moved. */}
+              {chat.pending ? null : working ? (
+                chat.turnStartedAt ? (
+                  <RunTime since={chat.turnStartedAt} />
+                ) : null
+              ) : (
                 <T size={font.caption} tone="muted" style={{ fontVariant: ['tabular-nums'] }}>
                   {ago(chat.lastActiveAt)}
                 </T>
@@ -442,4 +446,29 @@ function Dot({ color }: { color: string }) {
 function until(at: number): string {
   const minutes = Math.max(1, Math.round((at - Date.now()) / 60_000))
   return minutes < 60 ? `${minutes}m` : `${Math.round(minutes / 60)}h`
+}
+
+/**
+ * How long the turn has run, in whole minutes ("4m", "1h 5m"): one update a minute keeps a list of working threads from
+ * redrawing every second.
+ */
+function RunTime({ since }: { since: number }) {
+  const say = useSay()
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(timer)
+  }, [])
+  const minutes = Math.max(0, Math.floor((now - since) / 60_000))
+  const text = minutes < 1 ? '<1m' : minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`
+  return (
+    <T
+      size={font.caption}
+      tone="muted"
+      style={{ fontVariant: ['tabular-nums'] }}
+      accessibilityLabel={say('Working for {0}', { 0: text })}
+    >
+      {text}
+    </T>
+  )
 }

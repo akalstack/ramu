@@ -1,4 +1,5 @@
 import { mergeInputSummaries } from '@ramu/shared/chat/inputSummary'
+import { turnStartedAt } from '@ramu/shared/chat/agentActivity'
 import { threadProviders, type ProviderUse } from '@ramu/shared/chat/threadProviders'
 import { generateBranchName } from '../../workspace/branchNaming'
 import { currentBranch } from '../../workspace/git'
@@ -41,6 +42,12 @@ import type { TaskRemovalReview } from '@ramu/shared/chat/taskRemoval'
 let lastSnapshotAt = 0
 /** Never moves backwards, even if the clock does, so clients can order two reads of one task. */
 type HostTask = ReturnType<Workspace['listTasks']>[number]
+const WORKING_STATES = new Set(['starting', 'running', 'needs-input'])
+/** When the main agent's current turn began, for the list's "Working for". */
+const withTurnStart = (events: Parameters<typeof turnStartedAt>[0]) => {
+  const at = turnStartedAt(events)
+  return at === null ? {} : { turnStartedAt: at }
+}
 const threadListOptions = z
   .object({ recentDone: z.number().int().min(0).max(500), keep: z.array(id).max(2000).optional() })
   .strict()
@@ -256,6 +263,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
         executionState,
         helperSummary: helpers.get(task.id) ?? null,
         ...(advice.get(task.id) ? { unreadAdvice: advice.get(task.id) } : {}),
+        ...(main && WORKING_STATES.has(main.state) ? withTurnStart(agents.events(main.id)) : {}),
         pullRequest: pullRequestIndex?.forTask(task) ?? null,
         branch: branches.get(task.id) ?? null,
         snapshotAt,

@@ -138,6 +138,8 @@ export interface Task {
   snapshotAt?: number
   /** Latest root execution outcome. */
   executionState?: AgentSessionState
+  /** When the turn the main agent is working on began, while it works; the list's "Working for" reads from it. */
+  turnStartedAt?: number | null
   /** A chat started from a "What Ramu learned" summary; it shows a Review label under Chats. */
   kind?: 'library-review' | null
   /** The schedule whose run created this thread. Null for every other thread. */

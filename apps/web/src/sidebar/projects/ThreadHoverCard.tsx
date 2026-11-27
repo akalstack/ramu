@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { pullRequestWaitingDetail } from '@ramu/shared/pullRequests'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { titleSourceNote } from '@ramu/shared/chat/threadStatus'
@@ -9,6 +10,7 @@ import type { RepositoryBinding, Task } from '@ramu/shared/types'
 import type { ThreadStatus } from '@ramu/shared/chat/threadStatus'
 import { describeInputCounts } from '@ramu/shared/chat/inputSummary'
 import { t, useLanguage } from '../../i18n'
+import { formatDuration } from '../../views/agent/lib/format'
 import { useHost } from '../../workspace/HostProvider'
 import { ipcQueryKeyOn, cachedDataOn } from '../../dataQueries'
 import { queryInvokerFor } from '../../git/hostQuery'
@@ -122,6 +124,7 @@ function ThreadCardBody({ task, status, hostName, workspaceName, sharedWorkspace
           {[status.short !== status.full && t(status.full), status.next && t(status.next)].filter(Boolean).join(' · ')}
         </div>
       )}
+      {task.turnStartedAt && <WorkingFor since={task.turnStartedAt} />}
       {titleSourceNote(task.titleSource) && (
         <div className="text-caption text-muted-foreground">{t(titleSourceNote(task.titleSource)!)}</div>
       )}
@@ -263,5 +266,19 @@ function ThreadCardBody({ task, status, hostName, workspaceName, sharedWorkspace
         </div>
       )}
     </>
+  )
+}
+
+/** How long the agent has worked on its current turn, counting up while the card is open. */
+function WorkingFor({ since }: { since: number }) {
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [])
+  return (
+    <div className="text-caption text-muted-foreground tabular-nums">
+      {t('Working for {0}', { 0: formatDuration(Math.max(0, now - since)) })}
+    </div>
   )
 }
