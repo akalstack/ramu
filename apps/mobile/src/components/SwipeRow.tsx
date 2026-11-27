@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react'
-import { Animated, Easing, PanResponder, Pressable } from 'react-native'
+import { PanResponder, Pressable } from 'react-native'
+import Reanimated, {
+  Easing,
+  Extrapolation,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated'
+import { scheduleOnRN } from 'react-native-worklets'
 import { tap } from './ui'
 import { useSay } from '../i18n'
 import { radius } from '../theme'
@@ -35,9 +45,10 @@ export function SwipeRow({
 }) {
   const say = useSay()
   const shown = actions.slice(0, 3)
-  // The finger's offset: negative while the row is pulled left. JS-driven, since the stretching action is layout.
-  const x = useRef(new Animated.Value(0)).current
-  const height = useRef(new Animated.Value(0)).current
+  // The finger's offset: negative while the row is pulled left. On the UI thread, stretching action included, so the
+  // row keeps up with the finger and settles smoothly while JavaScript is busy.
+  const x = useSharedValue(0)
+  const height = useSharedValue(0)
   const width = shown.length ? shown.length * BUTTON + (shown.length - 1) * GAP + INSET * 2 : 0
   const [open, setOpen] = useState(false)
   const [leaving, setLeaving] = useState(false)
@@ -52,45 +63,37 @@ export function SwipeRow({
     if (isOpen !== state.current.open) tap()
     state.current.open = isOpen
     setOpen(isOpen)
-    Animated.spring(x, {
-      toValue: isOpen ? -state.current.width : 0,
-      useNativeDriver: false,
-      bounciness: 0,
-      speed: 18,
-    }).start()
+    x.value = withSpring(isOpen ? -state.current.width : 0, { damping: 30, stiffness: 320, overshootClamping: true })
   }
   const commit = (action: SwipeAction) => {
     tap()
     state.current.open = false
     setOpen(false)
     if (!action.removes) {
-      Animated.timing(x, {
-        toValue: 0,
-        duration: 220,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: false,
-      }).start()
+      x.value = withTiming(0, { duration: 220, easing: Easing.out(Easing.cubic) })
       action.onPress()
       return
     }
     // Off to the left, then the gap closes; the list drops the row once it has no height, so nothing jumps.
     setLeaving(true)
-    Animated.sequence([
-      Animated.timing(x, {
-        toValue: -(state.current.rowWidth || 400),
-        duration: 180,
-        easing: Easing.in(Easing.quad),
-        useNativeDriver: false,
-      }),
-      Animated.timing(height, { toValue: 0, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
-    ]).start(() => {
+    const gone = () => {
       action.onPress()
       // The list normally drops the row now. If it stays (the host refused, or is offline), bring it back.
       restore.current = setTimeout(() => {
         setLeaving(false)
-        x.setValue(0)
+        x.value = 0
       }, 1500)
-    })
+    }
+    x.value = withTiming(
+      -(state.current.rowWidth || 400),
+      { duration: 180, easing: Easing.in(Easing.quad) },
+      (finished) => {
+        if (!finished) return
+        height.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.cubic) }, (done) => {
+          if (done) scheduleOnRN(gone)
+        })
+      },
+    )
   }
   const restore = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(
@@ -123,18 +126,17 @@ export function SwipeRow({
               state.current.armed = armed
               tap()
             }
-            x.setValue(Math.max(next, -(state.current.rowWidth || Infinity)))
+            x.value = Math.max(next, -(state.current.rowWidth || Infinity))
             return
           }
           state.current.armed = false
           // Past either end the row resists instead of stopping dead.
-          x.setValue(
+          x.value =
             next > 0
               ? next / 4
               : next < -state.current.width
                 ? -state.current.width + (next + state.current.width) / 4
-                : next,
-          )
+                : next
         },
         onPanResponderRelease: (_, g) => {
           const at = state.current.start + g.dx
@@ -149,53 +151,49 @@ export function SwipeRow({
     [x],
   )
   // The revealed width behind the row, and how far past the buttons the finger has pulled (0 until it does).
-  const revealed = x.interpolate({
-    inputRange: [-10000, -INSET * 2, 0],
-    outputRange: [10000 - INSET * 2, 0, 0],
-    extrapolate: 'clamp',
-  })
-  const beyond = x.interpolate({
-    inputRange: [-10000, -width, 0],
-    outputRange: [10000 - width, 0, 0],
-    extrapolate: 'clamp',
-  })
+  const revealedStyle = useAnimatedStyle(
+    () => ({ width: interpolate(x.value, [-10000, -INSET * 2, 0], [10000 - INSET * 2, 0, 0], Extrapolation.CLAMP) }),
+    [],
+  )
   // The first action, nearest the edge, grows with the pull; the others give it room and fade.
-  const firstWidth = Animated.add(BUTTON, beyond)
-  const othersFade = x.interpolate({
-    inputRange: [-(width + 48), -width, 0],
-    outputRange: [0, 1, 1],
-    extrapolate: 'clamp',
-  })
+  const firstStyle = useAnimatedStyle(
+    () => ({ width: BUTTON + interpolate(x.value, [-10000, -width, 0], [10000 - width, 0, 0], Extrapolation.CLAMP) }),
+    [width],
+  )
+  const othersStyle = useAnimatedStyle(
+    () => ({ opacity: interpolate(x.value, [-(width + 48), -width, 0], [0, 1, 1], Extrapolation.CLAMP) }),
+    [width],
+  )
+  const rowStyle = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }), [])
+  const leavingStyle = useAnimatedStyle(() => (leaving ? { height: height.value } : {}), [leaving])
 
   return (
-    <Animated.View
-      style={leaving ? { height, overflow: 'hidden' } : { overflow: 'hidden' }}
+    <Reanimated.View
+      style={[{ overflow: 'hidden' }, leavingStyle]}
       onLayout={(event) => {
-        if (!leaving) height.setValue(event.nativeEvent.layout.height)
+        if (!leaving) height.value = event.nativeEvent.layout.height
       }}
     >
       {shown.length ? (
-        <Animated.View
+        <Reanimated.View
           pointerEvents={open ? 'box-none' : 'none'}
-          style={{
-            position: 'absolute',
-            top: INSET,
-            bottom: INSET,
-            right: INSET,
-            width: revealed,
-            flexDirection: 'row-reverse',
-            gap: GAP,
-            overflow: 'hidden',
-          }}
+          style={[
+            {
+              position: 'absolute',
+              top: INSET,
+              bottom: INSET,
+              right: INSET,
+              flexDirection: 'row-reverse',
+              gap: GAP,
+              overflow: 'hidden',
+            },
+            revealedStyle,
+          ]}
         >
           {shown.map((action, index) => (
-            <Animated.View
+            <Reanimated.View
               key={action.label}
-              style={{
-                width: index === 0 ? firstWidth : BUTTON,
-                opacity: index === 0 ? 1 : othersFade,
-                flexShrink: index === 0 ? 0 : 1,
-              }}
+              style={[{ width: BUTTON, flexShrink: index === 0 ? 0 : 1 }, index === 0 ? firstStyle : othersStyle]}
             >
               <Pressable
                 accessibilityRole="button"
@@ -214,20 +212,16 @@ export function SwipeRow({
               >
                 <action.icon size={20} color="#ffffff" />
               </Pressable>
-            </Animated.View>
+            </Reanimated.View>
           ))}
-        </Animated.View>
+        </Reanimated.View>
       ) : null}
-      <Animated.View
+      <Reanimated.View
         {...pan.panHandlers}
         onLayout={(event) => {
           state.current.rowWidth = event.nativeEvent.layout.width
         }}
-        style={{
-          transform: [{ translateX: x }],
-          backgroundColor: background,
-          borderRadius: open || leaving ? radius.l : 0,
-        }}
+        style={[{ backgroundColor: background, borderRadius: open || leaving ? radius.l : 0 }, rowStyle]}
       >
         {children}
         {open ? (
@@ -237,7 +231,7 @@ export function SwipeRow({
             style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 }}
           />
         ) : null}
-      </Animated.View>
-    </Animated.View>
+      </Reanimated.View>
+    </Reanimated.View>
   )
 }
