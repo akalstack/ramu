@@ -2,11 +2,13 @@ import { useLayoutEffect, useRef, type RefObject, type UIEvent } from 'react'
 import { NEAR_BOTTOM_PX } from '../constants'
 
 /**
- * Asks the transcript's MessageScroller to stop following new output, as a wheel gesture does. Use it after moving
- * the viewport on the reader's behalf (restoring a saved position), which the scroller cannot tell from its own jumps.
+ * Asks the transcript's MessageScroller to stop following new output, as a wheel gesture does. Use it when moving
+ * the viewport on the reader's behalf (restoring a saved position, showing a found message), which nothing can tell
+ * from a move the browser made by itself.
  */
 export function releaseFollow(viewport: HTMLElement | null) {
-  viewport?.dispatchEvent(new WheelEvent('wheel', { bubbles: true }))
+  // Upward, so it also reads as the reader's own to whatever keeps the transcript following.
+  viewport?.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: -1 }))
 }
 
 /**
