@@ -37,9 +37,9 @@ Platforms connected to a repository through their Git integration (Vercel, Netli
 
 ## After a push
 
-When a thread pushes (**Push** or **Sync** in Source Control, a `git push` the agent runs in its own shell, or **Merge…** of a pull request into the default branch), Ramu follows the checks on the pushed commit, CI and platform deploys alike. When they finish it wakes that thread once, through the same queue as pull request feedback:
+When a thread pushes (**Push** or **Sync** in Source Control, a `git push` the agent runs in its own shell, or **Merge…** of a pull request into the default branch), Ramu follows the checks on the pushed commit, CI and platform deploys alike. When they finish it wakes that thread once, through the same queue as pull request feedback, and the thread shows it as a line from Ramu:
 
-- **All passed:** a short note listing the checks with their links. The agent replies in one line, with the deploy's address when there is one.
+- **All passed, a deploy among them:** a short note listing the checks with their links. The agent replies in one line with the deploy's address. When only CI passed there is nothing to report, so the thread is not woken.
 - **One failed:** the failing checks with the end of their logs, treated as external text, so the agent can find the cause and propose a fix. A fix for the default branch goes on a new branch.
 
 This works on GitHub and GitLab. Only the newest push of a branch is followed. A push with no checks after 20 minutes, or checks still running after three hours, is dropped. A branch whose pull request is [watched](git-hosting.md#github) is left to that watch. Pushes made outside Ramu aren't followed.

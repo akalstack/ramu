@@ -39,7 +39,7 @@ Ask the project's agent to deploy. It picks a platform that suits the stack (Ver
 
 The agent works on a branch and opens a pull request. Ask it to ship and it also fixes checks and handles review rounds until the project's finish line ([Shipping a change](git-hosting.md#shipping-a-change)). Its card in Source Control and on the phone shows the checks, including the preview a platform connected to the repository reports ([The Pull requests page](git-hosting.md#the-pull-requests-page)). With the platform connected to the repository, merging deploys it.
 
-- **After a push or merge from a thread**, Ramu follows the checks on that commit and wakes the thread once, with the links or the failing logs ([After a push](deploy.md#after-a-push)).
+- **After a push or merge from a thread**, Ramu follows the checks on that commit and wakes the thread once, with the failing logs or a deploy's links ([After a push](deploy.md#after-a-push)).
 - **Latest deploy** in **Live app…** shows the checks on the default branch's newest commit ([The latest deploy](deploy.md#the-latest-deploy)).
 
 ## 7. Keep it running
