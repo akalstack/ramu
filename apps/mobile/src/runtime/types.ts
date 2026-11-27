@@ -223,6 +223,8 @@ export type TranscriptItem = (
       held?: boolean
       /** How many times this same note happened back to back, shown once. */
       repeats?: number
+      /** The mark drawn before the title, as the desktop's rows carry one. */
+      icon?: NoteIcon
     }
   /** A finished turn's routine steps folded under "Worked for 12m 48s". */
   | {
@@ -234,6 +236,9 @@ export type TranscriptItem = (
       items: TranscriptItem[]
     }
 ) & { at?: number; requestSource?: { sessionId: string; agentId: string; name: string; requestId?: string } }
+
+/** What a status line is about, for its mark. */
+export type NoteIcon = 'compaction' | 'recovery' | 'stop' | 'schedule' | 'advice' | 'message' | 'answers' | 'card'
 
 export interface Chat extends Task {
   executionState?: import('@ramu/shared/types').AgentSessionState

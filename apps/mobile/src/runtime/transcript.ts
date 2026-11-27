@@ -174,6 +174,7 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
             ? {
                 kind: 'note',
                 id,
+                icon: 'advice',
                 ...(advice.failed
                   ? noteTitle('The advisor could not answer: {0}', { 0: advice.body })
                   : noteTitle('Advice delivered to the agent')),
@@ -181,16 +182,23 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
                 failed: advice.failed,
               }
             : stop
-              ? { kind: 'note', id, ...noteTitle('Asked the agent to stop {0}', { 0: stop.name }) }
+              ? { kind: 'note', id, icon: 'stop', ...noteTitle('Asked the agent to stop {0}', { 0: stop.name }) }
               : relay
-                ? { kind: 'note', id, ...noteTitle('Message to {0}', { 0: relay.name }), detail: relay.body }
+                ? {
+                    kind: 'note',
+                    id,
+                    icon: 'message',
+                    ...noteTitle('Message to {0}', { 0: relay.name }),
+                    detail: relay.body,
+                  }
                 : pressed
-                  ? { kind: 'note', id, ...noteTitle('From a card'), detail: pressed.summary }
+                  ? { kind: 'note', id, icon: 'card', ...noteTitle('From a card'), detail: pressed.summary }
                   : events.some((event) => event.kind === 'question' && event.requestId === answers!.requestId)
                     ? // The question's card above already shows the answer; this line only marks when it was sent.
                       ({
                         kind: 'note',
                         id,
+                        icon: 'answers',
                         ...(answerPairs(answers!.body).length === 1
                           ? noteTitle('Answered 1 question')
                           : noteTitle('Answered {0} questions', { 0: answerPairs(answers!.body).length })),
@@ -198,6 +206,7 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
                     : ({
                         kind: 'note',
                         id,
+                        icon: 'answers',
                         ...noteTitle("Answers to the agent's questions"),
                         detail: answersDetail(events, answers!),
                       } as TranscriptItem),
@@ -220,6 +229,7 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
       items.push({
         kind: 'note',
         id,
+        icon: 'schedule',
         ...noteTitle('Schedule created: {0}', { 0: e.schedule.name }),
         ...(e.schedule.state === 'paused' ? { detail: 'Paused', detailIsCopy: true as const } : {}),
       })
@@ -428,13 +438,15 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
       })
     // These notes read as the desktop's rows do.
     else if (e.kind === 'background-terminal-stop')
-      items.push({ kind: 'note', id, ...noteTitle('You requested a stop for {0}', { 0: e.command }) })
-    else if (e.kind === 'recovery') items.push({ kind: 'note', id, ...noteTitle('Resumed after restart') })
+      items.push({ kind: 'note', id, icon: 'stop', ...noteTitle('You requested a stop for {0}', { 0: e.command }) })
+    else if (e.kind === 'recovery')
+      items.push({ kind: 'note', id, icon: 'recovery', ...noteTitle('Resumed after restart') })
     else if (e.kind === 'compaction' && e.state !== 'started') {
       const counts = compactionCounts(e)
       items.push({
         kind: 'note',
         id,
+        icon: 'compaction',
         ...(e.state === 'failed'
           ? noteTitle('Context compaction failed')
           : e.state === 'cancelled'

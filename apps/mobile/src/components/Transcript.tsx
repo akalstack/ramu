@@ -73,6 +73,14 @@ import {
   AppWindow,
   FolderOpen,
   MessageCircleQuestion,
+  Minimize2,
+  RotateCcw,
+  OctagonX,
+  CalendarClock,
+  Send,
+  MousePointerClick,
+  MessageSquareReply,
+  type LucideIcon,
 } from 'lucide-react-native'
 import { pickFolder } from '../runtime/folderPick'
 import { font, radius, space, useTheme } from '../theme'
@@ -83,7 +91,7 @@ import { endedOnError, formatDuration } from '../runtime/turns'
 import { limitWaitOf } from '../runtime/limitTray'
 import { showError } from '../runtime/toast'
 import { accountName } from '@ramu/shared/providers/providers'
-import { providerNames, type Chat, type ToolKind, type TranscriptItem } from '../runtime/types'
+import { providerNames, type Chat, type NoteIcon, type ToolKind, type TranscriptItem } from '../runtime/types'
 import { useStore } from '../runtime/store'
 import { Markdown, ReferenceBadge, ReferenceContext } from './Markdown'
 import { draftChip } from '@ramu/shared/chat/referenceChip'
@@ -949,6 +957,18 @@ function ThreadMessageCard({
 
 const ACCESS = { edits: 'Allow edits', auto: 'Auto', full: 'Full access' } as const
 /** A status line with a rule on both sides, like the desktop's separators: "Opus Medium" over "Changed conversation settings". */
+/** The desktop's marks for the same status lines. */
+const NOTE_ICONS: Record<NoteIcon, LucideIcon> = {
+  compaction: Minimize2,
+  recovery: RotateCcw,
+  stop: OctagonX,
+  schedule: CalendarClock,
+  advice: Lightbulb,
+  message: Send,
+  answers: MessageSquareReply,
+  card: MousePointerClick,
+}
+
 function NoteRow({ item, chat }: { item: Extract<TranscriptItem, { kind: 'note' }>; chat: Chat }) {
   const say = useSay()
   const { c } = useTheme()
@@ -1004,6 +1024,7 @@ function NoteRow({ item, chat }: { item: Extract<TranscriptItem, { kind: 'note' 
     (s.accountId ?? 'default') !== (item.settings.accountId ?? 'default')
       ? loginName(s)
       : label(s)
+  const Icon = item.icon ? NOTE_ICONS[item.icon] : null
   let title = item.goalNote ? say(GOAL_NOTE_LABELS[item.goalNote]) : item.title
   if (!item.goalNote) title = item.titleCopy ? say(item.titleCopy.text, item.titleCopy.values) : say(item.title)
   // As on the desktop, each model carries its provider's mark: "[Claude] Opus Medium → [Codex] GPT-5.5 High".
@@ -1062,6 +1083,7 @@ function NoteRow({ item, chat }: { item: Extract<TranscriptItem, { kind: 'note' 
       <View style={{ maxWidth: '78%', alignItems: 'center', gap: 2 }}>
         {change ?? (
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.s }}>
+            {Icon ? <Icon size={13} color={item.failed ? c.bad : c.muted} style={{ flexShrink: 0 }} /> : null}
             <T size={font.caption} tone={item.failed ? 'bad' : 'muted'} style={{ textAlign: 'center', flexShrink: 1 }}>
               {title}
             </T>

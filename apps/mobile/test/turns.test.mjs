@@ -557,3 +557,19 @@ test('work the agent picked up by itself, as after a background command, is its 
     text: 'Working for {0}',
   })
 })
+
+test('status lines carry the mark of what they are about, as the desktop rows do', () => {
+  const notes = transcript([
+    { kind: 'compaction', state: 'completed', at: 1_000 },
+    { kind: 'recovery', state: 'resumed', at: 2_000 },
+    { kind: 'background-terminal-stop', command: 'pnpm dev', at: 3_000 },
+  ]).filter((item) => item.kind === 'note')
+  assert.deepEqual(
+    notes.map((note) => [note.title, note.icon]),
+    [
+      ['Context compacted', 'compaction'],
+      ['Resumed after restart', 'recovery'],
+      ['You requested a stop for pnpm dev', 'stop'],
+    ],
+  )
+})
