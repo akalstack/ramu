@@ -212,7 +212,6 @@ export function fakeAnalysis(prompt: string): string {
     })
   if (prompt.startsWith('ramu-learning:'))
     return '{"checkpoint":"Completed simulated work; verify real changes separately.","memories":[],"skills":[],"archive":[]}'
-  if (prompt.includes('recap-items')) return '{"items":[]}'
   if (prompt.startsWith('aside:'))
     return `Side answer: ${prompt.match(/<question>\n([\s\S]*?)\n<\/question>/)?.[1] ?? ''}`.trim()
   if (prompt.startsWith('advisor:'))

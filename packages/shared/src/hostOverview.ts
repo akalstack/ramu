@@ -1,11 +1,10 @@
-import type { AgentSessionInfo, LibrarySummary, Project, RecapItem, Task } from './types'
+import type { AgentSessionInfo, LibrarySummary, Project, Task } from './types'
 
 /** Every row is addressed by host and resource ID together. */
 export interface HostOverview {
   projects: Project[]
   tasks: Task[]
   agents: AgentSessionInfo[]
-  recaps: RecapItem[]
   summaries: LibrarySummary[]
   errors: string[]
   /** Null when the host refuses or lacks the reading; a viewer device never has it. */
@@ -15,7 +14,7 @@ export interface HostOverview {
 export type HostDestination =
   /**
    * `sessionId` is the session to show (a helper's own, for its request); `requestId` the request to scroll to, or
-   * `sourceSeq` the place in the transcript, such as the turn a recap is about.
+   * `sourceSeq` the place in the transcript, such as the turn a learning review is about.
    */
   | { kind: 'task'; taskId: string; sessionId?: string; requestId?: string; sourceSeq?: number }
   | { kind: 'project'; projectId: string }
@@ -89,7 +88,6 @@ export function hostInboxInput(hosts: { id: string; data?: HostOverview }[]) {
         }
       }),
     ),
-    recaps: hosts.flatMap(({ id, data }) => (data?.recaps ?? []).map((item) => ({ computerId: id, item }))),
     summaries: hosts.flatMap(({ id, data }) => (data?.summaries ?? []).map((summary) => ({ computerId: id, summary }))),
     lowMemory: hosts.flatMap(({ id, data }) => {
       const low = data?.resources?.low

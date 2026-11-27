@@ -2,18 +2,15 @@ import { expect, it, vi } from 'vitest'
 import { HostOverviewQueue, readHostOverview } from '../src/main/hostOverview'
 import { HostNavigation } from '../src/main/hostNavigation'
 
-it('keeps successful sections when one fails, and respects disabled recaps', async () => {
+it('keeps successful sections when one fails', async () => {
   const invoke = vi.fn(async (method: string) => {
     if (method === 'summaries.get') throw new Error('Memory is unavailable')
-    if (method === 'settings.app.get') return { recapsEnabled: false }
     if (method === 'tasks.list') return [{ id: 'remote-task' }]
     return []
   })
   const data = await readHostOverview(invoke)
   expect(data.tasks).toEqual([{ id: 'remote-task' }])
-  expect(data.recaps).toEqual([])
   expect(data.errors).toEqual(['summaries: Memory is unavailable'])
-  expect(invoke).not.toHaveBeenCalledWith('recaps.get')
 })
 
 it('bounds reads across hosts, joins duplicate requests, and continues after a failure', async () => {
@@ -26,7 +23,7 @@ it('bounds reads across hosts, joins duplicate requests, and continues after a f
     await new Promise<void>((resolve) => releases.push(resolve))
     active--
     if (id === 'bad') throw new Error('Disconnected')
-    return { tasks: [], projects: [], recaps: [], summaries: [], agents: [], errors: [] }
+    return { tasks: [], projects: [], summaries: [], agents: [], errors: [] }
   }, 2)
   const a = queue.read('a')
   expect(queue.read('a')).toBe(a)

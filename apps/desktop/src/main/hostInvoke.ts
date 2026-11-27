@@ -17,7 +17,6 @@ const DOMAINS = new Set([
   'agent',
   'aside',
   'summaries',
-  'recaps',
   'schedules',
   'files',
   'git',
@@ -142,6 +141,6 @@ export function routeTaskCommand(
 export function activityChannel(method: string): 'workspace:changed' | 'automation:changed' | null {
   const domain = method.split('.')[0]
   if (domain === 'tasks' || domain === 'projects') return 'workspace:changed'
-  if (domain === 'recaps' || domain === 'schedules') return 'automation:changed'
+  if (domain === 'schedules') return 'automation:changed'
   return null
 }

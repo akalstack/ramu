@@ -6,7 +6,6 @@ export interface TokenChoices {
   crossThreadRecall: boolean
   learning: boolean
   autoGoals: boolean
-  recaps: boolean
 }
 
 export type TokenFeature = keyof TokenChoices
@@ -37,12 +36,6 @@ export const TOKEN_FEATURES: { key: TokenFeature; title: string; help: string; c
     help: 'When a thread has a goal, the agent keeps going until it is met, up to a turn limit.',
     cost: 'more',
   },
-  {
-    key: 'recaps',
-    title: 'Daily recaps',
-    help: 'Home shows a written summary of recent threads and unfinished work.',
-    cost: 'more',
-  },
 ]
 
 /** Only the switch that saves tokens stays on. */
@@ -51,7 +44,6 @@ export const FEWEST_TOKENS: TokenChoices = {
   crossThreadRecall: false,
   learning: false,
   autoGoals: false,
-  recaps: false,
 }
 
 export function tokenChoicesOf(preferences: AppPreferences): TokenChoices {
@@ -60,7 +52,6 @@ export function tokenChoicesOf(preferences: AppPreferences): TokenChoices {
     crossThreadRecall: preferences.intelligence.crossThreadRecall,
     learning: preferences.intelligence.learning !== 'off',
     autoGoals: preferences.goals.mode === 'auto',
-    recaps: preferences.recapsEnabled,
   }
 }
 
@@ -73,7 +64,6 @@ export function applyTokenChoices(preferences: AppPreferences, choices: TokenCho
     : 'off'
   return {
     ...preferences,
-    recapsEnabled: choices.recaps,
     goals: { ...preferences.goals, mode: choices.autoGoals ? 'auto' : 'manual' },
     intelligence: {
       ...preferences.intelligence,

@@ -12,7 +12,6 @@ import {
   KeyRound,
   MemoryStick,
   MessageCircleQuestion,
-  Newspaper,
   ShieldCheck,
   Target,
 } from 'lucide-react-native'
@@ -52,7 +51,6 @@ const MARK: Record<BriefMark, typeof CircleAlert> = {
   connector: KeyRound,
   goal: Target,
   memory: MemoryStick,
-  recap: Newspaper,
 }
 
 type Invoke = (hostId: string, method: string, ...args: unknown[]) => Promise<unknown>
@@ -63,12 +61,11 @@ function BriefRowView({ row, divider, where }: { row: BriefRow; divider: boolean
   const openThread = useOpenThread()
   const router = useRouter()
   const store = useStore()
-  const auto = useAutomation()
   const [busy, setBusy] = useState(false)
   const [open, setOpen] = useState(false)
   const [error, setError] = useState('')
   const hostId = briefRowHost(row)
-  const taskId = row.kind === 'recap' ? row.recap.item.taskId : row.kind === 'low-memory' ? '' : row.chat.taskId
+  const taskId = row.kind === 'low-memory' ? '' : row.chat.taskId
   const chat = store.chats.find((entry) => entry.computerId === hostId && entry.taskId === taskId)
   const computer = store.computers.find((entry) => entry.id === hostId)
   const viewOnly = computer?.access === 'viewer'
@@ -102,27 +99,23 @@ function BriefRowView({ row, divider, where }: { row: BriefRow; divider: boolean
       : undefined
   const off = busy || !online
   const title =
-    row.kind === 'recap'
-      ? row.recap.item.title
-      : row.kind === 'low-memory'
-        ? say('{0} is low on memory', { 0: shortHostName(computer?.name ?? '') })
-        : (chat?.title ?? '')
+    row.kind === 'low-memory'
+      ? say('{0} is low on memory', { 0: shortHostName(computer?.name ?? '') })
+      : (chat?.title ?? '')
   const detail =
-    row.kind === 'recap'
-      ? row.recap.item.detail
-      : row.kind === 'low-memory'
-        ? row.memory.low.idleThreads.length
-          ? say('{0} idle threads use {1} GB', {
-              0: row.memory.low.idleThreads.length,
-              1: gigabytes(row.memory.low.idleBytes),
-            })
-          : say('{0} GB free', { 0: gigabytes(row.memory.low.availableBytes) })
-        : row.kind === 'failure'
-          ? say('Failed')
-          : row.kind === 'pull-request'
-            ? pullRequestRowDetail(row.chat.pullRequest!, say)
-            : (request?.title && say(request.title)) ||
-              inboxBlockerText(row.blocker, store.language === 'id' ? 'id' : 'en')
+    row.kind === 'low-memory'
+      ? row.memory.low.idleThreads.length
+        ? say('{0} idle threads use {1} GB', {
+            0: row.memory.low.idleThreads.length,
+            1: gigabytes(row.memory.low.idleBytes),
+          })
+        : say('{0} GB free', { 0: gigabytes(row.memory.low.availableBytes) })
+      : row.kind === 'failure'
+        ? say('Failed')
+        : row.kind === 'pull-request'
+          ? pullRequestRowDetail(row.chat.pullRequest!, say)
+          : (request?.title && say(request.title)) ||
+            inboxBlockerText(row.blocker, store.language === 'id' ? 'id' : 'en')
   const look = briefRowLook(row)
   const Mark = MARK[look.mark]
   const toneColor = look.tone === 'bad' ? c.bad : look.tone === 'warn' ? c.warn : c.muted
@@ -155,13 +148,6 @@ function BriefRowView({ row, divider, where }: { row: BriefRow; divider: boolean
     <Button title={say('Review and send')} disabled={!online} onPress={go} />
   ) : row.kind === 'pull-request' && row.chat.pullRequest && pullRequestNeedsReviewer(row.chat.pullRequest) ? (
     <Button title={say('Request review')} disabled={!online} onPress={go} />
-  ) : row.kind === 'recap' ? (
-    <Button
-      kind="secondary"
-      title={say('Mark done')}
-      disabled={off}
-      onPress={() => run(() => auto.actRecap(hostId, row.recap.item, 'done'))}
-    />
   ) : request?.kind === 'approval' ? (
     <Button
       title={say('Allow once')}
@@ -266,7 +252,7 @@ export function InboxBrief({ inbox, where }: { inbox: InboxModel; where: (chat: 
         detail={
           finished
             ? say('{0} finished since your last visit.', { 0: finished })
-            : say('Questions, approvals, failures and recaps that need a decision show up here.')
+            : say('Questions, approvals and failures show up here.')
         }
       />
     )
@@ -285,11 +271,7 @@ export function InboxBrief({ inbox, where }: { inbox: InboxModel; where: (chat: 
       <View>
         {shown.map((row, index) => (
           <BriefRowView
-            key={JSON.stringify([
-              row.kind,
-              briefRowHost(row),
-              row.kind === 'recap' ? row.recap.item.id : row.kind === 'low-memory' ? '' : row.chat.taskId,
-            ])}
+            key={JSON.stringify([row.kind, briefRowHost(row), row.kind === 'low-memory' ? '' : row.chat.taskId])}
             row={row}
             divider={index > 0}
             where={where}

@@ -1,5 +1,4 @@
 import { animateThreadListChange } from './workspace/threadListMotion'
-import type { RecapItem } from '@ramu/shared/types'
 import { finishThreads } from './chat/FinishThreadDialog'
 import { offerThreadUndo } from './sidebar/projects/threadUndo'
 import { useEffect, useMemo, useState } from 'react'
@@ -189,14 +188,11 @@ export function AgentRow({
   session,
   group,
   helpers = 0,
-  recap,
 }: {
   session: AgentSessionInfo
   group: AgentGroup
   /** How many sub-agents this thread started; shown as a count, the sub-agents themselves live in the thread. */
   helpers?: number
-  /** The thread's newest recap: its line says what the thread did, in place of the model it ran on. */
-  recap?: RecapItem
 }) {
   useLanguage()
   const ws = useWorkspace()
@@ -251,7 +247,7 @@ export function AgentRow({
       meta={[
         prefix,
         helpers > 0 && t(helpers === 1 ? '1 sub-agent' : '{0} sub-agents', { 0: helpers }),
-        recap ? recap.title : session.settings.model || session.provider,
+        session.settings.model || session.provider,
       ]
         .filter(Boolean)
         .join(' · ')}
@@ -322,14 +318,7 @@ type Item = { session: AgentSessionInfo; group: AgentGroup }
  * Agent rows as a list, like the sidebar's. Only threads get rows; each shows how many sub-agents it started. A
  * sub-agent gets its own row only while it waits for your input, so it can be answered here.
  */
-export function AgentList({
-  items,
-  recapOf,
-}: {
-  items: Item[]
-  /** Each thread's newest recap, shown on its row. */
-  recapOf?: (taskId: string) => RecapItem | undefined
-}) {
+export function AgentList({ items }: { items: Item[] }) {
   const { groups } = useAgentOverview()
   const helpers = new Map<string, number>()
   for (const session of Object.values(groups).flat())
@@ -342,7 +331,6 @@ export function AgentList({
           session={item.session}
           group={item.group}
           helpers={helpers.get(item.session.id) ?? 0}
-          recap={item.session.parentId ? undefined : recapOf?.(item.session.taskId)}
         />
       ))}
     </InboxList>

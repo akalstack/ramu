@@ -16,7 +16,6 @@ export type ToggleKey =
   | 'modelCatalogLookups'
   | 'newModelNotices'
   | 'liveViewDesktop'
-  | 'recapsEnabled'
   | 'notifyAgentDone'
   | 'resumeChatsOnRestart'
   | 'asyncQuestions'

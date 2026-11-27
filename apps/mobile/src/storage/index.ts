@@ -195,7 +195,7 @@ export function saveLastVisit(at: number) {
     if (Platform.OS === 'web') localStorage.setItem(visitKey, String(at))
     else new File(Paths.document, visitKey).writeSync(String(at))
   } catch {
-    // Losing the marker only means Inbox shows a few more recaps as new.
+    // Losing the marker only means Inbox counts a few more threads as finished since the last visit.
   }
 }
 

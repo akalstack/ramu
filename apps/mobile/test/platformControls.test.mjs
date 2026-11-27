@@ -8685,7 +8685,7 @@ test('every toast sits near the bottom within reach and can be closed, errors in
     .filter(Boolean)
   assert.ok(labels.includes('Dismiss'), 'an error can be closed')
 
-  const undo = render({ id: 2, message: 'recapDone', action: { label: 'undo', run() {} } })
+  const undo = render({ id: 2, message: 'threadDone', action: { label: 'undo', run() {} } })
   assert.equal(undo.props.pointerEvents, 'box-none')
   assert.equal(undo.props.style.bottom, 34 + 72)
   assert.equal(undo.props.style.top, undefined)

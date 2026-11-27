@@ -222,13 +222,6 @@ export function useComposerSuggest({
         run: go('/schedules'),
       },
       {
-        id: 'recap',
-        label: '/recap',
-        description: say('Open your daily recap'),
-        kind: 'Command',
-        run: go('/(tabs)/inbox'),
-      },
-      {
         id: 'settings',
         label: '/settings',
         description: say('Open app settings'),

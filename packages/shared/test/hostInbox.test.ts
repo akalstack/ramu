@@ -9,7 +9,6 @@ import {
   inboxBlocker,
   inboxTabOf,
   type InboxChat,
-  type InboxRecap,
   type InboxSummary,
 } from '../src/hostInbox'
 import { hostInboxInput, isHostDestination, type HostOverview } from '../src/hostOverview'
@@ -36,7 +35,7 @@ it('keeps unfinished goals out of Completed between turns and offers held goals 
     status: 'ready-for-review',
     goalState: { status: 'paused', pausedBy: 'provider-limit' },
   })
-  const result = buildInbox({ chats, recaps: [], summaries: [], now })
+  const result = buildInbox({ chats, summaries: [], now })
   expect(result.running.map((item) => item.taskId)).toEqual(['active', 'limit'])
   expect(result.waiting.map((item) => item.taskId)).toEqual(['paused', 'blocked', 'turn-limit'])
   expect(result.completed.map((item) => item.taskId)).toEqual(['completed'])
@@ -50,7 +49,7 @@ it('keeps a thread with independent helpers still running out of Completed, like
       { ...idle, taskId: 'settled', id: 'settled', helperSummary: { active: 0 } },
       { ...idle, taskId: 'asks', id: 'asks', status: 'needs-input' as const, helperSummary: { active: 1 } },
     ],
-    recaps: [],
+
     summaries: [],
     now,
   })
@@ -67,7 +66,7 @@ it('prefers a refreshed mobile goal over a stale task summary, including an expl
       { ...base, id: 'cleared', goal: null },
       { ...base, id: 'completed', goal: { status: 'completed' } },
     ],
-    recaps: [],
+
     summaries: [],
     now,
   })
@@ -76,19 +75,12 @@ it('prefers a refreshed mobile goal over a stale task summary, including an expl
 })
 
 it('filters every inbox section and badge by the owning host even when resource IDs collide', () => {
-  // Each host has a thread waiting on the person and a settled one whose recap needs a decision.
-  const settled = (computerId: string): InboxChat => ({ ...chat(computerId, 'recapped'), status: 'idle' })
-  const chats = [chat('a'), chat('b'), settled('a'), settled('b')]
-  const recaps = ['a', 'b'].map((computerId) => ({
-    computerId,
-    item: {
-      id: 'same',
-      taskId: 'recapped',
-      group: 'attention',
-      status: 'open',
-      updatedAt: now,
-    } as HostOverview['recaps'][number],
-  }))
+  const chats = [
+    chat('a'),
+    chat('b'),
+    { ...chat('a', 'failed'), status: 'failed' as const },
+    { ...chat('b', 'failed'), status: 'failed' as const },
+  ]
   const summaries = ['a', 'b'].map((computerId) => ({
     computerId,
     summary: {
@@ -97,12 +89,12 @@ it('filters every inbox section and badge by the owning host even when resource 
       periodEnd: now,
     } as HostOverview['summaries'][number],
   }))
-  const all = buildInbox({ chats, recaps, summaries, now })
+  const all = buildInbox({ chats, summaries, now })
   expect(all.needsYou).toBe(4)
-  const filtered = buildInbox({ chats, recaps, summaries, computerId: 'b', now })
+  const filtered = buildInbox({ chats, summaries, computerId: 'b', now })
   expect(filtered.needsYou).toBe(2)
   expect(filtered.waiting.map((c) => c.computerId)).toEqual(['b'])
-  expect(filtered.attention.map((r) => r.computerId)).toEqual(['b'])
+  expect(filtered.failed.map((c) => c.computerId)).toEqual(['b'])
   expect(filtered.summaries.map((s) => s.computerId)).toEqual(['b'])
   expect(chats).toHaveLength(4)
 })
@@ -122,7 +114,7 @@ it('applies host filtering before learned/completed limits and day grouping', ()
   })
   const chats = Array.from({ length: 60 }, (_, i) => ({ ...chat('a', `${i}`), status: 'idle' as const }))
   chats.push({ ...chat('b'), status: 'idle', lastActiveAt: now - 1000 })
-  const result = buildInbox({ chats, summaries, recaps: [], computerId: 'b', now })
+  const result = buildInbox({ chats, summaries, computerId: 'b', now })
   expect(result.summaries.map((s) => s.summary.id)).toEqual(['older'])
   expect(result.completed.map((c) => c.computerId)).toEqual(['b'])
   expect(result.days.flatMap((day) => day.items)).toHaveLength(1)
@@ -131,7 +123,7 @@ it('applies host filtering before learned/completed limits and day grouping', ()
 it('uses active agent state and routes native helpers to their parent session on their own host', () => {
   const data = {
     projects: [],
-    recaps: [],
+
     summaries: [],
     errors: [],
     tasks: [{ id: 'same', projectId: 'p', title: 'Task', status: 'idle', lastActiveAt: now }],
@@ -186,7 +178,7 @@ it('preserves done markers when adapting desktop tasks into the shared inbox', (
   const data = {
     projects: [],
     agents: [],
-    recaps: [],
+
     summaries: [],
     errors: [],
     tasks: [{ id: 'done', status: 'needs-input', lastActiveAt: now, doneAt: now }],
@@ -229,13 +221,13 @@ it('puts async questions and approvals in Waiting even when execution continues,
       inputSummary: { ...summary, approvals: 0 },
     },
   ]
-  const result = buildInbox({ chats, recaps: [], summaries: [] })
+  const result = buildInbox({ chats, summaries: [] })
   expect(result.waiting.map((chat) => chat.id)).toEqual(['live', 'idle'])
   expect(result.running).toEqual([])
   expect(result.days.flatMap((day) => day.items)).toEqual([])
   const cleared = buildInbox({
     chats: chats.map((chat) => ({ ...chat, inputSummary: null })),
-    recaps: [],
+
     summaries: [],
   })
   expect(cleared.waiting).toEqual([])
@@ -245,7 +237,7 @@ it('puts async questions and approvals in Waiting even when execution continues,
 it('treats a host that sends no goal summary as unknown rather than inventing a goal or hiding the thread', () => {
   const data = {
     projects: [],
-    recaps: [],
+
     summaries: [],
     errors: [],
     tasks: [{ id: 't', projectId: 'p', title: 'Old host task', status: 'ready-for-review', lastActiveAt: now }],
@@ -348,26 +340,23 @@ it('groups sign-ins by connector so threads waiting on the same one read as a si
   expect(inboxBlocker(signIn('a', 'Atlassian'))).toEqual({ kind: 'connector', count: 1, connector: 'Atlassian' })
 })
 
-it('orders the Brief: requests, failures, limits, then recaps, and counts failures until seen', () => {
+it('orders the Brief: requests, failures, then limits, and counts failures until seen', () => {
   const blocked = { ...chat('a', 'goal'), status: 'idle' as const, goalState: { status: 'turn-limit' as const } }
   const failed = { ...chat('b', 'failed'), status: 'failed' as const }
   const approval = {
     ...chat('a', 'approval'),
     inputSummary: { count: 1, approvals: 1, connectors: 0, requests: [] },
   }
-  const item = { id: 'r', taskId: 'failed', group: 'attention', status: 'open', updatedAt: now } as InboxRecap['item']
-  const input = { chats: [blocked, failed, approval], recaps: [{ computerId: 'b', item }], summaries: [], now }
+  const input = { chats: [blocked, failed, approval], summaries: [], now }
   const model = buildInbox(input)
-  // The failed thread's recap folds into its failure row: one row, and one count, per thread.
   expect(
     briefRows(model).map(
       (row) => row.kind + (row.kind === 'blocker' ? `:${row.chat.taskId}` : '') + (row.more ? `+${row.more}` : ''),
     ),
-  ).toEqual(['blocker:approval', 'failure+1', 'blocker:goal'])
+  ).toEqual(['blocker:approval', 'failure', 'blocker:goal'])
   expect(model.needsYou).toBe(3)
   const seen = buildInbox({ ...input, failureSeen: (entry) => entry.taskId === 'failed' })
-  // A seen failure stops asking, but its recap still needs a decision, so the thread still counts once.
-  expect(seen.needsYou).toBe(3)
+  expect(seen.needsYou).toBe(2)
   expect(seen.failed).toEqual([])
   // Seen failures still belong in finished work; only the ask goes away.
   expect(seen.completed.map((entry) => entry.taskId)).toContain('failed')
@@ -380,7 +369,7 @@ it('opens unknown tabs on the Brief', () => {
 
 it('counts finished threads since the last visit', () => {
   const finished = { ...chat('a', 'done'), status: 'ready-for-review' as const, lastActiveAt: now - 10 }
-  const model = buildInbox({ chats: [finished], recaps: [], summaries: [], now })
+  const model = buildInbox({ chats: [finished], summaries: [], now })
   expect(finishedSince(model, now - 20)).toBe(1)
   expect(finishedSince(model, now)).toBe(0)
 })
@@ -397,7 +386,7 @@ it('asks for pull requests whose next step is the person’s, after requests and
   }
   const model = buildInbox({
     chats: [pr('replies', 'replies-ready'), pr('merge', 'ready'), pr('waiting', 'checks-pending'), approval],
-    recaps: [],
+
     summaries: [],
     now,
   })
@@ -422,7 +411,7 @@ it('asks for a pull request that waits on review with nobody asked, and not for 
       waiting: { ...waiting, from },
     },
   })
-  const model = buildInbox({ chats: [pr('nobody', []), pr('asked', ['ana'])], recaps: [], summaries: [], now })
+  const model = buildInbox({ chats: [pr('nobody', []), pr('asked', ['ana'])], summaries: [], now })
   expect(model.pullRequests.map((entry) => entry.taskId)).toEqual(['nobody'])
 })
 
@@ -446,39 +435,6 @@ it('marks each Brief row by how serious it is, the same on every device', () => 
   expect(look({ kind: 'blocker', chat: chat('host'), blocker: { kind: 'goal-paused' } }).tone).toBe('warn')
 })
 
-it('keeps a working thread to its live state: its recaps wait until it settles', () => {
-  const working: InboxChat = { ...chat('a', 'busy'), status: 'running' }
-  const recaps = ['one', 'two', 'three'].map((id) => ({
-    computerId: 'a',
-    item: { id, taskId: 'busy', group: 'attention', status: 'open', updatedAt: now } as InboxRecap['item'],
-  }))
-  const model = buildInbox({ chats: [working], recaps, summaries: [], now })
-  expect(briefRows(model)).toEqual([])
-  expect(model.attention).toEqual([])
-  expect(model.needsYou).toBe(0)
-  const settled = buildInbox({ chats: [{ ...working, status: 'idle' }], recaps, summaries: [], now })
-  // Settled, its three decisions are one Brief row that counts the other two.
-  expect(briefRows(settled).map((row) => [row.kind, row.more])).toEqual([['recap', 2]])
-  expect(settled.needsYou).toBe(1)
-})
-
-it('keeps one recent recap per thread, its newest, while decisions stay one per item', () => {
-  const idle: InboxChat = { ...chat('a', 'long'), status: 'idle' }
-  const recap = (id: string, group: 'recent' | 'attention', updatedAt: number) => ({
-    computerId: 'a',
-    item: { id, taskId: 'long', group, status: 'open', updatedAt } as InboxRecap['item'],
-  })
-  const model = buildInbox({
-    chats: [idle],
-    recaps: [recap('old', 'recent', now - 20), recap('new', 'recent', now - 10), recap('ask', 'attention', now)],
-    summaries: [],
-    visit: now - 100,
-    now,
-  })
-  expect(model.recent.map((r) => r.item.id)).toEqual(['new'])
-  expect(model.attention.map((r) => r.item.id)).toEqual(['ask'])
-})
-
 it('leads Learned with reviews waiting for Apply on the hosts in scope, and counts them on the tab', () => {
   const proposal = JSON.stringify({ memories: [{ title: 'Note' }], skills: [], archive: [] })
   const job = (id: string, status: 'pending' | 'applied', createdAt: number) => ({
@@ -497,11 +453,11 @@ it('leads Learned with reviews waiting for Apply on the hosts in scope, and coun
     { computerId: 'a', job: job('saved', 'applied', 3) },
     { computerId: 'b', job: job('elsewhere', 'pending', 4) },
   ]
-  const all = buildInbox({ chats: [], recaps: [], summaries: [], reviews, now })
+  const all = buildInbox({ chats: [], summaries: [], reviews, now })
   expect(all.learningReviews.map((review) => review.job.id)).toEqual(['elsewhere', 'new', 'old'])
   expect(all.learnedCount).toBe(3)
   expect(all.empty).toBe(false)
-  const scoped = buildInbox({ chats: [], recaps: [], summaries: [], reviews, computerId: 'a', now })
+  const scoped = buildInbox({ chats: [], summaries: [], reviews, computerId: 'a', now })
   expect(scoped.learningReviews.map((review) => review.job.id)).toEqual(['new', 'old'])
-  expect(buildInbox({ chats: [], recaps: [], summaries: [], now }).learnedCount).toBe(0)
+  expect(buildInbox({ chats: [], summaries: [], now }).learnedCount).toBe(0)
 })

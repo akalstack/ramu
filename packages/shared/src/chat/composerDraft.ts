@@ -76,7 +76,7 @@ export function composerDraft(value: string, mentions: readonly DraftMention[] =
       target: part.target,
     })
   }
-  const command = value.match(/^\/(?:goal|aside|new|schedule|schedules|changes|recap|settings|clear)(?=\s)/)
+  const command = value.match(/^\/(?:goal|aside|new|schedule|schedules|changes|settings|clear)(?=\s)/)
   if (command)
     chips.push({ kind: 'command', start: 0, end: command[0].length, source: command[0], label: command[0].slice(1) })
   chips.sort((a, b) => a.start - b.start)

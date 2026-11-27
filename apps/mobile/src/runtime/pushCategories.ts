@@ -3,20 +3,12 @@
 /**
  * `input`: a thread needs you. `failed` / `done`: an ordinary thread stopped with an error or finished.
  * `scheduled`: a thread started by a schedule finished or failed, or a scheduled run could not start (needing input still
- * counts as `input`). `digest`: the once-a-day "your recap is ready" note, with no content. `artifacts`: notifications
- * artifacts you allowed to notify send, in their own words.
+ * counts as `input`). `artifacts`: notifications artifacts you allowed to notify send, in their own words.
  */
-export const PUSH_CATEGORIES = ['input', 'failed', 'done', 'scheduled', 'digest', 'artifacts'] as const
+export const PUSH_CATEGORIES = ['input', 'failed', 'done', 'scheduled', 'artifacts'] as const
 export type PushCategory = (typeof PUSH_CATEGORIES)[number]
 
-/** Off until switched on; every other category is on until switched off. */
-export const PUSH_OPT_IN: readonly PushCategory[] = ['digest']
-const onByDefault = (category: PushCategory) => !PUSH_OPT_IN.includes(category)
-
-/**
- * The draft key that stores the categories switched away from their default, as a comma list: an on-by-default one that was
- * switched off, or an opt-in one that was switched on.
- */
+/** The draft key that stores the categories switched off, as a comma list. Every category is on until switched off. */
 export const PUSH_MUTED_KEY = 'push-muted'
 
 export function parseSwitched(text: string | undefined): PushCategory[] {
@@ -25,18 +17,18 @@ export function parseSwitched(text: string | undefined): PushCategory[] {
 }
 
 export function isCategoryOn(text: string | undefined, category: PushCategory): boolean {
-  return onByDefault(category) !== parseSwitched(text).includes(category)
+  return !parseSwitched(text).includes(category)
 }
 
 /** The stored text after switching `category` on or off. */
 export function withCategory(text: string | undefined, category: PushCategory, on: boolean): string {
   const switched = parseSwitched(text).filter((entry) => entry !== category)
-  return (on === onByDefault(category) ? switched : [...switched, category]).join(',')
+  return (on ? switched : [...switched, category]).join(',')
 }
 
 /**
- * The extra argument for `notifications.register`: the categories that are on, or nothing while every choice is at its
- * default, so a host that learns a new category later still sends it.
+ * The extra argument for `notifications.register`: the categories that are on, or nothing while none is switched off,
+ * so a host that learns a new category later still sends it.
  */
 export function registerCategories(text: string | undefined): [PushCategory[]] | [] {
   return parseSwitched(text).length ? [PUSH_CATEGORIES.filter((category) => isCategoryOn(text, category))] : []

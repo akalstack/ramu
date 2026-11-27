@@ -107,7 +107,7 @@ export interface WorkspaceApi {
   composing: string | null
   /** Chats that finished (or need you) while you were looking elsewhere; cleared when you open them. */
   unread: ReadonlySet<string>
-  /** Back to the Chats landing: recaps, the review inbox and the start box, with no chat open. */
+  /** Back to the Chats landing: the start box and what needs you, with no chat open. */
   showHome(): void
   newTask(projectId?: string): void
   cancelNewTask(): void

@@ -261,7 +261,7 @@ export function SettingsPanel({
                     {scope.primaryId === scope.currentId && <SettingsTransfer />}
                   </>
                 )}
-                {page === 'system' && <SystemSettings {...draftProps} onOpenModels={openWorkModels} />}
+                {page === 'system' && <SystemSettings {...draftProps} />}
                 {page === 'about' && <AboutSettings {...draftProps} />}
                 {page === 'appearance' && (
                   <AppearanceSettings {...draftProps} sizesReset={sizesReset} onResetSizes={() => setReset('sizes')} />

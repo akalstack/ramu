@@ -19,17 +19,12 @@ test('a scheduled run that could not start opens the schedules, with no thread t
   })
 })
 
-test('the daily recap opens the recaps', () => {
-  assert.deepEqual(pushTarget({ computerId: 'host-a', kind: 'digest', target: 'recaps' }, hosts), {
-    kind: 'recaps',
-    computerId: 'host-a',
-  })
-})
-
 test('a push from a host this phone does not know, or with data it cannot read, opens nothing', () => {
   assert.equal(pushTarget({ computerId: 'elsewhere', target: 'schedules' }, hosts), null)
   assert.equal(pushTarget({ computerId: 'host-a' }, hosts), null)
   assert.equal(pushTarget({ computerId: 'host-a', target: 'settings' }, hosts), null)
+  // An older host's daily-recap push has nowhere to go.
+  assert.equal(pushTarget({ computerId: 'host-a', kind: 'digest', target: 'recaps' }, hosts), null)
   assert.equal(pushTarget({ taskId: 't1' }, hosts), null)
   assert.equal(pushTarget(null, hosts), null)
   assert.equal(pushTarget('x', hosts), null)

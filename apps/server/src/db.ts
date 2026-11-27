@@ -15,6 +15,11 @@ const MIGRATIONS: ((db: DatabaseSync) => void)[] = [
   // Listing every review sorted its whole JSON into a temporary file on each call: tens of MB written per refresh.
   // A released build may already have had it added by hand to stop the writes, so it can exist before this runs.
   (db) => db.exec('CREATE INDEX IF NOT EXISTS reviews_by_time ON change_reviews(created_at)'),
+  // Daily recaps were removed: their items, and the state that scheduled and gated them, have no reader left.
+  (db) =>
+    db.exec(
+      "DROP TABLE IF EXISTS recap_items; DELETE FROM app_state WHERE key LIKE 'recap-%' OR key = 'input-gate:recap'",
+    ),
 ]
 
 const SCHEMA = `
@@ -108,8 +113,6 @@ CREATE TABLE schedules (id TEXT PRIMARY KEY, data TEXT NOT NULL, state TEXT NOT 
 CREATE TABLE schedule_runs (id TEXT PRIMARY KEY, schedule_id TEXT NOT NULL REFERENCES schedules(id) ON DELETE CASCADE,
     due_at INTEGER NOT NULL, task_id TEXT, session_id TEXT, status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0,
     retry_at INTEGER, error TEXT, created_at INTEGER NOT NULL, UNIQUE(schedule_id, due_at));
-
-CREATE TABLE recap_items (id TEXT PRIMARY KEY, key TEXT NOT NULL UNIQUE, data TEXT NOT NULL);
 
 CREATE TABLE change_reviews (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, session_id TEXT, state TEXT NOT NULL, data TEXT NOT NULL, created_at INTEGER NOT NULL);
 

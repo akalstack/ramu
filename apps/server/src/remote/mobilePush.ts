@@ -4,14 +4,12 @@ import { createFinishedGate } from '@ramu/shared/chat/finishedGate'
 /**
  * What a phone can switch on or off. `done` and `failed` cover ordinary threads; a thread started by a schedule that finishes
  * or fails counts as `scheduled` instead, so scheduled work can be muted on its own, and so does a scheduled run that could
- * not start a thread at all. `input` covers every thread. `digest` is the once-a-day "your recap is ready" note.
+ * not start a thread at all. `input` covers every thread.
  */
-export const PUSH_CATEGORIES = ['input', 'failed', 'done', 'scheduled', 'digest', 'artifacts'] as const
+export const PUSH_CATEGORIES = ['input', 'failed', 'done', 'scheduled', 'artifacts'] as const
 export type PushCategory = (typeof PUSH_CATEGORIES)[number]
-/** Off until a phone asks for them: a registration that lists no categories does not get these. */
-export const OPT_IN_CATEGORIES: readonly PushCategory[] = ['digest']
 /** Where a tap on a push that is not about one thread goes; see `pushTarget` in the mobile app. */
-export type PushTarget = 'schedules' | 'recaps' | 'artifact'
+export type PushTarget = 'schedules' | 'artifact'
 interface Registration {
   deviceId: string
   token: string
@@ -179,14 +177,6 @@ export class MobilePush {
       target: 'schedules' satisfies PushTarget,
     }))
   }
-  /** The once-a-day note that a recap is ready. No content, and only for phones that switched it on. */
-  async deliverDigest() {
-    await this.send('digest', 'Your daily recap is ready.', (registration) => ({
-      computerId: registration.computerId,
-      kind: 'digest',
-      target: 'recaps' satisfies PushTarget,
-    }))
-  }
   /**
    * A notification an artifact sends, with the words it chose. The person allowed this artifact to notify, and the grant
    * sheet says the text travels through the phone's push service; the tap opens the artifact.
@@ -205,7 +195,7 @@ export class MobilePush {
     )
   }
   private wants(registration: Registration, category: PushCategory) {
-    return registration.categories ? registration.categories.includes(category) : !OPT_IN_CATEGORIES.includes(category)
+    return registration.categories ? registration.categories.includes(category) : true
   }
   private async send(
     category: PushCategory,

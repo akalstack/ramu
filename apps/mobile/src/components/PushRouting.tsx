@@ -43,9 +43,7 @@ export function PushRouting() {
           // Bound session memory without losing deduplication of recent taps.
           if (handled.current.size > 100) handled.current.delete(handled.current.keys().next().value!)
           store.select(target.computerId)
-          // Not about one thread: the schedules, or the Inbox on Completed, where each finished thread shows its recap.
           if (target.kind === 'schedules') return router.navigate('/schedules')
-          if (target.kind === 'recaps') return router.navigate({ pathname: '/inbox', params: { tab: 'completed' } })
           if (target.kind === 'artifact')
             return router.push({
               pathname: '/artifact/[computer]/[id]',

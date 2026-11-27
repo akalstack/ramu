@@ -49,7 +49,7 @@ Open a project, say what you want, review the result. The defaults work as they 
 
 **🤖 Agents that keep going**
 
-- Schedules, webhooks, queued messages and long commands keep running after you close the window. Recaps tell you what happened.
+- Schedules, webhooks, queued messages and long commands keep running after you close the window. Inbox shows what needs you and what finished.
 - `@`-mention another model into a thread, delegate to helpers on any provider, or save custom agents for repeat jobs.
 - Ask a second model for advice or a review. Select text to quote it or ask a quick question.
 - Borrow abilities across providers, such as Codex's image generation in a Claude thread.

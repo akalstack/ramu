@@ -30,7 +30,6 @@ it('reuses discovered models across ordinary saves and refreshes them for UI and
         key === 'app-preferences' ? store.preferences() : key === 'model-preferences' ? store.models() : fallback,
       setAppState: (_key: string, value: unknown) => store.set(undefined, value),
     },
-    recaps: { settingsChanged: () => {} },
     agents: {
       catalog: () => catalogs.discoverCatalog(false),
       invalidateCatalog: () => catalogs.invalidateCatalog(),

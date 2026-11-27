@@ -223,7 +223,6 @@ import { AgentHostService } from './remote/agentHosts'
 import { runtimeBuild, runtimeVersion } from './build'
 import { claimSocketPath } from './socketClaim'
 import { ReviewService } from './review/reviews'
-import { RecapService } from './memory/recaps'
 import { MemoryService, registerMemoryTools } from './memory/memory'
 import { RuleStore } from './rules/rules'
 import { RuleFiles } from './rules/ruleFiles'
@@ -1012,7 +1011,6 @@ agents.reviewHooks = {
   observe: (sessionId, event) => reviews!.observe(sessionId, event),
   commandTurn: (sessionId, toolUseId, signal) => reviews!.commandTurn(sessionId, toolUseId, signal),
 }
-const recaps = new RecapService(db, workspace, agents, changed, () => void mobilePush.deliverDigest().catch(() => {}))
 const memory = new MemoryService(db, workspace, agents, () => send('memory:changed', {}), join(userData, 'memory'))
 // Once a second identity exists, notes also have an identity level between a project and everywhere.
 memory.identityOf = (projectId) =>
@@ -1780,7 +1778,6 @@ const dispatcher = createDispatcher(
     pullRequestWrites,
     settingsChanges,
     toolSuggestions: suggestions.service,
-    recaps,
     reviews,
     memory,
     learning,
@@ -1824,7 +1821,7 @@ async function stop(intentional = false, exitCode = 0) {
   agents.stopAll(!intentional)
   await Promise.all(workspace.listTasks().flatMap((task) => agents.list(task.id).map((s) => agents.stopAndWait(s.id))))
   await Promise.all(workspace.listTasks().flatMap((task) => agents.list(task.id).map((s) => reviews.complete(s.id))))
-  await Promise.all([recaps.settle(), reviews.settle(), memory.settle(), learning.settle(), summaries.settle()])
+  await Promise.all([reviews.settle(), memory.settle(), learning.settle(), summaries.settle()])
   terminals.closeAll()
   await externalTools.close()
   await sharedMcp?.close()
@@ -3145,7 +3142,6 @@ const tick = setInterval(() => {
   void uptime.tick().catch(console.error)
   void pullRequestIndex.tick().catch(console.error)
   void agentThreads.tick().catch(console.error)
-  void recaps.tick().catch(console.error)
   void memory.tick().catch(console.error)
   void learning.tick().catch(console.error)
   void summaries.tick().catch(console.error)
@@ -3154,7 +3150,6 @@ const tick = setInterval(() => {
 threadTitles.recover()
 await agents.recoverOnBoot()
 void schedules.tick().catch(console.error)
-void recaps.tick().catch(console.error)
 // Live pull request webhooks follow new projects and a changed public address; a sync with them off removes leftovers.
 void livePullRequests.sync().catch(console.error)
 const liveSync = setInterval(() => void livePullRequests.sync().catch(console.error), 30 * 60_000)

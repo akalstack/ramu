@@ -22,7 +22,6 @@ import type { Workspace } from '../workspace/workspace'
 import type { ScheduleService } from '../background/schedules'
 import type { PullRequestWatchService } from '../background/pullRequestWatches'
 import type { ReviewService } from '../review/reviews'
-import type { RecapService } from '../memory/recaps'
 import type { MemoryService } from '../memory/memory'
 import type { SummaryService } from '../memory/summaries'
 import type { RuleStore } from '../rules/rules'
@@ -86,7 +85,6 @@ export interface Services {
   settingsChanges?: import('../settings/settingsChanges').SettingsChanges
   /** Tools suggested in threads from what they do. */
   toolSuggestions?: import('../plugins/toolSuggestions').ToolSuggestions
-  recaps: RecapService
   learning?: LearningService
   memory?: MemoryService
   summaries?: SummaryService

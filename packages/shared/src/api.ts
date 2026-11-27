@@ -61,7 +61,6 @@ import type {
   ScheduleRule,
   Schedule,
   ScheduleRun,
-  RecapSnapshot,
   BackgroundStatus,
   NetworkStatus,
   NetworkSettingsInput,
@@ -1162,12 +1161,6 @@ export interface RamuMethods extends ArtifactMethods {
   'computers.navigate'(id: string, destination: HostDestination): void
   'computers.navigation.ready'(): void
   /** The hosts whose workspace stores this window shows besides its own; their host events reach it while on screen. */
-  'computers.recapAct'(
-    id: string,
-    recapId: string,
-    action: 'open' | 'done' | 'dismissed' | 'snoozed',
-    until?: number,
-  ): void
   /** Brings a computer's window to the front. Rejects when it cannot be reached. */
   'computers.open'(id: string): void
   /** `alternates` are the link's https backup addresses, tried in turn only when the one before cannot be reached. */
@@ -1220,9 +1213,8 @@ export interface RamuMethods extends ArtifactMethods {
   'schedules.githubRepos'(id: string): { repoId: string; name: string; slug: string }[]
   /** Creates the webhook on that repository with the schedule's HTTPS address, secret and events. */
   'schedules.connectGithub'(id: string, repoId: string): Schedule
-  'recaps.get'(): RecapSnapshot
-  'recaps.refresh'(): RecapSnapshot
-  'recaps.act'(id: string, action: 'open' | 'done' | 'dismissed' | 'snoozed', until?: number): void
+  /** Daily recaps are gone; apps released with them still ask, and get an empty answer. */
+  'recaps.get'(): { items: never[]; generatedAt: null; generating: false; error: null }
   'memory.get'(): MemorySnapshot
   'memory.save'(input: MemoryInput, id?: string): Memory
   'memory.archive'(id: string): Memory

@@ -88,7 +88,7 @@ export const TRANSFER_GROUPS = [
       'asideModel',
     ],
   },
-  { id: 'notifications', label: 'Notifications', keys: ['notifyAgentDone', 'recapsEnabled', 'recapTime'] },
+  { id: 'notifications', label: 'Notifications', keys: ['notifyAgentDone'] },
   { id: 'rules', label: 'Rules', keys: [] },
   { id: 'identities', label: 'Identities', keys: [] },
   { id: 'memories', label: 'Everywhere notes', keys: [] },

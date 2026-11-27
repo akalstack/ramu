@@ -64,9 +64,28 @@ it('upgrades an older profile in place, running each later migration once and in
   expect(ran).toEqual(['first', 'second'])
 })
 
+it('drops the daily recaps a released profile kept, and nothing else', () => {
+  const path = profile()
+  const old = openDb(path, [])
+  old.exec(
+    `CREATE TABLE recap_items (id TEXT PRIMARY KEY, key TEXT NOT NULL UNIQUE, data TEXT NOT NULL);
+     INSERT INTO recap_items VALUES ('r', 'k', '{}');
+     INSERT INTO app_state (key, value) VALUES ('recap-generated-at', '1'), ('recap-watermark:s', '4'),
+       ('input-gate:recap', '"x"'), ('input-gate:learning:s', '"y"'), ('app-preferences', '{}');`,
+  )
+  old.close()
+  const db = openDb(path)
+  expect(db.prepare("SELECT name FROM sqlite_master WHERE name = 'recap_items'").get()).toBeUndefined()
+  expect((db.prepare('SELECT key FROM app_state ORDER BY key').all() as { key: string }[]).map((r) => r.key)).toEqual([
+    'app-preferences',
+    'input-gate:learning:s',
+  ])
+  db.close()
+})
+
 it('leaves a profile as it was when a migration fails', () => {
   const path = profile()
-  openDb(path).close()
+  openDb(path, []).close()
   const released = versionOf(path)
   const failing = [
     (db: DatabaseSync) => db.exec('CREATE TABLE half_done (id INTEGER)'),

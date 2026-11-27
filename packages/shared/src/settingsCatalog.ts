@@ -225,8 +225,8 @@ export const SETTINGS_CATALOG: SettingsCatalogEntry[] = [
     section: 'models',
     title: 'Background model',
     path: 'intelligence.maintenanceModel',
-    help: 'Writes daily recaps, learning reviews and memory cleanup. A cheaper model keeps token use low.',
-    words: 'maintenance model cheaper background recap',
+    help: 'Writes learning reviews and memory cleanup. A cheaper model keeps token use low.',
+    words: 'maintenance model cheaper background',
   },
   {
     section: 'memory',
@@ -313,20 +313,6 @@ export const SETTINGS_CATALOG: SettingsCatalogEntry[] = [
     path: 'suggestTools',
     help: 'Show a card in a thread when the agent or a link you share points to a tool that isn’t on. Turning one on is up to you.',
     words: 'tool tools plugin plugins mcp server skill recommend recommendation suggestion suggest card integration',
-  },
-  {
-    section: 'system',
-    title: 'Daily recaps',
-    path: 'recapsEnabled',
-    help: 'Show recent threads and unfinished work on Home. Uses model tokens to write the summary.',
-    words: 'recap summary home tokens',
-  },
-  {
-    section: 'system',
-    title: 'Generate daily at',
-    path: 'recapTime',
-    help: 'Create the recap at this time in your system timezone.',
-    words: 'recap time schedule timezone',
   },
   {
     section: 'system',

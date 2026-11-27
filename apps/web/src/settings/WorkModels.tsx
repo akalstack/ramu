@@ -22,7 +22,7 @@ export function WorkModelSettings({ draft, onChange }: { draft: AppPreferences; 
       <SettingsRow setting="intelligence.maintenanceModel">
         <SettingsLabel
           title={t('Background model')}
-          help={t('Writes daily recaps, learning reviews and memory cleanup. A cheaper model keeps token use low.')}
+          help={t('Writes learning reviews and memory cleanup. A cheaper model keeps token use low.')}
         />
         <ModelChoice
           label={t('Background model')}
