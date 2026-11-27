@@ -82,6 +82,7 @@ function harness(reduced = false) {
     makeMutable: (value) => ({ value }),
     useAnimatedStyle: (style) => style(),
     interpolate: (value) => value,
+    Extrapolation: { CLAMP: 'clamp' },
     withTiming(toValue, config, callback) {
       timings.push({ toValue, ...config })
       if (callback) completions.push(() => callback(true))
@@ -96,6 +97,9 @@ function harness(reduced = false) {
   }).outputText
   runInNewContext(code, {
     exports: module.exports,
+    Date,
+    setTimeout: () => 0,
+    clearTimeout() {},
     require: (id) =>
       id === '@ramu/shared/chat/presentation'
         ? chatPresentation
@@ -116,6 +120,10 @@ function harness(reduced = false) {
     timings,
     finish() {
       for (const callback of completions.splice(0)) callback({ finished: true })
+    },
+    /** Starts the next render as a new instance, as a view the list mounts in place of another. */
+    remount() {
+      slots.length = 0
     },
     render(component, props) {
       cursor = 0
@@ -198,4 +206,24 @@ test('reduced motion skips both status entrances and state changes', async () =>
   const tree = h.render(h.Arrive, { animate: true, identity: 'Working', children: 'Working' })
   assert.equal(tree.props.style.opacity, 1)
   assert.equal(h.timings.length, 0)
+})
+
+test('the host’s copy of a sent message keeps the bubble’s height until its own text has measured as tall', () => {
+  const h = harness()
+  const sent = h.render(h.SentArrive, { identity: 'pending:1', start: true, children: 'Bubble' })
+  sent.props.children.props.onLayout({ nativeEvent: { layout: { height: 64 } } })
+  h.remount()
+  let copy = h.render(h.SentArrive, { identity: 'pending:1', start: false, children: 'Copy' })
+  assert.equal(copy.props.style[1]?.minHeight, 64)
+  // Its text first measures a line short; the hold covers that frame.
+  copy.props.children.props.onLayout({ nativeEvent: { layout: { height: 43 } } })
+  copy = h.render(h.SentArrive, { identity: 'pending:1', start: false, children: 'Copy' })
+  assert.equal(copy.props.style[1]?.minHeight, 64)
+  copy.props.children.props.onLayout({ nativeEvent: { layout: { height: 64 } } })
+  copy = h.render(h.SentArrive, { identity: 'pending:1', start: false, children: 'Copy' })
+  assert.equal(copy.props.style[1], null)
+  // A message that arrived from elsewhere has nothing to hold.
+  h.remount()
+  const other = h.render(h.SentArrive, { identity: 'pending:2', start: false, children: 'Other' })
+  assert.equal(other.props.style[1], null)
 })

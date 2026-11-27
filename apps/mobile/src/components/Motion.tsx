@@ -222,6 +222,13 @@ export function Arrive({ animate, identity, children }: { animate: boolean; iden
 const SENT_MS = SENT_MOTION.durationMs
 /** When each sent message began rising, so the host's copy that replaces it mid-way carries on instead of restarting. */
 const sentStarts = new Map<string, number>()
+/**
+ * The height each message on its way was drawn at. The host's copy is a new view whose text is measured again, and
+ * for a frame it came out at another height, so the transcript jumped by a line as the copy took over; it keeps this
+ * height until its own text has measured as tall, or briefly when the copy really is shorter.
+ */
+const sentHeights = new Map<string, number>()
+const SENT_HOLD_MS = 250
 
 /**
  * A message you just sent rises from the composer into its place, as in WhatsApp: it starts lower and a little smaller,
@@ -248,6 +255,18 @@ export function SentArrive({ identity, start, children }: { identity: string; st
       clearTimeout(forget)
     }
   }, [from, identity, progress])
+  const [held, setHeld] = useState(() => (start ? 0 : (sentHeights.get(identity) ?? 0)))
+  useEffect(() => {
+    if (!held) return
+    const timer = setTimeout(() => setHeld(0), SENT_HOLD_MS)
+    return () => clearTimeout(timer)
+  }, [held])
+  useEffect(
+    () => () => {
+      if (!start) sentHeights.delete(identity)
+    },
+    [identity, start],
+  )
   const style = useAnimatedStyle(() => ({
     opacity: interpolate(progress.value, [0, SENT_MOTION.opaqueAt], [0, 1], Extrapolation.CLAMP),
     transformOrigin: 'right bottom',
@@ -256,7 +275,19 @@ export function SentArrive({ identity, start, children }: { identity: string; st
       { scale: interpolate(progress.value, [0, 1], [SENT_MOTION.scale, 1], Extrapolation.CLAMP) },
     ],
   }))
-  return <Reanimated.View style={style}>{children}</Reanimated.View>
+  return (
+    <Reanimated.View style={[style, held ? { minHeight: held } : null]}>
+      <View
+        onLayout={(event) => {
+          const height = event.nativeEvent.layout.height
+          if (start) sentHeights.set(identity, height)
+          else if (held && height >= held - 0.5) setHeld(0)
+        }}
+      >
+        {children}
+      </View>
+    </Reanimated.View>
+  )
 }
 
 /** Height and opacity disclosure motion, shared by every expandable transcript block. */
