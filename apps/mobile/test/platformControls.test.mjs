@@ -152,6 +152,8 @@ function load(file, os, overrides = {}, globals = {}) {
       resolveBusyMode: () => ({ mode: 'steer', source: 'default' }),
     },
     '../runtime/computerUse': { useComputerUse: () => ({ session: undefined, refresh() {} }) },
+    // The system paste needs the native module; the composer's other behaviour does not.
+    '../runtime/paste': { usePastedFiles() {} },
     '../runtime/threadSelection': threadSelectionStub,
     '../../../runtime/threadSelection': threadSelectionStub,
     '../../../components/BulkThreadActions': { useBulkThreadActions: () => ({ writable: () => false }) },
@@ -1138,6 +1140,7 @@ test('new thread with Auto moves to the composer once its host connects after th
   let asTab = false
   const destinations = []
   const store = {
+    chats: [],
     selected: 'a',
     language: 'en',
     computers: [{ id: 'a', name: 'Laptop', status: 'online' }],
@@ -1186,6 +1189,7 @@ test('new thread switches projects and composer in one flow without losing the d
   let asTab = false
   const destinations = []
   const store = {
+    chats: [],
     selected: 'a',
     language: 'en',
     computers: [{ id: 'a', name: 'Laptop', status: 'online' }],
@@ -1280,6 +1284,7 @@ test('a new-thread form keeps its chosen host when the global selection changes'
   let cursor = 0
   let submitted
   const store = {
+    chats: [],
     selected: 'a',
     computers: [
       { id: 'a', name: 'Laptop', status: 'online' },
@@ -1435,6 +1440,7 @@ for (const os of ['ios', 'android']) {
     let submitted
     const destinations = []
     const store = {
+      chats: [],
       selected: 'a',
       computers: [{ id: 'a', name: 'Laptop', status: 'online' }],
       projects: [{ id: 'a:p', computerId: 'a', name: 'Project', kind: 'repo' }],
@@ -2928,6 +2934,7 @@ for (const os of ['ios', 'android']) {
     const listeners = new Map()
     let submitted
     const store = {
+      chats: [],
       selected: 'a',
       computers: [{ id: 'a', name: 'Laptop', status: 'online' }],
       projects: ['p', 'q'].map((id) => ({ id: `a:${id}`, computerId: 'a', name: id, kind: 'repo' })),
@@ -3109,6 +3116,7 @@ for (const os of ['ios', 'android']) {
     const rename = deferred()
     let refreshed = 0
     const store = {
+      chats: [],
       selected: 'a',
       computers: ['a', 'b'].map((id) => ({ id, name: id, status: 'online' })),
       projects: [{ id: 'a:p', computerId: 'a', name: 'Project', kind: 'repo' }],
@@ -3501,6 +3509,7 @@ for (const os of ['ios', 'android']) {
     const submitted = []
     let online = true
     const store = {
+      chats: [],
       selected: 'a',
       computers: [{ id: 'a', name: 'Host' }],
       projects: [{ id: 'a:p', computerId: 'a', name: 'Project' }],
@@ -4242,6 +4251,7 @@ for (const os of ['ios', 'android']) {
     let latest = modelRepository
     const copy = { ...projectModelCopy, newChat: 'New thread' }
     const store = {
+      chats: [],
       selected: 'a',
       computers: [{ id: 'a', name: 'Laptop', status: 'online' }],
       projects: [{ id: 'a:p', computerId: 'a', name: 'Project' }],

@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["RamuPasteModule"]
+  },
+  "android": {
+    "modules": ["dev.ramu.paste.RamuPasteModule"]
+  }
+}

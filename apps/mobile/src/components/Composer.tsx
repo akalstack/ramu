@@ -19,6 +19,7 @@ import {
 } from 'react-native'
 import { Pressable as NativePressable } from 'react-native-gesture-handler'
 import { attachmentPreview, keepAttachmentPreview } from '../runtime/attachmentPreviews'
+import { usePastedFiles, type PastedFile } from '../runtime/paste'
 import { MenuView } from '@react-native-menu/menu'
 import { markdownRuns, type MarkdownMark } from '@ramu/shared/chat/markdownRuns'
 import { composerDraft } from '@ramu/shared/chat/composerDraft'
@@ -793,6 +794,8 @@ export function Composer({
   extraContent?: boolean
 }) {
   const textInput = useRef<import('react-native').TextInputInstance>(null)
+  // A picture or file pasted into the field attaches as if chosen from the attach menu.
+  usePastedFiles(textInput, (files) => void upload(...files))
   useEffect(() => {
     if (!autoFocus) return
     // iOS ignores a focus while the screen is still sliding in or a sheet above it is closing, so look again once each
@@ -1054,7 +1057,7 @@ export function Composer({
       Alert.alert(say('Could not load host choices'), e instanceof Error ? e.message : String(e))
     }
   }
-  const upload = async (kind: AttachmentSource) => {
+  const upload = async (...sources: (AttachmentSource | PastedFile)[]) => {
     if (attachments.length >= 10) return Alert.alert(say('Attachments'), say('Attach up to ten files per message.'))
     if (uploadPending.current) return
     uploadPending.current = true
@@ -1062,14 +1065,15 @@ export function Composer({
     setUploading(true)
     setMenu(null)
     try {
-      await pickAttachment(
-        store,
-        pc,
-        (a) => {
-          if (attachmentOwner.current === owner) setAttachments((old) => [...old, a])
-        },
-        kind,
-      )
+      for (const source of sources.slice(0, 10 - attachments.length))
+        await pickAttachment(
+          store,
+          pc,
+          (a) => {
+            if (attachmentOwner.current === owner) setAttachments((old) => [...old, a])
+          },
+          source,
+        )
     } finally {
       uploadPending.current = false
       setUploading(false)
@@ -1823,13 +1827,17 @@ async function pickAttachment(
   store: ReturnType<typeof useStore>,
   computerId: string,
   add: (attachment: import('@ramu/shared/types').Attachment) => void,
-  kind: AttachmentSource = 'document',
+  kind: AttachmentSource | PastedFile = 'document',
 ) {
   const say = (text: string) => translate(store.language, text)
   try {
     if (!store.isOnline(computerId)) throw new Error(say('Reconnect this host to upload an attachment.'))
     let asset: { uri: string; name: string; size?: number; file?: File; base64?: string }
-    if (kind === 'clipboard') {
+    if (typeof kind === 'object') {
+      // Pasted through the text field's own Paste; an item over the limit arrives without a copy.
+      if (!kind.uri) throw new Error(say('Attachments must be 10 MB or smaller.'))
+      asset = { uri: kind.uri, name: kind.name, size: kind.size }
+    } else if (kind === 'clipboard') {
       // A text field takes only text from the paste menu, so a copied picture is read from the clipboard here.
       const { getImageAsync } = await import('expo-clipboard')
       const image = await getImageAsync({ format: 'jpeg', jpegQuality: 0.85 })
