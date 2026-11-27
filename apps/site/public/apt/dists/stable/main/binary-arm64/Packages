@@ -1,19 +1,19 @@
 Package: ramu
 Architecture: arm64
-Version: 1.1.0~beta.5
+Version: 1.1.0~beta.6
 Priority: optional
 Section: utils
 Maintainer: Ramu contributors
-Installed-Size: 448687
+Installed-Size: 448729
 Depends: libgtk-3-0, libnotify4, libnss3, xdg-utils, libatspi2.0-0, libdrm2, libgbm1, libxcb-dri3-0, libsecret-1-0, kde-cli-tools | kde-runtime | trash-cli | libglib2.0-bin | gvfs
 Recommends: libasound2t64 | libasound2 | pulseaudio
 Suggests: gnome-keyring, lsb-release
-Filename: pool/v1.1.0-beta.5/linux-arm64-ramu_1.1.0.beta.5_arm64.deb
-Size: 117119124
-MD5sum: 1dd9cc20b20d9260eaf4065b3806253c
-SHA1: d4128c3354293b4c95b445614db3f26cd8f0b81d
-SHA256: f5a9a2d17c1dcd410b8785216cc69b58497df86cdec37c473f21222d7496a3ab
-SHA512: 179e4e8b26988426b69b60e621460e62a18f2d8a617f6c102b1e587571a9ca69dda2af5705615c5efac7713c5d0a7dfff534bd10cd999a61fd1c3a957ca36011
+Filename: pool/v1.1.0-beta.6/linux-arm64-ramu_1.1.0.beta.6_arm64.deb
+Size: 117142780
+MD5sum: 8fb7c2871390c0e2421263a7d7ce1d7a
+SHA1: c9ef436b9689ea9aa3aa24e8faa2b51fceb087ad
+SHA256: 836ffcac35a5a205ae2544a6cd20a4bcde36dd1cda6e1f5e85cf79126d4285dd
+SHA512: 2dc06bebb7acc106077d22f97de35c41022cc7913da35100a0c4f0943aa289aed40e23f776f354bb620ed94700aa3d151a2c67e008198c4edda9d6b24a861acf
 Homepage: https://getramu.dev
 Description: Ramu desktop app: an open-source workspace for coding with agents.
  Ramu desktop app: an open-source workspace for coding with agents.
