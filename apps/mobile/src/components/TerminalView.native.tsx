@@ -128,6 +128,9 @@ export default function TerminalView({
         javaScriptEnabled
         scrollEnabled={false}
         keyboardDisplayRequiresUserAction={false}
+        // iOS adds its form bar (previous, next, Done) over the keyboard for any field in a web page. A terminal has no
+        // fields to move between, and the key bar already hides the keyboard.
+        hideKeyboardAccessoryView
         onMessage={(event) => {
           try {
             const value = JSON.parse(event.nativeEvent.data)
