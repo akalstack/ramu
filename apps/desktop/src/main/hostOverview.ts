@@ -2,18 +2,11 @@ import type { HostOverview } from '@ramu/shared/hostOverview'
 
 /** Reads one explicit endpoint. A failed section cannot hide successful sections or fall back to another host. */
 export async function readHostOverview(invoke: (method: string) => Promise<unknown>): Promise<HostOverview> {
-  const result: HostOverview = { projects: [], tasks: [], agents: [], recaps: [], summaries: [], errors: [] }
+  const result: HostOverview = { projects: [], tasks: [], agents: [], summaries: [], errors: [] }
   const reads = [
     ['projects', () => invoke('projects.list')],
     ['tasks', () => invoke('tasks.list')],
     ['agents', () => invoke('agent.all')],
-    [
-      'recaps',
-      async () => {
-        const prefs = (await invoke('settings.app.get')) as { recapsEnabled?: boolean }
-        return prefs.recapsEnabled === false ? [] : ((await invoke('recaps.get')) as { items: unknown }).items
-      },
-    ],
     ['summaries', async () => ((await invoke('summaries.get')) as { summaries: unknown }).summaries],
   ] as const
   await Promise.all(

@@ -5,8 +5,6 @@ import type {
   AgentSettings,
   LearningSnapshot,
   LibrarySummary,
-  RecapItem,
-  RecapSnapshot,
   Schedule,
   ScheduleInput,
   ScheduleRun,
@@ -16,18 +14,14 @@ import type { HostResources } from '@ramu/shared/resources'
 import { readFailuresSeen, readLastVisit, saveFailuresSeen, saveLastVisit } from '../storage'
 import { useStore } from './store'
 import { buildInbox, type InboxModel } from './inbox'
-import { looseInvoke } from './settingsModel'
-import { actOnHost, applyRecapAction, RECAP_TOAST, type RecapAction } from './recapActions'
-import { showError, showToast } from './toast'
 
-// What the computers keep beyond threads: recaps, what Ramu learned (summaries and reviews), and schedules. Every online computer is read
+// What the computers keep beyond threads: what Ramu learned (summaries and reviews), and schedules. Every online computer is read
 // at once (Inbox shows what needs you on all of them) and refreshed when the computer says automation changed.
 
 const FAILURES_KEPT = 300
 const RESOURCES_MS = 60_000
 
 export interface Automation {
-  recaps: RecapSnapshot | null
   summaries: SummariesSnapshot | null
   /** Learning reviews and skills; null where the host refuses them, as it does a view-only device. */
   learning: LearningSnapshot | null
@@ -38,7 +32,6 @@ export interface Automation {
   error: string | null
 }
 const empty: Automation = {
-  recaps: null,
   summaries: null,
   learning: null,
   schedules: [],
@@ -51,18 +44,12 @@ const empty: Automation = {
 interface AutomationStore {
   of(computerId: string): Automation
   inbox: InboxModel
-  /** The moment recaps count as "since your last visit" from. */
+  /** The moment threads count as finished "since your last visit" from. */
   visit: number
   failureSeen: (chat: { id: string; lastActiveAt: number }) => boolean
   /** Opening a failed thread is seeing it: it stops asking in the Brief and the badge. */
   seeFailure: (chat: { id: string; lastActiveAt: number }) => void
   reload(computerId: string): Promise<void>
-  refreshRecaps(computerId: string): Promise<void>
-  /**
-   * Done, Dismiss or Snooze a recap item (`until` is when a snooze ends) and show an Undo toast; `'open'` puts it back.
-   * Resolves once the host has answered; the card is already gone by then.
-   */
-  actRecap(computerId: string, item: RecapItem, action: RecapAction, until?: number): Promise<void>
   readSummary(computerId: string, id: string): Promise<LibrarySummary>
   dismissSummary(computerId: string, id: string): Promise<void>
   /** Apply, dismiss or undo a learning review; resolves with how many items Undo left because they changed since. */
@@ -90,7 +77,7 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
   storeRef.current = store
 
   // "Since your last visit" means since you last left the app, not since this screen last mounted: the marker moves
-  // forward only after the app was in the background for a while, so recaps don't vanish on the next tap.
+  // forward only after the app was in the background for a while, so the count doesn't vanish on the next tap.
   const [visit, setVisit] = useState(() => readLastVisit())
   const [failures, setFailures] = useState(() => readFailuresSeen())
   useEffect(() => {
@@ -117,18 +104,11 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
     if (problem) throw new Error(problem)
   }
 
-  const recapsOn = (id: string) => store.appPreferences[id]?.recapsEnabled !== false
-
   const load = useCallback(
-    async (
-      id: string,
-      what: ('recaps' | 'summaries' | 'learning' | 'schedules')[] = ['recaps', 'summaries', 'learning', 'schedules'],
-    ) => {
+    async (id: string, what: ('summaries' | 'learning' | 'schedules')[] = ['summaries', 'learning', 'schedules']) => {
       const call = storeRef.current.invoke
-      const on = storeRef.current.appPreferences[id]?.recapsEnabled !== false
       try {
-        const [recaps, summaries, learning, schedules, runs] = await Promise.all([
-          what.includes('recaps') && on ? call(id, 'recaps.get') : undefined,
+        const [summaries, learning, schedules, runs] = await Promise.all([
           // Older computers do not have summaries; that is not an error for the rest.
           what.includes('summaries') ? call(id, 'summaries.get').catch(() => undefined) : undefined,
           what.includes('learning') ? call(id, 'learning.get').catch(() => null) : undefined,
@@ -136,7 +116,6 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
           what.includes('schedules') ? call(id, 'schedules.runs') : undefined,
         ])
         patch(id, {
-          ...(recaps ? { recaps } : {}),
           ...(summaries ? { summaries } : {}),
           ...(learning !== undefined ? { learning } : {}),
           ...(schedules ? { schedules } : {}),
@@ -168,13 +147,13 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
       readResources()
       const resourceTimer = setInterval(readResources, RESOURCES_MS)
       let timer: ReturnType<typeof setTimeout> | undefined
-      // Bursts of changes (a run starting, then each recap) are read once.
+      // Bursts of changes (a run starting, then its updates) are read once.
       const soon = (what: Parameters<typeof load>[1]) => {
         clearTimeout(timer)
         timer = setTimeout(() => void load(id, what), 250)
       }
       const off = storeRef.current.subscribe(id, (...[channel]) => {
-        if (channel === 'automation:changed') soon(['recaps', 'schedules'])
+        if (channel === 'automation:changed') soon(['schedules'])
         else if (channel === 'summaries:changed') soon(['summaries'])
         else if (channel === 'memory:changed') soon(['learning'])
       })
@@ -186,14 +165,6 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
     })
     return () => offs.forEach((off) => off())
   }, [online, load, patch])
-
-  // Recaps are fetched only when turned on; read them when the preference arrives or flips.
-  const recapKey = store.computers.map((c) => `${c.id}:${recapsOn(c.id)}`).join(',')
-  useEffect(() => {
-    for (const c of storeRef.current.computers)
-      if (c.status === 'online' && storeRef.current.appPreferences[c.id]?.recapsEnabled !== false)
-        void load(c.id, ['recaps'])
-  }, [recapKey, load])
 
   const value = useMemo<AutomationStore>(() => {
     const failureSeen = (chat: { id: string; lastActiveAt: number }) => failures[chat.id] === chat.lastActiveAt
@@ -214,68 +185,19 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
         }),
       inbox: buildInbox({
         chats: store.chats,
-        recaps: store.computers.flatMap((c) =>
-          (state[c.id]?.recaps?.items ?? []).map((item) => ({ computerId: c.id, item })),
-        ),
         summaries: store.computers.flatMap((c) =>
           (state[c.id]?.summaries?.summaries ?? []).map((summary) => ({ computerId: c.id, summary })),
         ),
         reviews: store.computers.flatMap((c) =>
           (state[c.id]?.learning?.jobs ?? []).map((job) => ({ computerId: c.id, job })),
         ),
-        recapsEnabled: recapsOn,
         failureSeen,
         lowMemory: store.computers.flatMap((c) => {
           const low = state[c.id]?.resources?.low
           return low ? [{ computerId: c.id, low }] : []
         }),
-        visit,
       }),
       reload: (id) => load(id),
-      refreshRecaps: async (id) => {
-        patch(id, {
-          recaps: { ...(state[id]?.recaps ?? { items: [], generatedAt: null, error: null }), generating: true },
-        })
-        try {
-          patch(id, { recaps: await call(id, (invoke) => invoke(id, 'recaps.refresh')) })
-        } catch (error) {
-          await load(id, ['recaps'])
-          throw error
-        }
-      },
-      actRecap: async (id, item, action, until) => {
-        // Gone at once; the computer confirms (or the reload below puts it back).
-        setState((all) => {
-          const current = all[id]?.recaps
-          if (!current) return all
-          return {
-            ...all,
-            [id]: {
-              ...all[id]!,
-              recaps: { ...current, items: applyRecapAction(current.items, item.id, action, until) },
-            },
-          }
-        })
-        try {
-          await actOnHost(
-            (...args) => call(id, (invoke) => looseInvoke(invoke)(id, 'recaps.act', ...args)),
-            item.id,
-            action,
-            until,
-          )
-          if (action !== 'open')
-            showToast(RECAP_TOAST[action], {
-              label: 'undo',
-              // An undo that fails says so, as the thread undo does; a silent one leaves the recap gone with no word why.
-              run: () =>
-                void api
-                  .actRecap(id, item, 'open')
-                  .catch((error: unknown) => showError(error instanceof Error ? error.message : String(error))),
-            })
-        } finally {
-          void load(id, ['recaps'])
-        }
-      },
       readSummary: (id, summaryId) => call(id, (invoke) => invoke(id, 'summaries.read', summaryId)),
       dismissSummary: async (id, summaryId) => {
         await call(id, (invoke) => invoke(id, 'summaries.dismiss', summaryId))
@@ -327,7 +249,7 @@ export function AutomationProvider({ children }: { children: ReactNode }) {
     }
     return api
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, store.chats, store.computers, store.appPreferences, visit, failures, load, patch])
+  }, [state, store.chats, store.computers, visit, failures, load, patch])
   return <Context.Provider value={value}>{children}</Context.Provider>
 }
 

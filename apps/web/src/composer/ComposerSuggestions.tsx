@@ -194,13 +194,6 @@ export function useComposerSuggestions(
         },
       },
       {
-        id: 'recap',
-        label: '/recap',
-        description: t('Open your daily recap'),
-        kind: 'Command',
-        action: () => ws.showHome(),
-      },
-      {
         id: 'settings',
         label: '/settings',
         description: t('Open app settings'),

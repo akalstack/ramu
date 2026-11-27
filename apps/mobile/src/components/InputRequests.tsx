@@ -30,23 +30,13 @@ export function InputRequests({ chat }: { chat: Chat }) {
     </View>
   )
 }
-export function InboxThread({
-  chat,
-  project,
-  divider,
-  recap,
-}: {
-  chat: Chat
-  project?: string
-  divider?: boolean
-  recap?: string
-}) {
+export function InboxThread({ chat, project, divider }: { chat: Chat; project?: string; divider?: boolean }) {
   const say = useSay()
   const [open, setOpen] = useState(false)
   const requests = chat.items.filter(pendingRequest)
   return (
     <View>
-      <ChatRow chat={chat} project={project} divider={divider} recap={recap} />
+      <ChatRow chat={chat} project={project} divider={divider} />
       {requests.length ? (
         <View style={{ paddingLeft: ROW_INSET - space.s, paddingRight: space.l, paddingBottom: space.s }}>
           <Button

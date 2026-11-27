@@ -1533,22 +1533,6 @@ async function main() {
       if (!isHostInvokeAllowed(operation)) throw new Error(t('That action is not available on another host'))
       return runOnHost(self, operation, parameters)
     }
-    if (method === 'computers.recapAct') {
-      const [id, recapId, action, until] = args
-      if (typeof id !== 'string' || !computers.exists(id) || computers.status(id) !== 'connected')
-        throw new Error('That host is not connected')
-      if (typeof recapId !== 'string' || !['open', 'done', 'dismissed', 'snoozed'].includes(action as string))
-        throw new Error('Invalid recap action')
-      if (until !== undefined && (action !== 'snoozed' || typeof until !== 'number'))
-        throw new Error('Invalid snooze time')
-      await runtimeInvoke(
-        computers.endpoint(id),
-        'recaps.act',
-        until === undefined ? [recapId, action] : [recapId, action, until],
-      )
-      observeHostActivity(id, 'automation:changed', {})
-      return
-    }
     if (method === 'computers.threads') {
       const [id, sessionIds] = args
       if (

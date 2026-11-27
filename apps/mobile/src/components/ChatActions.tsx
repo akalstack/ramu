@@ -153,7 +153,7 @@ export async function confirmChatDeletion(
  * stay where you can see them, so they get no toast.
  */
 export function offerThreadUndo(store: ReturnType<typeof useStore>, chat: Chat, kind: 'done' | 'archived') {
-  showToast(kind === 'done' ? 'recapDone' : 'threadArchived', {
+  showToast(kind === 'done' ? 'threadDone' : 'threadArchived', {
     label: 'undo',
     run: () => {
       void store

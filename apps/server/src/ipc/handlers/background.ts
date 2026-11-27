@@ -10,7 +10,6 @@ export const registerBackgroundHandlers: RegisterHandlers = ({
   awake,
   memory,
   learning,
-  recaps,
   notices,
   resources,
   servers,
@@ -50,7 +49,6 @@ export const registerBackgroundHandlers: RegisterHandlers = ({
         })
       if (memory?.snapshot().dreaming) items.push({ id: 'memory', label: 'Maintaining memories', cancellable: true })
       if (learning?.snapshot().running) items.push({ id: 'learning', label: 'Learning skills', cancellable: true })
-      if (recaps.snapshot().generating) items.push({ id: 'recaps', label: 'Generating recaps', cancellable: true })
       return items
     },
   },
@@ -61,7 +59,6 @@ export const registerBackgroundHandlers: RegisterHandlers = ({
       if (activityId === 'app-update') await updates.cancel()
       else if (activityId === 'memory') memory?.cancel()
       else if (activityId === 'learning') learning?.cancel()
-      else if (activityId === 'recaps') recaps.cancel()
       else activity.cancel(activityId)
     },
   },

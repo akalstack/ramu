@@ -14,7 +14,6 @@ it('persists reusable commit actions and the primary branch choice', () => {
           saved = value
         },
       },
-      recaps: { settingsChanged: () => {} },
       agents: { invalidateCatalog: () => {}, goalsSettingsChanged: () => {} },
     } as unknown as Services,
   )

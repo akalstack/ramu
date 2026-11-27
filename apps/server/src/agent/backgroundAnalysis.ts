@@ -178,7 +178,7 @@ export class BackgroundAnalysis {
     )
   }
 
-  /** Isolated inference shared by commit drafts, recaps, and change reviews. */
+  /** Isolated inference shared by commit drafts, learning and change reviews. */
   async analyze(
     prompt: string,
     settings: AgentSettings,
@@ -197,7 +197,7 @@ export class BackgroundAnalysis {
     const tried = new Set<string>()
     const triedAccounts = new Set<string>()
     let waited = 0
-    // Titles, recaps and commit messages follow the same rule, quietly.
+    // Titles and commit messages follow the same rule, quietly.
     let chosen = settings
     try {
       const early = await this.host.route(settings)

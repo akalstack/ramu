@@ -123,7 +123,6 @@ const afterSeconds = (n: Value) =>
       : Number(n) > 60
         ? `After ${Number(n) / 60} minutes`
         : `After ${n} seconds`
-const hours = Array.from({ length: 24 }, (_, hour) => `${String(hour).padStart(2, '0')}:00`)
 
 /** The desktop's rows that make sense on a phone, in the desktop's order and wording. Heavy editors stay on the desktop. */
 export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
@@ -697,7 +696,7 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
           kind: 'model',
           path: 'intelligence.maintenanceModel',
           title: 'Background model',
-          help: 'Writes daily recaps, learning reviews and memory cleanup. A cheaper model keeps token use low.',
+          help: 'Writes learning reviews and memory cleanup. A cheaper model keeps token use low.',
           words: 'background model cheap tokens learning cleanup maintenance',
           emptyLabel: 'Default model',
         },
@@ -756,27 +755,6 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
             { value: 'always', label: 'Plugged in and on battery' },
           ],
           when: { path: 'keepAwake', equals: true },
-        },
-      ],
-    },
-    {
-      title: 'Daily recaps',
-      rows: [
-        {
-          kind: 'toggle',
-          path: 'recapsEnabled',
-          title: 'Daily recaps',
-          help: 'Show recent threads and unfinished work on Home. Uses model tokens to write the summary.',
-          words: 'recap summary home tokens',
-        },
-        {
-          kind: 'choice',
-          path: 'recapTime',
-          title: 'Generate daily at',
-          help: 'Create the recap at this time in the host’s timezone.',
-          words: 'recap time schedule timezone',
-          options: hours.map((value) => ({ value, label: value })),
-          when: { path: 'recapsEnabled', equals: true },
         },
       ],
     },

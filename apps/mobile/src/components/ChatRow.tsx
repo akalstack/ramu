@@ -67,13 +67,10 @@ export const ChatRow = memo(function ChatRow({
   divider,
   selectable,
   earlierRuns,
-  recap,
   inProject,
 }: {
   chat: Chat
   project?: string
-  /** Its newest recap, in Completed: what the thread did, in place of the opening of its last reply. */
-  recap?: string
   divider?: boolean
   /** A recurring schedule's older runs folded into this, its newest run. */
   earlierRuns?: number
@@ -145,7 +142,7 @@ export const ChatRow = memo(function ChatRow({
   const prLabel = pr ? say('Pull request #{0}: {1}', { 0: pr.number, 1: pullRequestStageDetail(pr, say) }) : null
   const facts = Boolean(pr || branch || project || helpers || !online)
   // Without a state to report, the reply says what the thread came to, which is what a person scans the list for.
-  const reply = state ? '' : (recap ?? chat.lastReply ?? '')
+  const reply = state ? '' : (chat.lastReply ?? '')
   const detail = Boolean(state || reply || facts)
   // Every agent that has worked here, as T3's rows show them: earlier ones (a handoff) small and grey
   // before the one leading now.

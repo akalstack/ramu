@@ -37,8 +37,6 @@ export interface ModelPreferences {
 
 export interface AppPreferences extends WorkspaceDefaults {
   language: 'system' | 'en' | 'id'
-  recapsEnabled: boolean
-  recapTime: string
   accent: 'blue' | 'violet' | 'teal'
   fontFamily: 'system' | 'geist'
   fontSize: number
@@ -167,8 +165,6 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   ...DEFAULT_WORKSPACE_PREFERENCES,
   agentBrowser: { agentBrowser: 'integrated', providerOverrides: {}, defaultProfileId: 'default' },
   language: 'system',
-  recapsEnabled: true,
-  recapTime: '08:00',
   accent: 'violet',
   fontFamily: 'system',
   fontSize: 14,

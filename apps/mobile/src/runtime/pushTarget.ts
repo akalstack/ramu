@@ -3,12 +3,11 @@
 export type PushRoute =
   | { kind: 'thread'; computerId: string; taskId: string }
   | { kind: 'schedules'; computerId: string }
-  | { kind: 'recaps'; computerId: string }
   | { kind: 'artifact'; computerId: string; artifactId: string }
 
 /**
- * The screen a notification opens, from the data the host sent. A push about one thread carries its `taskId`; the two that
- * are not about a thread (a scheduled run that could not start, the daily recap) carry a `target` instead. Anything from a
+ * The screen a notification opens, from the data the host sent. A push about one thread carries its `taskId`; one that is
+ * not about a thread (a scheduled run that could not start, an artifact's own notice) carries a `target` instead. Anything from a
  * host this phone is not paired with, or that is not understood, opens nothing.
  */
 export function pushTarget(data: unknown, knownComputers: readonly string[]): PushRoute | null {
@@ -16,7 +15,6 @@ export function pushTarget(data: unknown, knownComputers: readonly string[]): Pu
   const { computerId, taskId, target, artifactId } = data as Record<string, unknown>
   if (typeof computerId !== 'string' || !knownComputers.includes(computerId)) return null
   if (target === 'schedules') return { kind: 'schedules', computerId }
-  if (target === 'recaps') return { kind: 'recaps', computerId }
   if (target === 'artifact' && typeof artifactId === 'string' && /^[\w-]{1,80}$/.test(artifactId))
     return { kind: 'artifact', computerId, artifactId }
   if (typeof taskId === 'string') return { kind: 'thread', computerId, taskId }

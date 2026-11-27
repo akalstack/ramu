@@ -55,10 +55,6 @@ A schedule can start from a webhook instead of a clock. Choose **When a request 
 
 On the phone, webhook schedules can be renamed, edited, paused and run, and a webhook schedule's page lists its requests with **Replay** and **Send test**. The trigger, address and secret are set up on a computer.
 
-## Recaps
-
-[Recaps](inbox.md#learned-and-done) summarize what threads did and what is left. Inbox's Brief lists items that need a decision, and **Inbox → Done** shows the rest on each finished thread's row. Recaps use model tokens only when something changed. They are written with the background model (**Settings → Models → Models for Ramu’s own work**), or with your default model when none is chosen; at a usage limit they move to another login of that provider, then down your fallback order. A phone can get one daily "Your daily recap is ready" notification.
-
 ## Reviews and undo
 
 A changed-files summary opens the recorded diff. Add comments in **Changes** and send them with your next message. **Undo** (or **Edit → Preview restore** on a message) shows the reverse change before applying it. Conflicting files are skipped.

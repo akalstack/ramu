@@ -96,7 +96,7 @@ User-facing behavior is in the [browser guide](../guide/browser-and-computer.md#
 | `providers/` | Provider plumbing and the `ProviderAdapter` interface (`adapter.ts`) with one adapter per provider in `adapters/`: binary lookup, account environment, sign-in checks, login arguments and update plans. Also usage and usage-limit detection and `fakeAgent.ts` for simulated runs. |
 | `workspace/` | Repositories, files, Git, isolation checkouts, terminals (PTY), editorconfig, discard previews, forge adapters in `forge/`, and the platform-agnostic deploy loop in `deploy/` ([Forges and platforms](#forges-and-platforms)). |
 | `review/` | Recorded diffs, review state and stats, undo and restore with conflict checks. |
-| `memory/` | Shared memory notes, memory files, learning, recaps. |
+| `memory/` | Shared memory notes, memory files, learning. |
 | `remote/` | Pairing, devices, network listener and socket, presence announcements, mobile push, host folder browsing. |
 | `background/` | Schedules, activity, keep-awake, app update checks, notices, Resources, and threads started by agents, people and terminals. |
 | `browser/` | Host browser broker and scoped provider tools; no Electron imports. |
@@ -144,7 +144,7 @@ Host preferences and model sets live in `userData/settings.json` through `settin
 | `changes/` | The review tab for a thread's recorded changes. |
 | `workspace/` | Layout, panes, terminals, project switching, paired hosts. |
 | `sidebar/` | Projects, Explorer, Source Control and Search panels, each in its own subfolder. |
-| `inbox/` | The Inbox page (Brief, Running with Resources, Recaps, Learned, Completed), recap actions, and the cross-host Inbox. |
+| `inbox/` | The Inbox page (Brief, Running with Resources, Learned, Completed) and the cross-host Inbox. |
 | `liveView/` | Float: the live view card and the window above other apps. |
 | `summaries/` | The "What Ramu learned" card, host and notice. |
 | `palette/` | The command palette and its sources (see [UI development](ui.md#command-palette)). |

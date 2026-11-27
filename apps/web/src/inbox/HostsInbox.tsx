@@ -69,14 +69,7 @@ export function HostsInbox() {
                 )
               }
               title={task?.title}
-              // A finished thread's newest recap says what it did, where Completed lists it.
-              meta={[
-                blocker,
-                where(chat.computerId, chat.taskId),
-                model.recent.find((r) => r.computerId === chat.computerId && r.item.taskId === chat.taskId)?.item.title,
-              ]
-                .filter(Boolean)
-                .join(' · ')}
+              meta={[blocker, where(chat.computerId, chat.taskId)].filter(Boolean).join(' · ')}
               at={chat.lastActiveAt}
               disabled={!available(chat.computerId)}
               onOpen={() =>

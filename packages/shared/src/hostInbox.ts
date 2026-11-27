@@ -1,18 +1,10 @@
-import type {
-  ChatGoal,
-  LearningJob,
-  LibrarySummary,
-  RecapItem,
-  TaskPullRequest,
-  TaskStatus,
-  ThreadInputSummary,
-} from './types'
+import type { ChatGoal, LearningJob, LibrarySummary, TaskPullRequest, TaskStatus, ThreadInputSummary } from './types'
 import { waitingReviews } from '@ramu/shared/learningReviews'
 import { pullRequestNeedsReviewer, stageNeedsYou } from '@ramu/shared/pullRequests'
 import { goalContinues } from '@ramu/shared/chat/goalHold'
 import type { LowMemory } from './resources'
 
-// Shared desktop/mobile inbox: what needs you, what is running, recaps, learning, and finished work.
+// Shared desktop/mobile inbox: what needs you, what is running, learning, and finished work.
 // Keep derivation independent of rendering and apply host scope before limits or counts.
 
 export type InboxTab = 'brief' | 'running' | 'learned' | 'completed'
@@ -139,10 +131,6 @@ export const blockerTallyLine = (
 /** Threads needed before a summary line is worth showing; two rows can simply be read. */
 export const TALLY_MIN_THREADS = 3
 
-export interface InboxRecap {
-  computerId: string
-  item: RecapItem
-}
 export interface InboxSummary {
   computerId: string
   summary: LibrarySummary
@@ -166,42 +154,6 @@ export const startOfDay = (at: number) => {
   return d.getTime()
 }
 
-/** A recap item is live when open, or snoozed and the snooze has run out. */
-export function isLiveRecap(item: RecapItem, now: number) {
-  return item.status === 'open' || (item.status === 'snoozed' && (item.snoozedUntil ?? 0) <= now)
-}
-
-/**
- * Live recap items for threads that still exist, newest first, split into those that need a decision and recent ones.
- * Recent ones are "since your last visit" when updated after `visit`, otherwise earlier.
- */
-export function splitRecaps(
-  recaps: InboxRecap[],
-  chats: Pick<InboxChat, 'taskId' | 'computerId'>[],
-  visit: number,
-  now: number,
-) {
-  const live = recaps
-    .filter(
-      ({ computerId, item }) =>
-        isLiveRecap(item, now) && chats.some((chat) => chat.computerId === computerId && chat.taskId === item.taskId),
-    )
-    .sort((a, b) => b.item.updatedAt - a.item.updatedAt)
-  const attention = live.filter((r) => r.item.group === 'attention')
-  // A thread's newest recap tells its story so far; its earlier ones are history it has moved past, so each thread
-  // keeps one recent row instead of filling Recaps with every step.
-  const seen = new Set<string>()
-  const recent = live.filter((r) => {
-    if (r.item.group !== 'recent') return false
-    const thread = `${r.computerId}:${r.item.taskId}`
-    if (seen.has(thread)) return false
-    seen.add(thread)
-    return true
-  })
-  const sinceVisit = recent.filter((r) => r.item.updatedAt > visit)
-  return { attention, recent, sinceVisit, earlier: recent.filter((r) => !sinceVisit.includes(r)) }
-}
-
 export interface CompletedDay {
   label: 'today' | 'yesterday' | 'earlier'
   items: InboxChat[]
@@ -211,16 +163,12 @@ export function buildInbox(input: {
   chats: InboxChat[]
   /** Null or omitted means all hosts. Filter before limits and counts are calculated. */
   computerId?: string | null
-  recaps: InboxRecap[]
   summaries: InboxSummary[]
   /** Learning reviews; those waiting for Apply lead Learned and count toward its tab. */
   reviews?: InboxReview[]
-  /** Recaps are only shown when the computer has them turned on. */
-  recapsEnabled?: (computerId: string) => boolean
   /** A failure the person already opened on this device no longer asks for them. */
   failureSeen?: (chat: InboxChat) => boolean
   lowMemory?: InboxLowMemory[]
-  visit?: number
   now?: number
 }) {
   const now = input.now ?? Date.now()
@@ -265,18 +213,6 @@ export function buildInbox(input: {
     )
     .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
   const lowMemory = (input.lowMemory ?? []).filter((entry) => inScope(entry.computerId))
-  const enabled = input.recapsEnabled ?? (() => true)
-  // A thread still working, or already asking for something, is followed live: its recap waits until it settles,
-  // so one busy thread does not fill the Brief with decisions the work is still overtaking.
-  const busy = new Set([...waiting, ...running].map((chat) => `${chat.computerId}:${chat.taskId}`))
-  const recaps = splitRecaps(
-    input.recaps.filter(
-      (r) => inScope(r.computerId) && enabled(r.computerId) && !busy.has(`${r.computerId}:${r.item.taskId}`),
-    ),
-    live,
-    input.visit ?? 0,
-    now,
-  )
   const summaries = input.summaries
     .filter((s) => inScope(s.computerId) && s.summary.status !== 'dismissed')
     .sort((a, b) => b.summary.periodEnd - a.summary.periodEnd)
@@ -315,7 +251,6 @@ export function buildInbox(input: {
     pullRequests,
     lowMemory,
     running,
-    ...recaps,
     summaries,
     unreadSummaries,
     learningReviews,
@@ -325,22 +260,17 @@ export function buildInbox(input: {
     days,
     /**
      * What the badge counts: each thread that needs you once, whatever the reasons (waiting, a failure not yet looked
-     * at, a pull request, recaps that need a decision), and each low host.
+     * at, a pull request), and each low host.
      */
     needsYou:
-      new Set(
-        [...waiting, ...failed, ...pullRequests]
-          .map((chat) => `${chat.computerId}:${chat.taskId}`)
-          .concat(recaps.attention.map((r) => `${r.computerId}:${r.item.taskId}`)),
-      ).size + lowMemory.length,
+      new Set([...waiting, ...failed, ...pullRequests].map((chat) => `${chat.computerId}:${chat.taskId}`)).size +
+      lowMemory.length,
     empty:
       !waiting.length &&
       !failed.length &&
       !pullRequests.length &&
       !lowMemory.length &&
       !running.length &&
-      !recaps.attention.length &&
-      !recaps.sinceVisit.length &&
       !summaries.length &&
       !learningReviews.length &&
       !completed.length,
@@ -359,16 +289,11 @@ export type BriefRow = (
   | { kind: 'pull-request'; chat: InboxChat }
   | { kind: 'blocker'; chat: InboxChat; blocker: InboxBlocker }
   | { kind: 'low-memory'; memory: InboxLowMemory }
-  | { kind: 'recap'; recap: InboxRecap }
 ) & { more?: number }
 
 /** The thread a Brief row is about, so one thread takes one row. */
 const briefThread = (row: BriefRow): string | null =>
-  row.kind === 'low-memory'
-    ? null
-    : row.kind === 'recap'
-      ? `${row.recap.computerId}:${row.recap.item.taskId}`
-      : `${row.chat.computerId}:${row.chat.taskId}`
+  row.kind === 'low-memory' ? null : `${row.chat.computerId}:${row.chat.taskId}`
 
 /** Rows the Brief shows before **See all**, so the first screen always holds what matters most. */
 export const BRIEF_ROWS = 5
@@ -376,18 +301,10 @@ export const BRIEF_ROWS = 5
 const blockerRank = (kind: InboxBlockerKind) =>
   kind === 'approval' || kind === 'connector' || kind === 'question' ? 0 : 2
 const briefRank = (row: BriefRow) =>
-  row.kind === 'blocker'
-    ? blockerRank(row.blocker.kind)
-    : row.kind === 'failure' || row.kind === 'pull-request'
-      ? 1
-      : row.kind === 'low-memory'
-        ? 3
-        : 4
+  row.kind === 'blocker' ? blockerRank(row.blocker.kind) : row.kind === 'failure' || row.kind === 'pull-request' ? 1 : 3
 
-/** What needs the person now: requests, then failures and pull requests, then limits and paused goals, then recaps needing a decision. */
-export function briefRows(
-  model: Pick<InboxModel, 'waiting' | 'failed' | 'pullRequests' | 'attention' | 'lowMemory'>,
-): BriefRow[] {
+/** What needs the person now: requests, then failures and pull requests, then limits and paused goals, then a host low on memory. */
+export function briefRows(model: Pick<InboxModel, 'waiting' | 'failed' | 'pullRequests' | 'lowMemory'>): BriefRow[] {
   const rows: BriefRow[] = [
     ...model.waiting.flatMap((chat): BriefRow[] => {
       const blocker = inboxBlocker(chat)
@@ -396,10 +313,9 @@ export function briefRows(
     ...model.failed.map((chat): BriefRow => ({ kind: 'failure', chat })),
     ...model.pullRequests.map((chat): BriefRow => ({ kind: 'pull-request', chat })),
     ...model.lowMemory.map((memory): BriefRow => ({ kind: 'low-memory', memory })),
-    ...model.attention.map((recap): BriefRow => ({ kind: 'recap', recap })),
   ]
   // Array sorting is stable, so each kind keeps its newest-first order. Each thread then keeps only its most urgent
-  // row, which counts the rest, so a thread with an approval, a failure and recaps reads as one thing to do.
+  // row, which counts the rest, so a thread with an approval and a failure reads as one thing to do.
   const shown = new Map<string, BriefRow>()
   return rows
     .sort((a, b) => briefRank(a) - briefRank(b))
@@ -420,7 +336,7 @@ export function briefRows(
 /** How serious a Brief row is, and which mark it carries, so desktop and phone draw the same row the same way. */
 export type BriefTone = 'bad' | 'warn' | 'neutral'
 export type BriefMark =
-  'failed' | 'conflicts' | 'pull-request' | 'approval' | 'question' | 'connector' | 'goal' | 'memory' | 'recap'
+  'failed' | 'conflicts' | 'pull-request' | 'approval' | 'question' | 'connector' | 'goal' | 'memory'
 
 export function briefRowLook(row: BriefRow): { mark: BriefMark; tone: BriefTone } {
   switch (row.kind) {
@@ -432,8 +348,6 @@ export function briefRowLook(row: BriefRow): { mark: BriefMark; tone: BriefTone 
         : { mark: 'pull-request', tone: 'warn' }
     case 'low-memory':
       return { mark: 'memory', tone: 'warn' }
-    case 'recap':
-      return { mark: 'recap', tone: 'neutral' }
     case 'blocker':
       switch (row.blocker.kind) {
         case 'approval':
@@ -448,8 +362,7 @@ export function briefRowLook(row: BriefRow): { mark: BriefMark; tone: BriefTone 
   }
 }
 
-export const briefRowHost = (row: BriefRow) =>
-  row.kind === 'recap' ? row.recap.computerId : row.kind === 'low-memory' ? row.memory.computerId : row.chat.computerId
+export const briefRowHost = (row: BriefRow) => (row.kind === 'low-memory' ? row.memory.computerId : row.chat.computerId)
 
 /** Threads finished since the last visit, for Home's and the Brief's one summary line. */
 export const finishedSince = (model: Pick<InboxModel, 'completed'>, visit: number) =>

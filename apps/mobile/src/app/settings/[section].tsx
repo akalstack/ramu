@@ -235,7 +235,6 @@ function Notifications({ host, name }: { host: ReturnType<typeof useHostSettings
     failed: [t.alertFailed, t.alertFailedHelp],
     done: [t.alertDone, t.alertDoneHelp],
     scheduled: [t.alertScheduled, t.alertScheduledHelp],
-    digest: [t.alertDigest, t.alertDigestHelp],
     artifacts: [say('Artifacts'), say('Notifications from artifacts you allowed to notify, in their own words.')],
   }
   return (

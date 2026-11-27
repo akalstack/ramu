@@ -17,7 +17,6 @@ describe('onboarding token choices', () => {
     const next = applyTokenChoices(DEFAULT_APP_PREFERENCES, FEWEST_TOKENS)
     expect(next.intelligence).toMatchObject({ toolSearch: true, crossThreadRecall: false, learning: 'off' })
     expect(next.goals.mode).toBe('manual')
-    expect(next.recapsEnabled).toBe(false)
     expect(next.goals.maxTurns).toBe(DEFAULT_APP_PREFERENCES.goals.maxTurns)
   })
 

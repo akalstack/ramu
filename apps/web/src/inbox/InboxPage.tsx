@@ -5,10 +5,8 @@ import { useComputers } from '../workspace/computers'
 import { HostsInbox } from './HostsInbox'
 import { useEffect, useState } from 'react'
 import { useWorkspace } from '../workspace/workspace'
-import { DateTime } from 'luxon'
-import { Inbox, Loader, RefreshCw, Sparkles } from 'lucide-react'
+import { Inbox, Loader, Sparkles } from 'lucide-react'
 import type { LibrarySummary } from '@ramu/shared/types'
-import { Button } from '@/components/desktop-button'
 import { Tabs, TabsContent } from '@/components/ui/tabs'
 import { InboxEmpty, InboxList, InboxMark, InboxRow, InboxTabsList, byDay } from './InboxParts'
 import { t, useLanguage } from '../i18n'
@@ -16,7 +14,6 @@ import { AgentList, recentlyCompleted, rowsOf, useAgentOverview } from '../HomeA
 import { FeedSection } from '../HomeSection'
 import { useSummaries } from '../summaries/useSummaries'
 import { openSummary } from '../summaries/openSummary'
-import { useRecaps } from './recaps'
 import { timeAgo } from '../Menu'
 import { StateDot } from '../sidebar/projects/TaskStateIcon'
 import type { InboxTab } from '@ramu/shared/hostInbox'
@@ -63,8 +60,8 @@ function LearnedList({ summaries }: { summaries: LibrarySummary[] }) {
 const LEARNED_MAX = 20
 
 /**
- * Everything agents, recaps and learning have for you: the Brief of what needs you, what is running, recaps, what
- * Ramu learned and finished work, one tab each.
+ * Everything agents and learning have for you: the Brief of what needs you, what is running, what Ramu learned and
+ * finished work, one tab each.
  */
 export function InboxPage() {
   const computers = useComputers()
@@ -77,7 +74,6 @@ function CurrentHostInbox() {
   const host = useHost()
   const reviews = useLearningReviews([host.id])
   const { model } = useInboxModel({ reviews })
-  const recaps = useRecaps()
   const { snapshot } = useSummaries()
   const [tab, setTab] = useState<InboxTab>(savedInboxTab)
   useEffect(() => {
@@ -157,49 +153,10 @@ function CurrentHostInbox() {
           <TabsContent value="completed" className="flex flex-col gap-6">
             {tab === 'completed' && (
               <>
-                {/* Recaps live on the threads they are about: each finished thread's row says what it did, and the
-                    daily recap's state and refresh sit here. Decisions a recap asks for are in the Brief. */}
-                {recaps.enabled && (
-                  <div className="flex items-center gap-2 text-caption text-muted-foreground">
-                    <span>
-                      {recaps.recap?.generating
-                        ? recaps.recap.generatedAt
-                          ? t('Updating recap…')
-                          : t('Preparing your first recap')
-                        : recaps.recap?.generatedAt
-                          ? t('Daily recap updated {0}', {
-                              '0': DateTime.fromMillis(recaps.recap.generatedAt).toRelative(),
-                            })
-                          : ''}
-                    </span>
-                    {recaps.recap?.generatedAt || recaps.recap?.generating ? (
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        className="text-muted-foreground"
-                        aria-label={t('Refresh recap')}
-                        disabled={recaps.recap?.generating}
-                        onClick={() => void recaps.refresh()}
-                      >
-                        <RefreshCw size={13} />
-                      </Button>
-                    ) : (
-                      <Button variant="secondary" size="xs" onClick={() => void recaps.refresh()}>
-                        <RefreshCw size={12} />
-                        {t('Make the first recap')}
-                      </Button>
-                    )}
-                  </div>
-                )}
-                {recaps.recap?.error && (
-                  <p className="text-bad small text-caption" role="alert">
-                    {recaps.recap.error}
-                  </p>
-                )}
                 <ShipActivityList />
                 {days.map((day) => (
                   <FeedSection key={day.label} title={day.label} count={day.items.length}>
-                    <AgentList items={day.items} recapOf={recaps.recapOf} />
+                    <AgentList items={day.items} />
                   </FeedSection>
                 ))}
                 {completed.length > 0 ? (

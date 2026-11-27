@@ -43,7 +43,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Hide from screen sharing': 'Sembunyikan dari berbagi layar',
   'Changes apply to the connected host. Offline hosts keep their settings.':
     'Perubahan berlaku untuk host yang terhubung. Host offline tetap memakai pengaturannya.',
-  'Make the first recap': 'Buat recap pertama',
   Float: 'Mengambang',
   'Float: keep a live view in the corner': 'Mengambang: tampilan langsung di sudut',
   'Live view': 'Tampilan langsung',
@@ -310,8 +309,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   '{0} need you': '{0} perlu tindakanmu',
   '{0} finished': '{0} selesai',
   '{0} finished since your last visit.': '{0} selesai sejak kunjungan terakhirmu.',
-  'Questions, approvals, failures and recaps that need a decision show up here.':
-    'Pertanyaan, persetujuan, kegagalan, dan recap yang perlu keputusan muncul di sini.',
+  'Questions, approvals and failures show up here.': 'Pertanyaan, persetujuan, dan kegagalan muncul di sini.',
   'Choose models': 'Pilih model',
   '{0} of {1} listed in model pickers': '{0} dari {1} tampil di pemilih model',
   '{0} models': 'Model {0}',
@@ -869,8 +867,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Continue goals automatically': 'Lanjutkan tujuan otomatis',
   'When a thread has a goal, the agent keeps going until it is met, up to a turn limit.':
     'Jika thread punya tujuan, agent terus bekerja sampai tujuan tercapai, hingga batas giliran.',
-  'Home shows a written summary of recent threads and unfinished work.':
-    'Beranda menampilkan ringkasan tertulis thread terbaru dan pekerjaan yang belum selesai.',
   'Copy diagram source': 'Salin sumber diagram',
   'Mermaid diagram': 'Diagram Mermaid',
   'The diagram renderer did not load.': 'Penampil diagram gagal dimuat.',
@@ -996,7 +992,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Downloading app update': 'Mengunduh pembaruan aplikasi',
   'Maintaining memories': 'Merapikan memori',
   'Learning skills': 'Mempelajari skill',
-  'Generating recaps': 'Membuat rangkuman',
   'Fetching repositories': 'Mengambil pembaruan repositori',
   'Pulling repository updates': 'Menarik pembaruan repositori',
   'Pushing repository changes': 'Mengirim perubahan repositori',
@@ -1039,8 +1034,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Lanjutkan thread yang belum selesai saat layanan restart. Thread yang dihentikan atau selesai tetap berhenti.',
   'Send the active file or selection with each message, plus the paths of other open tabs. Unsaved edits are included.':
     'Kirim file atau seleksi aktif di setiap pesan, beserta path tab lain yang terbuka. Perubahan yang belum disimpan ikut dikirim.',
-  'Show recent threads and unfinished work on Home. Uses model tokens to write the summary.':
-    'Tampilkan thread terbaru dan pekerjaan yang belum selesai di Beranda. Memakai token model untuk menulis ringkasan.',
   'Stop the host sleeping from idle while the service runs. The display can still turn off.':
     'Cegah host tidur saat idle selama layanan berjalan. Layar tetap bisa mati.',
   'Applies to project notes that were never used. Notes you wrote and essential memories are kept.':
@@ -1072,8 +1065,8 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Setelah thread, cari catatan penting dan skill yang bisa dipakai ulang. Memakai token model saat idle.',
   'Any number from 1 to 1000.': 'Angka apa pun dari 1 sampai 1000.',
   'Ask me first': 'Tanya dulu',
-  'Writes daily recaps, learning reviews and memory cleanup. A cheaper model keeps token use low.':
-    'Menulis rekap harian, tinjauan pembelajaran dan pembersihan memori. Model yang lebih hemat menjaga pemakaian token tetap rendah.',
+  'Writes learning reviews and memory cleanup. A cheaper model keeps token use low.':
+    'Menulis tinjauan pembelajaran dan pembersihan memori. Model yang lebih hemat menjaga pemakaian token tetap rendah.',
   'Models for Ramu’s own work': 'Model untuk pekerjaan Ramu sendiri',
   'Aside model': 'Model sampingan',
   'Continue in a new thread': 'Lanjutkan di thread baru',
@@ -1165,9 +1158,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Buat preset model dan effort untuk bilah pilihan thread.',
   'Let Claude continue other work when a command exceeds this delay. Choose Off to move commands to the background manually.':
     'Claude tetap bekerja saat perintah berjalan lebih lama dari ini. Pilih Nonaktif untuk memindahkan perintah ke latar belakang sendiri.',
-  'Create the recap at this time in your system timezone.': 'Buat rekap pada jam ini sesuai zona waktu sistem kamu.',
-  'Show a daily summary of recent threads and unfinished work on Home. Generating recaps uses model tokens.':
-    'Tampilkan ringkasan harian thread terbaru dan pekerjaan yang belum selesai di Beranda. Memakai token model.',
   'Steer sends your message after the current tools finish. Queue waits until the agent finishes its turn. Cmd/Ctrl+Enter switches between these actions.':
     'Steer mengirim pesanmu setelah tool yang berjalan selesai. Queue menunggu sampai giliran selesai. Cmd/Ctrl+Enter memakai yang satunya.',
   'Choose where the terminal panel opens. Checkouts with a saved terminal position keep that choice.':
@@ -1437,7 +1427,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Pilih terang atau gelap, atau ikuti perangkat. Disimpan hanya di perangkat ini.',
   'Match device': 'Ikuti perangkat',
   Dark: 'Gelap',
-  'Background & Recaps': 'Latar belakang & rekap',
   'Editor & Terminal': 'Editor & Terminal',
   Models: 'Model',
   Providers: 'Provider',
@@ -2611,9 +2600,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'After 5 minutes': 'Setelah 5 menit',
   Off: 'Mati',
   'Let the agent carry on while this keeps running': 'Agent bisa lanjut bekerja selama ini berjalan',
-  'Daily recaps': 'Ringkasan harian',
-  'Generate daily at': 'Buat setiap hari pukul',
-  'When the daily recap is written, using your system timezone.': 'Mengikuti zona waktu sistem.',
   'Background service': 'Layanan latar belakang',
   'Background service running': 'Layanan latar belakang berjalan',
   'Background service stopped': 'Layanan latar belakang berhenti',
@@ -2761,17 +2747,11 @@ export const indonesian: Readonly<Record<string, string>> = {
   '{0} → {1} tokens': '{0} → {1} token',
   'Resume where it stopped': 'Lanjutkan dari terakhir berhenti',
   'Let an agent handle it later': 'Biar agent kerjakan nanti',
-  'Preparing your first recap': 'Menyiapkan ringkasan pertamamu',
   'Since your last visit': 'Sejak kunjungan terakhirmu',
-  'Updating recap…': 'Memperbarui ringkasan…',
-  'Open your daily recap': 'Buka ringkasan harianmu',
-  'Refresh recap': 'Perbarui ringkasan',
-  Snooze: 'Tunda',
   'In 3 hours': '3 jam lagi',
   Tomorrow: 'Besok',
   'Next week': 'Minggu depan',
   'Marked done': 'Ditandai selesai',
-  Snoozed: 'Ditunda',
   'Mark done': 'Tandai selesai',
   Report: 'Laporan',
   'New schedules use your system timezone. Saved schedules keep their original timezone.':
@@ -3090,7 +3070,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Context window: {0} of {1} tokens used{2}': 'Konteks: {0} dari {1} token terpakai{2}',
   'Context {0}% full': 'Konteks terisi {0}%',
   'Copy {0} command': 'Salin perintah {0}',
-  'Daily recap updated {0}': 'Ringkasan harian diperbarui {0}',
   'Delete {0}': 'Hapus {0}',
   'Delete “{0}”?': 'Hapus “{0}”?',
   'Detached at {0}': 'Detached di {0}',
@@ -3381,28 +3360,17 @@ export const indonesian: Readonly<Record<string, string>> = {
   '1 sub-agent': '1 sub-agent',
   All: 'Semua',
   'See all': 'Lihat semua',
-  '{0} new recaps': '{0} ringkasan baru',
   'You are all caught up': 'Semua sudah beres',
-  'Threads, recaps and what Ramu learns appear here as you work.':
-    'Thread, ringkasan, dan hal yang Ramu pelajari muncul di sini saat kamu bekerja.',
   Inbox: 'Inbox',
   'Show inbox': 'Tampilkan inbox',
   'Open inbox': 'Buka inbox',
   Waiting: 'Menunggu',
-  Recaps: 'Ringkasan',
   Learned: 'Dipelajari',
   Completed: 'Selesai',
   Earlier: 'Sebelumnya',
-  'Questions, approvals and recaps that need a decision appear here.':
-    'Pertanyaan, persetujuan, dan ringkasan yang butuh keputusanmu muncul di sini.',
   'No agents running': 'Tidak ada agent yang berjalan',
   'Threads and sub-agents that are working or waiting on a usage limit appear here.':
     'Thread dan sub-agent yang sedang bekerja atau menunggu batas pemakaian muncul di sini.',
-  'No recaps yet': 'Belum ada ringkasan',
-  'A daily recap shows what your threads did and what is left.':
-    'Ringkasan harian menunjukkan apa yang dikerjakan thread-mu dan apa yang tersisa.',
-  'Daily recaps are off. Turn them on in Settings → Background & Recaps.':
-    'Ringkasan harian nonaktif. Aktifkan di Pengaturan → Aktivitas & ringkasan.',
   'No summaries yet': 'Belum ada ringkasan pembelajaran',
   'Ramu summarizes the memories and skills it saves from your threads.':
     'Ramu merangkum memori dan skill yang ia simpan dari thread-mu.',
@@ -7754,7 +7722,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Stop the host sleeping from idle while the service runs. Display sleep and manual sleep still work.':
     'Cegah host tidur karena diam selama layanan berjalan. Layar tidur dan tidur manual tetap berfungsi.',
   'Plugged in only': 'Hanya saat terhubung ke listrik',
-  'Create the recap at this time in the host’s timezone.': 'Buat rekap pada jam ini sesuai zona waktu host.',
   'Look for new Ramu releases on the host.': 'Cari rilis Ramu baru di host.',
   'Install updates automatically': 'Pasang pembaruan otomatis',
   'Download and install new Ramu releases on the host when they are found.':

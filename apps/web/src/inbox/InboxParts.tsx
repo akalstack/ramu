@@ -6,7 +6,6 @@ import {
   KeyRound,
   MemoryStick,
   MessageCircleQuestion,
-  Newspaper,
   ShieldCheck,
   Target,
 } from 'lucide-react'
@@ -96,7 +95,6 @@ const MARK: Record<BriefMark, typeof CircleAlert> = {
   connector: KeyRound,
   goal: Target,
   memory: MemoryStick,
-  recap: Newspaper,
 }
 const TONE: Record<BriefTone, string> = {
   bad: 'bg-(--bad-wash) text-bad',
@@ -151,7 +149,6 @@ export function InboxRow({
   mark,
   title,
   meta,
-  wrapMeta = false,
   at,
   trailing,
   onOpen,
@@ -165,8 +162,6 @@ export function InboxRow({
   mark: ReactNode
   title: ReactNode
   meta?: ReactNode
-  /** Let the details run to two lines, for rows whose details are a sentence (recaps). */
-  wrapMeta?: boolean
   /** When it last changed; shown as its age unless `trailing` replaces it. */
   at?: number
   trailing?: ReactNode
@@ -186,13 +181,7 @@ export function InboxRow({
       {mark}
       <span className="min-w-0 flex-1">
         <span className="block truncate font-medium text-foreground">{title}</span>
-        {meta && (
-          <span
-            className={`block text-caption text-muted-foreground ${wrapMeta ? 'line-clamp-2 leading-[1.45]' : 'truncate'}`}
-          >
-            {meta}
-          </span>
-        )}
+        {meta && <span className="block truncate text-caption text-muted-foreground">{meta}</span>}
       </span>
       {trailing ?? (
         <span className="min-w-6 flex-none text-right text-caption text-muted-foreground tabular-nums">

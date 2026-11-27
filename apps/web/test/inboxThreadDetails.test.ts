@@ -36,7 +36,7 @@ vi.mock('../src/inbox/Brief', () => ({ Brief: () => null, blockerLabel: () => ''
 vi.mock('../src/inbox/LearningReviews', () => ({ LearningReviewList: () => null }))
 vi.mock('../src/learning/learningQueries', () => ({ useLearningReviews: () => [] }))
 vi.mock('../src/inbox/failureSeen', () => ({ useFailureSeen: () => () => false }))
-vi.mock('../src/inbox/recaps', () => ({ notifyRecapAction: vi.fn() }))
+vi.mock('../src/inbox/lastVisit', () => ({ lastVisit: () => 0 }))
 vi.mock('../src/chat/Notifications', () => ({ notifyError: vi.fn() }))
 vi.mock('../src/inbox/navigation', () => ({ savedInboxTab: () => 'running', saveInboxTab: vi.fn() }))
 
@@ -65,7 +65,6 @@ beforeEach(() => {
     data: {
       projects: [],
       agents: [],
-      recaps: [],
       summaries: [],
       errors: [],
       tasks: [

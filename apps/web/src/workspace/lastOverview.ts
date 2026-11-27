@@ -14,7 +14,6 @@ export function readLastOverview(id: string): HostOverview | undefined {
           tasks: saved.tasks,
           projects: saved.projects,
           agents: saved.agents ?? [],
-          recaps: saved.recaps ?? [],
           summaries: saved.summaries ?? [],
           errors: [],
         }

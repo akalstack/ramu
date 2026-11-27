@@ -5,8 +5,8 @@ import { WebhookSetup } from '../../background/webhookSetup'
 import { id } from '../schemas'
 import type { RegisterHandlers } from '../types'
 
-/** Schedules and the daily recaps. */
-export const registerScheduleHandlers: RegisterHandlers = ({ schedules, recaps, workspace }) => {
+/** Schedules. */
+export const registerScheduleHandlers: RegisterHandlers = ({ schedules, workspace }) => {
   const setup = new WebhookSetup(schedules, workspace)
   return {
     'schedules.list': { args: z.tuple([]), run: () => schedules.list() },
@@ -63,12 +63,10 @@ export const registerScheduleHandlers: RegisterHandlers = ({ schedules, recaps, 
       args: z.tuple([id, z.string().trim().min(8).max(500).nullable()]),
       run: (scheduleId: string, secret: string | null) => schedules.setWebhookSecret(scheduleId, secret),
     },
-    'recaps.get': { args: z.tuple([]), run: () => recaps.snapshot() },
-    'recaps.refresh': { args: z.tuple([]), run: () => recaps.refresh() },
-    'recaps.act': {
-      args: z.tuple([id, z.enum(['open', 'done', 'dismissed', 'snoozed']), z.number().int().positive().optional()]),
-      run: (itemId: string, action: 'open' | 'done' | 'dismissed' | 'snoozed', until?: number) =>
-        recaps.act(itemId, action, until),
+    // Apps released with daily recaps still ask for them on every overview; an empty answer keeps theirs working.
+    'recaps.get': {
+      args: z.tuple([]),
+      run: () => ({ items: [], generatedAt: null, generating: false as const, error: null }),
     },
   }
 }

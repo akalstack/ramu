@@ -19,7 +19,6 @@ it('defaults automatic pull on, persists opt-out, and skips active agent writers
         getBinding: () => ({ cwd: '/tmp/checkout', folderOnly: false }),
         getRepository: () => ({ root: '/tmp/checkout' }),
       },
-      recaps: { settingsChanged: () => {} },
       agents: { activeWriter, invalidateCatalog: () => {}, goalsSettingsChanged: () => {} },
     } as unknown as Services,
   )

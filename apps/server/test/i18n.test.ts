@@ -56,7 +56,6 @@ describe('app languages', () => {
           saved = value
         },
       },
-      recaps: { settingsChanged: () => {} },
       providers: { settingsChanged: () => {} },
       agents: { invalidateCatalog: () => {}, goalsSettingsChanged: () => {} },
     } as unknown as Services)

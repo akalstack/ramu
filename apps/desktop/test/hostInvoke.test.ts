@@ -155,7 +155,7 @@ describe('push event host', () => {
   it('maps thread and project changes to the activity events that refresh overviews', () => {
     expect(activityChannel('tasks.rename')).toBe('workspace:changed')
     expect(activityChannel('projects.add')).toBe('workspace:changed')
-    expect(activityChannel('recaps.act')).toBe('automation:changed')
+    expect(activityChannel('schedules.save')).toBe('automation:changed')
     expect(activityChannel('git.status')).toBeNull()
   })
 })

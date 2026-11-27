@@ -157,11 +157,6 @@ export const appPreferences = z.object({
   worktreeBranchInstructions: z.string().max(2000).default(''),
   intelligence: intelligenceSchema.default(() => intelligenceSchema.parse({})),
   language: z.enum(['system', 'en', 'id']).default('system'),
-  recapsEnabled: z.boolean().default(true),
-  recapTime: z
-    .string()
-    .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
-    .default('08:00'),
   accent: z.enum(['blue', 'violet', 'teal']).default(DEFAULT_APP_PREFERENCES.accent),
   fontFamily: z.enum(['system', 'geist']).default(DEFAULT_APP_PREFERENCES.fontFamily),
   fontSize: z.number().int().min(12).max(18).default(DEFAULT_APP_PREFERENCES.fontSize),

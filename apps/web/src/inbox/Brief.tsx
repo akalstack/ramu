@@ -59,7 +59,7 @@ interface RowContent {
   sessionId?: string | null
   /** The request Open scrolls to, in `sessionId`. */
   requestId?: string
-  /** The place in `sessionId`'s transcript Open scrolls to, such as the turn a recap is about. */
+  /** The place in `sessionId`'s transcript Open scrolls to, when the row is about one turn. */
   sourceSeq?: number
   /** A pull request whose next step is yours opens in its own review, not in the thread. */
   pullRequest?: { url: string; closed: boolean; askReviewers: boolean }
@@ -95,7 +95,7 @@ function BriefRowView({
       .then(onDone, (error) => notifyError(errorText(error)))
       .finally(() => setBusy(false))
   }
-  // A row opens where its next step is: the request, the pull request's review, or the turn a recap is about. A failure
+  // A row opens where its next step is: the request or the pull request's review. A failure
   // opens its thread, which ends on the error with Retry beside it.
   const open = () =>
     content.pullRequest && hostId === activeHost
@@ -144,15 +144,6 @@ function BriefRowView({
         {t('Stop idle')}
       </Button>
     )
-  ) : row.kind === 'recap' ? (
-    <Button
-      variant="ghost"
-      size="xs"
-      disabled={disabled}
-      onClick={() => run(() => invoke('recaps.act', row.recap.item.id, 'done'))}
-    >
-      {t('Mark done')}
-    </Button>
   ) : row.kind === 'pull-request' && row.chat.pullRequest?.prepared ? (
     // Drafts are checked where they are, never sent from here unseen.
     <Button size="xs" disabled={!online} onClick={open}>
@@ -243,17 +234,6 @@ export function Brief() {
           : t('{0} GB free', { 0: gigabytes(low.availableBytes) }),
       }
     }
-    if (row.kind === 'recap') {
-      const { item } = row.recap
-      return {
-        taskId: item.taskId,
-        sessionId: item.sessionId,
-        sourceSeq: item.sourceSeq,
-        title: item.title,
-        detail: item.detail,
-        at: item.updatedAt,
-      }
-    }
     const title = task(row.chat.computerId, row.chat.taskId)?.title ?? ''
     const base = { taskId: row.chat.taskId, sessionId: row.chat.sessionId, title, at: row.chat.lastActiveAt }
     if (row.kind === 'failure') return { ...base, detail: t('Failed') }
@@ -275,11 +255,7 @@ export function Brief() {
   }
   const refetch = (hostId: string) => () => void hosts.find((entry) => entry.id === hostId)?.refetch()
   const keyOf = (row: BriefRow) =>
-    JSON.stringify([
-      briefRowHost(row),
-      row.kind,
-      row.kind === 'recap' ? row.recap.item.id : row.kind === 'low-memory' ? '' : row.chat.taskId,
-    ])
+    JSON.stringify([briefRowHost(row), row.kind, row.kind === 'low-memory' ? '' : row.chat.taskId])
   return (
     <div className="flex flex-col gap-5">
       {rows.length > 0 ? (
@@ -303,11 +279,7 @@ export function Brief() {
                   <BriefRowView
                     row={row}
                     content={content(row)}
-                    where={
-                      row.kind === 'low-memory'
-                        ? ''
-                        : where(hostId, row.kind === 'recap' ? row.recap.item.taskId : row.chat.taskId)
-                    }
+                    where={row.kind === 'low-memory' ? '' : where(hostId, row.chat.taskId)}
                     online={pc(hostId)?.status === 'connected'}
                     onDone={refetch(hostId)}
                   />
@@ -337,7 +309,7 @@ export function Brief() {
             <EmptyDescription>
               {finished
                 ? t('{0} finished since your last visit.', { 0: finished })
-                : t('Questions, approvals, failures and recaps that need a decision show up here.')}
+                : t('Questions, approvals and failures show up here.')}
             </EmptyDescription>
           </EmptyHeader>
         </Empty>

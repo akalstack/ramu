@@ -38,9 +38,8 @@ The Brief lists what needs you, most urgent first, without a model call:
 2. Failed threads you haven't opened
 3. Usage limits and paused goals
 4. A host low on memory
-5. Recaps that need a decision
 
-The usual next step is one tap: **Allow once** for an approval, an option for a single-choice question, **Retry** or **Mark done** for a failure, **Stop idle** for a host low on memory. Other questions expand in place. Each thread takes one row, its most urgent reason, with **+N more** for the rest. Opening a row goes where its next step is: an approval or question opens the session that asked (a helper's own included), scrolled to the request; a pull request opens its review; a recap's decision opens the thread at the turn it is about (on desktop); a failure opens its thread, which ends on the error. A thread still working, or already asking for something, holds its recaps until it settles. Five rows show, then **See all**. Viewer devices see rows without buttons. When what lets a thread continue is up to you, such as resuming a goal at its turn limit, its hover card says so.
+The usual next step is one tap: **Allow once** for an approval, an option for a single-choice question, **Retry** or **Mark done** for a failure, **Stop idle** for a host low on memory. Other questions expand in place. Each thread takes one row, its most urgent reason, with **+N more** for the rest. Opening a row goes where its next step is: an approval or question opens the session that asked (a helper's own included), scrolled to the request; a pull request opens its review; a failure opens its thread, which ends on the error. Five rows show, then **See all**. Viewer devices see rows without buttons. When what lets a thread continue is up to you, such as resuming a goal at its turn limit, its hover card says so.
 
 A paired phone gets a push when a thread finishes, stops with an error or needs you, except about a thread you are looking at: open on the phone with Ramu in front, or on screen in a focused desktop window. While you are using the desktop app (its window in front, and a key or the pointer touched in the last two minutes), the phone gets no push from that host at all: the app's own notifications show what happened. Opening a thread on the phone also clears its pushes from the notification list.
 
@@ -59,12 +58,12 @@ Deployed apps reach you as notifications, not Brief rows. A live address that st
 
 Expand a thread to see its agent, terminals, commands, test devices and servers, each with **Stop**. A command still alive under finished work reads **Still running**. Figures are approximate and are read only while the tab is open. Ramu never stops work by itself.
 
-On the phone, the host's own work (such as learning or recaps being generated) is listed under **On the computer**, with **Stop** for work that can be stopped safely.
+On the phone, the host's own work (such as learning or memory cleanup) is listed under **On the computer**, with **Stop** for work that can be stopped safely.
 
 ### Learned and Done
 
 - **Learned** lists "What Ramu learned" summaries ([Learning](memory-and-learning.md)).
-- **Done** shows threads finished in the last 7 days. A recap summarizes what each did, on its row, and the daily recap's state and refresh sit at the top. A recap that asks for a decision is in the Brief, with **Mark done**.
+- **Done** shows threads finished in the last 7 days.
 - **Done for you**, at the top of **Done**, lists what [shipping](git-hosting.md#shipping-a-change) did without asking in the last week, such as "Fixed failing checks on #42" or "Replied to reviewers on #42". A row opens its thread. **Undo** on a fix pushes a commit that reverts it and tells the thread not to push it again. It works while nothing came after the fix on the branch and the checkout has no uncommitted changes; otherwise undo it from the thread. **Undo** on replies deletes the replies Ramu posted; the fixes stay pushed.
 
 Nothing needs clearing. Rows leave as you answer or finish them.

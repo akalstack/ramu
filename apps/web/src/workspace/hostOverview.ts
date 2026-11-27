@@ -76,7 +76,6 @@ export function useHostOverviews(ids: string[], live: (id: string) => boolean = 
 export function rememberHostRows(id: string, rows: { tasks: Task[]; projects: Project[] }) {
   queryClient.setQueryData<HostOverview>(overviewKey(id), (previous) => ({
     agents: [],
-    recaps: [],
     summaries: [],
     errors: [],
     ...previous,

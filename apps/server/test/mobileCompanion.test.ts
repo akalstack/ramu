@@ -68,7 +68,7 @@ it('push respects each phone category switches and treats scheduled threads as t
     JSON.parse(readFileSync(join(dir, 'push.json'), 'utf8')).find((r: any) => r.deviceId === 'b').categories,
   ).toEqual(['input', 'failed'])
 })
-it('scheduled runs that never got a thread and the daily digest are generic, and the digest is opt-in', async () => {
+it('a scheduled run that never got a thread is generic, and a category an older phone lists is ignored', async () => {
   dir = mkdtempSync(join(tmpdir(), 'ramu-phone-push-'))
   const sent: { to: string; body: string; data: Record<string, unknown> }[] = []
   const request = vi.fn(async (_url: string | URL | Request, options?: RequestInit) => {
@@ -76,26 +76,22 @@ it('scheduled runs that never got a thread and the daily digest are generic, and
     return new Response(JSON.stringify({ data: { status: 'ok', id: 'ticket' } }))
   }) as unknown as typeof fetch
   const push = new MobilePush(join(dir, 'push.json'), () => [{ id: 'a' }, { id: 'b' }, { id: 'c' }], request)
-  push.register('a', 'ExpoPushToken[abcdefghijk11111]', 'host') // every choice at its default: everything but the digest
+  push.register('a', 'ExpoPushToken[abcdefghijk11111]', 'host')
   push.register('b', 'ExpoPushToken[abcdefghijk22222]', 'host', ['input', 'failed', 'done', 'scheduled', 'digest'])
   push.register('c', 'ExpoPushToken[abcdefghijk33333]', 'host', ['input', 'failed', 'done'])
-  const tokens = () => sent.splice(0).map((message) => message.to.slice(-6, -1))
   await push.deliverScheduleFailure()
   expect(sent.map((message) => message.data)).toEqual([
     { computerId: 'host', kind: 'scheduled', target: 'schedules' },
     { computerId: 'host', kind: 'scheduled', target: 'schedules' },
   ])
-  expect(tokens()).toEqual(['11111', '22222'])
-  await push.deliverDigest()
-  expect(sent.map((message) => message.data)).toEqual([{ computerId: 'host', kind: 'digest', target: 'recaps' }])
-  expect(tokens()).toEqual(['22222'])
-  // Neither carries a thread, a title or any recap text.
-  await push.deliverScheduleFailure()
-  await push.deliverDigest()
+  expect(sent.map((message) => message.to.slice(-6, -1))).toEqual(['11111', '22222'])
   for (const message of sent) {
     expect(Object.keys(message.data)).not.toContain('taskId')
-    expect(message.body).toMatch(/^(A scheduled run could not start|Your daily recap is ready)\.$/)
+    expect(message.body).toBe('A scheduled run could not start.')
   }
+  expect(
+    JSON.parse(readFileSync(join(dir, 'push.json'), 'utf8')).find((r: any) => r.deviceId === 'b').categories,
+  ).toEqual(['input', 'failed', 'done', 'scheduled'])
 })
 it('push keeps transcript content private, removes invalid tokens, and drops revoked devices', async () => {
   dir = mkdtempSync(join(tmpdir(), 'ramu-phone-push-'))

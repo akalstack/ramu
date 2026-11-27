@@ -15,7 +15,6 @@ it('loads older preferences and persists terminal docking separately from tab la
           saved = value
         },
       },
-      recaps: { settingsChanged: () => {} },
       providers: { settingsChanged: () => {} },
       agents: { invalidateCatalog: () => {}, goalsSettingsChanged: () => {} },
     } as unknown as Services,

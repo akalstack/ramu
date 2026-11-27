@@ -35,7 +35,7 @@ import type { HandlerContext, RuntimeHost, Services } from './types'
 
 /** Builds the services and helpers every handler group shares, and wires them into the agent service. */
 export function createHandlerContext(host: RuntimeHost, services: Services): HandlerContext {
-  const { workspace, agents, recaps, memory, learning, terminals } = services
+  const { workspace, agents, memory, learning, terminals } = services
   const hostFolders = new HostFolders(() => workspace.listProjects().flatMap((p) => (p.root ? [p.root] : [])))
   const activity = new ActivityService((items) => host.send('activity:changed', items))
   configureProviderAccounts(join(host.userData, 'provider-accounts'))
@@ -192,7 +192,6 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
     const catalogChanged = nextConfiguration !== catalogConfiguration
     catalogConfiguration = nextConfiguration
     host.send('settings:changed', preferences)
-    recaps.settingsChanged()
     providers.settingsChanged()
     awake.settingsChanged()
     host.send('usage:changed', usage.list())

@@ -71,22 +71,3 @@ export interface ScheduleRun {
   error: string | null
   createdAt: number
 }
-export interface RecapItem {
-  id: string
-  key: string
-  group: 'attention' | 'recent'
-  title: string
-  detail: string
-  taskId: string
-  sessionId: string
-  sourceSeq: number
-  status: 'open' | 'done' | 'dismissed' | 'snoozed'
-  snoozedUntil: number | null
-  updatedAt: number
-}
-export interface RecapSnapshot {
-  items: RecapItem[]
-  generatedAt: number | null
-  generating: boolean
-  error: string | null
-}

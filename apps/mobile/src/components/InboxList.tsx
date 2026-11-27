@@ -9,7 +9,6 @@ import {
   ChevronRight,
   Inbox as InboxIcon,
   Loader,
-  RefreshCw,
   Sparkles,
   X,
 } from 'lucide-react-native'
@@ -63,19 +62,14 @@ export function InboxList({ pane }: { pane?: boolean }) {
   const inbox = buildInbox({
     computerId: host,
     chats: store.chats,
-    recaps: store.computers.flatMap((pc) =>
-      (auto.of(pc.id).recaps?.items ?? []).map((item) => ({ computerId: pc.id, item })),
-    ),
     summaries: store.computers.flatMap((pc) =>
       (auto.of(pc.id).summaries?.summaries ?? []).map((summary) => ({ computerId: pc.id, summary })),
     ),
     reviews: store.computers.flatMap((pc) =>
       (auto.of(pc.id).learning?.jobs ?? []).map((job) => ({ computerId: pc.id, job })),
     ),
-    recapsEnabled: (id) => store.appPreferences[id]?.recapsEnabled !== false,
     failureSeen: auto.failureSeen as (chat: InboxChat) => boolean,
     lowMemory: auto.inbox.lowMemory,
-    visit: auto.visit,
   })
   const params = useLocalSearchParams<{ tab?: string }>()
   const [tab, setTab] = useState<InboxTab>(() => (params.tab ? inboxTabOf(params.tab) : lastTab))
@@ -115,15 +109,7 @@ export function InboxList({ pane }: { pane?: boolean }) {
       {list.map((chat, i) => {
         const full = chat as Chat
         return (
-          <InboxThread
-            key={full.id}
-            chat={full}
-            project={where(full.computerId, full.projectId)}
-            divider={i > 0}
-            recap={
-              inbox.recent.find((r) => r.computerId === full.computerId && r.item.taskId === full.taskId)?.item.title
-            }
-          />
+          <InboxThread key={full.id} chat={full} project={where(full.computerId, full.projectId)} divider={i > 0} />
         )
       })}
     </View>
@@ -236,8 +222,6 @@ export function InboxList({ pane }: { pane?: boolean }) {
         }),
       )
   }
-  const recapsOn = store.computers.some((pc) => store.appPreferences[pc.id]?.recapsEnabled !== false)
-  const generating = store.computers.some((pc) => auto.of(pc.id).recaps?.generating)
   const actions = useTabActions()
 
   const chips = INBOX_TABS.map((key) => ({
@@ -338,23 +322,6 @@ export function InboxList({ pane }: { pane?: boolean }) {
     completed: inbox.days.length ? (
       <>
         <ShipActivityList hostId={host} />
-        {/* Recaps live on the threads they are about: each row's line says what it did, and refreshing them sits here. */}
-        {recapsOn ? (
-          <Row
-            onPress={() => {
-              tap()
-              store.computers
-                .filter((pc) => pc.status === 'online')
-                .forEach((pc) => void auto.refreshRecaps(pc.id).catch(() => {}))
-            }}
-            style={{ paddingVertical: space.s }}
-          >
-            <RefreshCw size={14} color={c.muted} />
-            <T size={font.control} tone="muted" style={{ flex: 1 }}>
-              {generating ? t.updatingRecap : t.refresh}
-            </T>
-          </Row>
-        ) : null}
         {inbox.days.map((day) => (
           <Section key={day.label} title={t[day.label]} count={day.items.length}>
             {rows(day.items)}
