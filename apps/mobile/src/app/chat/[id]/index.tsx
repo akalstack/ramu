@@ -1954,6 +1954,11 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                           setStaged(null)
                           await store.setModel(chat.id, m.provider, m.model, m.effort, m.settings)
                         }
+                        // As on the desktop, a sent "/mcp" opens this thread's MCP servers instead of reaching the agent.
+                        if (text.trim() === '/mcp' && !attachments?.length) {
+                          setMcpOpen(true)
+                          return
+                        }
                         // "/aside question" (or "/btw") asks beside the chat: the agent keeps working and never sees it.
                         const side = /^\/(?:aside|btw)\s+(\S[\s\S]*)$/.exec(text.trim())
                         if (side && !attachments?.length && chat.sessionId)
@@ -2010,6 +2015,7 @@ function ChatView({ id, started }: { id: string; started?: ThreadArrival }) {
                       }
                       taskId={chat.taskId || undefined}
                       chatId={chat.id}
+                      onMcp={() => setMcpOpen(true)}
                       onFindQuote={findQuote}
                       helpers={composerMentions}
                       computerId={chat.computerId}

@@ -751,6 +751,7 @@ export function Composer({
   taskId,
   scope,
   chatId,
+  onMcp,
   helpers,
   extraContent,
   onFindQuote,
@@ -773,6 +774,8 @@ export function Composer({
   scope?: string
   /** Lets chat-only commands (`/changes`) act on this chat. */
   chatId?: string
+  /** Opens this thread's MCP servers, where a server is signed in; `/mcp` falls back to Agent setup without it. */
+  onMcp?: () => void
   running: boolean
   model: ModelChoice
   onModel: (m: ModelChoice) => void
@@ -896,6 +899,7 @@ export function Composer({
     computerId: pc,
     scope: scope ?? taskId,
     chatId,
+    onMcp,
     text: split.body,
     caret,
     mentions: helpers,

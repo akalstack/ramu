@@ -50,6 +50,7 @@ export function useComposerSuggest({
   computerId,
   scope,
   chatId,
+  onMcp,
   text,
   caret,
   mentions,
@@ -57,6 +58,7 @@ export function useComposerSuggest({
   computerId: string
   scope?: string
   chatId?: string
+  onMcp?: () => void
   text: string
   caret: number
   mentions?: ComposerMentions
@@ -180,9 +182,10 @@ export function useComposerSuggest({
             {
               id: 'mcp',
               label: '/mcp',
-              description: say('Show MCP servers and skills'),
+              description: say('Show MCP connection status'),
               kind: 'Command' as const,
-              run: go({ pathname: '/settings/[section]', params: { section: 'agent-setup' } }),
+              // The thread's own servers, where one is signed in, as the desktop's /mcp opens.
+              run: onMcp ?? go({ pathname: '/settings/[section]', params: { section: 'agent-setup' } }),
             },
             {
               id: 'aside',

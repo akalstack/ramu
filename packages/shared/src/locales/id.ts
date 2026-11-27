@@ -7962,7 +7962,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Fast mode · higher usage': 'Mode cepat · pemakaian lebih tinggi',
   'Reconnect this host to browse its files and skills.':
     'Hubungkan kembali host ini untuk menelusuri file dan skill-nya.',
-  'Show MCP servers and skills': 'Tampilkan server MCP dan skill',
   'Open the thread’s changed files': 'Buka file yang diubah di thread ini',
   'Create a schedule for:': 'Buat jadwal untuk:',
   'Remember this for future threads:': 'Ingat ini untuk thread berikutnya:',
