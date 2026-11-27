@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { basename, extname, join } from 'node:path'
 import type { ContentBlockParam } from '@anthropic-ai/sdk/resources/messages'
 import type { Attachment } from '@ramu/shared/types'
@@ -26,6 +26,9 @@ const audioTypes: Record<string, string> = {
 const videoTypes: Record<string, string> = {
   '.mp4': 'video/mp4',
   '.webm': 'video/webm',
+  // What an iPhone records, and its sibling.
+  '.mov': 'video/quicktime',
+  '.m4v': 'video/x-m4v',
 }
 
 /** 3D models a model ability saves, which may be larger than other attachments. */
@@ -34,7 +37,15 @@ const modelTypes: Record<string, string> = {
   '.gltf': 'model/gltf+json',
 }
 export const MAX_MODEL_BYTES = 100 * 1024 * 1024
-const limitFor = (name: string) => (modelTypes[extname(name).toLowerCase()] ? MAX_MODEL_BYTES : MAX_ATTACHMENT_BYTES)
+/** A phone video runs far past an image's limit; it arrives in parts (see `beginUpload`). */
+export const MAX_VIDEO_BYTES = 100 * 1024 * 1024
+const isLarge = (name: string) => !!modelTypes[extname(name).toLowerCase()] || !!videoTypes[extname(name).toLowerCase()]
+/** The most bytes a file of this name may have: videos and 3D models more than other files. */
+export const attachmentLimit = (name: string) => (isLarge(name) ? MAX_MODEL_BYTES : MAX_ATTACHMENT_BYTES)
+const limitFor = attachmentLimit
+/** How long a part upload waits for its next part before it is dropped. */
+const UPLOAD_IDLE_MS = 30 * 60_000
+const MAX_UPLOADS = 8
 
 export const isPdf = (file: Pick<Attachment, 'mimeType'>) => file.mimeType === 'application/pdf'
 
@@ -79,7 +90,9 @@ export class AttachmentStore {
       throw new Error(
         modelTypes[extname(name).toLowerCase()]
           ? 'A 3D model must be nonempty and no larger than 100 MB.'
-          : 'Each attachment must be nonempty and no larger than 10 MB.',
+          : videoTypes[extname(name).toLowerCase()]
+            ? 'A video must be nonempty and no larger than 100 MB.'
+            : 'Each attachment must be nonempty and no larger than 10 MB.',
       )
     const safeName =
       basename(name.replace(/\\/g, '/'))
@@ -100,6 +113,64 @@ export class AttachmentStore {
     writeFileSync(path, bytes)
     writeFileSync(join(dir, 'metadata.json'), JSON.stringify(attachment))
     return attachment
+  }
+
+  /** Uploads arriving in parts, by token: a video from a phone is too large for one request. */
+  private readonly uploads = new Map<
+    string,
+    { name: string; size: number; path: string; received: number; parts: number; at: number }
+  >()
+
+  /**
+   * Starts an upload of `size` bytes that arrives in parts, in order. The bytes collect in the store's own folder and
+   * become an attachment only once all of them have arrived, so a dropped upload leaves nothing behind but its staging.
+   */
+  beginUpload(name: string, size: number): string {
+    if (!Number.isSafeInteger(size) || size <= 0 || size > limitFor(name))
+      throw new Error(
+        isLarge(name)
+          ? 'A video or 3D model must be no larger than 100 MB.'
+          : 'Each attachment must be nonempty and no larger than 10 MB.',
+      )
+    const now = Date.now()
+    for (const [token, upload] of this.uploads)
+      if (now - upload.at > UPLOAD_IDLE_MS) this.dropUpload(token, upload.path)
+    if (this.uploads.size >= MAX_UPLOADS) throw new Error('Too many uploads at once. Wait for one to finish.')
+    const token = randomUUID()
+    const dir = join(this.root, '.uploads')
+    mkdirSync(dir, { recursive: true })
+    const path = join(dir, token)
+    writeFileSync(path, '')
+    this.uploads.set(token, { name, size, path, received: 0, parts: 0, at: now })
+    return token
+  }
+
+  /** Adds the next part of an upload. Parts arrive in order and never past the size the upload began with. */
+  appendUpload(token: string, index: number, bytes: Buffer): void {
+    const upload = this.uploads.get(token)
+    if (!upload) throw new Error('This upload is no longer waiting. Attach the file again.')
+    if (index !== upload.parts) throw new Error('Upload parts must arrive in order.')
+    if (!bytes.length || upload.received + bytes.length > upload.size)
+      throw new Error('This part does not fit the upload.')
+    appendFileSync(upload.path, bytes)
+    upload.received += bytes.length
+    upload.parts++
+    upload.at = Date.now()
+  }
+
+  /** Turns a complete upload into an attachment. */
+  finishUpload(token: string): Attachment {
+    const upload = this.uploads.get(token)
+    if (!upload) throw new Error('This upload is no longer waiting. Attach the file again.')
+    if (upload.received !== upload.size) throw new Error('The upload is missing parts. Attach the file again.')
+    const bytes = readFileSync(upload.path)
+    this.dropUpload(token, upload.path)
+    return this.add(upload.name, bytes)
+  }
+
+  private dropUpload(token: string, path: string): void {
+    this.uploads.delete(token)
+    rmSync(path, { force: true })
   }
 
   get(id: string): Attachment {

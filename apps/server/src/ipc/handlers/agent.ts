@@ -4,7 +4,7 @@ import { z } from 'zod'
 import type { AgentSettings, FileContext, PermissionScope, SecretAnswer } from '@ramu/shared/types'
 import type { ModelViewerLabels } from '@ramu/shared/interactive'
 import { INLINE_UI_LIMITS, type InlineUiActionEvent } from '@ramu/shared/chat/inlineUi'
-import { MAX_ATTACHMENT_BYTES } from '../../attachments'
+import { MAX_VIDEO_BYTES, attachmentLimit } from '../../attachments'
 import { modelViewerHtml } from '../../interactive/modelViewer'
 import { draftPrompt, interpretDraft, type CustomAgent } from '@ramu/shared/customAgents'
 import {
@@ -202,8 +202,12 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
         const filePaths = (await host.native('pickAttachments')) as string[]
         if (filePaths.length > 10) throw new Error('Attach up to 10 files per message.')
         for (const path of filePaths)
-          if (statSync(path).size > MAX_ATTACHMENT_BYTES)
-            throw new Error('Each attachment must be no larger than 10 MB.')
+          if (statSync(path).size > attachmentLimit(path))
+            throw new Error(
+              attachmentLimit(path) > 10 * 1024 * 1024
+                ? 'A video or 3D model must be no larger than 100 MB.'
+                : 'Each attachment must be no larger than 10 MB.',
+            )
         return filePaths.map((path) => attachmentStore.add(path, readFileSync(path)))
       },
     },
@@ -218,6 +222,25 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
       ]),
       run: (name: string, base64: string) => attachmentStore.add(name, Buffer.from(base64, 'base64')),
     },
+    // A file too large for one request (a phone's video) arrives in parts: begin, each part in order, then finish.
+    'attachments.begin': {
+      args: z.tuple([z.string().min(1).max(255), z.number().int().positive().max(MAX_VIDEO_BYTES)]),
+      run: (name: string, size: number) => attachmentStore.beginUpload(name, size),
+    },
+    'attachments.part': {
+      args: z.tuple([
+        id,
+        z.number().int().nonnegative().max(10_000),
+        z
+          .string()
+          .min(1)
+          .max(6_000_000)
+          .regex(/^[A-Za-z0-9+/]*={0,2}$/),
+      ]),
+      run: (token: string, index: number, base64: string) =>
+        attachmentStore.appendUpload(token, index, Buffer.from(base64, 'base64')),
+    },
+    'attachments.finish': { args: z.tuple([id]), run: (token: string) => attachmentStore.finishUpload(token) },
     'attachments.status': {
       args: z.tuple([z.array(id).max(10)]),
       run: (ids: string[]) => attachmentStore.status(ids),

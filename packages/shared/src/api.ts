@@ -1961,6 +1961,12 @@ export interface RamuMethods extends ArtifactMethods {
   'agent.scope'(taskId: string): AgentScope
   'attachments.pick'(): Attachment[]
   'attachments.add'(name: string, base64: string): Attachment
+  /** Starts an upload that arrives in parts (a phone's video); returns its token. */
+  'attachments.begin'(name: string, size: number): string
+  /** The next part of an upload, in order, as base64 of at most about 4.5 MB. */
+  'attachments.part'(token: string, index: number, base64: string): void
+  /** Turns a complete upload into an attachment. */
+  'attachments.finish'(token: string): Attachment
   'attachments.status'(ids: string[]): { id: string; available: boolean }[]
   'attachments.text'(attachmentId: string): string | null
   'attachments.preview'(id: string): string | null
