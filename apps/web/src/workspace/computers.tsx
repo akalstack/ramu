@@ -1,3 +1,4 @@
+import { useSeparateByHost } from '../sidebar/projectsByHost'
 import { ChevronsUpDown, Network, Settings2 } from 'lucide-react'
 import { useMemo, useSyncExternalStore, type ReactNode } from 'react'
 import type { Computer, ComputerStatus, Computers } from '@ramu/shared/types'
@@ -120,6 +121,7 @@ export function ComputerSwitcher() {
   const state = useComputers()
   const restarting = useRestartingHosts()
   const syncing = useSyncingHosts()
+  const [separate, setSeparate] = useSeparateByHost()
   if (!state || state.computers.length < 2) return null
   const selected = state.computers.find((computer) => computer.id === state.scope)
   const select = (id: string | null) =>
@@ -173,6 +175,24 @@ export function ComputerSwitcher() {
         </>,
       ),
     })),
+    ...(!selected
+      ? ([
+          { key: 'separator-projects', separator: true },
+          { key: 'projects-heading', heading: t('A project on several hosts') },
+          {
+            key: 'projects-together',
+            selected: !separate,
+            label: t('One group'),
+            onSelect: () => setSeparate(false),
+          },
+          {
+            key: 'projects-separate',
+            selected: separate,
+            label: t('Separate by host'),
+            onSelect: () => setSeparate(true),
+          },
+        ] as MenuEntry[])
+      : []),
     { key: 'separator', separator: true },
     {
       key: 'manage',

@@ -2262,6 +2262,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'A repository on several hosts is one project, each thread naming its host.':
     'Repositori di beberapa host menjadi satu proyek, dan setiap utas menyebut host-nya.',
   'Separate by host': 'Pisahkan per host',
+  'On several hosts': 'Di beberapa host',
   'The model every helper runs on.': 'Model yang dipakai setiap helper.',
   'Automatic updates': 'Pembaruan otomatis',
   'Update the CLI when a newer one is out.': 'Perbarui CLI saat versi lebih baru tersedia.',

@@ -17,6 +17,7 @@ import {
   Rocket,
   CircleCheck,
   SquarePen,
+  Split,
 } from 'lucide-react'
 import { NO_PROJECT, type Computer, type Project, type Task } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
@@ -45,6 +46,7 @@ import { mergedThreads, sidebarThreads, threadNeedsYou, threadProjectName } from
 import { useSharedSidebarSection, useSidebarExpansion } from './projects/sidebarExpansion'
 import { EMBEDDED_THREAD_LIMIT, ThreadPreviewList, useThreadPreview } from './projects/ThreadPreviewList'
 import { hostRows } from './hostRows'
+import { sharedProjects, useSeparateByHost, type SharedProject } from './projectsByHost'
 import { hasOfflineCopy } from '../workspace/offlineCopy'
 import { PendingThreadsSection } from '../composer/WaitingThreads'
 import { canOpenOffline } from '../workspace/selectionRoute'
@@ -66,6 +68,8 @@ export function HostProjects() {
   const state = useComputers()
   const { preferences } = useAppSettings()
   const { activeHost } = useHostSelection()
+  const [separate] = useSeparateByHost()
+  const sources = useHostThreads(state?.computers ?? [])
   // Relative labels keep aging even when no provider event re-renders the list.
   const [, setTimeTick] = useState(0)
   useEffect(() => {
@@ -78,6 +82,10 @@ export function HostProjects() {
   const solo = state.computers.length < 2
   const grouped = !solo && !state.scope
   const scoped = state.scope ? state.computers.filter((computer) => computer.id === state.scope) : state.computers
+  // With every host on screen, a repository two hosts have is one project above them, as on the phone.
+  const shared = grouped && !separate && !preferences.recentChatMode ? sharedProjects(sources) : []
+  const hiddenOn = (host: string) =>
+    new Set(shared.flatMap((group) => group.members.filter((m) => m.host === host).map((m) => m.project.id)))
   return (
     <div
       className={
@@ -87,6 +95,7 @@ export function HostProjects() {
       }
     >
       {grouped && <NeedsYou computers={state.computers} />}
+      {shared.length > 0 && <SharedProjectsSection groups={shared} sources={sources} />}
       {grouped && preferences.recentChatMode ? (
         <MergedRecent computers={state.computers} />
       ) : (
@@ -96,6 +105,7 @@ export function HostProjects() {
             computer={computer}
             current={solo || computer.id === activeHost}
             grouped={grouped}
+            hidden={shared.length ? hiddenOn(computer.id) : undefined}
           />
         ))
       )}
@@ -104,7 +114,17 @@ export function HostProjects() {
   )
 }
 
-function HostGroup({ computer, current, grouped }: { computer: Computer; current: boolean; grouped: boolean }) {
+function HostGroup({
+  computer,
+  current,
+  grouped,
+  hidden,
+}: {
+  computer: Computer
+  current: boolean
+  grouped: boolean
+  hidden?: ReadonlySet<string>
+}) {
   const tree = useSidebarExpansion(computer.id)
   const { select } = useHostSelection()
   const addProject = useAddProject(computer.id)
@@ -191,13 +211,25 @@ function HostGroup({ computer, current, grouped }: { computer: Computer; current
         </div>
       )}
       {open &&
-        (current ? <ProjectsPanel embedded={grouped} /> : <OtherHostProjects computer={computer} embedded={grouped} />)}
+        (current ? (
+          <ProjectsPanel embedded={grouped} hidden={hidden} />
+        ) : (
+          <OtherHostProjects computer={computer} embedded={grouped} hidden={hidden} />
+        ))}
     </section>
   )
 }
 
 /** A host that is not on screen: its rows act on that host's store and open there through the selection. */
-function OtherHostProjects({ computer, embedded }: { computer: Computer; embedded: boolean }) {
+function OtherHostProjects({
+  computer,
+  embedded,
+  hidden,
+}: {
+  computer: Computer
+  embedded: boolean
+  hidden?: ReadonlySet<string>
+}) {
   const tree = useSidebarExpansion(computer.id)
   const identityView = useIdentityView(computer.id)
   const { select } = useHostSelection()
@@ -207,7 +239,7 @@ function OtherHostProjects({ computer, embedded }: { computer: Computer; embedde
   // Away, but kept here: its threads open from this device's copy, and new ones wait in the outbox.
   const openable = available || (canOpenOffline(computer.status) && hasOfflineCopy(computer.id))
   const all = rows.tasks
-  const projects = rows.projects
+  const projects = hidden ? rows.projects.filter((project) => !hidden.has(project.id)) : rows.projects
   const { active, done } = sidebarThreads(all)
   const pinned = active.filter((task) => task.pinnedAt).sort(pinnedFirst)
   const loose = active.filter((task) => task.projectId === NO_PROJECT && !task.pinnedAt).sort(pinnedFirst)
@@ -588,5 +620,133 @@ function MergedDone({ computers }: { computers: Computer[] }) {
       order={(a, b) => b.doneAt! - a.doneAt!}
       paged
     />
+  )
+}
+
+/** Projects whose repository several hosts have, once each, with every host's threads in it naming their host. */
+function SharedProjectsSection({ groups, sources }: { groups: SharedProject[]; sources: HostThreads[] }) {
+  const { open, setOpen } = useSharedSidebarSection('section:shared-projects')
+  const [, setSeparate] = useSeparateByHost()
+  return (
+    <section className="min-w-0">
+      <SectionHead
+        title={t('On several hosts')}
+        icon={FolderClosed}
+        open={open}
+        onToggle={() => setOpen(!open)}
+        controls="all-hosts-shared-projects"
+      >
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className={ICON_BUTTON_CLASS}
+          aria-label={t('Separate by host')}
+          title={t('Separate by host')}
+          onClick={() => setSeparate(true)}
+        >
+          <Split size={14} />
+        </Button>
+      </SectionHead>
+      <Collapse open={open} id="all-hosts-shared-projects" className="flex flex-col gap-0.5">
+        {groups.map((group) => (
+          <SharedProjectRow key={group.key} group={group} sources={sources} />
+        ))}
+      </Collapse>
+    </section>
+  )
+}
+
+function SharedProjectRow({ group, sources }: { group: SharedProject; sources: HostThreads[] }) {
+  const { open, setOpen } = useSharedSidebarSection(`shared:${group.key}`)
+  const { select } = useHostSelection()
+  const { preferences } = useAppSettings()
+  const state = useComputers()
+  const rows = mergedThreads(
+    sources.filter((source) => group.members.some((member) => member.host === source.host)),
+    (source) =>
+      source.active.filter(
+        (task) =>
+          !task.pinnedAt &&
+          group.members.some((member) => member.host === source.host && member.project.id === task.projectId),
+      ),
+  ).sort((a, b) => b.task.lastActiveAt - a.task.lastActiveAt)
+  // New thread and opening the project go to the host worked on last.
+  const lead =
+    group.members.find(
+      (member) => member.host === rows[0]?.source.host && member.project.id === rows[0].task.projectId,
+    ) ?? group.members[0]!
+  const hostNames = group.members
+    .map((member) => state?.computers.find((computer) => computer.id === member.host)?.name)
+    .filter(Boolean)
+    .join(', ')
+  return (
+    <section className="project-group mb-0 [&:has(.task-list)]:mb-2.5 relative">
+      <div className={STICKY_PROJECT_CLASS}>
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label={t('Open {0}', { '0': group.name })}
+          title={hostNames}
+          className="project-row group/project flex min-h-[30px] items-center gap-2 rounded-(--radius-s) px-2 text-body leading-5 text-soft hover:bg-accent hover:text-foreground"
+          onClick={() => {
+            setOpen(true)
+            select(lead.host, { kind: 'project', projectId: lead.project.id })
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') select(lead.host, { kind: 'project', projectId: lead.project.id })
+          }}
+        >
+          {open ? (
+            <FolderOpen size={15} className="flex-none text-muted-foreground" />
+          ) : (
+            <FolderClosed size={15} className="flex-none text-muted-foreground" />
+          )}
+          <FadeText
+            text={group.name}
+            className="project-name font-medium min-w-0 flex-1 overflow-hidden whitespace-nowrap"
+          />
+          <span
+            className={`${ROW_ACTIONS_CLASS} group-hover/project:opacity-100 group-focus-within/project:opacity-100`}
+          >
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className={ICON_BUTTON_CLASS}
+              aria-label={t('Toggle {0}', { '0': group.name })}
+              title={open ? t('Collapse') : t('Expand')}
+              onClick={(event) => {
+                event.stopPropagation()
+                setOpen(!open)
+              }}
+            >
+              <ChevronRight size={14} className={open ? 'rotate-90' : ''} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className={ICON_BUTTON_CLASS}
+              aria-label={t('New thread in {0}', { '0': group.name })}
+              title={t('New thread')}
+              onClick={(event) => {
+                event.stopPropagation()
+                select(lead.host, { kind: 'new', projectId: lead.project.id })
+              }}
+            >
+              <Plus size={14} />
+            </Button>
+          </span>
+        </div>
+      </div>
+      {open && (
+        <div className="task-list flex flex-col gap-0.5">
+          {/* Inside its project a thread names only the host it runs on. */}
+          {rows.slice(0, preferences.recentChats).map(({ task, source }) => (
+            <HostScope key={`${source.host}:${task.id}`} host={source.host} store={source.store}>
+              <TaskRow task={task} merged />
+            </HostScope>
+          ))}
+        </div>
+      )}
+    </section>
   )
 }

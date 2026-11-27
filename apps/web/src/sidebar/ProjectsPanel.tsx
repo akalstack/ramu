@@ -24,7 +24,14 @@ import { useSharedSidebarSection, useSidebarExpansion } from './projects/sidebar
 import { DropOverlay } from '@/components/drop-overlay'
 import { EMBEDDED_THREAD_LIMIT, ThreadPreviewList, useThreadPreview } from './projects/ThreadPreviewList'
 
-export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
+export function ProjectsPanel({
+  embedded = false,
+  hidden,
+}: {
+  embedded?: boolean
+  /** Projects shown once across hosts above, so not again in this host's list. */
+  hidden?: ReadonlySet<string>
+}) {
   useLanguage()
   const ws = useWorkspace()
   const addProject = useAddProject()
@@ -149,7 +156,7 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={dropProject}>
               <SortableContext items={projectIds} strategy={verticalListSortingStrategy}>
                 {identityView.arrange(
-                  projects,
+                  hidden ? projects.filter((p) => !hidden.has(p.id)) : projects,
                   (p) => p.id,
                   (p) => (
                     <ProjectGroup key={p.id} project={p} previewLimit={embedded ? EMBEDDED_THREAD_LIMIT : undefined} />
