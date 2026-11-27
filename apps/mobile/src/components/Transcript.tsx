@@ -34,7 +34,7 @@ import {
   GitFork,
   ChevronRight,
   FileDiff,
-  Flag,
+  CircleCheck,
   Globe,
   Lightbulb,
   Brain,
@@ -2407,9 +2407,10 @@ function GoalNote({ item }: { item: Extract<TranscriptItem, { kind: 'note' }> })
   )
 }
 
+/** A finished goal, as the desktop shows it: "Goal completed" and its objective on one line, the rest folded below. */
 function GoalDone({ item }: { item: Extract<TranscriptItem, { kind: 'goal' }> }) {
   const { c } = useTheme()
-  const strings = useT()
+  const say = useSay()
   const [open, setOpen] = useState(false)
   const toggled = useContext(RowToggle)
   return (
@@ -2424,9 +2425,12 @@ function GoalDone({ item }: { item: Extract<TranscriptItem, { kind: 'goal' }> })
         }}
         style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}
       >
-        <Flag size={14} color={c.ok} strokeWidth={1.8} />
-        <T size={font.control} tone="muted" style={{ flex: 1 }}>
-          {fill(strings.goalReached, item.turns, item.objective)}
+        <CircleCheck size={14} color={c.ok} strokeWidth={1.8} />
+        <T size={font.control} tone="soft">
+          {say('Goal completed')}
+        </T>
+        <T size={font.control} tone="muted" numberOfLines={1} style={{ flex: 1 }}>
+          {item.objective}
         </T>
         <Disclosure open={open} color={c.muted} />
       </Pressable>

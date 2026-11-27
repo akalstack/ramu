@@ -516,7 +516,6 @@ const en = {
   autoResumeState: 'Auto-resume: {0}',
   autoResumeHint:
     'Applies to this thread only. Messages you send during a limit are queued and the wait continues. Stop ends the wait.',
-  goalReached: 'Goal reached in {0} turns · {1}',
   verifyCommand: 'Verify command',
   verifySet: 'Set verify command',
   verifyEdit: 'Edit verify command',
@@ -1064,7 +1063,6 @@ const id: typeof en = {
   autoResumeState: 'Lanjut otomatis: {0}',
   autoResumeHint:
     'Hanya untuk thread ini. Pesan yang kamu kirim saat batas tercapai masuk antrean dan tetap menunggu. Hentikan membatalkan penantian.',
-  goalReached: 'Goal tercapai dalam {0} giliran · {1}',
   verifyCommand: 'Perintah verifikasi',
   verifySet: 'Atur perintah verifikasi',
   verifyEdit: 'Ubah perintah verifikasi',
