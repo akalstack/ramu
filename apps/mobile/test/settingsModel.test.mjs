@@ -472,3 +472,18 @@ test('the models Ramu’s own work runs on use the shared choice of thread, defa
     assert.equal(row?.kind, 'work-model', path)
   }
 })
+
+test('the phone offers what the desktop does for helpers and provider updates', () => {
+  const rows = (section) => SETTINGS_ROWS[section].flatMap((group) => group.rows)
+  // Helpers on one model are chosen here, not left to the desktop.
+  const step = rows('workflows').find((row) => row.path === 'subagents.step')
+  assert.deepEqual(step && { kind: step.kind, withId: step.withId, when: step.when }, {
+    kind: 'model',
+    withId: true,
+    when: { path: 'subagents.model', equals: 'pick' },
+  })
+  // Each provider's CLI updates itself when its switch is on, as on the desktop's provider cards.
+  const updates = rows('providers').filter((row) => row.path.endsWith('.autoUpdate'))
+  assert.ok(updates.length >= 3)
+  assert.ok(updates.every((row) => row.kind === 'toggle' && row.path.startsWith('providerBinaries.')))
+})

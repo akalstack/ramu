@@ -504,6 +504,20 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
         },
       ],
     },
+    {
+      title: 'Automatic updates',
+      // As each provider's card on the desktop: the host installs a newer CLI when one is out and safe to take.
+      rows: AGENT_PROVIDERS.map((provider): SettingRow => ({
+        kind: 'toggle',
+        path: `providerBinaries.${provider}.autoUpdate`,
+        title: providerName(provider),
+        help:
+          provider === 'antigravity'
+            ? 'Update the runtime when a newer one is out.'
+            : 'Update the CLI when a newer one is out.',
+        words: 'auto update cli runtime version install provider',
+      })),
+    },
   ],
   access: [
     {
@@ -561,8 +575,18 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
           options: [
             { value: 'thread', label: "The thread's model" },
             { value: 'auto', label: 'A model chosen for each task' },
-            { value: 'pick', label: 'A model picked on the desktop' },
+            { value: 'pick', label: 'One model for all' },
           ],
+        },
+        {
+          kind: 'model',
+          path: 'subagents.step',
+          title: 'All sub-agents use',
+          help: 'The model every helper runs on.',
+          words: 'subagent helper model pick',
+          emptyLabel: 'Choose a model',
+          withId: true,
+          when: { path: 'subagents.model', equals: 'pick' },
         },
       ],
     },
