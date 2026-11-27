@@ -78,7 +78,7 @@ import { TitleTooltips } from './TitleTooltips'
 import { AppSettingsProvider, useAppSettings } from './settings/AppSettings'
 import { ModelSetsProvider } from './models/ModelSets'
 import type { SettingsSection } from './settings/SettingsPage'
-import { SchedulesPage } from './Automation'
+import { SchedulesPage, type ScheduleThread } from './Automation'
 import { PagesPage } from './pages/PagesPage'
 import { PageNotices } from './pages/PageNotices'
 import { InboxPage } from './inbox/InboxPage'
@@ -1001,6 +1001,30 @@ function TaskHeader({ starting, tools }: { starting: boolean; tools?: ReactNode 
                   ),
                   onSelect: () => {
                     if (canWrite()) setRenaming(true)
+                  },
+                },
+                {
+                  key: 'schedule',
+                  label: (
+                    <>
+                      <CalendarClock size={14} />
+                      {t('Schedule a message…')}
+                    </>
+                  ),
+                  onSelect: () => {
+                    if (!canWrite()) return
+                    const thread: ScheduleThread = {
+                      id: task.id,
+                      title: task.title,
+                      projectId: task.projectId,
+                      workspaceId: task.workspaceId,
+                    }
+                    ws.setSidebar('schedules')
+                    // The page mounts first; it then opens its editor for this thread.
+                    setTimeout(
+                      () => window.dispatchEvent(new CustomEvent('ramu:schedule', { detail: { thread } })),
+                      100,
+                    )
                   },
                 },
                 {

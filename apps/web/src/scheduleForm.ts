@@ -63,6 +63,24 @@ export function defaultScheduleInput(
   }
 }
 
+/**
+ * A new schedule set on a thread: named after it, in its project and checkout, and sending each run into it, where its
+ * own agent and settings answer.
+ */
+export function threadScheduleInput(
+  settings: AgentSettings,
+  timezone: string,
+  thread: { id: string; title: string; projectId: string; workspaceId: string | null },
+): ScheduleInput {
+  return {
+    ...defaultScheduleInput(settings, timezone, thread.projectId),
+    name: thread.title,
+    workspaceId: thread.workspaceId,
+    sourceTaskId: thread.id,
+    targetTaskId: thread.id,
+  }
+}
+
 /** The value of a `datetime-local` input: the schedule's own one-time moment, or an hour from now, as wall-clock time in `zone`. */
 export function onceLocalValue(rule: ScheduleRule | undefined, zone: string, now: DateTime = DateTime.now()): string {
   const at = rule?.kind === 'once' ? DateTime.fromISO(rule.at, { zone }) : now.plus({ hours: 1 }).setZone(zone)

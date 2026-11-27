@@ -6,6 +6,7 @@ import {
   byNextRun,
   canSaveSchedule,
   defaultScheduleInput,
+  threadScheduleInput,
   describeRule,
   isProblemRun,
   onceIso,
@@ -151,5 +152,25 @@ describe('describeRule', () => {
     const preset = (source: string) => webhookRule(WEBHOOK_PRESETS.find((entry) => entry.source === source)!)
     expect(line(preset('github'))).toBe('When GitHub sends a request')
     expect(line(preset('generic'))).toBe('When a request arrives')
+  })
+})
+
+describe('a schedule set on a thread', () => {
+  it('is named after the thread and sends each run into it, in its project and checkout', () => {
+    const input = threadScheduleInput(DEFAULT_AGENT_SETTINGS, 'Asia/Jakarta', {
+      id: 't1',
+      title: 'Release checks',
+      projectId: 'p1',
+      workspaceId: 'w1',
+    })
+    expect(input).toMatchObject({
+      name: 'Release checks',
+      prompt: '',
+      projectId: 'p1',
+      workspaceId: 'w1',
+      sourceTaskId: 't1',
+      targetTaskId: 't1',
+      rule: { kind: 'daily', time: '09:00' },
+    })
   })
 })

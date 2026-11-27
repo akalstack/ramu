@@ -51,6 +51,7 @@ import {
   describeRule,
   canSaveSchedule,
   defaultScheduleInput,
+  threadScheduleInput,
   onceIso,
   onceLocalValue,
   ruleForKind,
@@ -111,7 +112,7 @@ export function SchedulesPage({
   const ownName = computers?.computers.find((computer) => computer.id === own)?.name
   // Bumped after the page's editor saves, so another host's list reads its schedules again at once.
   const [version, setVersion] = useState(0)
-  const [editing, setEditing] = useState<Schedule | 'new' | null>(null),
+  const [editing, setEditing] = useState<Schedule | 'new' | ScheduleThread | null>(null),
     [selected, setSelected] = useState<string | null>(null)
   const [busy, setBusy] = useState(false),
     [error, setError] = useState<string | null>(null)
@@ -123,9 +124,10 @@ export function SchedulesPage({
   }, [createRequested, onCreateHandled])
   useEffect(() => {
     const select = (e: Event) => {
-      const id = (e as CustomEvent).detail?.id
+      const detail = (e as CustomEvent<{ id?: string; thread?: ScheduleThread } | undefined>).detail
+      const id = detail?.id
       setSelected(id ?? null)
-      setEditing(id ? (schedules.find((s) => s.id === id) ?? null) : 'new')
+      setEditing(id ? (schedules.find((s) => s.id === id) ?? null) : (detail?.thread ?? 'new'))
     }
     window.addEventListener('ramu:schedule', select)
     return () => window.removeEventListener('ramu:schedule', select)
@@ -179,7 +181,8 @@ export function SchedulesPage({
           <HostProvider hostId={showOwn ? undefined : scope!}>
             <ScheduleEditor
               key={editing === 'new' ? 'new' : editing.id}
-              schedule={editing === 'new' ? undefined : editing}
+              schedule={editing === 'new' || !('rule' in editing) ? undefined : editing}
+              thread={editing !== 'new' && !('rule' in editing) ? editing : undefined}
               onClose={() => setEditing(null)}
               onSaved={() => {
                 setEditing(null)
@@ -595,12 +598,22 @@ function ScheduleCard({
   )
 }
 
+/** A thread a new schedule sends into, as the thread menu's Schedule a message… opens it. */
+export interface ScheduleThread {
+  id: string
+  title: string
+  projectId: string
+  workspaceId: string | null
+}
+
 function ScheduleEditor({
   schedule,
+  thread,
   onClose,
   onSaved,
 }: {
   schedule?: Schedule
+  thread?: ScheduleThread
   onClose: () => void
   onSaved: () => void
 }) {
@@ -616,15 +629,19 @@ function ScheduleEditor({
   const ws = useWorkspacesOf([runsOn])[0] ?? current,
     { initialSettings } = useModelSets()
   const invoke = invokerFor(runsOn)
-  const [input, setInput] = useState<ScheduleInput>(
-    () =>
-      schedule ??
-      defaultScheduleInput(
-        initialSettings,
-        systemTimezone(),
-        ws.ui.activeTaskId ? (ws.projectOf(ws.ui.activeTaskId)?.id ?? null) : null,
-      ),
-  )
+  const [input, setInput] = useState<ScheduleInput>(() => {
+    if (schedule) return schedule
+    if (thread) return threadScheduleInput(initialSettings, systemTimezone(), thread)
+    return defaultScheduleInput(
+      initialSettings,
+      systemTimezone(),
+      ws.ui.activeTaskId ? (ws.projectOf(ws.ui.activeTaskId)?.id ?? null) : null,
+    )
+  })
+  // Runs sent into a thread use its agent, settings, project and checkout, so those choices step aside.
+  const target = input.targetTaskId
+    ? (ws.tasks.find((task) => task.id === input.targetTaskId)?.title ?? thread?.title ?? t('This thread'))
+    : null
   const [previewLoading, setPreviewLoading] = useState(true)
   const [preview, setPreview] = useState<number[]>([]),
     [error, setError] = useState<string | null>(null),
@@ -696,7 +713,7 @@ function ScheduleEditor({
         disabled={busy}
         className="schedule-form [&_label]:flex [&_label]:flex-col [&_label]:gap-[7px] [&_label]:text-caption [&_input]:w-full [&_input]:p-[9px_10px] [&_input]:rounded-(--radius-s) [&_input]:[border:1px_solid_transparent] [&_input]:[background:var(--field)] [&_input]:text-inherit [&_input]:[font:inherit] [&_select]:w-full [&_select]:p-[9px_10px] [&_select]:rounded-(--radius-s) [&_select]:[border:1px_solid_transparent] [&_select]:[background:var(--field)] [&_select]:text-inherit [&_select]:[font:inherit] [&_textarea]:w-full [&_textarea]:p-[9px_10px] [&_textarea]:rounded-(--radius-s) [&_textarea]:[border:1px_solid_transparent] [&_textarea]:[background:var(--field)] [&_textarea]:text-inherit [&_textarea]:[font:inherit] [&_textarea]:resize-y [&_textarea]:leading-[1.5] [&_[data-slot='select-trigger']]:p-[9px_10px] [&_[data-slot='select-trigger']]:[background:var(--field)] [&_[data-slot='select-trigger']]:h-auto [border:0] p-0 mt-4 grid gap-4 min-w-0 grid-cols-1 min-[640px]:grid-cols-2 [&_>_*]:min-w-0 [&_>_:is(.schedule-wide,_.schedule-form-row,_.schedule-weekdays,_.schedule-preview,_p,_.error,_.schedule-form-actions)]:col-span-full"
       >
-        {hosts.length > 1 && (
+        {hosts.length > 1 && !target && (
           <label className="schedule-wide col-span-full">
             {t('Runs on')}
             <Dropdown
@@ -750,36 +767,52 @@ function ScheduleEditor({
             onChange={(e) => setInput({ ...input, prompt: e.target.value })}
           />
         </label>
-        <div className="schedule-form-row grid [grid-template-columns:1fr_1fr] gap-4">
-          <label>
-            {t('Scope')}
-            <Dropdown
-              label={t('Scope')}
-              value={input.projectId}
-              onChange={(projectId) => setInput({ ...input, projectId, workspaceId: null })}
-              options={[
-                { value: NO_PROJECT, label: t('No project') },
-                ...ws.projects.map((p) => ({ value: p.id, label: p.name })),
-              ]}
-            />
-          </label>
-          {input.projectId !== NO_PROJECT && (
+        {target ? (
+          <div className="schedule-wide col-span-full flex flex-wrap items-center gap-x-3 gap-y-1 rounded-(--radius-s) bg-(--field) p-3 text-caption">
+            <span className="min-w-0 flex-1">
+              {t('Each run sends this message into {0}, with its agent and settings.', { 0: target })}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setInput({ ...input, targetTaskId: null })}
+              disabled={busy}
+            >
+              {t('Start a new thread each run')}
+            </Button>
+          </div>
+        ) : (
+          <div className="schedule-form-row grid [grid-template-columns:1fr_1fr] gap-4">
             <label>
-              {t('Checkout')}
+              {t('Scope')}
               <Dropdown
-                label={t('Checkout')}
-                value={input.workspaceId ?? ''}
-                onChange={(workspaceId) => setInput({ ...input, workspaceId: workspaceId || null })}
+                label={t('Scope')}
+                value={input.projectId}
+                onChange={(projectId) => setInput({ ...input, projectId, workspaceId: null })}
                 options={[
-                  { value: '', label: t('Current checkout') },
-                  ...ws.workspaces
-                    .filter((w) => w.projectId === input.projectId)
-                    .map((w) => ({ value: w.id, label: w.name })),
+                  { value: NO_PROJECT, label: t('No project') },
+                  ...ws.projects.map((p) => ({ value: p.id, label: p.name })),
                 ]}
               />
             </label>
-          )}
-        </div>
+            {input.projectId !== NO_PROJECT && (
+              <label>
+                {t('Checkout')}
+                <Dropdown
+                  label={t('Checkout')}
+                  value={input.workspaceId ?? ''}
+                  onChange={(workspaceId) => setInput({ ...input, workspaceId: workspaceId || null })}
+                  options={[
+                    { value: '', label: t('Current checkout') },
+                    ...ws.workspaces
+                      .filter((w) => w.projectId === input.projectId)
+                      .map((w) => ({ value: w.id, label: w.name })),
+                  ]}
+                />
+              </label>
+            )}
+          </div>
+        )}
         <div className="contents">
           <label>
             {t('Frequency')}
@@ -880,13 +913,15 @@ function ScheduleEditor({
             />
           </label>
         )}
-        <div className="schedule-wide col-span-full">
-          <AgentControls
-            settings={input.settings}
-            onChange={(settings) => setInput({ ...input, settings })}
-            disabled={busy}
-          />
-        </div>
+        {!target && (
+          <div className="schedule-wide col-span-full">
+            <AgentControls
+              settings={input.settings}
+              onChange={(settings) => setInput({ ...input, settings })}
+              disabled={busy}
+            />
+          </div>
+        )}
         {rule.kind !== 'webhook' && (
           <div className="schedule-preview grid gap-[7px] [background:var(--field)] rounded-(--radius-s) p-3">
             <strong className="small text-caption">{t('Upcoming runs')}</strong>
