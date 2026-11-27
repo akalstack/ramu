@@ -16,12 +16,14 @@ export function TranscriptFollow({ viewport }: { viewport: RefObject<HTMLDivElem
   const intent = useRef(newFollowIntent())
 
   // Heard on the way down from the document, so the reader's part is known before the scroller reports the move.
+  // The listeners sit on the document, so they are attached at once; the transcript is looked up when each event
+  // arrives. It is not there yet when a thread opens, and listening only once it existed left the wheel unheard: every
+  // turn of it then looked like the browser's own move and was undone, so the transcript could not be scrolled.
   useLayoutEffect(() => {
-    const el = viewport.current
-    if (!el) return
     const state = intent.current
-    state.lastTop = el.scrollTop
-    const inside = (event: Event) => event.target instanceof Node && el.contains(event.target)
+    if (viewport.current) state.lastTop = viewport.current.scrollTop
+    const inside = (event: Event) =>
+      event.target instanceof Node && !!viewport.current && viewport.current.contains(event.target)
     const onWheel = (event: WheelEvent) => {
       if (inside(event) && !event.ctrlKey) gestured(state, { kind: 'wheel', deltaY: event.deltaY })
     }
@@ -29,7 +31,8 @@ export function TranscriptFollow({ viewport }: { viewport: RefObject<HTMLDivElem
       if (inside(event)) gestured(state, { kind: 'touch' })
     }
     const onScroll = (event: Event) => {
-      if (event.target !== el) return
+      const el = viewport.current
+      if (!el || event.target !== el) return
       scrolled(state, el.scrollTop, el.scrollHeight - el.scrollTop - el.clientHeight, performance.now())
     }
     const onDown = () => pressed(state, performance.now(), 'down')
