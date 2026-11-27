@@ -41,4 +41,3 @@ test('helper activity cannot publish a partial main-agent answer', () => {
   )
   assert.ok(!rows.some((row) => row.kind === 'text' && row.text === 'Partial'))
 })
-
