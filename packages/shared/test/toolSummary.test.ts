@@ -16,6 +16,23 @@ describe('summarizeTools', () => {
     ).toBe('Ran 2 commands, Read 3 files, Edited 1 file, Searched the web')
   })
 
+  it('reads a lone call the agent gave a reason for as that reason, not its command', () => {
+    expect(
+      summarizeTools(
+        [call('Bash', { subject: "sed -i '' 's/a/b/' x.ts && pnpm exec tsc", title: 'Typecheck the phone' })],
+        say,
+      ),
+    ).toBe('Typecheck the phone')
+    expect(
+      summarizeTools(
+        [call('Bash', { subject: 'pnpm test', title: 'Run the tests' }), call('Read', { subject: 'a.ts' })],
+        say,
+      ),
+    ).toBe('Run the tests, Read a.ts')
+    // Two commands are counted; their reasons are in the rows inside.
+    expect(summarizeTools([call('Bash', { title: 'One' }), call('Bash', { title: 'Two' })], say)).toBe('Ran 2 commands')
+  })
+
   it('reads a kind still running in the present', () => {
     expect(summarizeTools([call('Bash'), call('Bash', { running: true }), call('Grep')], say)).toBe(
       'Running 2 commands, Searched 1 pattern',

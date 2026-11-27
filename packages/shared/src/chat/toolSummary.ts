@@ -52,7 +52,8 @@ export const toolLabel = (name: string) => mcpToolWords(name, '').verb
 /**
  * One line for a group of tool calls, the same on the desktop and the phone: "Ran pnpm test, Read 3 files". Calls of
  * one tool are counted together, in the order each tool first appears, and a kind still running reads in the present.
- * A tool called once names what it acted on, since "Ran 1 command" says nothing the icon does not.
+ * A tool called once names what it acted on, since "Ran 1 command" says nothing the icon does not, or the reason the
+ * agent gave for it.
  */
 export function summarizeTools(tools: SummaryTool[], say: Say): string {
   const keyOf = (tool: SummaryTool) => (tool.ramu ? `ramu:${tool.ramu.key}` : tool.name)
@@ -77,6 +78,10 @@ export function summarizeTools(tools: SummaryTool[], say: Say): string {
           ? say('Used {name}{count}', { name: toolLabel(key), count: n > 1 ? ` ×${n}` : '' })
           : `${say(toolVerb(KIND_VERB[kind], running))} ${n > 1 ? `${n} · ` : ''}${first.title ?? say(KIND_LABEL[kind])}`
       }
+      // A lone call the agent gave a reason for reads as that reason, as its own row does ("Typecheck the app"), not
+      // as the raw command.
+      const reason = n === 1 ? shortSubject(first.title) : undefined
+      if (reason) return reason
       const verb = say(toolVerb(verbs[0], running))
       const subject = n === 1 && verbs[1] ? shortSubject(first.subject) : undefined
       if (subject) return `${verb} ${subject}`
