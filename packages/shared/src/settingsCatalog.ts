@@ -170,6 +170,13 @@ export const SETTINGS_CATALOG: SettingsCatalogEntry[] = [
   },
   {
     section: 'git',
+    title: 'Follow checks after a push',
+    path: 'followPushChecks',
+    help: 'After a thread pushes, follow the checks on the pushed commit, CI and deploys alike, and wake that thread once they finish: a failure with its logs, or a deploy with its address.',
+    words: 'ci checks push deploy github actions gitlab pipeline auto follow wake',
+  },
+  {
+    section: 'git',
     title: 'Live pull request updates',
     help: 'Reviews, finished checks and merges show at once instead of at the next check. Uses the Ramu GitHub App where it is installed, and otherwise adds a webhook to the repository, which needs admin rights there and a public address for this computer (Ramu Link).',
     words: 'pr webhook github app realtime instant events checks reviews',

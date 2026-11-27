@@ -122,6 +122,12 @@ export function GitSettings({ draft, onChange, busy, onOpenModels }: DraftProps 
         title="Automatically watch pull requests"
         description="Watch pull requests you create from a thread. New failures and requested changes go back to that thread, and you review and push. Manage existing watches in Source Control."
       />
+      <ToggleRow
+        {...toggleProps}
+        setting="followPushChecks"
+        title="Follow checks after a push"
+        description="After a thread pushes, follow the checks on the pushed commit, CI and deploys alike, and wake that thread once they finish: a failure with its logs, or a deploy with its address."
+      />
       <LivePullRequestsSetting />
       <SettingsGroupTitle>{t('Generated text')}</SettingsGroupTitle>
       <ToggleRow

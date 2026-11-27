@@ -209,6 +209,13 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
           help: 'Watch pull requests you create from a thread. New failures and requested changes return to that thread. You review and push.',
           words: 'pr auto checks reviews feedback thread background',
         },
+        {
+          kind: 'toggle',
+          path: 'followPushChecks',
+          title: 'Follow checks after a push',
+          help: 'After a thread pushes, follow the checks on the pushed commit, CI and deploys alike, and wake that thread once they finish.',
+          words: 'ci checks push deploy actions pipeline follow wake',
+        },
       ],
     },
     {

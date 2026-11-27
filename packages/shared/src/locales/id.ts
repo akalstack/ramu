@@ -4535,6 +4535,11 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Invalid Git branch name': 'Nama branch Git tidak valid',
   'MCP servers': 'Server MCP',
   'Show MCP connection status': 'Tampilkan status koneksi MCP',
+  'Follow checks after a push': 'Ikuti pemeriksaan setelah push',
+  'After a thread pushes, follow the checks on the pushed commit, CI and deploys alike, and wake that thread once they finish: a failure with its logs, or a deploy with its address.':
+    'Setelah thread melakukan push, ikuti pemeriksaan pada commit yang di-push, baik CI maupun deploy, dan bangunkan thread itu setelah selesai: kegagalan beserta log-nya, atau deploy beserta alamatnya.',
+  'After a thread pushes, follow the checks on the pushed commit, CI and deploys alike, and wake that thread once they finish.':
+    'Setelah thread melakukan push, ikuti pemeriksaan pada commit yang di-push, baik CI maupun deploy, dan bangunkan thread itu setelah selesai.',
   'Change this on the host, or from a device with full access and Change settings over an encrypted connection (HTTPS, Ramu Link or Tailscale).':
     'Ubah ini di host, atau dari perangkat dengan akses penuh dan izin Ubah pengaturan melalui koneksi terenkripsi (HTTPS, Ramu Link, atau Tailscale).',
   Connecting: 'Menyambungkan',

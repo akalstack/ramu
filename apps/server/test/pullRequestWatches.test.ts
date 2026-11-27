@@ -353,6 +353,15 @@ describe('pushes from a thread', () => {
     expect(enqueue).toHaveBeenCalledOnce()
   })
 
+  it('follows no push while Follow checks after a push is off', async () => {
+    ws.setAppState('app-preferences', { followPushChecks: false })
+    vi.mocked(commitChecks).mockResolvedValue(failing)
+    await push()
+    await service.tick(0)
+    await service.tick(60_000)
+    expect(enqueue).not.toHaveBeenCalled()
+  })
+
   it('wakes the pull request’s thread when CI fails on the commit a merge made, and only for the default branch', async () => {
     const sha = 'f'.repeat(40)
     vi.mocked(currentBranch).mockResolvedValue('feature')

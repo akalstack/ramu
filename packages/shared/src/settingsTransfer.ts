@@ -80,6 +80,7 @@ export const TRANSFER_GROUPS = [
       'autoPull',
       'removeAgentCredits',
       'autoWatchPullRequests',
+      'followPushChecks',
       'commitStyle',
       'commitInstructions',
       'defaultCommitAction',

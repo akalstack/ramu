@@ -302,6 +302,7 @@ export class PullRequestWatchService {
    */
   async watchPush(taskId: string, cwd: string, repoId: string): Promise<void> {
     if (this.stopping) return
+    if (this.workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}).followPushChecks === false) return
     const { branch } = await commitBranchInfo(cwd)
     if (!branch || this.list().some((watch) => watch.cwd === cwd && watch.branch === branch)) return
     const sha = await headOid(cwd)

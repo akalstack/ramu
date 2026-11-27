@@ -53,6 +53,8 @@ export interface AppPreferences extends WorkspaceDefaults {
   removeAgentCredits: boolean
   /** Watch newly created PRs in their originating thread. Existing watches are controlled per PR. */
   autoWatchPullRequests: boolean
+  /** After a thread pushes, follow the pushed commit's checks and wake that thread once they finish. */
+  followPushChecks: boolean
   localCrashReports: boolean
   /** Wording rules for AI-drafted commit messages. */
   commitStyle: CommitStyle
@@ -181,6 +183,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   autoPull: true,
   removeAgentCredits: true,
   autoWatchPullRequests: false,
+  followPushChecks: true,
   localCrashReports: false,
   commitStyle: 'conventional',
   commitInstructions: '',
