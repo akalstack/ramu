@@ -65,6 +65,7 @@ import { abilityRunner } from './agent/abilityRuns'
 import { registerAbilityTools } from './agent/abilityTools'
 import { providerLogin } from './providers/abilityChecks'
 import { AttachmentStore } from './attachments'
+import { serveAttachmentStream } from './attachmentStream'
 import { registerInteractiveTools } from './interactive/tools'
 import { PageStore } from './interactive/pages'
 import { ArtifactExports } from './interactive/exports'
@@ -1764,6 +1765,15 @@ const dispatcher = createDispatcher(
       )
     },
     callerIsLocal: () => origin.getStore()?.network !== true,
+    // Only a caller on this computer can reach the loopback server.
+    loopbackPort: () => {
+      if (origin.getStore()?.network === true) return undefined
+      try {
+        return (mcpHttp.address() as import('node:net').AddressInfo | null)?.port
+      } catch {
+        return undefined
+      }
+    },
     browserDevice: () => (origin.getStore()?.network ? origin.getStore()?.deviceId : 'local'),
     callerName: () => {
       const caller = origin.getStore()
@@ -2170,6 +2180,8 @@ async function performInvoke(
 // Requests over TCP must present the bearer token.
 const handle = () => async (req: import('node:http').IncomingMessage, res: ServerResponse) => {
   try {
+    // A player on a paired device streams a video attachment by its single-file address, which is its own permission.
+    if (serveAttachmentStream(req, res, abilityAttachments)) return
     // A service's redirect after sign-in arrives from a browser with no device token; the transaction's state is the proof.
     if (req.method === 'GET' && (req.url ?? '').split('?')[0] === HOSTED_CALLBACK_PATH) {
       const outcome = await completeOAuthCallback(new URL(req.url ?? '/', 'http://host'))
@@ -2235,6 +2247,8 @@ const sessions = new Map<
   { session: AgentSessionInfo; toolSearch: boolean; browser?: import('@ramu/shared/browser').AgentBrowserPreferences }
 >()
 const mcpHttp = createServer(async (req, res) => {
+  // A player on this computer (the desktop app) streams a video attachment by its single-file address.
+  if (serveAttachmentStream(req, res, abilityAttachments)) return
   const token = req.headers.authorization?.replace(/^Bearer /, '')
   const connection = token ? sessions.get(token) : undefined
   const source = connection?.session

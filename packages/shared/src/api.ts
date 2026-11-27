@@ -1967,6 +1967,11 @@ export interface RamuMethods extends ArtifactMethods {
   'attachments.part'(token: string, index: number, base64: string): void
   /** Turns a complete upload into an attachment. */
   'attachments.finish'(token: string): Attachment
+  /**
+   * A single-file address a player streams a video or audio attachment from, for 30 minutes: `path` on the host's
+   * own address, and `local` on this computer's loopback when the caller runs on the host.
+   */
+  'attachments.stream'(id: string): { path: string; local?: string }
   'attachments.status'(ids: string[]): { id: string; available: boolean }[]
   'attachments.text'(attachmentId: string): string | null
   'attachments.preview'(id: string): string | null

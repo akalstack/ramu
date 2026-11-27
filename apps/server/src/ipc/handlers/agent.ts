@@ -5,6 +5,7 @@ import type { AgentSettings, FileContext, PermissionScope, SecretAnswer } from '
 import type { ModelViewerLabels } from '@ramu/shared/interactive'
 import { INLINE_UI_LIMITS, type InlineUiActionEvent } from '@ramu/shared/chat/inlineUi'
 import { MAX_VIDEO_BYTES, attachmentLimit } from '../../attachments'
+import { ATTACHMENT_STREAM_PATH } from '../../attachmentStream'
 import { modelViewerHtml } from '../../interactive/modelViewer'
 import { draftPrompt, interpretDraft, type CustomAgent } from '@ramu/shared/customAgents'
 import {
@@ -241,6 +242,15 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
         attachmentStore.appendUpload(token, index, Buffer.from(base64, 'base64')),
     },
     'attachments.finish': { args: z.tuple([id]), run: (token: string) => attachmentStore.finishUpload(token) },
+    // A single-file address a player streams a video or audio attachment from; the loopback one serves this computer.
+    'attachments.stream': {
+      args: z.tuple([id]),
+      run: (attachmentId: string) => {
+        const path = `${ATTACHMENT_STREAM_PATH}${attachmentStore.streamToken(attachmentId)}`
+        const port = host.loopbackPort?.()
+        return { path, ...(port ? { local: `http://127.0.0.1:${port}${path}` } : {}) }
+      },
+    },
     'attachments.status': {
       args: z.tuple([z.array(id).max(10)]),
       run: (ids: string[]) => attachmentStore.status(ids),

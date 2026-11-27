@@ -106,6 +106,8 @@ export interface RuntimeHost {
    * settings permission over an encrypted connection.
    */
   canAdministerIntegrations?(): boolean
+  /** The port of this host's loopback server, where a player on this computer streams an attachment. */
+  loopbackPort?(): number | undefined
   /** The current call comes from this host itself, for steps that need someone at it (an OS prompt, a keychain). */
   callerIsLocal?(): boolean
   /** The current call comes from a paired device with view-only access. */

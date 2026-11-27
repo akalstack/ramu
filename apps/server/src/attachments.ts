@@ -46,6 +46,13 @@ const limitFor = attachmentLimit
 /** How long a part upload waits for its next part before it is dropped. */
 const UPLOAD_IDLE_MS = 30 * 60_000
 const MAX_UPLOADS = 8
+/**
+ * Addresses a player streams one video or audio attachment from, by token, until each expires. Shared by every store on
+ * the host: the token a call issues is served by the host's HTTP servers.
+ */
+const streams = new Map<string, { id: string; until: number }>()
+/** How long a player's streaming address works. */
+const STREAM_TTL_MS = 30 * 60_000
 
 export const isPdf = (file: Pick<Attachment, 'mimeType'>) => file.mimeType === 'application/pdf'
 
@@ -171,6 +178,31 @@ export class AttachmentStore {
   private dropUpload(token: string, path: string): void {
     this.uploads.delete(token)
     rmSync(path, { force: true })
+  }
+
+  /**
+   * A single-file address for a player: a video's bytes are too many to send as a data URL. The token names one
+   * attachment, is unguessable and expires after 30 minutes, so the player needs no device sign-in to use it.
+   */
+  streamToken(id: string): string {
+    const file = this.get(id)
+    if (!/^(video|audio)\//.test(file.mimeType)) throw new Error(`${file.name} is not a video or audio file.`)
+    const now = Date.now()
+    for (const [token, entry] of streams) if (entry.until <= now) streams.delete(token)
+    const token = randomUUID()
+    streams.set(token, { id, until: now + STREAM_TTL_MS })
+    return token
+  }
+
+  /** The attachment a stream token names while it is still good, or null. */
+  streamed(token: string): Attachment | null {
+    const entry = streams.get(token)
+    if (!entry || entry.until <= Date.now()) return null
+    try {
+      return this.get(entry.id)
+    } catch {
+      return null
+    }
   }
 
   get(id: string): Attachment {

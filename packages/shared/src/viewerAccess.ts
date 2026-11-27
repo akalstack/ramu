@@ -81,6 +81,7 @@ const viewerMethods = new Set([
   'attachments.text',
   'attachments.preview',
   'attachments.modelViewer',
+  'attachments.stream',
   'forge.avatar',
   'reviews.list',
   'reviews.get',
