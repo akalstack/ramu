@@ -1,6 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { groupKey, groupThreads, moveProject, readThreadList, splitDone } from '../src/runtime/threadGroups.ts'
+import {
+  groupKey,
+  groupKeys,
+  groupThreads,
+  moveProject,
+  readThreadList,
+  splitDone,
+} from '../src/runtime/threadGroups.ts'
 import { resolveLayered } from '../src/runtime/busyMode.ts'
 
 const thread = (id, projectId, lastActiveAt, status = 'idle', computerId = 'a') => ({
@@ -141,4 +148,20 @@ test('one repository on two hosts is one group, led by the host it was last work
   )
   // Separate by host: the same repository is one group per host.
   assert.equal(groupThreads(threads, projects, none).length, 3)
+})
+
+test('a thread’s group key is its repository’s when hosts merge, so its folded runs open with the merged group', () => {
+  const projects = [
+    { id: 'a:ramu', computerId: 'a', repository: 'github.com/akalstack/ramu' },
+    { id: 'b:ramu', computerId: 'b', repository: 'github.com/akalstack/ramu' },
+    { id: 'a:local', computerId: 'a' },
+  ]
+  const merged = groupKeys(projects, true)
+  assert.equal(merged('a', 'a:ramu'), merged('b', 'b:ramu'))
+  assert.equal(merged('a', 'a:local'), groupKey('a', 'a:local'))
+  // Separate by host, and a project the list does not know, keep the host's own key.
+  assert.equal(groupKeys(projects, false)('b', 'b:ramu'), groupKey('b', 'b:ramu'))
+  assert.equal(merged('c', 'gone'), groupKey('c', 'gone'))
+  const [group] = groupThreads([thread('t', 'b:ramu', 1, 'idle', 'b')], projects, { ...none, mergeHosts: true })
+  assert.equal(group.key, merged('b', 'b:ramu'))
 })

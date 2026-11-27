@@ -15,6 +15,25 @@ export function splitDone<T extends { doneAt?: number | null }>(threads: readonl
 /** Projects are qualified by host: two hosts can both have a standalone bucket or a colliding project ID. */
 export const groupKey = (computerId: string, projectId: string) => `${computerId}\u0000${projectId}`
 
+/**
+ * Where each host's project lands: its own key, or with the rest of its repository when hosts merge. Threads of a
+ * project the list does not know keep their own key.
+ */
+export function groupKeys(
+  projects: readonly { id: string; computerId: string; repository?: string }[],
+  mergeHosts: boolean,
+): (computerId: string, projectId: string) => string {
+  const keyOf = new Map<string, string>()
+  for (const project of projects) {
+    const own = groupKey(project.computerId, project.id)
+    keyOf.set(own, mergeHosts && project.repository ? `repository\u0000${project.repository}` : own)
+  }
+  return (computerId, projectId) => {
+    const own = groupKey(computerId, projectId)
+    return keyOf.get(own) ?? own
+  }
+}
+
 /** Projects groups threads under their project; Recent threads is one list by latest activity (the desktop's "Sidebar shows"). */
 export type ThreadListMode = 'projects' | 'recent'
 
@@ -74,20 +93,16 @@ export function groupThreads<
     members: { computerId: string; projectId: string; project: P }[]
   }
   const buckets = new Map<string, Bucket>()
-  // Where each host's project lands: its own key, or with the rest of its repository when hosts merge.
-  const keyOf = new Map<string, string>()
+  const keyOf = groupKeys(projects, !!options.mergeHosts)
   for (const project of projects) {
-    const own = groupKey(project.computerId, project.id)
-    const key = options.mergeHosts && project.repository ? `repository\u0000${project.repository}` : own
-    keyOf.set(own, key)
+    const key = keyOf(project.computerId, project.id)
     const member = { computerId: project.computerId, projectId: project.id, project }
     const bucket = buckets.get(key)
     if (bucket) bucket.members.push(member)
     else buckets.set(key, { ...member, threads: [], members: [member] })
   }
   for (const thread of threads) {
-    const own = groupKey(thread.computerId, thread.projectId)
-    const key = keyOf.get(own) ?? own
+    const key = keyOf(thread.computerId, thread.projectId)
     const bucket = buckets.get(key) ?? {
       computerId: thread.computerId,
       projectId: thread.projectId,

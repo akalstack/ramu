@@ -3,7 +3,7 @@ import { projectIdentity, useHostIdentities } from '../../../runtime/identities'
 import { recentThreads } from '../../../runtime/recentThreads'
 import {
   THREAD_LIST_KEY,
-  groupKey,
+  groupKeys,
   groupThreads,
   readThreadList,
   splitDone,
@@ -309,13 +309,15 @@ export default function Threads() {
     )
     const runs = collapseScheduleRuns(unpinned, (chat) => !!chat.sessionId && unread.has(chat.sessionId))
     const shownRuns = new Set(runs.visible)
+    // A merged repository is one group across hosts, so its runs fold and open under that group's key.
+    const keyOf = groupKeys(projectList, merged && !separateHosts)
     const listed = unpinned.filter(
-      (chat) => shownRuns.has(chat) || expanded.has(groupKey(chat.computerId, chat.projectId)),
+      (chat) => shownRuns.has(chat) || expanded.has(keyOf(chat.computerId, chat.projectId)),
     )
     const folded = new Map<string, number>()
     for (const chat of unpinned)
       if (!shownRuns.has(chat)) {
-        const key = groupKey(chat.computerId, chat.projectId)
+        const key = keyOf(chat.computerId, chat.projectId)
         folded.set(key, (folded.get(key) ?? 0) + 1)
       }
     // Folded runs count toward a section's "Show more", so a section holding only folded runs can still open them.
