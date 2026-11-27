@@ -43,9 +43,7 @@ export function TurnRunning({ label }: { label: string }) {
   return (
     <div className="turn-summary flex flex-col" role="status">
       <Marker render={<SummaryDisclosureButton tabIndex={-1} className="pointer-events-none" />}>
-        <MarkerContent className="flex-none text-muted-foreground tabular-nums">
-          {label}
-        </MarkerContent>
+        <MarkerContent className="flex-none text-muted-foreground tabular-nums">{label}</MarkerContent>
       </Marker>
     </div>
   )
