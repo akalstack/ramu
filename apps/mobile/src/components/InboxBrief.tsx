@@ -29,7 +29,7 @@ import {
   type InboxModel,
 } from '@ramu/shared/hostInbox'
 import { retryThread, stopIdleThreads } from '@ramu/shared/chat/threadActions'
-import { gigabytes } from '@ramu/shared/resources'
+import { lowMemoryDetail } from '@ramu/shared/resources'
 import { useSay } from '../i18n'
 import { confirmDone } from './confirmDone'
 import { useAutomation } from '../runtime/automation'
@@ -104,12 +104,9 @@ function BriefRowView({ row, divider, where }: { row: BriefRow; divider: boolean
       : (chat?.title ?? '')
   const detail =
     row.kind === 'low-memory'
-      ? row.memory.low.idleThreads.length
-        ? say('{0} idle threads use {1} GB', {
-            0: row.memory.low.idleThreads.length,
-            1: gigabytes(row.memory.low.idleBytes),
-          })
-        : say('{0} GB free', { 0: gigabytes(row.memory.low.availableBytes) })
+      ? lowMemoryDetail(row.memory.low)
+          .map((line) => say(line.text, line.values))
+          .join(' · ')
       : row.kind === 'failure'
         ? say('Failed')
         : row.kind === 'pull-request'

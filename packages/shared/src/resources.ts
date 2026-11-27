@@ -55,6 +55,8 @@ export interface LowMemory {
   availableBytes: number
   idleThreads: string[]
   idleBytes: number
+  /** What the host stopped on its own while low: the agents of threads idle a while, and the memory they held. */
+  stopped?: { threads: number; bytes: number; at: number }
 }
 
 export interface HostResources {
@@ -239,4 +241,23 @@ export const cpuPercent = (cpu: number, cores = 1) => `${Math.round(cpuShare(cpu
 export function leftoverLabel(thread: Pick<ThreadResources, 'items'>): string | null {
   const names = [...new Set(thread.items.filter((item) => item.kind !== 'agent' && item.name).map((item) => item.name))]
   return names.length ? names.slice(0, 2).join(', ') + (names.length > 2 ? ` +${names.length - 2}` : '') : null
+}
+
+/**
+ * The Brief's line under "low on memory": what the host stopped on its own, then what is still idle or how much is
+ * free. Copy to translate where it is shown.
+ */
+export function lowMemoryDetail(low: LowMemory): { text: string; values: Record<string, string | number> }[] {
+  const lines: { text: string; values: Record<string, string | number> }[] = []
+  if (low.stopped)
+    lines.push({
+      text: 'Stopped {0} idle agents, freeing {1} GB',
+      values: { 0: low.stopped.threads, 1: gigabytes(low.stopped.bytes) },
+    })
+  lines.push(
+    low.idleThreads.length
+      ? { text: '{0} idle threads use {1} GB', values: { 0: low.idleThreads.length, 1: gigabytes(low.idleBytes) } }
+      : { text: '{0} GB free', values: { 0: gigabytes(low.availableBytes) } },
+  )
+  return lines
 }

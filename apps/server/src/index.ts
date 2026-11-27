@@ -19,6 +19,7 @@ import {
 import { terminalThreadRequest } from './background/agentThreads'
 import { NO_PROJECT_GUIDE, projectFactsText } from './workspace/projectCreate'
 import { HELPER_ROLES } from '@ramu/shared/chat/helperRoles'
+import { goalContinues } from '@ramu/shared/chat/goalHold'
 import { CustomAgentStore } from './agent/customAgents'
 import { TEST_DEVICE_GUIDE, TestDevices } from './testDevice/testDevices'
 import { currentBranch } from './workspace/git'
@@ -799,6 +800,25 @@ const resources = new ResourceService(
           .map(({ taskId }) => taskId),
       )
       return new Set(sessions.map(({ taskId }) => taskId).filter((taskId) => !busy.has(taskId)))
+    },
+    idleFor: (taskId) => {
+      try {
+        return Date.now() - workspace.getTask(taskId).lastActiveAt
+      } catch {
+        return 0
+      }
+    },
+    // Only agents resting between turns with nothing waiting on them: stopping pauses a goal and holds the queue, so a
+    // thread whose goal carries on or that has messages queued keeps its agent. The check may be a minute old.
+    stopAgents: async (taskIds) => {
+      for (const session of agents.all())
+        if (
+          taskIds.includes(session.taskId) &&
+          session.state === 'idle' &&
+          !goalContinues(agents.getGoal(session.id)) &&
+          !agents.queued(session.id).length
+        )
+          await agents.stopAndWait(session.id)
     },
   },
   undefined,

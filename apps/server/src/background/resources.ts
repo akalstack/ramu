@@ -4,6 +4,7 @@ import { availableParallelism, totalmem } from 'node:os'
 import { promisify } from 'node:util'
 import {
   attributeProcesses,
+  idleAgents,
   isLowMemory,
   parseMeminfo,
   parseVmStat,
@@ -42,7 +43,16 @@ export interface ResourceSources {
   roots(): ProcessRoot[]
   /** Threads with no turn in progress, the only ones Ramu offers to stop as a group. */
   idleThreads(): Set<string>
+  /** How long ago the thread last moved, in milliseconds. */
+  idleFor?(taskId: string): number
+  /** Stops these threads' agents; each starts again with its thread's next message. */
+  stopAgents?(taskIds: string[]): Promise<void>
 }
+
+/** A thread idle this long has its agent stopped while the host is low on memory; one idle a moment may be read now. */
+export const AUTO_STOP_IDLE_MS = 10 * 60_000
+/** How long the Brief says what the host stopped on its own. */
+const STOPPED_SHOWN_MS = 60 * 60_000
 
 /** Reads on demand: `ps` runs only while someone is looking, and the once-a-minute check needs it only while low. */
 export class ResourceService {
@@ -50,6 +60,7 @@ export class ResourceService {
   private reading: Promise<ResourceSnapshot> | null = null
   private lowChecks = 0
   private latest: HostResources = { memory: null, low: null, platform: process.platform, arch: process.arch }
+  private stopped: LowMemory['stopped']
   private timer?: NodeJS.Timeout
 
   constructor(
@@ -99,13 +110,26 @@ export class ResourceService {
     this.lowChecks = memory && isLowMemory(memory) ? this.lowChecks + 1 : 0
     let low: LowMemory | null = null
     if (memory && this.lowChecks >= 2) {
-      const { threads } = await this.snapshot().catch(() => ({ threads: [] as ResourceSnapshot['threads'] }))
+      let { threads } = await this.snapshot().catch(() => ({ threads: [] as ResourceSnapshot['threads'] }))
+      // Low for two minutes running: agents of threads idle a while are stopped, as the person would from Resources.
+      // Servers and terminals keep running, since something may be using them.
+      const quiet = idleAgents(
+        threads.filter((thread) => (this.sources.idleFor?.(thread.taskId) ?? 0) >= AUTO_STOP_IDLE_MS),
+      )
+      if (quiet.taskIds.length && this.sources.stopAgents) {
+        await this.sources.stopAgents(quiet.taskIds).catch(() => {})
+        this.stopped = { threads: quiet.taskIds.length, bytes: quiet.bytes, at: Date.now() }
+        this.cached = null
+        threads = (await this.snapshot().catch(() => ({ threads: [] as ResourceSnapshot['threads'] }))).threads
+      }
       const idle = this.sources.idleThreads()
       const idleThreads = threads.filter((thread) => idle.has(thread.taskId))
+      const stopped = this.stopped && Date.now() - this.stopped.at < STOPPED_SHOWN_MS ? this.stopped : undefined
       low = {
         availableBytes: memory.availableBytes,
         idleThreads: idleThreads.map((thread) => thread.taskId),
         idleBytes: idleThreads.reduce((sum, thread) => sum + thread.rssBytes, 0),
+        ...(stopped ? { stopped } : {}),
       }
     }
     this.latest = { memory, low, platform: process.platform, arch: process.arch }

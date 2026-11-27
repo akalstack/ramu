@@ -15,7 +15,7 @@ import {
   type InboxBlocker,
 } from '@ramu/shared/hostInbox'
 import { retryThread, stopIdleThreads } from '@ramu/shared/chat/threadActions'
-import { gigabytes } from '@ramu/shared/resources'
+import { lowMemoryDetail } from '@ramu/shared/resources'
 import { Button } from '@/components/desktop-button'
 import { BriefMarkIcon, InboxList, InboxRow, TONE_TEXT } from './InboxParts'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
@@ -229,9 +229,9 @@ export function Brief() {
       const host = pc(computerId)?.name ?? ''
       return {
         title: t('{0} is low on memory', { 0: host }),
-        detail: low.idleThreads.length
-          ? t('{0} idle threads use {1} GB', { 0: low.idleThreads.length, 1: gigabytes(low.idleBytes) })
-          : t('{0} GB free', { 0: gigabytes(low.availableBytes) }),
+        detail: lowMemoryDetail(low)
+          .map((line) => t(line.text, line.values))
+          .join(' · '),
       }
     }
     const title = task(row.chat.computerId, row.chat.taskId)?.title ?? ''
