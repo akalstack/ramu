@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, Platform, Pressable, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useSharedValue } from 'react-native-reanimated'
 import { useLocalSearchParams } from 'expo-router'
 import { Trash2, X } from 'lucide-react-native'
 import { translate } from '@ramu/shared/i18n'
@@ -9,11 +10,13 @@ import { font, radius, space, useTheme } from '../../../theme'
 import { useChat, useStore } from '../../../runtime/store'
 import { canWriteHost, VIEW_ONLY_WRITE_NOTICE } from '../../../runtime/viewerAccess'
 import { quotedQuestion, sideChat } from '../../../runtime/sideChat'
-import { Header, HeaderButton, PageScrollView as ScrollView, Screen } from '../../../components/Screen'
+import { Header, HeaderButton, PageKeyboardLegendList, Screen } from '../../../components/Screen'
 import { ComposerDock, KeyboardLift, useKeyboardHeight } from '../../../components/Keyboard'
 import { Markdown } from '../../../components/Markdown'
 import { T } from '../../../components/ui'
 import { Composer, type ModelChoice } from '../../../components/Composer'
+
+const RowSeparator = () => <View style={{ height: space.m }} />
 
 /**
  * One side chat per thread, like Claude's /btw: ask about the work without interrupting it (the agent never sees these),
@@ -38,32 +41,14 @@ export default function AsideScreen() {
   const { c } = useTheme()
   const insets = useSafeAreaInsets()
   const keyboard = useKeyboardHeight()
-  const [composerHeight, setComposerHeight] = useState(96)
-  const ios = Platform.OS === 'ios'
-  const cover =
-    composerHeight + (keyboard.height ? Math.max(0, keyboard.height - Math.max(0, insets.bottom - space.s)) : 0)
-  const viewport = useRef({ content: 0, height: 0 })
-  const following = useRef(true)
-  const toEnd = useCallback(
-    (animated = true) => {
-      const { content, height } = viewport.current
-      if (!height) return
-      if (ios) scroll.current?.scrollTo({ y: Math.max(0, content - height + cover), animated })
-      else scroll.current?.scrollToEnd({ animated })
-    },
-    [ios, cover],
-  )
-  useEffect(() => {
-    if (!following.current) return
-    const frame = requestAnimationFrame(() => toEnd())
-    return () => cancelAnimationFrame(frame)
-  }, [toEnd])
+  // The list keeps its end above the message box and the keyboard itself, as the thread's transcript does.
+  const endInset = useSharedValue(96 + space.s)
+  const keyboardSlack = Platform.OS === 'ios' ? Math.max(0, insets.bottom - space.s) : -space.s
   const [asides, setAsides] = useState<Aside[]>([])
   const [busy, setBusy] = useState(false)
   // A model and login picked here with the thread's own picker; until then the thread's choice (or Settings' model for
   // asides) answers. It lasts while this screen is open, so a follow-up keeps it.
   const [picked, setPicked] = useState<ModelChoice | null>(null)
-  const scroll = useRef<import('react-native').ScrollViewInstance>(null)
   const computerId = chat?.computerId,
     sessionId = chat?.sessionId
   const say = (text: string) => translate(store.language, text)
@@ -212,42 +197,12 @@ export default function AsideScreen() {
         }
       />
       <View style={{ flex: 1 }}>
-        <ScrollView
-          ref={scroll}
-          contentInsetAdjustmentBehavior="automatic"
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="interactive"
-          automaticallyAdjustKeyboardInsets={false}
-          style={{ flex: 1 }}
-          contentInset={ios ? { bottom: cover } : undefined}
-          scrollIndicatorInsets={ios ? { bottom: cover } : undefined}
-          onLayout={(event) => {
-            viewport.current.height = event.nativeEvent.layout.height
-            if (following.current) toEnd(false)
-          }}
-          onContentSizeChange={(_width, height) => {
-            viewport.current.content = height
-            if (following.current) toEnd()
-          }}
-          onScrollBeginDrag={() => {
-            following.current = false
-          }}
-          onScroll={(event) => {
-            const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent
-            const gap = contentSize.height - layoutMeasurement.height + (ios ? cover : 0) - contentOffset.y
-            if (gap < 40) following.current = true
-          }}
-          scrollEventThrottle={16}
-          contentContainerStyle={{ padding: space.l, gap: space.m, paddingBottom: ios ? space.xl : cover + space.xl }}
-        >
-          {!messages.length ? (
-            <T size={font.control} tone="muted">
-              {say('Ask about this thread without interrupting it. The agent never sees these.')}
-            </T>
-          ) : null}
-          {messages.map((m) =>
+        <PageKeyboardLegendList
+          data={messages}
+          keyExtractor={(m) => m.id}
+          renderItem={({ item: m }) =>
             m.role === 'user' ? (
-              <View key={m.id} style={{ gap: space.s, alignItems: 'flex-end' }}>
+              <View style={{ gap: space.s, alignItems: 'flex-end' }}>
                 {m.quote ? <View style={{ alignSelf: 'stretch' }}>{quoteBlock(m.quote, 4)}</View> : null}
                 <View
                   style={{
@@ -264,15 +219,44 @@ export default function AsideScreen() {
                   </T>
                 </View>
               </View>
+            ) : m.error ? (
+              <T tone="bad">{m.text}</T>
             ) : (
-              <View key={m.id}>{m.error ? <T tone="bad">{m.text}</T> : <Markdown text={m.text} />}</View>
-            ),
-          )}
-          {waiting ? <ActivityIndicator style={{ alignSelf: 'flex-start' }} color={c.accent} /> : null}
-          {viewOnly ? <T tone="muted">{VIEW_ONLY_WRITE_NOTICE[store.language]}</T> : null}
-        </ScrollView>
+              <Markdown text={m.text} />
+            )
+          }
+          getItemType={(m) => m.role}
+          contentInsetEndAdjustment={endInset}
+          keyboardOffset={keyboardSlack}
+          keyboardLiftBehavior="whenAtEnd"
+          contentInsetAdjustmentBehavior="automatic"
+          estimatedItemSize={120}
+          initialScrollAtEnd
+          alignItemsAtEnd
+          // While the end is in view a new answer keeps it there; a reader scrolled up among older ones stays put.
+          maintainScrollAtEnd={{ animated: false, on: { dataChange: true, itemLayout: true, layout: true } }}
+          maintainScrollAtEndThreshold={0}
+          ItemSeparatorComponent={RowSeparator}
+          keyboardDismissMode="interactive"
+          keyboardShouldPersistTaps="handled"
+          style={{ flex: 1 }}
+          contentContainerStyle={{ padding: space.l }}
+          ListEmptyComponent={
+            <T size={font.control} tone="muted">
+              {say('Ask about this thread without interrupting it. The agent never sees these.')}
+            </T>
+          }
+          ListFooterComponent={
+            waiting || viewOnly ? (
+              <View style={{ gap: space.m, paddingTop: messages.length ? space.m : 0 }}>
+                {waiting ? <ActivityIndicator style={{ alignSelf: 'flex-start' }} color={c.accent} /> : null}
+                {viewOnly ? <T tone="muted">{VIEW_ONLY_WRITE_NOTICE[store.language]}</T> : null}
+              </View>
+            ) : null
+          }
+        />
         <KeyboardLift keyboard={keyboard}>
-          <ComposerDock onLayout={(event) => setComposerHeight(event.nativeEvent.layout.height)}>
+          <ComposerDock onLayout={(event) => endInset.set(event.nativeEvent.layout.height + space.s)}>
             <View style={{ paddingHorizontal: space.s + 2, gap: space.s }}>
               {pendingQuote ? (
                 // The passage the next question is about, removable before sending.

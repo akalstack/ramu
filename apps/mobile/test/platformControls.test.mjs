@@ -6046,8 +6046,9 @@ for (const os of ['ios', 'android']) {
         Screen: 'Screen',
         Header: 'Header',
         HeaderButton: 'HeaderButton',
-        PageScrollView: 'ScrollView',
+        PageKeyboardLegendList: 'PageKeyboardLegendList',
       },
+      'react-native-reanimated': { useSharedValue: (value) => ({ value, set() {} }) },
       'react-native': { Alert: { alert: (...args) => confirmations.push(args) } },
     })
     const render = () => hooks.render(() => AsideScreen())
@@ -6064,7 +6065,12 @@ for (const os of ['ios', 'android']) {
     assert.equal(find(tree, 'Composer').props.draftKey, composer.props.draftKey)
     // A viewer cannot clear; the conversation stays readable.
     assert.equal(find(tree, 'Header').props.right, null)
-    assert.ok(nodes(tree).some((node) => node.props.children === 'existing question'))
+    const list = find(tree, 'PageKeyboardLegendList')
+    assert.ok(
+      list.props.data
+        .flatMap((item, index) => nodes(list.props.renderItem({ item, index })))
+        .some((node) => node.props.children === 'existing question'),
+    )
     await find(tree, 'Composer').props.onSend('unsent follow-up', 'send', [])
     confirmations[0][2].find((item) => item.style === 'destructive').onPress()
     await settle()
@@ -8829,9 +8835,9 @@ test('iOS header keeps both toolbar owners stable while actions load, clear and 
   }
 })
 
-test('side-question input uses the thread dock and lifts the transcript inset without resizing it', async () => {
+test('side questions use the thread dock and keep their end above it and the keyboard, as the transcript does', async () => {
   const hooks = hookHarness()
-  const scrolls = []
+  const endInsets = []
   let keyboardHeight = 0
   const keyboard = {
     useKeyboardHeight: () => ({ height: keyboardHeight }),
@@ -8859,36 +8865,28 @@ test('side-question input uses the thread dock and lifts the transcript inset wi
       Screen: 'Screen',
       Header: 'Header',
       HeaderButton: 'HeaderButton',
-      PageScrollView: 'ScrollView',
+      PageKeyboardLegendList: 'PageKeyboardLegendList',
     },
+    'react-native-reanimated': { useSharedValue: (value) => ({ value, set: (next) => endInsets.push(next) }) },
   })
   const render = () => hooks.render(() => AsideScreen())
   let tree = render()
-  const list = find(tree, 'ScrollView')
-  list.props.ref.current = { scrollTo: (options) => scrolls.push(options) }
-  list.props.onLayout({ nativeEvent: { layout: { height: 500 } } })
-  list.props.onContentSizeChange(400, 1000)
+  // The list's end sits above the message box: the dock's height and a little room, measured as it grows.
   find(tree, 'ComposerDock').props.onLayout({ nativeEvent: { layout: { height: 100 } } })
-  tree = render()
-  assert.equal(find(tree, 'ScrollView').props.contentInset.bottom, 100)
+  assert.deepEqual(endInsets, [108])
+  const list = find(render(), 'PageKeyboardLegendList')
+  assert.equal(list.props.contentInsetEndAdjustment.value, 104)
+  // The keyboard lifts the list only when it is at its end, past the home indicator's room the keyboard covers.
+  assert.equal(list.props.keyboardLiftBehavior, 'whenAtEnd')
+  assert.equal(list.props.keyboardOffset, 26)
+  // It opens at the latest answer, and a new one keeps the end in view only while the reader is there.
+  assert.equal(list.props.initialScrollAtEnd, true)
+  assert.equal(list.props.maintainScrollAtEndThreshold, 0)
+  assert.equal(list.props.maintainScrollAtEnd.on.dataChange, true)
   keyboardHeight = 300
   tree = render()
   assert.equal(find(tree, 'KeyboardLift').props.keyboard.height, 300)
-  assert.equal(find(tree, 'ScrollView').props.automaticallyAdjustKeyboardInsets, false)
-  assert.equal(find(tree, 'ScrollView').props.contentInset.bottom, 374)
-  assert.equal(find(tree, 'ScrollView').props.contentContainerStyle.paddingBottom, 24)
   await settle()
-  assert.ok(
-    scrolls.some(({ y }) => y === 874),
-    'latest answer remains above the raised input',
-  )
-  find(tree, 'ScrollView').props.onScrollBeginDrag()
-  const before = scrolls.length
-  find(tree, 'ScrollView').props.onContentSizeChange(400, 1200)
-  assert.equal(scrolls.length, before, 'new answers do not pull a reader away from older messages')
-  keyboardHeight = 0
-  tree = render()
-  assert.equal(find(tree, 'ScrollView').props.contentInset.bottom, 100)
   hooks.dispose()
 })
 
@@ -8935,8 +8933,9 @@ test('a side question is answered on the model and login picked in the thread’
       Screen: 'Screen',
       Header: 'Header',
       HeaderButton: 'HeaderButton',
-      PageScrollView: 'ScrollView',
+      PageKeyboardLegendList: 'PageKeyboardLegendList',
     },
+    'react-native-reanimated': { useSharedValue: (value) => ({ value, set() {} }) },
   })
   const render = () => hooks.render(() => AsideScreen())
   let tree = render()
