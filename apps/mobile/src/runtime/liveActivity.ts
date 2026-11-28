@@ -82,3 +82,11 @@ export function keepOneActivity(input: {
   const kept = input.current ?? adopt
   return { adopt, end: live.filter((id) => id !== kept) }
 }
+
+/**
+ * Whether a dismissal is over. Swiping the activity away (or it ending in a way Ramu did not ask for) hides it until
+ * the next work, so once nothing on the host works or waits, work that starts after it shows the activity again.
+ */
+export function dismissalOver(input: { dismissed: boolean; ongoing: number; online: boolean }): boolean {
+  return input.dismissed && input.online && input.ongoing === 0
+}

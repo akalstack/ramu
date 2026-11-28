@@ -10,7 +10,7 @@ import {
   liveActivityOrder,
 } from '@ramu/shared/liveActivity'
 import { useStore } from '../runtime/store'
-import { keepOneActivity, liveActivityStep, liveActivityThreads } from '../runtime/liveActivity'
+import { dismissalOver, keepOneActivity, liveActivityStep, liveActivityThreads } from '../runtime/liveActivity'
 import { isThreadViewed, onThreadViewed } from '../runtime/threadViewing'
 
 type Activity = LiveActivity<MobileLiveActivityContent>
@@ -237,6 +237,14 @@ export function LiveActivityMonitor() {
     const ongoing = threads.filter((t) => t.status !== 'done' && t.status !== 'failed')
     if (current.current) for (const thread of ongoing) followed.current.add(thread.id)
     const finished = threads.filter((t) => t.status === 'done' || t.status === 'failed')
+    if (
+      dismissalOver({
+        dismissed: suppressed.current === state.selected,
+        ongoing: ongoing.length,
+        online: computer?.status === 'online',
+      })
+    )
+      suppress(null)
     const step = liveActivityStep({
       active: !!current.current,
       ongoing: ongoing.length,

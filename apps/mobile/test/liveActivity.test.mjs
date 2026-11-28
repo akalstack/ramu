@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  dismissalOver,
   keepOneActivity,
   liveActivityStep,
   liveActivityThreads,
@@ -103,4 +104,14 @@ test('one activity at a time: a host-started one beside the app’s is ended, an
     adopt: null,
     end: ['host'],
   })
+})
+
+test('an activity swiped away (or ended without Ramu asking) stays hidden only until the work is over', () => {
+  // Still working: the person asked not to see it for this work.
+  assert.equal(dismissalOver({ dismissed: true, ongoing: 2, online: true }), false)
+  // Nothing works or waits any more: the next work shows it again.
+  assert.equal(dismissalOver({ dismissed: true, ongoing: 0, online: true }), true)
+  // An unreachable host says nothing about its work, and nothing was dismissed.
+  assert.equal(dismissalOver({ dismissed: true, ongoing: 0, online: false }), false)
+  assert.equal(dismissalOver({ dismissed: false, ongoing: 0, online: true }), false)
 })
