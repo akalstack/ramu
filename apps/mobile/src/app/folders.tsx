@@ -35,7 +35,7 @@ import {
 import { goBackOrHome } from '../runtime/navigation'
 import { finishFolderPick } from '../runtime/folderPick'
 import { childPath, repositoryCloneUrl } from '../runtime/cloneRepository'
-import { Header, Screen, GlassButton, PageScrollView as ScrollView } from '../components/Screen'
+import { Header, Screen, GlassButton, PageLegendList, PageScrollView as ScrollView } from '../components/Screen'
 import { ReadableColumn } from '../components/ReadableColumn'
 import { useKeyboardInset } from '../components/Keyboard'
 import { Button, Chip, Divider, IconButton, ROW_INSET, Row, SectionLabel, T, tap } from '../components/ui'
@@ -309,168 +309,180 @@ export default function HostFolders() {
           {opening ? <ActivityIndicator size="small" color={c.muted} style={{ marginLeft: space.xs }} /> : null}
         </HScroll>
       ) : null}
-      <ScrollView
+      {/* A folder can hold thousands of others; only the rows near the screen are mounted. */}
+      <PageLegendList
+        data={listing?.folders ?? []}
+        keyExtractor={(folder) => folder.path}
+        renderItem={({ item: folder, index }) => (
+          <View>
+            {index ? <Divider inset={ROW_INSET} /> : null}
+            <Row
+              onPress={() => open(folder.path)}
+              disabled={cloning}
+              accessibilityState={{ busy: opening === folder.path }}
+              accessibilityLabel={folder.repo ? `${folder.name}, ${say('Git repository')}` : folder.name}
+              style={opening === folder.path ? { backgroundColor: c.pressed } : undefined}
+            >
+              {folder.repo ? <FolderGit2 size={16} color={c.accent} /> : <Folder size={16} color={c.soft} />}
+              <T style={{ flex: 1 }} numberOfLines={1}>
+                {folder.name}
+              </T>
+              {opening === folder.path ? (
+                <ActivityIndicator size="small" color={c.accent} />
+              ) : (
+                <ChevronRight size={15} color={c.muted} />
+              )}
+            </Row>
+          </View>
+        )}
+        estimatedItemSize={48}
+        // The folder being opened and a clone in progress mark the rows, which their data does not carry.
+        extraData={`${opening}:${cloning}`}
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingBottom: space.xl }}
-      >
-        {error ? (
-          <View
-            accessibilityLiveRegion="polite"
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: space.s,
-              marginHorizontal: space.l,
-              marginVertical: space.s,
-              paddingLeft: space.m,
-              paddingRight: space.xs,
-              paddingVertical: space.xs,
-              borderRadius: radius.m,
-              backgroundColor: c.badWash,
-            }}
-          >
-            <CircleAlert size={15} color={c.bad} />
-            <T tone="bad" size={font.control} selectable style={{ flex: 1, paddingVertical: space.xs }}>
-              {error.text}
-            </T>
-            <Button kind="ghost" title={say('Try again')} disabled={working} onPress={error.retry} />
-          </View>
-        ) : null}
-        {!listing ? (
-          places === null || (opening && !places.some((place) => place.path === opening)) ? (
-            error ? null : (
-              <View style={{ alignItems: 'center', gap: space.s, margin: space.xl }}>
-                <PageLoader color={c.accent} />
-                <T size={font.caption} tone="muted">
-                  {say('Loading folders…')}
-                </T>
-              </View>
-            )
-          ) : (
-            <>
-              {pathRow}
-              <SectionLabel>{say('Locations')}</SectionLabel>
-              {places.map((place, index) => {
-                const Icon = PLACE_ICONS[place.kind]
-                const firstProject = place.kind === 'project' && places[index - 1]?.kind !== 'project'
-                return (
-                  <View key={place.path}>
-                    {firstProject ? (
-                      <SectionLabel>{say('Projects')}</SectionLabel>
-                    ) : index ? (
-                      <Divider inset={ROW_INSET} />
-                    ) : null}
-                    <Row onPress={() => open(place.path)} accessibilityState={{ busy: opening === place.path }}>
-                      <Icon size={16} color={c.soft} />
-                      <View style={{ flex: 1 }}>
-                        <T numberOfLines={1}>{placeLabel(place, say)}</T>
-                        <T size={font.caption} tone="muted" numberOfLines={1} ellipsizeMode="head">
-                          {place.path}
-                        </T>
-                      </View>
-                      {opening === place.path ? (
-                        <ActivityIndicator size="small" color={c.accent} />
-                      ) : (
-                        <ChevronRight size={15} color={c.muted} />
-                      )}
-                    </Row>
-                  </View>
-                )
-              })}
-            </>
-          )
-        ) : (
+        style={{ backgroundColor: c.canvas }}
+        ListHeaderComponent={
           <>
-            {/* Making room for a project comes first: a new folder named in place, or a repository cloned here. */}
-            {naming === null ? (
-              <Row onPress={() => setNaming('')} disabled={working}>
-                <FolderPlus size={16} color={c.accent} />
-                <T tone="accent" weight="500" style={{ flex: 1 }}>
-                  {say('New folder')}
-                </T>
-              </Row>
-            ) : (
+            {error ? (
               <View
+                accessibilityLiveRegion="polite"
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  gap: space.m,
-                  paddingLeft: space.l,
-                  paddingRight: space.s,
-                  minHeight: 48,
+                  gap: space.s,
+                  marginHorizontal: space.l,
+                  marginVertical: space.s,
+                  paddingLeft: space.m,
+                  paddingRight: space.xs,
+                  paddingVertical: space.xs,
+                  borderRadius: radius.m,
+                  backgroundColor: c.badWash,
                 }}
               >
-                <FolderPlus size={16} color={c.accent} />
-                <TextInput
-                  autoFocus
-                  value={naming}
-                  onChangeText={setNaming}
-                  onSubmitEditing={createFolder}
-                  returnKeyType="done"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  placeholder={say('Folder name')}
-                  placeholderTextColor={c.placeholder}
-                  accessibilityLabel={say('Folder name')}
-                  style={{ flex: 1, color: c.text, fontSize: font.body, paddingVertical: space.s }}
-                />
-                <IconButton
-                  icon={Check}
-                  label={say('Create folder')}
-                  size={34}
-                  tone="accent"
-                  disabled={busy || !naming.trim()}
-                  onPress={createFolder}
-                />
-                <IconButton icon={X} label={say('Cancel')} size={34} tone="muted" onPress={() => setNaming(null)} />
+                <CircleAlert size={15} color={c.bad} />
+                <T tone="bad" size={font.control} selectable style={{ flex: 1, paddingVertical: space.xs }}>
+                  {error.text}
+                </T>
+                <Button kind="ghost" title={say('Try again')} disabled={working} onPress={error.retry} />
               </View>
-            )}
-            {/* A repository asked for by name clones with the button below, with no search for it. */}
-            {choosingParent || wanted ? null : (
+            ) : null}
+            {!listing ? (
+              places === null || (opening && !places.some((place) => place.path === opening)) ? (
+                error ? null : (
+                  <View style={{ alignItems: 'center', gap: space.s, margin: space.xl }}>
+                    <PageLoader color={c.accent} />
+                    <T size={font.caption} tone="muted">
+                      {say('Loading folders…')}
+                    </T>
+                  </View>
+                )
+              ) : (
+                <>
+                  {pathRow}
+                  <SectionLabel>{say('Locations')}</SectionLabel>
+                  {places.map((place, index) => {
+                    const Icon = PLACE_ICONS[place.kind]
+                    const firstProject = place.kind === 'project' && places[index - 1]?.kind !== 'project'
+                    return (
+                      <View key={place.path}>
+                        {firstProject ? (
+                          <SectionLabel>{say('Projects')}</SectionLabel>
+                        ) : index ? (
+                          <Divider inset={ROW_INSET} />
+                        ) : null}
+                        <Row onPress={() => open(place.path)} accessibilityState={{ busy: opening === place.path }}>
+                          <Icon size={16} color={c.soft} />
+                          <View style={{ flex: 1 }}>
+                            <T numberOfLines={1}>{placeLabel(place, say)}</T>
+                            <T size={font.caption} tone="muted" numberOfLines={1} ellipsizeMode="head">
+                              {place.path}
+                            </T>
+                          </View>
+                          {opening === place.path ? (
+                            <ActivityIndicator size="small" color={c.accent} />
+                          ) : (
+                            <ChevronRight size={15} color={c.muted} />
+                          )}
+                        </Row>
+                      </View>
+                    )
+                  })}
+                </>
+              )
+            ) : (
               <>
+                {/* Making room for a project comes first: a new folder named in place, or a repository cloned here. */}
+                {naming === null ? (
+                  <Row onPress={() => setNaming('')} disabled={working}>
+                    <FolderPlus size={16} color={c.accent} />
+                    <T tone="accent" weight="500" style={{ flex: 1 }}>
+                      {say('New folder')}
+                    </T>
+                  </Row>
+                ) : (
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: space.m,
+                      paddingLeft: space.l,
+                      paddingRight: space.s,
+                      minHeight: 48,
+                    }}
+                  >
+                    <FolderPlus size={16} color={c.accent} />
+                    <TextInput
+                      autoFocus
+                      value={naming}
+                      onChangeText={setNaming}
+                      onSubmitEditing={createFolder}
+                      returnKeyType="done"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      placeholder={say('Folder name')}
+                      placeholderTextColor={c.placeholder}
+                      accessibilityLabel={say('Folder name')}
+                      style={{ flex: 1, color: c.text, fontSize: font.body, paddingVertical: space.s }}
+                    />
+                    <IconButton
+                      icon={Check}
+                      label={say('Create folder')}
+                      size={34}
+                      tone="accent"
+                      disabled={busy || !naming.trim()}
+                      onPress={createFolder}
+                    />
+                    <IconButton icon={X} label={say('Cancel')} size={34} tone="muted" onPress={() => setNaming(null)} />
+                  </View>
+                )}
+                {/* A repository asked for by name clones with the button below, with no search for it. */}
+                {choosingParent || wanted ? null : (
+                  <>
+                    <Divider inset={ROW_INSET} />
+                    <Row onPress={() => setSearching(true)} disabled={working}>
+                      <Download size={16} color={c.accent} />
+                      <T tone="accent" weight="500" style={{ flex: 1 }}>
+                        {say('Clone a repository here')}
+                      </T>
+                    </Row>
+                  </>
+                )}
                 <Divider inset={ROW_INSET} />
-                <Row onPress={() => setSearching(true)} disabled={working}>
-                  <Download size={16} color={c.accent} />
-                  <T tone="accent" weight="500" style={{ flex: 1 }}>
-                    {say('Clone a repository here')}
-                  </T>
-                </Row>
+                {pathRow}
+                <SectionLabel>{here}</SectionLabel>
               </>
             )}
-            <Divider inset={ROW_INSET} />
-            {pathRow}
-            <SectionLabel>{here}</SectionLabel>
-            {listing.folders.map((folder, index) => (
-              <View key={folder.path}>
-                {index ? <Divider inset={ROW_INSET} /> : null}
-                <Row
-                  onPress={() => open(folder.path)}
-                  disabled={cloning}
-                  accessibilityState={{ busy: opening === folder.path }}
-                  accessibilityLabel={folder.repo ? `${folder.name}, ${say('Git repository')}` : folder.name}
-                  style={opening === folder.path ? { backgroundColor: c.pressed } : undefined}
-                >
-                  {folder.repo ? <FolderGit2 size={16} color={c.accent} /> : <Folder size={16} color={c.soft} />}
-                  <T style={{ flex: 1 }} numberOfLines={1}>
-                    {folder.name}
-                  </T>
-                  {opening === folder.path ? (
-                    <ActivityIndicator size="small" color={c.accent} />
-                  ) : (
-                    <ChevronRight size={15} color={c.muted} />
-                  )}
-                </Row>
-              </View>
-            ))}
-            {!listing.folders.length ? (
-              <T tone="muted" style={{ paddingHorizontal: space.l, paddingVertical: space.m }}>
-                {say('No folders here')}
-              </T>
-            ) : null}
           </>
-        )}
-      </ScrollView>
+        }
+        ListEmptyComponent={
+          listing ? (
+            <T tone="muted" style={{ paddingHorizontal: space.l, paddingVertical: space.m }}>
+              {say('No folders here')}
+            </T>
+          ) : null
+        }
+      />
       {/* The one thing this screen is for, always in reach: add, choose or clone into the folder in view. */}
       {listing ? (
         <View
