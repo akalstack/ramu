@@ -8,7 +8,7 @@ import { gestureOverlayPosition, type Direction, type TerminalGestureState } fro
 
 export type GestureDisplay = Pick<TerminalGestureState, 'active' | 'direction' | 'speed' | 'x' | 'y'>
 const SIZE = 112
-/** Where each direction sits: on a ring around the centre, like the arrows of a remote's round pad. */
+/** Where each direction sits: one on each side of the centre. */
 const SPOT = 34
 const RING = 31
 const CENTER = (SIZE - SPOT) / 2
@@ -37,7 +37,7 @@ export function readGesture(value: Record<string, unknown>): GestureDisplay | nu
 }
 
 /**
- * The cursor pad shown while a held finger moves the terminal's cursor: a round glass pad with an arrow on each side,
+ * The cursor pad shown while a held finger moves the terminal's cursor: a plain glass panel with an arrow on each side,
  * fixed on the right edge. The arrow being sent turns the accent color and stacks more chevrons as the cursor speeds
  * up, on the glass itself rather than a disc of its own, so how far the finger has travelled reads at a glance without following it. On Android, which has
  * no glass, it is a raised surface over the terminal.
@@ -97,7 +97,7 @@ export function TerminalGestureOverlay({
         height: SIZE,
       }}
     >
-      <Glass radius={SIZE / 2} floating style={{ width: SIZE, height: SIZE }}>
+      <Glass radius={26} floating style={{ width: SIZE, height: SIZE }}>
         <View
           style={{
             position: 'absolute',
