@@ -1,8 +1,7 @@
-import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { createPrivateKey, sign } from 'node:crypto'
 import { connect, constants } from 'node:http2'
 import type { MobileLiveActivityRegistration } from '@ramu/shared/api'
-import { translate } from '@ramu/shared/i18n'
 import { LIVE_ACTIVITY_DONE_MS, LIVE_ACTIVITY_STALE_MS, liveActivityCountsContent } from '@ramu/shared/liveActivity'
 import {
   LINK_URL,
@@ -132,19 +131,6 @@ export function createLinkLiveActivitySender(
   }
 }
 
-/** A phone's push-to-start token: lets the host start its Live Activity when work begins while Ramu is closed. */
-interface StartRegistration {
-  deviceId: string
-  token: string
-  computerId: string
-  locale: 'en' | 'id'
-  environment: 'sandbox' | 'production'
-  /** The stretch of work (its start time) this phone was last started for, so each stretch starts it at most once. */
-  startedFor?: number
-}
-
-/** How long work runs before the host starts an activity, so a phone with Ramu open starts its own first. */
-export const START_DELAY_MS = 15_000
 /** The reason a Link sender gives when Link itself cannot send, as opposed to Apple refusing one push. */
 const LINK_UNAVAILABLE = 'LinkUnavailable'
 /** How long the host stops using Link after Link said it has no Apple key, before asking again. */
@@ -155,46 +141,14 @@ interface Registration extends MobileLiveActivityRegistration {
   sentAt?: number
   signature?: string
 }
-const validStart = (value: unknown): value is Omit<StartRegistration, 'deviceId' | 'startedFor'> => {
-  const r = value as Partial<StartRegistration> | null
-  return (
-    !!r &&
-    typeof r === 'object' &&
-    typeof r.token === 'string' &&
-    typeof r.computerId === 'string' &&
-    /^[a-fA-F0-9]{64,256}$/.test(r.token) &&
-    /^[a-zA-Z0-9_-]{1,100}$/.test(r.computerId) &&
-    (r.locale === 'en' || r.locale === 'id') &&
-    (r.environment === 'sandbox' || r.environment === 'production')
-  )
-}
-/** What iOS shows as an activity the host started appears: the phone's own words, so in its language. */
-const startAlert = (locale: 'en' | 'id', counts: { running: number; needsInput: number }) => ({
-  title: 'Ramu',
-  body: translate(
-    locale,
-    counts.needsInput
-      ? counts.needsInput === 1
-        ? 'An agent needs your input'
-        : '{0} agents need your input'
-      : counts.running === 1
-        ? 'An agent is working'
-        : '{0} agents are working',
-    { 0: String(counts.needsInput || counts.running) },
-  ),
-})
-
 /**
  * Paired-device-owned ActivityKit tokens; the pushes carry counts, never transcript data. They go through this host's
  * own Apple key when it has one, else through Ramu Link with the host's Ramu account.
  */
 export class MobileLiveActivities {
   private registrations: Registration[] = []
-  private starts: StartRegistration[] = []
   private timer: ReturnType<typeof setTimeout> | undefined
   private busy = false
-  /** When the current stretch of work began, 0 while no thread is working or waiting. */
-  private workingSince = 0
   /** Until when sending is off, after the route said it cannot send (Link with no Apple key). */
   private unavailableUntil = 0
   constructor(
@@ -211,16 +165,8 @@ export class MobileLiveActivities {
           (r: { deviceId?: unknown }) => this.valid(r) && typeof r.deviceId === 'string',
         )
     } catch {}
-    try {
-      const saved = JSON.parse(readFileSync(this.startsPath, 'utf8'))
-      if (Array.isArray(saved))
-        this.starts = saved.filter(
-          (r: { deviceId?: unknown }) => validStart(r) && typeof r.deviceId === 'string',
-        ) as StartRegistration[]
-    } catch {}
-  }
-  private get startsPath() {
-    return this.path.replace(/(\.json)?$/, '-starts.json')
+    // Hosts no longer start an activity while Ramu is closed; drop the start tokens an earlier version kept.
+    rmSync(path.replace(/(\.json)?$/, '-starts.json'), { force: true })
   }
   /** Whether pushes can reach the phone while Ramu is closed: a route is set up and has not just refused. */
   async available(): Promise<boolean> {
@@ -246,9 +192,6 @@ export class MobileLiveActivities {
     const temp = `${this.path}.tmp`
     writeFileSync(temp, JSON.stringify(this.registrations), { mode: 0o600 })
     renameSync(temp, this.path)
-    const startsTemp = `${this.startsPath}.tmp`
-    writeFileSync(startsTemp, JSON.stringify(this.starts), { mode: 0o600 })
-    renameSync(startsTemp, this.startsPath)
   }
   /** `value` arrives from the phone unvalidated; it is checked here before anything is stored. */
   async register(deviceId: string, value: unknown) {
@@ -285,32 +228,6 @@ export class MobileLiveActivities {
   }
   remove(deviceId: string, activityId: string) {
     this.registrations = this.registrations.filter((r) => r.deviceId !== deviceId || r.activityId !== activityId)
-    this.save()
-  }
-  /** The phone's push-to-start token, so work on this host starts its Live Activity while Ramu is closed. */
-  registerStart(deviceId: string, value: unknown) {
-    if (!this.devices().some((d) => d.id === deviceId)) throw new Error('Live Activities require a paired phone')
-    if (!validStart(value)) throw new Error('Invalid Live Activity registration')
-    const token = value.token.toLowerCase()
-    const previous = this.starts.find((r) => r.deviceId === deviceId)
-    this.starts = [
-      ...this.starts.filter((r) => r.deviceId !== deviceId && r.token !== token),
-      {
-        deviceId,
-        token,
-        computerId: value.computerId,
-        locale: value.locale,
-        environment: value.environment,
-        // A phone registering again during work it was already started for is not started twice.
-        ...(previous?.startedFor ? { startedFor: previous.startedFor } : {}),
-      },
-    ]
-    this.save()
-    this.observe()
-  }
-  /** The phone turned Live Activities off, dismissed the current one, or follows another host now. */
-  removeStart(deviceId: string) {
-    this.starts = this.starts.filter((r) => r.deviceId !== deviceId)
     this.save()
   }
   observe() {
@@ -362,13 +279,7 @@ export class MobileLiveActivities {
       const bounded = (value: number) => (Number.isFinite(value) ? Math.max(0, Math.min(9999, Math.floor(value))) : 0)
       const normalized = { running: bounded(counts.running), needsInput: bounded(counts.needsInput) }
       const working = normalized.running + normalized.needsInput > 0
-      if (!working) this.workingSince = 0
-      else if (!this.workingSince) this.workingSince = Date.now()
       const signature = JSON.stringify(normalized)
-      // A phone that showed an activity during this work is not started again in it, also after it swiped it away.
-      if (working)
-        for (const start of this.starts)
-          if (this.registrations.some((r) => r.deviceId === start.deviceId)) start.startedFor = this.workingSince
       for (const r of [...this.registrations]) {
         const revoked = !devices.has(r.deviceId),
           expired = Date.now() - r.startedAt >= 8 * 60 * 60_000
@@ -394,42 +305,9 @@ export class MobileLiveActivities {
           if (revoked || expired) this.registrations = this.registrations.filter((current) => current !== r)
         }
       }
-      await this.startActivities(devices, normalized)
       this.save()
     } finally {
       this.busy = false
-    }
-  }
-  /**
-   * Starts the Live Activity on phones that have none for this work, once per stretch of work and only after it has
-   * gone on a little, so a phone with Ramu open starts its own and is not shown two.
-   */
-  private async startActivities(devices: Set<string>, counts: { running: number; needsInput: number }) {
-    this.starts = this.starts.filter((s) => devices.has(s.deviceId))
-    if (!this.workingSince) return
-    const due = this.workingSince + START_DELAY_MS
-    if (Date.now() < due) {
-      if (this.starts.some((s) => s.startedFor !== this.workingSince)) this.schedule(due - Date.now() + 100)
-      return
-    }
-    for (const s of [...this.starts]) {
-      if (s.startedFor === this.workingSince || this.registrations.some((r) => r.deviceId === s.deviceId)) continue
-      const now = Math.floor(Date.now() / 1000)
-      try {
-        const result = await this.sender({
-          token: s.token,
-          environment: s.environment,
-          event: 'start',
-          props: this.props(Date.now(), s.locale, counts, false),
-          staleDate: now + LIVE_ACTIVITY_STALE_MS / 1000,
-          computerId: s.computerId,
-          alert: startAlert(s.locale, counts),
-        })
-        this.refused(result)
-        if (result.status === 200) s.startedFor = this.workingSince
-        else if (result.status === 410 || result.reason === 'BadDeviceToken')
-          this.starts = this.starts.filter((current) => current !== s)
-      } catch {}
     }
   }
   dispose() {

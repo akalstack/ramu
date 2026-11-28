@@ -2075,12 +2075,10 @@ async function performInvoke(
   } else if (method === 'liveActivity.register') {
     if (!deviceId) throw new Error('Live Activities require a paired phone')
     value = await mobileLiveActivities.register(deviceId, args?.[0])
-  } else if (method === 'liveActivity.registerStart') {
+  } else if (method === 'liveActivity.registerStart' || method === 'liveActivity.unregisterStart') {
+    // Phones before 1.1.0-beta.9 still hand over their start token. Only the open app starts an activity now, since a
+    // pushed one gets its update token only if iOS wakes the app, so the token is accepted and not kept.
     if (!deviceId) throw new Error('Live Activities require a paired phone')
-    mobileLiveActivities.registerStart(deviceId, args?.[0])
-  } else if (method === 'liveActivity.unregisterStart') {
-    if (!deviceId) throw new Error('Live Activities require a paired phone')
-    mobileLiveActivities.removeStart(deviceId)
   } else if (method === 'liveActivity.unregister') {
     if (!deviceId || typeof args?.[0] !== 'string') throw new Error('Live Activities require a paired phone')
     mobileLiveActivities.remove(deviceId, args[0])

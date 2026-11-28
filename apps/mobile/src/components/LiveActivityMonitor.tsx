@@ -52,7 +52,6 @@ export function LiveActivityMonitor() {
     recovered = useRef(false),
     suppressed = useRef<string | null>(null)
   const syncRef = useRef<() => void>(() => {})
-  const startKey = useRef('')
   const enabled = store.drafts['live-activities-enabled'] !== 'no'
   const pc = store.computers.find((c) => c.id === store.selected)
   const chats = store.chats.filter((c) => c.computerId === store.selected && c.status !== 'archived')
@@ -142,45 +141,24 @@ export function LiveActivityMonitor() {
     void value?.instance.end('immediate').catch(() => {})
   }
   /**
-   * Hands the phone's push-to-start token to the host it follows, so work there starts the activity while Ramu is
-   * closed, and takes it back from a host it no longer follows, when Live Activities are off or the current one was
-   * dismissed.
+   * Takes the push-to-start token back from a host an earlier Ramu gave it to. Only the open app starts an activity:
+   * one a host starts gets its update token only if iOS wakes Ramu in the background, which does not always happen,
+   * and then it stays frozen on the Lock Screen.
    */
-  const syncStart = async () => {
+  const releaseStart = async () => {
     const state = latest.current
-    const token = state.drafts['live-activity-start-token'] || ''
-    const want =
-      token && state.drafts['live-activities-enabled'] !== 'no' && suppressed.current !== state.selected
-        ? state.selected
-        : ''
     const registered = state.drafts['live-activity-start-host'] || ''
-    const key = `${want}:${token}:${state.language}`
-    if (startKey.current === key && registered === want) return
-    if (registered && registered !== want && state.computers.some((c) => c.id === registered)) {
-      // A host that did not hear this keeps the token and goes on starting activities, with Live Activities turned off
-      // too. It stays recorded as holding the token, so the next change of state asks it again.
+    if (!registered) return
+    if (state.computers.some((c) => c.id === registered)) {
+      // A host that did not hear this keeps starting activities, so it is asked again on the next change.
       const released = await state.invoke(registered, 'liveActivity.unregisterStart').then(
         () => true,
         () => false,
       )
       if (!released) return
     }
-    if (want) {
-      const ok = await state
-        .invoke(want, 'liveActivity.registerStart', {
-          token,
-          computerId: want,
-          locale: state.language,
-          environment: __DEV__ ? 'sandbox' : 'production',
-        })
-        .then(
-          () => true,
-          () => false,
-        )
-      if (!ok) return
-    }
-    startKey.current = key
-    state.setDraft('live-activity-start-host', want)
+    state.setDraft('live-activity-start-host', '')
+    state.setDraft('live-activity-start-token', '')
   }
   const synchronize = async () => {
     let state = latest.current
@@ -202,7 +180,7 @@ export function LiveActivityMonitor() {
           startedAt: saved.startedAt,
           remote: !!saved.remote,
         }
-      // The host started this one while Ramu was closed (push-to-start), for the host this phone follows.
+      // An older host started this one while Ramu was closed (push-to-start), for the host this phone follows.
       else if (instances[0] && !saved.computerId) {
         current.current = { instance: instances[0], computerId: state.selected, startedAt: Date.now(), remote: false }
         persist(current.current)
@@ -231,7 +209,7 @@ export function LiveActivityMonitor() {
       for (const instance of live)
         if (keep.end.includes(instance.getId())) await instance.end('immediate').catch(() => {})
     }
-    await syncStart()
+    await releaseStart()
     state = latest.current
     if (
       state.drafts['live-activities-enabled'] === 'no' ||
@@ -243,7 +221,7 @@ export function LiveActivityMonitor() {
       suppress(null)
     }
     if (state.drafts['live-activities-enabled'] === 'no') {
-      // Off means none on the Lock Screen: one the host started while Ramu was closed, or one left from before, is not
+      // Off means none on the Lock Screen: one an older host started while Ramu was closed, or one left from before, is not
       // the activity tracked above, and would otherwise stay until iOS timed it out.
       for (const instance of WorkActivityFactory.getInstances()) await instance.end('immediate').catch(() => {})
       return
@@ -358,25 +336,6 @@ export function LiveActivityMonitor() {
   useEffect(() => {
     syncRef.current()
   }, [store.ready, store.selected, pc?.status, shown, enabled, store.language, available])
-  useEffect(() => {
-    if (!available) return
-    let tokens: { remove(): void } | undefined
-    let alive = true
-    void import('expo-widgets')
-      .then((module) => {
-        if (!alive) return
-        tokens = module.addPushToStartTokenListener((event) => {
-          if (latest.current.drafts['live-activity-start-token'] === event.activityPushToStartToken) return
-          latest.current.setDraft('live-activity-start-token', event.activityPushToStartToken)
-          syncRef.current()
-        })
-      })
-      .catch(() => {})
-    return () => {
-      alive = false
-      tokens?.remove()
-    }
-  }, [available])
   useEffect(() => {
     if (!available) return
     const subscription = AppState.addEventListener('change', (state) => {

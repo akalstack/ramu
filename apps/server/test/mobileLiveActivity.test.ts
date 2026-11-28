@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { generateKeyPairSync, verify } from 'node:crypto'
@@ -155,57 +155,26 @@ it('leaves background registration disabled without host credentials', async () 
   expect(f.sender).not.toHaveBeenCalled()
 })
 
-it('starts the activity on a phone with Ramu closed once work has gone on a little, once per stretch of work', async () => {
+it('never starts an activity itself, and drops the start tokens an earlier version kept', async () => {
   vi.useFakeTimers()
-  const f = fixture()
-  const start = {
-    token: 'b'.repeat(64),
-    computerId: 'computer-a',
-    locale: 'id' as const,
-    environment: 'sandbox' as const,
-  }
-  f.service.registerStart('phone-a', start)
-  expect(() => f.service.registerStart('unknown', start)).toThrow('paired')
-  expect(() => f.service.registerStart('phone-a', { ...start, computerId: 'a&b' })).toThrow('Invalid')
-  // Work just began: a phone with Ramu open would start its own, so nothing is sent yet.
-  await f.service.flush()
-  expect(f.sender).not.toHaveBeenCalled()
-  vi.setSystemTime(Date.now() + 16_000)
-  await f.service.flush()
-  expect(f.sender).toHaveBeenCalledTimes(1)
-  const push = f.sender.mock.calls[0]![0]
-  expect(push).toMatchObject({ event: 'start', token: start.token, computerId: 'computer-a' })
-  expect(push.alert).toEqual({ title: 'Ramu', body: '2 agen sedang bekerja' })
-  expect(JSON.parse(push.props)).toMatchObject({ running: 2, phase: 'working', locale: 'id' })
-  // The same stretch of work never starts it twice.
-  await f.service.flush()
-  expect(f.sender).toHaveBeenCalledTimes(1)
-  // Work ended and began again: a new stretch, started again.
-  f.counts.running = 0
-  await f.service.flush()
-  f.counts.running = 1
-  await f.service.flush()
-  vi.setSystemTime(Date.now() + 16_000)
-  await f.service.flush()
-  expect(f.sender.mock.calls.filter(([p]) => p.event === 'start')).toHaveLength(2)
-})
-
-it('does not start one on a phone that already shows its own, or that took its token back', async () => {
-  vi.useFakeTimers()
-  const f = fixture()
-  const start = {
-    token: 'b'.repeat(64),
-    computerId: 'computer-a',
-    locale: 'en' as const,
-    environment: 'sandbox' as const,
-  }
-  f.service.registerStart('phone-a', start)
-  f.service.registerStart('phone-b', { ...start, token: 'c'.repeat(64) })
-  await f.service.register('phone-a', f.registration)
-  f.service.removeStart('phone-b')
-  vi.setSystemTime(Date.now() + 16_000)
-  await f.service.flush()
-  expect(f.sender.mock.calls.map(([p]) => p.event)).toEqual(['update'])
+  const directory = mkdtempSync(join(tmpdir(), 'ramu-activity-'))
+  const path = join(directory, 'activities.json')
+  const starts = join(directory, 'activities-starts.json')
+  writeFileSync(starts, JSON.stringify([{ deviceId: 'phone-a', token: 'b'.repeat(64) }]))
+  const sender = vi.fn(async () => ({ status: 200 }))
+  const service = new MobileLiveActivities(
+    path,
+    () => [{ id: 'phone-a' }],
+    () => ({ running: 2, needsInput: 0 }),
+    sender,
+    () => true,
+  )
+  expect(existsSync(starts)).toBe(false)
+  vi.setSystemTime(Date.now() + 60_000)
+  await service.flush()
+  expect(sender).not.toHaveBeenCalled()
+  service.dispose()
+  rmSync(directory, { recursive: true, force: true })
 })
 
 it('stops using a route that cannot send, so the phone keeps its own updates meanwhile', async () => {
@@ -234,25 +203,4 @@ it('sends through Ramu Link with the host account, and reports a signed-out host
   expect(url).toBe('https://ramu-link.akalstack.com/v1/live-activities')
   expect(init.headers).toMatchObject({ Authorization: 'Bearer session' })
   expect(JSON.parse(String(init.body))).toEqual(push)
-})
-
-it('does not start the activity again in the same work after the person swiped it away', async () => {
-  vi.useFakeTimers()
-  const f = fixture()
-  const start = {
-    token: 'b'.repeat(64),
-    computerId: 'computer-a',
-    locale: 'en' as const,
-    environment: 'sandbox' as const,
-  }
-  f.service.registerStart('phone-a', start)
-  await f.service.register('phone-a', f.registration)
-  await f.service.flush()
-  // Swiped away: its token is gone.
-  f.counts.running = 3
-  f.sender.mockResolvedValueOnce({ status: 410 })
-  await f.service.flush()
-  vi.setSystemTime(Date.now() + 16_000)
-  await f.service.flush()
-  expect(f.sender.mock.calls.map(([p]) => p.event)).toEqual(['update', 'update'])
 })

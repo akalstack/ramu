@@ -1044,8 +1044,8 @@ export interface RamuMethods extends ArtifactMethods {
   'liveActivity.register'(registration: MobileLiveActivityRegistration): { enabled: boolean }
   'liveActivity.unregister'(activityId: string): void
   /**
-   * The phone's push-to-start token for this host, so work here starts its Live Activity while Ramu is closed
-   * (iOS 17.2 and later). The phone sends it to the host it follows and takes it back when it stops following it.
+   * A phone's push-to-start token. Hosts no longer start an activity while Ramu is closed, so it is accepted and not
+   * kept; it stays for phones before 1.1.0-beta.9. Phones take it back with `unregisterStart` from a host that kept it.
    */
   'liveActivity.registerStart'(registration: MobileLiveActivityStart): void
   'liveActivity.unregisterStart'(): void
