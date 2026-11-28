@@ -131,6 +131,8 @@ export function createLinkLiveActivitySender(
   }
 }
 
+/** How long nothing may run or wait before the host ends its Live Activities as done. */
+export const SETTLE_MS = 6_000
 /** The reason a Link sender gives when Link itself cannot send, as opposed to Apple refusing one push. */
 const LINK_UNAVAILABLE = 'LinkUnavailable'
 /** How long the host stops using Link after Link said it has no Apple key, before asking again. */
@@ -151,6 +153,8 @@ export class MobileLiveActivities {
   private busy = false
   /** Until when sending is off, after the route said it cannot send (Link with no Apple key). */
   private unavailableUntil = 0
+  /** When the host last went from working to nothing running or waiting; 0 while it works. */
+  private quietSince = 0
   constructor(
     private path: string,
     private devices: () => { id: string }[],
@@ -279,11 +283,18 @@ export class MobileLiveActivities {
       const bounded = (value: number) => (Number.isFinite(value) ? Math.max(0, Math.min(9999, Math.floor(value))) : 0)
       const normalized = { running: bounded(counts.running), needsInput: bounded(counts.needsInput) }
       const working = normalized.running + normalized.needsInput > 0
+      // A steer or the gap between two turns reads as nothing running for a moment: end the activities only once the
+      // work stays over, and send nothing meanwhile, so the Lock Screen never says all work is done while it is not.
+      if (working) this.quietSince = 0
+      else if (!this.quietSince) this.quietSince = Date.now()
+      const settling = !working && Date.now() - this.quietSince < SETTLE_MS
+      if (settling) this.schedule(SETTLE_MS - (Date.now() - this.quietSince) + 100)
       const signature = JSON.stringify(normalized)
       for (const r of [...this.registrations]) {
         const revoked = !devices.has(r.deviceId),
           expired = Date.now() - r.startedAt >= 8 * 60 * 60_000
         const ended = revoked || expired || !working
+        if (settling && !revoked && !expired) continue
         if (!ended && r.signature === signature && Date.now() - (r.sentAt ?? 0) < 5 * 60_000) continue
         try {
           const result = await this.sender(this.push(r, normalized, ended, revoked || expired))

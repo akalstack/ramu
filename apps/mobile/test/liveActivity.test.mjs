@@ -115,3 +115,11 @@ test('an activity swiped away (or ended without Ramu asking) stays hidden only u
   assert.equal(dismissalOver({ dismissed: true, ongoing: 0, online: false }), false)
   assert.equal(dismissalOver({ dismissed: false, ongoing: 0, online: true }), false)
 })
+
+test('a moment with nothing running (a steer, the gap between turns) does not call the work done', () => {
+  const base = { active: true, ongoing: 0, followed: 1, online: true, foreground: true, viewingFinished: false }
+  assert.equal(liveActivityStep({ ...base, quietMs: 1_000 }), 'none')
+  assert.equal(liveActivityStep({ ...base, quietMs: 7_000 }), 'finish')
+  assert.equal(dismissalOver({ dismissed: true, ongoing: 0, quietMs: 1_000, online: true }), false)
+  assert.equal(dismissalOver({ dismissed: true, ongoing: 0, quietMs: 7_000, online: true }), true)
+})

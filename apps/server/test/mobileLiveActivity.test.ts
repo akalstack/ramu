@@ -3,7 +3,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { generateKeyPairSync, verify } from 'node:crypto'
 import { afterEach, expect, it, vi } from 'vitest'
-import { apnsAuthorization, MobileLiveActivities, type LiveActivitySender } from '../src/remote/mobileLiveActivity'
+import {
+  apnsAuthorization,
+  MobileLiveActivities,
+  SETTLE_MS,
+  type LiveActivitySender,
+} from '../src/remote/mobileLiveActivity'
 
 const directories: string[] = [],
   services: MobileLiveActivities[] = []
@@ -81,6 +86,7 @@ it('requires a paired owner, normalizes tokens and discards extra registration f
   expect(JSON.parse(readFileSync(f.path, 'utf8'))).toHaveLength(1)
 })
 it('sends only status, deduplicates unchanged work and ends completed activity', async () => {
+  vi.useFakeTimers()
   const f = fixture()
   await f.service.register('phone-a', f.registration)
   await f.service.flush()
@@ -109,16 +115,26 @@ it('sends only status, deduplicates unchanged work and ends completed activity',
   })
   f.counts.running = 0
   f.counts.needsInput = 0
+  // Nothing running for a moment (a steer, the gap between turns) is not the end of the work.
   await f.service.flush()
-  push = f.sender.mock.calls[2]![0]
+  expect(f.sender).toHaveBeenCalledTimes(2)
+  f.counts.running = 1
+  await f.service.flush()
+  f.counts.running = 0
+  await f.service.flush()
+  expect(f.sender.mock.calls.slice(2).map(([p]) => p.event)).not.toContain('end')
+  vi.setSystemTime(Date.now() + SETTLE_MS)
+  await f.service.flush()
+  push = f.sender.mock.calls.at(-1)![0]
   expect(push.event).toBe('end')
   // The finished activity leaves the Lock Screen after a few minutes, not hours later, and carries no counts.
   expect(push.dismissalDate).toBeGreaterThanOrEqual(Math.floor(Date.now() / 1000) + 239)
   expect(push.dismissalDate).toBeLessThanOrEqual(Math.floor(Date.now() / 1000) + 241)
   expect(JSON.parse(push.props)).toMatchObject({ running: 0, waiting: 0, phase: 'finished', tone: 'done' })
   expect(JSON.parse(push.props).rows).toBeUndefined()
+  const sent = f.sender.mock.calls.length
   await f.service.flush()
-  expect(f.sender).toHaveBeenCalledTimes(3)
+  expect(f.sender).toHaveBeenCalledTimes(sent)
 })
 it('immediately dismisses revoked or expired activities', async () => {
   vi.useFakeTimers()
@@ -134,9 +150,12 @@ it('immediately dismisses revoked or expired activities', async () => {
   expect(f.sender.mock.calls[1]![0].dismissalDate).toBe(0)
 })
 it('retries failed completion deliveries and drops invalidated APNs tokens', async () => {
+  vi.useFakeTimers()
   const f = fixture()
   await f.service.register('phone-a', f.registration)
   f.counts.running = 0
+  await f.service.flush()
+  vi.setSystemTime(Date.now() + SETTLE_MS)
   f.sender.mockResolvedValueOnce({ status: 503 })
   await f.service.flush()
   expect(JSON.parse(readFileSync(f.path, 'utf8'))).toHaveLength(1)

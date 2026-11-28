@@ -41,6 +41,9 @@ export function liveActivityThreads(chats: readonly LiveChat[], followed: Readon
     .sort((a, b) => b.at - a.at)
 }
 
+/** How long nothing may work or wait before the activity calls the work done. */
+export const LIVE_ACTIVITY_SETTLE_MS = 6_000
+
 /** What becomes of the activity once a host's work changes; the monitor carries it out. */
 type LiveActivityStep = 'start' | 'update' | 'finish' | 'dismiss' | 'none'
 
@@ -56,10 +59,14 @@ export function liveActivityStep(input: {
   online: boolean
   foreground: boolean
   viewingFinished: boolean
+  /** How long nothing has worked or waited; unknown counts as settled. */
+  quietMs?: number
 }): LiveActivityStep {
   if (!input.online) return 'none'
   if (!input.ongoing) {
     if (!input.active) return 'none'
+    // A steer or the gap between two turns reads as nothing running for a moment; the work is over only once it stays so.
+    if ((input.quietMs ?? Infinity) < LIVE_ACTIVITY_SETTLE_MS) return 'none'
     return !input.followed || input.viewingFinished ? 'dismiss' : 'finish'
   }
   if (!input.active) return input.foreground ? 'start' : 'none'
@@ -87,6 +94,13 @@ export function keepOneActivity(input: {
  * Whether a dismissal is over. Swiping the activity away (or it ending in a way Ramu did not ask for) hides it until
  * the next work, so once nothing on the host works or waits, work that starts after it shows the activity again.
  */
-export function dismissalOver(input: { dismissed: boolean; ongoing: number; online: boolean }): boolean {
-  return input.dismissed && input.online && input.ongoing === 0
+export function dismissalOver(input: {
+  dismissed: boolean
+  ongoing: number
+  quietMs?: number
+  online: boolean
+}): boolean {
+  return (
+    input.dismissed && input.online && input.ongoing === 0 && (input.quietMs ?? Infinity) >= LIVE_ACTIVITY_SETTLE_MS
+  )
 }

@@ -10,7 +10,13 @@ import {
   liveActivityOrder,
 } from '@ramu/shared/liveActivity'
 import { useStore } from '../runtime/store'
-import { dismissalOver, keepOneActivity, liveActivityStep, liveActivityThreads } from '../runtime/liveActivity'
+import {
+  LIVE_ACTIVITY_SETTLE_MS,
+  dismissalOver,
+  keepOneActivity,
+  liveActivityStep,
+  liveActivityThreads,
+} from '../runtime/liveActivity'
 import { isThreadViewed, onThreadViewed } from '../runtime/threadViewing'
 
 type Activity = LiveActivity<MobileLiveActivityContent>
@@ -52,6 +58,8 @@ export function LiveActivityMonitor() {
     recovered = useRef(false),
     suppressed = useRef<string | null>(null)
   const syncRef = useRef<() => void>(() => {})
+  const quietSince = useRef(0)
+  const settle = useRef<ReturnType<typeof setTimeout>>(undefined)
   const enabled = store.drafts['live-activities-enabled'] !== 'no'
   const pc = store.computers.find((c) => c.id === store.selected)
   const chats = store.chats.filter((c) => c.computerId === store.selected && c.status !== 'archived')
@@ -237,15 +245,29 @@ export function LiveActivityMonitor() {
     const ongoing = threads.filter((t) => t.status !== 'done' && t.status !== 'failed')
     if (current.current) for (const thread of ongoing) followed.current.add(thread.id)
     const finished = threads.filter((t) => t.status === 'done' || t.status === 'failed')
+    // When the host's work last went quiet, so a moment between turns is not read as the work being over.
+    if (ongoing.length) quietSince.current = 0
+    else if (!quietSince.current) quietSince.current = Date.now()
+    const quietMs = quietSince.current ? Date.now() - quietSince.current : 0
+    if (
+      !ongoing.length &&
+      (current.current || suppressed.current === state.selected) &&
+      quietMs < LIVE_ACTIVITY_SETTLE_MS
+    ) {
+      clearTimeout(settle.current)
+      settle.current = setTimeout(() => syncRef.current(), LIVE_ACTIVITY_SETTLE_MS - quietMs + 100)
+    }
     if (
       dismissalOver({
         dismissed: suppressed.current === state.selected,
         ongoing: ongoing.length,
+        quietMs,
         online: computer?.status === 'online',
       })
     )
       suppress(null)
     const step = liveActivityStep({
+      quietMs,
       active: !!current.current,
       ongoing: ongoing.length,
       followed: followed.current.size,
@@ -341,6 +363,7 @@ export function LiveActivityMonitor() {
       }
     })()
   }
+  useEffect(() => () => clearTimeout(settle.current), [])
   useEffect(() => {
     syncRef.current()
   }, [store.ready, store.selected, pc?.status, shown, enabled, store.language, available])
