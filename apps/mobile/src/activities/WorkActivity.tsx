@@ -1,5 +1,13 @@
 import { HStack, Image, Spacer, Text, VStack } from '@expo/ui/swift-ui'
-import { font, foregroundStyle, frame, lineLimit, padding, resizable } from '@expo/ui/swift-ui/modifiers'
+import {
+  font,
+  foregroundStyle,
+  frame,
+  lineLimit,
+  multilineTextAlignment,
+  padding,
+  resizable,
+} from '@expo/ui/swift-ui/modifiers'
 import { createLiveActivity, type LiveActivityEnvironment } from 'expo-widgets'
 import type { MobileLiveActivityContent } from '@ramu/shared/api'
 
@@ -142,12 +150,22 @@ function WorkActivity(props: MobileLiveActivityContent, environment: LiveActivit
         {row(rows[1], island)}
         {row(rows[2], island)}
       </VStack>
-    ) : island || !stale ? (
-      // The Lock Screen already says it is out of date under the headline.
+    ) : island || (!stale && tone !== 'working') ? (
+      // The Lock Screen already says it is out of date under the headline, and that agents work beside its timer.
       <Text modifiers={[font({ size: 13 }), secondary]}>{hint}</Text>
     ) : null
+  // A running timer's text takes all the width it is offered and centres in it, so it sat in the middle of the row.
+  // A fixed width as wide as "1:23:45", right-aligned, keeps it at the trailing edge without the row moving as it counts.
   const timer = (size: number) => (
-    <Text date={new Date(props.startedAt)} dateStyle="timer" modifiers={[font({ size, design: 'monospaced' })]} />
+    <Text
+      date={new Date(props.startedAt)}
+      dateStyle="timer"
+      modifiers={[
+        font({ size, design: 'monospaced' }),
+        multilineTextAlignment('trailing'),
+        frame({ width: Math.round(size * 4.6), alignment: 'trailing' }),
+      ]}
+    />
   )
   const trailingWord =
     tone === 'attention'
@@ -180,7 +198,10 @@ function WorkActivity(props: MobileLiveActivityContent, environment: LiveActivit
             <Image systemName={symbol} color={accent} modifiers={[font({ size: 17 })]} />
           )}
         </HStack>
-        {rowsView(false)}
+        {/* Under the headline, not the mark, so the card reads as one column. */}
+        <VStack alignment="leading" modifiers={[padding({ leading: 30 })]}>
+          {rowsView(false)}
+        </VStack>
       </VStack>
     ),
     bannerSmall: (
@@ -199,9 +220,17 @@ function WorkActivity(props: MobileLiveActivityContent, environment: LiveActivit
           </Text>
         </HStack>
       ) : tone === 'working' && !stale && props.running > 0 ? (
-        <Text modifiers={[font({ size: 14, weight: 'semibold', design: 'monospaced' }), foregroundStyle(islandAccent)]}>
-          {Math.min(99, props.running)}
-        </Text>
+        // How long the work has gone on, counted by iOS itself; how many threads run is in the expanded view.
+        <Text
+          date={new Date(props.startedAt)}
+          dateStyle="timer"
+          modifiers={[
+            font({ size: 14, weight: 'semibold', design: 'monospaced' }),
+            foregroundStyle(islandAccent),
+            multilineTextAlignment('trailing'),
+            frame({ width: 58, alignment: 'trailing' }),
+          ]}
+        />
       ) : (
         <Image systemName={symbol} color={islandAccent} modifiers={[font({ size: 14 })]} />
       ),
