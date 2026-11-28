@@ -1,5 +1,5 @@
 import { HStack, Image, Spacer, Text, VStack } from '@expo/ui/swift-ui'
-import { font, foregroundStyle, frame, lineLimit, padding } from '@expo/ui/swift-ui/modifiers'
+import { font, foregroundStyle, lineLimit, padding } from '@expo/ui/swift-ui/modifiers'
 import { createLiveActivity, type LiveActivityEnvironment } from 'expo-widgets'
 import type { MobileLiveActivityContent } from '@ramu/shared/api'
 
@@ -149,7 +149,7 @@ function WorkActivity(props: MobileLiveActivityContent, environment: LiveActivit
     banner: (
       <VStack alignment="leading" spacing={10} modifiers={[padding({ all: 16 })]}>
         <HStack spacing={10}>
-          <Image systemName={mark} color={accent} modifiers={[frame({ width: 22, height: 22 })]} />
+          <Image systemName={mark} color={accent} modifiers={[font({ size: 20 })]} />
           <VStack alignment="leading" spacing={2}>
             <Text modifiers={[font({ size: 16, weight: 'semibold' }), lineLimit(1)]}>{headline}</Text>
             <Text
@@ -165,7 +165,7 @@ function WorkActivity(props: MobileLiveActivityContent, environment: LiveActivit
           {!stale && tone === 'working' ? (
             timer(15)
           ) : (
-            <Image systemName={symbol} color={accent} modifiers={[frame({ width: 20, height: 20 })]} />
+            <Image systemName={symbol} color={accent} modifiers={[font({ size: 17 })]} />
           )}
         </HStack>
         {rowsView(false)}
@@ -173,15 +173,15 @@ function WorkActivity(props: MobileLiveActivityContent, environment: LiveActivit
     ),
     bannerSmall: (
       <HStack spacing={8} modifiers={[padding({ all: 12 })]}>
-        <Image systemName={mark} color={accent} />
+        <Image systemName={mark} color={accent} modifiers={[font({ size: 13 })]} />
         <Text modifiers={[font({ size: 13, weight: 'semibold' }), lineLimit(1)]}>{headline}</Text>
       </HStack>
     ),
-    compactLeading: <Image systemName={mark} color={islandAccent} modifiers={[frame({ width: 20, height: 20 })]} />,
+    compactLeading: <Image systemName={mark} color={islandAccent} modifiers={[font({ size: 14 })]} />,
     compactTrailing:
       tone === 'attention' && !stale ? (
         <HStack spacing={2}>
-          <Image systemName={symbol} color={islandAccent} />
+          <Image systemName={symbol} color={islandAccent} modifiers={[font({ size: 12 })]} />
           <Text modifiers={[font({ size: 14, weight: 'semibold' }), foregroundStyle(islandAccent)]}>
             {Math.min(99, props.waiting)}
           </Text>
@@ -191,7 +191,7 @@ function WorkActivity(props: MobileLiveActivityContent, environment: LiveActivit
           {Math.min(99, props.running)}
         </Text>
       ) : (
-        <Image systemName={symbol} color={islandAccent} />
+        <Image systemName={symbol} color={islandAccent} modifiers={[font({ size: 14 })]} />
       ),
     minimal:
       tone === 'working' && !stale && props.running > 0 ? (
@@ -199,11 +199,11 @@ function WorkActivity(props: MobileLiveActivityContent, environment: LiveActivit
           {Math.min(99, props.running)}
         </Text>
       ) : (
-        <Image systemName={symbol} color={islandAccent} />
+        <Image systemName={symbol} color={islandAccent} modifiers={[font({ size: 14 })]} />
       ),
     expandedLeading: (
       <HStack spacing={6}>
-        <Image systemName={mark} color={islandAccent} />
+        <Image systemName={mark} color={islandAccent} modifiers={[font({ size: 14 })]} />
         <Text modifiers={[font({ size: 14, weight: 'semibold' })]}>Ramu</Text>
       </HStack>
     ),
