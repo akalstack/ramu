@@ -7,6 +7,7 @@ fetchTimeout: 600000
 # Versions used by more than one workspace package.
 catalog:
   '@anthropic-ai/claude-agent-sdk': 0.3.327
+  '@legendapp/list': 3.7.3
   '@types/luxon': ^3.7.6
   '@types/node': ^26.6.6
   '@types/react': ^19.3.0

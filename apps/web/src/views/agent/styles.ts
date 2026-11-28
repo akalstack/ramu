@@ -72,18 +72,19 @@ export const TURN_END_CLASS =
 export const AGENT_HEADER_CLASS =
   'agent-header [&_.path]:flex-1 [&:not(:has(>_:not(.grow)))]:hidden [&_.grow]:hidden [&_.state]:mr-auto [&_.small]:gap-1.5 [&_.small]:text-soft [&_>_*]:flex-none [&_>_*]:whitespace-nowrap flex items-center flex-none text-control min-w-0 justify-end h-auto min-h-[36px] p-[4px_10px_0] gap-1.5 flex-wrap gap-y-1 pb-1'
 
-/** The transcript's scrolling area and its reading column. */
+/** The transcript's scrolling area and its reading column. The column is padded 12px above and 28px below, rows 14px apart. */
 export const TRANSCRIPT_VIEWPORT_CLASS =
-  'scroll-fade-y px-6 pt-3 pb-7 outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--line)]'
-export const TRANSCRIPT_COLUMN_CLASS = 'transcript-col mx-auto max-w-[var(--chat-column-width)] gap-3.5'
+  'scroll-fade-y px-6 outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--line)]'
+export const TRANSCRIPT_COLUMN_CLASS = 'transcript-col mx-auto max-w-[var(--chat-column-width)]'
 
 /** The strip under the transcript that holds a chat's message box. */
 export const COMPOSER_DOCK_CLASS =
   'composer-dock [&_.error]:mb-1.5 [&_.error]:text-control flex-none p-[0_calc(16px_+_var(--chat-scrollbar-width,_0px))_10px_16px]'
 
 /**
- * A transcript row is laid out at its real size from its first frame. The scroller's rows otherwise start at an
- * estimated height until drawn, which showed a message just sent 160px tall for one frame before it snapped into place.
+ * A row of the starting thread's transcript is laid out at its real size from its first frame. The scroller's rows
+ * otherwise start at an estimated height until drawn, which showed a message just sent 160px tall for one frame before
+ * it snapped into place.
  */
 export const LIVE_ITEM_CLASS = '[content-visibility:visible]'
 

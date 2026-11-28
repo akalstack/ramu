@@ -56,17 +56,20 @@ export function SelectionActions({
       }
     }
     const hide = () => setPick(null)
-    const el = scroller.current
+    // Heard from the document: the transcript draws a new scroller for each thread it shows.
+    const scrolled = (event: Event) => {
+      if (event.target === scroller.current) hide()
+    }
     document.addEventListener('selectionchange', change)
     document.addEventListener('mousedown', down)
     document.addEventListener('mouseup', up)
-    el?.addEventListener('scroll', hide)
+    document.addEventListener('scroll', scrolled, true)
     window.addEventListener('resize', hide)
     return () => {
       document.removeEventListener('selectionchange', change)
       document.removeEventListener('mousedown', down)
       document.removeEventListener('mouseup', up)
-      el?.removeEventListener('scroll', hide)
+      document.removeEventListener('scroll', scrolled, true)
       window.removeEventListener('resize', hide)
     }
   }, [scroller])

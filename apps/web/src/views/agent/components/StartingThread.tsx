@@ -39,12 +39,10 @@ export function OpeningTurn({
 }) {
   const date = nextTurnDate([], sentAt)
   return (
-    <MessageScrollerItem messageId="opening" className={LIVE_ITEM_CLASS}>
-      <div className="turn flex flex-col gap-3.5 min-w-0">
-        {date !== undefined && <TurnDate at={date} now={now} />}
-        <SentMessage text={text} attachments={attachments} start={start} />
-      </div>
-    </MessageScrollerItem>
+    <div className="turn flex flex-col gap-3.5 min-w-0">
+      {date !== undefined && <TurnDate at={date} now={now} />}
+      <SentMessage text={text} attachments={attachments} start={start} />
+    </div>
   )
 }
 
@@ -56,15 +54,20 @@ export function StartingTranscript({ thread, start = false }: { thread: Starting
     <MessageScrollerProvider autoScroll defaultScrollPosition="end">
       <div className="transcript-frame relative flex-1 min-h-0 min-w-0 flex [container:transcript-frame_/_inline-size] flex-col">
         <MessageScroller className="transcript min-h-0 min-w-0 flex-1">
-          <MessageScrollerViewport aria-label={translate('Conversation')} className={TRANSCRIPT_VIEWPORT_CLASS}>
-            <MessageScrollerContent className={TRANSCRIPT_COLUMN_CLASS}>
-              <OpeningTurn
-                text={thread.text}
-                attachments={thread.attachments}
-                sentAt={thread.sentAt}
-                now={now}
-                start={start}
-              />
+          <MessageScrollerViewport
+            aria-label={translate('Conversation')}
+            className={`${TRANSCRIPT_VIEWPORT_CLASS} pt-3 pb-7`}
+          >
+            <MessageScrollerContent className={`${TRANSCRIPT_COLUMN_CLASS} gap-3.5`}>
+              <MessageScrollerItem messageId="opening" className={LIVE_ITEM_CLASS}>
+                <OpeningTurn
+                  text={thread.text}
+                  attachments={thread.attachments}
+                  sentAt={thread.sentAt}
+                  now={now}
+                  start={start}
+                />
+              </MessageScrollerItem>
               <ChatStatus label={thread.status} enter={start} />
             </MessageScrollerContent>
           </MessageScrollerViewport>

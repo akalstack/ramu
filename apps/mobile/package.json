@@ -39,7 +39,7 @@
   "dependencies": {
     "@expo/metro-runtime": "~58.0.17",
     "@expo/ui": "~58.0.28",
-    "@legendapp/list": "3.7.3",
+    "@legendapp/list": "catalog:",
     "@ramu/client-runtime": "workspace:*",
     "@ramu/contracts": "workspace:*",
     "@ramu/shared": "workspace:*",

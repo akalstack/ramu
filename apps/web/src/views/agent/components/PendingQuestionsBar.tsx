@@ -4,6 +4,7 @@ import type { AgentEvent } from '@ramu/shared/types'
 import type { QuestionState } from '@ramu/shared/chat/questions'
 import { GHOST_TEXT_BUTTON_CLASS } from '../styles'
 import { scrollMotion } from '../../../workspace/panelMotion'
+import type { TranscriptReach } from '../hooks/useTranscriptReach'
 
 type PendingQuestion = Extract<AgentEvent, { kind: 'question' | 'elicitation' | 'secret-request' }>
 
@@ -12,11 +13,14 @@ export function PendingQuestionsBar({
   questions,
   states,
   scroller,
+  reach,
   onOpenQuestion,
 }: {
   questions: PendingQuestion[]
   states: Map<string, QuestionState>
   scroller: React.RefObject<HTMLDivElement | null>
+  /** Cards off screen are not drawn; this finds them anyway. */
+  reach: TranscriptReach
   onOpenQuestion: (requestId: string) => void
 }) {
   useLanguage()
@@ -33,11 +37,16 @@ export function PendingQuestionsBar({
           className={GHOST_TEXT_BUTTON_CLASS}
           onClick={() => {
             if (question.kind === 'question') return onOpenQuestion(question.requestId)
-            const card = [...(scroller.current?.querySelectorAll<HTMLElement>('[data-question-request]') ?? [])].find(
-              (node) => node.dataset.questionRequest === question.requestId,
-            )
-            card?.scrollIntoView({ block: 'center', behavior: scrollMotion() })
-            card?.querySelector<HTMLInputElement>('input:not(:disabled)')?.focus({ preventScroll: true })
+            reach({
+              find: () =>
+                [...(scroller.current?.querySelectorAll<HTMLElement>('[data-question-request]') ?? [])].find(
+                  (node) => node.dataset.questionRequest === question.requestId,
+                ) ?? null,
+              reveal: (card) => {
+                card.scrollIntoView({ block: 'center', behavior: scrollMotion() })
+                card.querySelector<HTMLInputElement>('input:not(:disabled)')?.focus({ preventScroll: true })
+              },
+            })
           }}
         >
           {question.kind !== 'question' ||

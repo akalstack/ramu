@@ -8,11 +8,12 @@ import { TURN_PAGE } from '../constants'
 import { turnsToKeep } from '../lib/paging'
 import { sourceEvent } from '../lib/sourceEvent'
 import { releaseFollow } from './useTranscriptScroll'
+import type { TranscriptReach } from './useTranscriptReach'
 import type { AgentViewDesc, Turn } from '../types'
 
 /**
- * A long chat draws its latest turns first; "Earlier turns" brings back the previous page (the scroller keeps the reader
- * where they were). A request to open a message from elsewhere (view.sourceSeq) scrolls to it, drawing every turn if needed.
+ * A long chat draws its latest turns first; "Earlier turns" brings back the previous page (the transcript keeps the
+ * reader where they were). A request to open a message from elsewhere (view.sourceSeq) scrolls to it, drawing every turn if needed.
  */
 export function useTurnPaging({
   view,
@@ -25,6 +26,7 @@ export function useTurnPaging({
   turns,
   scroller,
   stick,
+  reach,
 }: {
   view: AgentViewDesc
   visible: boolean
@@ -36,6 +38,7 @@ export function useTurnPaging({
   turns: Turn[]
   scroller: RefObject<HTMLDivElement | null>
   stick: RefObject<boolean>
+  reach: TranscriptReach
 }) {
   const ws = useWorkspaceActions()
   // A long chat draws its latest turns first; see "Earlier turns" below.
@@ -51,29 +54,36 @@ export function useTurnPaging({
         ? b.event === source
         : b.tools.some((t) => t === source || (source?.kind === 'tool-result' && t.toolUseId === source.toolUseId)),
     )
-    const node = scroller.current?.querySelector(`[data-block-index="${index}"]`)
-    // The message lives in a turn that is not drawn yet: bring every turn back, then this runs again.
-    if (!node && index >= 0) {
+    if (index < 0) return
+    const find = () => scroller.current?.querySelector<HTMLElement>(`[data-block-index="${index}"]`) ?? null
+    // The message may live in a turn that is not on the page yet: bring every turn back, then this runs again.
+    if (!find() && turns.length > shownTurns) {
       setShownTurns(Number.MAX_SAFE_INTEGER)
       return
     }
-    if (node) {
-      handledSource.current = request
-      if (source?.kind === 'question') onOpenQuestion(source.requestId)
-      stick.current = false
-      // A nearby message glides into view, as on the phone; a far one jumps, since a long glide over turns not laid out
-      // yet lands on estimated heights.
-      const viewport = scroller.current
-      releaseFollow(viewport)
-      const distance = viewport ? Math.abs(node.getBoundingClientRect().top - viewport.getBoundingClientRect().top) : 0
-      node.scrollIntoView({
-        block: 'center',
-        behavior: viewport && distance <= viewport.clientHeight * 3 ? scrollMotion() : 'auto',
-      })
-      return highlightSource(node, () => {
-        if (taskId) ws.consumeSourceNavigation(taskId, view.id, view.sourceRequestId)
-      })
-    }
+    // Its turn can still be off screen, where the transcript does not draw it; the request counts as handled once shown.
+    return reach({
+      find,
+      reveal: (node) => {
+        handledSource.current = request
+        if (source?.kind === 'question') onOpenQuestion(source.requestId)
+        stick.current = false
+        // A nearby message glides into view, as on the phone; a far one jumps, since a long glide over turns not laid
+        // out yet lands on estimated heights.
+        const viewport = scroller.current
+        releaseFollow(viewport)
+        const distance = viewport
+          ? Math.abs(node.getBoundingClientRect().top - viewport.getBoundingClientRect().top)
+          : 0
+        node.scrollIntoView({
+          block: 'center',
+          behavior: viewport && distance <= viewport.clientHeight * 3 ? scrollMotion() : 'auto',
+        })
+        return highlightSource(node, () => {
+          if (taskId) ws.consumeSourceNavigation(taskId, view.id, view.sourceRequestId)
+        })
+      },
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [view.sourceSeq, view.sourceRequestId, view.focusRequestId, events, ...] by design; the values it reads beyond these are current as of that run
   }, [view.sourceSeq, view.sourceRequestId, view.focusRequestId, events, eventSequences, visible, taskId, shownTurns])
   // A long chat draws its latest turns first; "Earlier turns" brings back the previous page, keeping the reader where they were.
@@ -90,7 +100,7 @@ export function useTurnPaging({
     if (keep > 0) setShownTurns((count) => count + keep)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [turns.length, view.sessionId] by design; the values it reads beyond these are current as of that run
   }, [turns.length, view.sessionId])
-  // The scroller keeps the reader where they were while earlier turns are added above.
+  // The transcript keeps the reader where they were while earlier turns are added above.
   const showEarlierTurns = () => {
     stick.current = false
     setShownTurns((count) => count + TURN_PAGE)

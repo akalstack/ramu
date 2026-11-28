@@ -4,18 +4,22 @@ import { ipcQueryKeyOn, queryClient } from '../../../dataQueries'
 import { registerWorkspaceCheckpoint } from '../../../workspace/workspaceCheckpoint'
 import { useHost } from '../../../workspace/HostProvider'
 import { ownHostId } from '../../../hosts'
-import { releaseFollow } from './useTranscriptScroll'
+import type { TranscriptAnchor } from '../lib/transcriptRows'
 
 // Per-chat presentation state belongs to the UI, separate from the data query cache.
-const chatPresentation = new Map<string, { draft: string; attachments: Attachment[]; top: number; stick: boolean }>()
+const chatPresentation = new Map<
+  string,
+  { draft: string; attachments: Attachment[]; stick: boolean; anchor: TranscriptAnchor | undefined }
+>()
 
-/** What a chat looked like when it was last left open: draft, attachments and scroll position. */
+/** What a chat looked like when it was last left open: draft, attachments and where the transcript was read. */
 export const savedChat = (sessionId: string, host = ownHostId()) =>
   chatPresentation.get(JSON.stringify([host, sessionId]))
 
 /**
- * Restores the saved scroll position and, when the chat unmounts, remembers its draft, attachments and
- * scroll position and refreshes its query cache. The workspace checkpoint waits for no pending attachments.
+ * When the chat unmounts, remembers its draft, attachments and reading position and refreshes its query cache; the
+ * transcript reopens from that position (a chat left at the bottom at the bottom, one left higher up where it was).
+ * The workspace checkpoint waits for no pending attachments.
  */
 export function useChatPresentation({
   sessionId,
@@ -23,37 +27,31 @@ export function useChatPresentation({
   events,
   draft,
   attachments,
-  scroller,
   stick,
+  anchor,
 }: {
   sessionId: string
   session: AgentSessionInfo | null
   events: AgentEvent[]
   draft: string
   attachments: Attachment[]
-  scroller: RefObject<HTMLDivElement | null>
   stick: RefObject<boolean>
+  anchor: RefObject<TranscriptAnchor | undefined>
 }) {
   const latestChat = useRef({ session, events, draft, attachments })
   latestChat.current = { session, events, draft, attachments }
   const host = useHost().id
   useEffect(() => registerWorkspaceCheckpoint(async () => latestChat.current.attachments.length === 0, host), [host])
   useLayoutEffect(() => {
-    const saved = chatPresentation.get(JSON.stringify([host, sessionId]))
-    // A chat left at the bottom reopens at the bottom (the scroller does that); one left higher up goes back to where it was.
-    if (saved && !saved.stick && scroller.current) {
-      scroller.current.scrollTop = saved.top
-      releaseFollow(scroller.current)
-    }
     return () => {
       const current = latestChat.current
       chatPresentation.set(JSON.stringify([host, sessionId]), {
         draft: current.draft,
         attachments: current.attachments,
         // eslint-disable-next-line react-hooks/exhaustive-deps -- cleanup must see the latest value, not the one from mount
-        top: scroller.current?.scrollTop ?? 0,
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- cleanup must see the latest value, not the one from mount
         stick: stick.current,
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- cleanup must see the latest value, not the one from mount
+        anchor: anchor.current,
       })
       // Refresh cache lifetime on leaving an open chat, even if it was idle for
       // longer than the query's normal garbage-collection interval.

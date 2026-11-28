@@ -13,7 +13,10 @@ declare global {
   }
 }
 
-/** Find in the conversation: highlights every match in the visible text, steps through them, and scrolls to the current one. */
+/**
+ * Find in the conversation: highlights every match in the text of `root`, steps through them, and scrolls to the
+ * current one. The transcript draws every loaded row while this is open, so matches off screen are found too.
+ */
 export function ChatFind({
   root,
   focusRequest = 0,
@@ -96,9 +99,9 @@ export function ChatFind({
       highlights.set('chat-find-current', range ? new window.Highlight(range) : new window.Highlight())
     const match = range?.startContainer.parentElement
     // A match found while the agent writes stays in view instead of the chat returning to the latest output.
-    releaseFollow(match?.closest<HTMLElement>('[data-slot="message-scroller-viewport"]') ?? null)
+    if (match) releaseFollow(root.current)
     match?.scrollIntoView({ block: 'center', behavior: scrollMotion() })
-  }, [current, count, query])
+  }, [current, count, query, root])
   useEffect(
     () => () => {
       const highlights = (CSS as unknown as { highlights?: Map<string, unknown> }).highlights

@@ -22,19 +22,11 @@ import { ThreadAgents } from './agent/lib/threadAgents'
 import { Archive, CheckCircle2, RotateCcw } from 'lucide-react'
 import { timeAgo } from '../Menu'
 import { t as translate, useLanguage } from '../i18n'
-import { ScrollToLatestButton } from './agent/components/ScrollToLatestButton'
 import { contextTokensShort, isCompacting } from '@ramu/shared/chat/compaction'
 import { Button } from '@/components/desktop-button'
 import { reportedStop } from '@ramu/shared/chat/turnResult'
-import {
-  MessageScroller,
-  MessageScrollerContent,
-  MessageScrollerItem,
-  MessageScrollerProvider,
-  MessageScrollerViewport,
-} from '@/components/ui/message-scroller'
-import { TranscriptScrollApi } from './agent/components/TranscriptScrollApi'
-import { TranscriptFollow } from './agent/components/TranscriptFollow'
+import { TranscriptList } from './agent/components/TranscriptList'
+import { TURN_ROW, type TranscriptRow } from './agent/lib/transcriptRows'
 import type { FileContext } from '@ramu/shared/types'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Attachment, AgentEvent } from '@ramu/shared/types'
@@ -81,6 +73,7 @@ import { LIVE, RESUME_PROMPT } from './agent/constants'
 import { savedChat, useChatPresentation } from './agent/hooks/useChatPresentation'
 import { useAgentStream } from './agent/hooks/useAgentStream'
 import { useTranscriptScroll } from './agent/hooks/useTranscriptScroll'
+import { useTranscriptReach } from './agent/hooks/useTranscriptReach'
 import { useChatFind } from './agent/hooks/useChatFind'
 import { useSidePanels } from './agent/hooks/useSidePanels'
 import { useTurnPaging } from './agent/hooks/useTurnPaging'
@@ -133,12 +126,7 @@ import { ErrorNote } from './agent/components/ErrorNote'
 import { TranscriptTurn, TurnDate } from './agent/components/TranscriptTurn'
 import { OpeningTurn } from './agent/components/StartingThread'
 import { useHeldSteers } from './agent/hooks/useHeldSteers'
-import {
-  COMPOSER_DOCK_CLASS,
-  LIVE_ITEM_CLASS,
-  TRANSCRIPT_COLUMN_CLASS,
-  TRANSCRIPT_VIEWPORT_CLASS,
-} from './agent/styles'
+import { COMPOSER_DOCK_CLASS } from './agent/styles'
 import type { StartingThread } from '../workspace/startingThreads'
 import { isLiveToolGroup } from './agent/lib/toolThinking'
 import { useTranscriptArrival } from './agent/hooks/useTranscriptArrival'
@@ -255,12 +243,12 @@ export const AgentView = memo(function AgentView({
   }, [opening, landed, visible, onOpeningLanded])
   const [dropping, setDropping] = useState(false)
   const root = useRef<HTMLDivElement>(null)
-  const { scroller, stick, onScroll } = useTranscriptScroll({
-    root,
-    savedStick: savedChat(view.sessionId, host.id)?.stick,
-  })
+  const savedPosition = savedChat(view.sessionId, host.id)
+  const chatKey = `${host.id}:${view.sessionId}`
+  const { scroller, attach, stick, anchor } = useTranscriptScroll({ root, chat: chatKey, saved: savedPosition })
   const scrollToEnd = useRef<(() => void) | null>(null)
-  useChatPresentation({ sessionId: view.sessionId, session, events, draft, attachments, scroller, stick })
+  const { reach, everything: reaching, pinned } = useTranscriptReach()
+  useChatPresentation({ sessionId: view.sessionId, session, events, draft, attachments, stick, anchor })
   const { finding, findRequest, findQuery, openFind, closeFind } = useChatFind(root)
 
   const outcomes = useMemo(() => outcomesOf(events), [events])
@@ -461,6 +449,7 @@ export const AgentView = memo(function AgentView({
     turns,
     scroller,
     stick,
+    reach,
   })
   const statusGroup =
     working && !turns.at(-1)?.ended ? turns.at(-1)?.items.findLast((block) => block.kind === 'tools') : undefined
@@ -569,26 +558,35 @@ export const AgentView = memo(function AgentView({
   prepareRetry.current = applyPendingSettings
   /**
    * Leads a quote in the message box back to where it was said: that message scrolls into view and lights up for a
-   * moment. A message in turns not drawn yet is found with Find instead, which reaches further back.
+   * moment. It is looked for in every turn on the page, drawn for the search; a message in turns not on the page yet is
+   * found with Find instead, which reaches further back.
    */
-  const showQuote = (quote: string) => {
-    const blocks = [...(root.current?.querySelectorAll<HTMLElement>('.transcript [data-block-index]') ?? [])]
-    const source = quoteSource(
-      blocks.map((element) => ({ element, text: element.innerText })),
-      quote,
-    )
-    const range = source && quoteRange(source.element, quote)
-    if (range) revealQuote(range)
-    else if (source) revealFound(source.element)
-    else
-      openFind(
-        quote
-          .split('\n')
-          .map((line) => line.trim())
-          .find(Boolean)
-          ?.slice(0, 80),
-      )
-  }
+  const showQuote = (quote: string) =>
+    reach({
+      everywhere: true,
+      find: () => {
+        const blocks = [...(scroller.current?.querySelectorAll<HTMLElement>('[data-block-index]') ?? [])]
+        return (
+          quoteSource(
+            blocks.map((element) => ({ element, text: element.innerText })),
+            quote,
+          )?.element ?? null
+        )
+      },
+      reveal: (element) => {
+        const range = quoteRange(element, quote)
+        if (range) revealQuote(range)
+        else revealFound(element)
+      },
+      missing: () =>
+        openFind(
+          quote
+            .split('\n')
+            .map((line) => line.trim())
+            .find(Boolean)
+            ?.slice(0, 80),
+        ),
+    })
   /** Adds a Markdown quote to the message box and puts the cursor after it. */
   const quoteIntoDraft = (text: string) => {
     const quoted = quoteLines(text)
@@ -900,6 +898,134 @@ export const AgentView = memo(function AgentView({
     onEditMessage: viewOnly ? undefined : editMessage,
   }
 
+  // Each row draws itself when the list puts it on the page; the list keeps only the rows near the view there.
+  const transcriptRows: TranscriptRow[] = [
+    ...pageTurns.map((turn, ti) => ({
+      key: `${TURN_ROW}${turn.key}`,
+      render: () => (
+        <TranscriptTurn
+          turn={turn}
+          // A message just sent after a finished turn already starts the next one: until the host's copy arrives, the
+          // thread turning busy must not read as this turn resuming.
+          isLast={ti === pageTurns.length - 1 && !(shownSubmissions.length > 0 && turn.ended)}
+          dateSeparator={pageTurnDate(turnDates, hiddenTurns, ti)}
+          dateNow={dateNow}
+          reviews={turnReviews.get(turn.key)}
+          completedGoals={completedGoals.get(turn.key)}
+          ctx={transcript}
+        />
+      ),
+    })),
+    ...(heldSettings && session
+      ? [
+          {
+            key: 'settings:held',
+            render: () => (
+              <PendingSettingsChange
+                next={heldSettings}
+                previous={session.settings}
+                onCancel={() => void act(() => invoke('agent.configure', view.sessionId, session.settings))}
+                onApplyNow={() =>
+                  void act(async () => setSession(await invoke('agent.configure', view.sessionId, heldSettings, 'now')))
+                }
+              />
+            ),
+          },
+        ]
+      : []),
+    ...(pendingSettings &&
+    !heldSettings &&
+    session &&
+    !busyAgent &&
+    !sameAgentSettings(pendingSettings, session.settings)
+      ? [
+          {
+            key: 'settings:pending',
+            render: () => (
+              <PendingSettingsChange
+                next={pendingSettings}
+                previous={session.settings}
+                onCancel={() => setPendingSettings(null)}
+              />
+            ),
+          },
+        ]
+      : []),
+    // A new thread whose first message the host holds still reads as started.
+    ...(!hydrating && !events.some((event) => event.kind === 'user')
+      ? trayQueued.map((message) => ({
+          key: `queued-opening:${message.id}`,
+          render: () => <QueuedOpening message={message} />,
+        }))
+      : []),
+    ...(openingShown
+      ? [
+          {
+            key: 'opening:',
+            render: () => (
+              <OpeningTurn
+                text={openingShown.text}
+                attachments={openingShown.attachments}
+                sentAt={openingShown.sentAt}
+                now={dateNow}
+              />
+            ),
+          },
+        ]
+      : []),
+    ...heldSteers.steers.map((message) => ({
+      key: `steering:${message.id}`,
+      render: () => (
+        <SteeringMessage
+          sessionId={view.sessionId}
+          message={message}
+          // One the queue already let go of is only waiting for its message to show.
+          readOnly={viewOnly || !steering.includes(message)}
+          editing={queuedEdit.edit?.id === message.id}
+          act={act}
+          onEdit={() => queuedEdit.start(message, 'steer')}
+          onRemoved={() => heldSteers.forget(message.id)}
+        />
+      ),
+    })),
+    ...shownSubmissions.map((item, index) => {
+      // Laid out as the turn it becomes, day separator included, so the host's copy lands in the same place instead of
+      // pushing it down.
+      const date = index === 0 ? nextTurnDate(turns, item.sentAt) : undefined
+      return {
+        key: `pending-submission:${item.id}`,
+        render: () => (
+          <div className="turn flex flex-col gap-3.5 min-w-0">
+            {date !== undefined && <TurnDate at={date} now={dateNow} />}
+            <PendingSubmission
+              submission={item}
+              onRetry={() => retrySubmission(item.id)}
+              onEdit={() => editSubmission(item)}
+              onRemove={() => removeSubmission(item.id)}
+            />
+          </div>
+        ),
+      }
+    }),
+    ...(statusLabel && (compacting || !liveGroup) && (!afterResult || stayedBusy)
+      ? [
+          {
+            key: 'status:',
+            render: () => (
+              <ChatStatus
+                label={statusLabel}
+                compacting={compacting}
+                // A running turn counts at its own top; this line then only says the agent is at work.
+                since={activityLabel === 'Working' && turns.at(-1)?.ended !== false ? turnStartedAt(events) : null}
+                // The starting thread's view drew this line already; it stays rather than fading in again.
+                enter={!openingShown}
+              />
+            ),
+          },
+        ]
+      : []),
+  ]
+
   return (
     <RunCommandProvider taskId={session?.taskId}>
       <div
@@ -1016,182 +1142,66 @@ export const AgentView = memo(function AgentView({
                 questions={pendingQuestions}
                 states={questionStates}
                 scroller={scroller}
+                reach={reach}
                 onOpenQuestion={openQuestion}
               />
             )}
             <ChatMentions.Provider value={composerHelpers.mentions}>
               <ThreadAgents.Provider value={allTasks}>
-                <MessageScrollerProvider autoScroll defaultScrollPosition="end">
-                  <TranscriptScrollApi apiRef={scrollToEnd} />
-                  <TranscriptFollow viewport={scroller} />
-                  <div className="transcript-frame [&_>_.agent-panel]:relative [&_>_.agent-panel]:inset-auto [&_>_.agent-panel]:flex-none [&_>_.agent-panel]:w-[min(440px,_45%)] [&_>_.agent-panel]:h-auto [&_>_.agent-panel]:[box-shadow:none] [&_>_.agent-panel]:[animation:none] [&_>_.agent-panel]:[border-left:var(--pane-border-width)_solid_var(--pane-border-color)] relative flex-1 min-h-0 min-w-0 flex [container:transcript-frame_/_inline-size] flex-col">
-                    <MessageScroller
-                      className={`transcript min-h-0 min-w-0 flex-1 ${hydrating && !turns.length && !openingShown ? 'chat-loading' : ''}`}
-                    >
-                      <MessageScrollerViewport
-                        ref={scroller}
-                        onScroll={onScroll}
-                        aria-label={translate('Conversation')}
-                        className={TRANSCRIPT_VIEWPORT_CLASS}
-                      >
-                        {hiddenTurns > 0 && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="mx-auto mb-2 flex text-muted-foreground"
-                            onClick={showEarlierTurns}
-                          >
-                            {hiddenTurns === 1
-                              ? translate('Show 1 earlier turn')
-                              : translate('Show {0} earlier turns', { '0': hiddenTurns })}
-                          </Button>
-                        )}
-                        <MessageScrollerContent
-                          className={`${hydrating && !turns.length && !openingShown ? 'justify-center' : ''} ${TRANSCRIPT_COLUMN_CLASS}`}
-                        >
-                          {/* The window already carries the brand; a chat that opens at once shows nothing, a slow one a
-                            small spinner. */}
-                          {slowHydration && !turns.length && !openingShown && (
-                            <div className="flex items-center justify-center text-muted-foreground">
-                              <Spinner aria-label={translate('Loading conversation')} />
+                <div className="transcript-frame [&_>_.agent-panel]:relative [&_>_.agent-panel]:inset-auto [&_>_.agent-panel]:flex-none [&_>_.agent-panel]:w-[min(440px,_45%)] [&_>_.agent-panel]:h-auto [&_>_.agent-panel]:[box-shadow:none] [&_>_.agent-panel]:[animation:none] [&_>_.agent-panel]:[border-left:var(--pane-border-width)_solid_var(--pane-border-color)] relative flex-1 min-h-0 min-w-0 flex [container:transcript-frame_/_inline-size] flex-col">
+                  <div
+                    className={`transcript relative flex size-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${hydrating && !turns.length && !openingShown ? 'chat-loading' : ''}`}
+                  >
+                    {transcriptRows.length > 0 ? (
+                      <TranscriptList
+                        key={chatKey}
+                        rows={transcriptRows}
+                        header={
+                          hiddenTurns > 0 && (
+                            <div className="pb-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="mx-auto flex text-muted-foreground"
+                                onClick={showEarlierTurns}
+                              >
+                                {hiddenTurns === 1
+                                  ? translate('Show 1 earlier turn')
+                                  : translate('Show {0} earlier turns', { '0': hiddenTurns })}
+                              </Button>
                             </div>
-                          )}
-                          {pageTurns.map((turn, ti) => (
-                            <MessageScrollerItem
-                              key={turn.key}
-                              messageId={String(turn.key)}
-                              className={LIVE_ITEM_CLASS}
-                            >
-                              <TranscriptTurn
-                                turn={turn}
-                                // A message just sent after a finished turn already starts the next one: until the
-                                // host's copy arrives, the thread turning busy must not read as this turn resuming.
-                                isLast={ti === pageTurns.length - 1 && !(shownSubmissions.length > 0 && turn.ended)}
-                                dateSeparator={pageTurnDate(turnDates, hiddenTurns, ti)}
-                                dateNow={dateNow}
-                                reviews={turnReviews.get(turn.key)}
-                                completedGoals={completedGoals.get(turn.key)}
-                                ctx={transcript}
-                              />
-                            </MessageScrollerItem>
-                          ))}
-                          {heldSettings && session && (
-                            <MessageScrollerItem messageId="held-settings" className={LIVE_ITEM_CLASS}>
-                              <PendingSettingsChange
-                                next={heldSettings}
-                                previous={session.settings}
-                                onCancel={() =>
-                                  void act(() => invoke('agent.configure', view.sessionId, session.settings))
-                                }
-                                onApplyNow={() =>
-                                  void act(async () =>
-                                    setSession(await invoke('agent.configure', view.sessionId, heldSettings, 'now')),
-                                  )
-                                }
-                              />
-                            </MessageScrollerItem>
-                          )}
-                          {pendingSettings &&
-                            !heldSettings &&
-                            session &&
-                            !busyAgent &&
-                            !sameAgentSettings(pendingSettings, session.settings) && (
-                              <MessageScrollerItem messageId="pending-settings" className={LIVE_ITEM_CLASS}>
-                                <PendingSettingsChange
-                                  next={pendingSettings}
-                                  previous={session.settings}
-                                  onCancel={() => setPendingSettings(null)}
-                                />
-                              </MessageScrollerItem>
-                            )}
-                          {/* A new thread whose first message the host holds still reads as started. */}
-                          {!hydrating &&
-                            !events.some((event) => event.kind === 'user') &&
-                            trayQueued.map((message) => (
-                              <MessageScrollerItem
-                                key={message.id}
-                                messageId={`queued-opening-${message.id}`}
-                                className={LIVE_ITEM_CLASS}
-                              >
-                                <QueuedOpening message={message} />
-                              </MessageScrollerItem>
-                            ))}
-                          {openingShown && (
-                            <OpeningTurn
-                              text={openingShown.text}
-                              attachments={openingShown.attachments}
-                              sentAt={openingShown.sentAt}
-                              now={dateNow}
-                            />
-                          )}
-                          {heldSteers.steers.map((message) => (
-                            <MessageScrollerItem
-                              key={message.id}
-                              messageId={`steering-${message.id}`}
-                              className={LIVE_ITEM_CLASS}
-                            >
-                              <SteeringMessage
-                                sessionId={view.sessionId}
-                                message={message}
-                                // One the queue already let go of is only waiting for its message to show.
-                                readOnly={viewOnly || !steering.includes(message)}
-                                editing={queuedEdit.edit?.id === message.id}
-                                act={act}
-                                onEdit={() => queuedEdit.start(message, 'steer')}
-                                onRemoved={() => heldSteers.forget(message.id)}
-                              />
-                            </MessageScrollerItem>
-                          ))}
-                          {shownSubmissions.map((item, index) => {
-                            // Laid out as the turn it becomes, day separator included, so the host's copy lands in
-                            // the same place instead of pushing it down.
-                            const date = index === 0 ? nextTurnDate(turns, item.sentAt) : undefined
-                            return (
-                              <MessageScrollerItem
-                                key={item.id}
-                                messageId={`pending-submission-${item.id}`}
-                                className={LIVE_ITEM_CLASS}
-                              >
-                                <div className="turn flex flex-col gap-3.5 min-w-0">
-                                  {date !== undefined && <TurnDate at={date} now={dateNow} />}
-                                  <PendingSubmission
-                                    submission={item}
-                                    onRetry={() => retrySubmission(item.id)}
-                                    onEdit={() => editSubmission(item)}
-                                    onRemove={() => removeSubmission(item.id)}
-                                  />
-                                </div>
-                              </MessageScrollerItem>
-                            )
-                          })}
-                          {statusLabel && (compacting || !liveGroup) && (!afterResult || stayedBusy) && (
-                            <ChatStatus
-                              label={statusLabel}
-                              compacting={compacting}
-                              // A running turn counts at its own top; this line then only says the agent is at work.
-                              since={
-                                activityLabel === 'Working' && turns.at(-1)?.ended !== false
-                                  ? turnStartedAt(events)
-                                  : null
-                              }
-                              // The starting thread's view drew this line already; it stays rather than fading in again.
-                              enter={!openingShown}
-                            />
-                          )}
-                        </MessageScrollerContent>
-                      </MessageScrollerViewport>
-                      {syncShown && <ChatSyncStatus label={translate('Syncing messages…')} />}
-                      <ScrollToLatestButton working={working} />
-                    </MessageScroller>
-                    <SelectionActions
-                      scroller={scroller}
-                      readOnly={viewOnly}
-                      onQuote={quoteIntoDraft}
-                      onQuoteNew={quoteIntoNewChat}
-                      onAside={(quote, from) => setOpenAside({ quote, from })}
-                    />
+                          )
+                        }
+                        initial={savedPosition}
+                        stick={stick}
+                        anchor={anchor}
+                        everything={finding || reaching}
+                        pinned={pinned}
+                        working={working}
+                        scrollToEnd={scrollToEnd}
+                        onViewport={attach}
+                      />
+                    ) : (
+                      // The window already carries the brand; a chat that opens at once shows nothing, a slow one a
+                      // small spinner, centred where the transcript's column would be.
+                      slowHydration &&
+                      !turns.length &&
+                      !openingShown && (
+                        <div className="flex flex-1 items-center justify-center px-6 pt-3 pb-7 text-muted-foreground">
+                          <Spinner aria-label={translate('Loading conversation')} />
+                        </div>
+                      )
+                    )}
+                    {syncShown && <ChatSyncStatus label={translate('Syncing messages…')} />}
                   </div>
-                </MessageScrollerProvider>
+                  <SelectionActions
+                    scroller={scroller}
+                    readOnly={viewOnly}
+                    onQuote={quoteIntoDraft}
+                    onQuoteNew={quoteIntoNewChat}
+                    onAside={(quote, from) => setOpenAside({ quote, from })}
+                  />
+                </div>
               </ThreadAgents.Provider>
             </ChatMentions.Provider>
             <div className={COMPOSER_DOCK_CLASS}>
