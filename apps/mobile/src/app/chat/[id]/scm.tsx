@@ -62,7 +62,7 @@ import { revisionParams, stashTitle } from '../../../runtime/gitRevision'
 import { ago, useSay } from '../../../i18n'
 import { useOpenFile } from '../../../runtime/openFile'
 import { Disclosure } from '../../../components/Motion'
-import { Header, HeaderButton, Screen, PageScrollView as ScrollView } from '../../../components/Screen'
+import { Header, HeaderButton, Screen, PageLegendList } from '../../../components/Screen'
 import { Glass } from '../../../components/Glass'
 import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
 import { CurrentPullRequest } from '../../../components/PullRequestSections'
@@ -263,52 +263,59 @@ function ConflictRow({ path, onOpen, onMenu }: { path: string; onOpen: () => voi
   )
 }
 
-function Group({
-  title,
-  count,
-  open = true,
-  onToggle,
-  action,
-  children,
-}: {
+type GroupHeadProps = {
   title: string
   count: number
-  open?: boolean
-  onToggle?: () => void
+  open: boolean
+  onToggle: () => void
   action?: { icon: Icon; label: string; onPress: () => void }
-  children: React.ReactNode
-}) {
+}
+
+/** A group's heading in the changes list: it folds the rows below it and holds the group's stage or unstage-all. */
+function GroupHead({ title, count, open, onToggle, action }: GroupHeadProps) {
   const { c } = useTheme()
   return (
-    <View style={{ gap: space.xs }}>
-      {/* The action reaches into the page margin so it sits in the rows' trailing column. */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: -space.s, minHeight: 36 }}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ expanded: open }}
-          onPress={() => {
-            tap()
-            onToggle?.()
-          }}
-          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'stretch' }}
-        >
-          <Disclosure open={open} size={14} color={c.muted} />
-          <T size={font.control} weight="600" tone="muted">
-            {title}{' '}
-            <T size={font.control} tone="placeholder">
-              {count}
-            </T>
+    // The action sits in the rows' trailing column, nearer the edge than the heading's text.
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingLeft: space.l,
+        paddingRight: space.s,
+        marginTop: space.l,
+        marginBottom: space.xs,
+        minHeight: 36,
+      }}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        onPress={() => {
+          tap()
+          onToggle()
+        }}
+        style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'stretch' }}
+      >
+        <Disclosure open={open} size={14} color={c.muted} />
+        <T size={font.control} weight="600" tone="muted">
+          {title}{' '}
+          <T size={font.control} tone="placeholder">
+            {count}
           </T>
-        </Pressable>
-        {action ? (
-          <IconButton icon={action.icon} label={action.label} size={34} tone="soft" onPress={action.onPress} />
-        ) : null}
-      </View>
-      {/* Lists reach the screen edges, out of the page's margin, as every list on the phone does. */}
-      {count && open ? <View style={{ marginHorizontal: -space.l }}>{children}</View> : null}
+        </T>
+      </Pressable>
+      {action ? (
+        <IconButton icon={action.icon} label={action.label} size={34} tone="soft" onPress={action.onPress} />
+      ) : null}
     </View>
   )
 }
+
+/** The Changes tab's rows: each group's heading, then its files while it is open. */
+type ChangeRow =
+  | ({ kind: 'head'; key: string } & GroupHeadProps)
+  | { kind: 'conflict'; key: string; path: string; divider: boolean }
+  | { kind: 'file'; key: string; file: FileState; mode: 'staged' | 'changes'; divider: boolean }
 
 export default function SourceControl() {
   const tr = useSay()
@@ -933,6 +940,125 @@ export default function SourceControl() {
     void run(() => gitAction('git.createBranch', name), tr('Created {0}', { 0: name }))
   }
 
+  const group = (head: Omit<Extract<ChangeRow, { kind: 'head' }>, 'kind'>, rows: ChangeRow[]): ChangeRow[] => [
+    { kind: 'head', ...head },
+    ...(head.open ? rows : []),
+  ]
+  // Only the rows near the screen are mounted, so a checkout with thousands of changed files opens at once.
+  const changeRows: ChangeRow[] =
+    tab !== 'changes'
+      ? []
+      : [
+          ...(conflicted.length
+            ? group(
+                {
+                  key: 'head:conflicts',
+                  title: tr('Merge changes'),
+                  count: shownConflicted.length,
+                  open: !folded.conflicts,
+                  onToggle: () => setFolded((f) => ({ ...f, conflicts: !f.conflicts })),
+                  action: canWrite
+                    ? {
+                        icon: CheckCheck,
+                        label: tr('Accept a side in every conflicted file'),
+                        onPress: () => setSheet('conflicts'),
+                      }
+                    : undefined,
+                },
+                shownConflicted.map((path, i) => ({ kind: 'conflict', key: `conflict:${path}`, path, divider: i > 0 })),
+              )
+            : []),
+          ...group(
+            {
+              key: 'head:staged',
+              title: tr('Staged Changes'),
+              count: shownStaged.length,
+              open: !folded.staged,
+              onToggle: () => setFolded((f) => ({ ...f, staged: !f.staged })),
+              action: staged.length
+                ? {
+                    icon: Minus,
+                    label: tr('Unstage all changes'),
+                    onPress: () =>
+                      setStaged(
+                        staged.map((f) => f.path),
+                        false,
+                      ),
+                  }
+                : undefined,
+            },
+            shownStaged.map((file, i) => ({
+              kind: 'file',
+              key: `staged:${file.path}`,
+              file,
+              mode: 'staged',
+              divider: i > 0,
+            })),
+          ),
+          ...group(
+            {
+              key: 'head:changes',
+              title: tr('Changes'),
+              count: shownUnstaged.length,
+              open: !folded.changes,
+              onToggle: () => setFolded((f) => ({ ...f, changes: !f.changes })),
+              action: unstaged.length
+                ? {
+                    icon: Plus,
+                    label: tr('Stage all changes'),
+                    onPress: () =>
+                      setStaged(
+                        unstaged.map((f) => f.path),
+                        true,
+                      ),
+                  }
+                : undefined,
+            },
+            shownUnstaged.map((file, i) => ({
+              kind: 'file',
+              key: `changes:${file.path}`,
+              file,
+              mode: 'changes',
+              divider: i > 0,
+            })),
+          ),
+        ]
+  const renderChangeRow = (row: ChangeRow) => {
+    if (row.kind === 'head') return <GroupHead {...row} />
+    if (row.kind === 'conflict')
+      return (
+        <View>
+          {row.divider ? <Divider inset={space.l} /> : null}
+          <ConflictRow
+            path={row.path}
+            onOpen={() => openConflict(row.path)}
+            onMenu={
+              canWrite
+                ? () => {
+                    setConflictPath(row.path)
+                    setSheet('conflict')
+                  }
+                : undefined
+            }
+          />
+        </View>
+      )
+    const { file, mode } = row
+    return (
+      <View>
+        {row.divider ? <Divider inset={space.l} /> : null}
+        <FileRow
+          file={file}
+          onOpen={() => openFile.open(binding!.repoId, file.path, { mode })}
+          onStage={() => setStaged([file.path], mode === 'changes')}
+          onDiscard={
+            mode === 'changes' && unstaged.some((entry) => entry.path === file.path) ? () => discard([file]) : undefined
+          }
+        />
+      </View>
+    )
+  }
+
   return (
     <Screen bg="canvas">
       <Header
@@ -947,339 +1073,304 @@ export default function SourceControl() {
       />
       {/* The commit box rides the keyboard like the thread composer: padding measured from the screen's bottom edge. */}
       <View style={{ flex: 1 }}>
-        <ScrollView
+        <PageLegendList
+          data={changeRows}
+          keyExtractor={(row) => row.key}
+          renderItem={({ item }) => renderChangeRow(item)}
+          getItemType={(row) => row.kind}
+          estimatedItemSize={52}
           contentInsetAdjustmentBehavior="automatic"
-          contentContainerStyle={{ padding: space.l, paddingTop: space.s, gap: space.l, paddingBottom: space.xl }}
+          contentContainerStyle={{ paddingBottom: space.xl }}
           keyboardShouldPersistTaps="handled"
           automaticallyAdjustKeyboardInsets={false}
           keyboardDismissMode="on-drag"
-        >
-          {!binding ? (
-            <T tone="muted">{tr('No repository is attached to this thread.')}</T>
-          ) : binding.notGit ? (
-            <Row
-              onPress={() =>
-                void run(
-                  () => store.invoke(chat!.computerId, 'git.init', chat!.taskId, binding.repoId),
-                  'Initialized repository',
-                )
-              }
-            >
-              <T>{tr('Initialize Git in {0}', { 0: binding.cwd })}</T>
-            </Row>
-          ) : null}
-          {/* One picker instead of tabs: a workspace project can hold any number of repositories. */}
-          {repos.length > 1 ? (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => {
-                tap()
-                setSheet('repo')
-              }}
-              style={({ pressed }) => ({
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: space.s,
-                height: 44,
-                paddingHorizontal: space.m,
-                borderRadius: radius.m,
-                backgroundColor: pressed ? c.raised : c.raised2,
-              })}
-            >
-              <FolderGit2 size={15} color={c.soft} />
-              <T weight="600" numberOfLines={1} style={{ flexShrink: 1 }}>
-                {repo}
-              </T>
-              <T size={font.caption} tone="muted" style={{ flex: 1 }} numberOfLines={1}>
-                {!changeCount
-                  ? tr('no changes')
-                  : changeCount === 1
-                    ? tr('1 change')
-                    : tr('{count} changes', { count: changeCount })}{' '}
-                · {tr('{count} repositories', { count: repos.length })}
-              </T>
-              <ChevronDown size={15} color={c.muted} />
-            </Pressable>
-          ) : null}
-
-          {/* Branch picker and sync, like the desktop's Git controls. */}
-          <View style={{ flexDirection: 'row', gap: space.s }}>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => {
-                tap()
-                setSheet('branch')
-              }}
-              style={({ pressed }) => ({
-                flex: 1,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: space.s,
-                height: 44,
-                paddingHorizontal: space.m,
-                borderRadius: radius.m,
-                backgroundColor: pressed ? c.raised : c.raised2,
-              })}
-            >
-              <GitBranch size={15} color={c.soft} />
-              <T weight="500" numberOfLines={1} style={{ flex: 1 }}>
-                {branch}
-              </T>
-              <ChevronDown size={15} color={c.muted} />
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              disabled={busy || !gates.canRemote}
-              onPress={() => {
-                tap()
-                if (published) sync()
-                else void run(() => gitAction('git.push'), tr('Published {0} to origin', { 0: branch }))
-              }}
-              accessibilityLabel={published ? tr('Sync changes') : tr('Publish branch')}
-              style={({ pressed }) => ({
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 6,
-                height: 44,
-                paddingHorizontal: space.m,
-                borderRadius: radius.m,
-                backgroundColor: pressed ? c.raised : c.raised2,
-                opacity: busy || !gates.canRemote ? 0.5 : 1,
-              })}
-            >
-              {published ? <RefreshCcw size={15} color={c.soft} /> : <CloudUpload size={15} color={c.soft} />}
-              <T size={font.control} weight="500" tone="soft" style={{ fontVariant: ['tabular-nums'] }}>
-                {published ? `${behind}↓ ${ahead}↑` : tr('Publish')}
-              </T>
-            </Pressable>
-          </View>
-
-          {gates.operation ? (
-            <Card style={{ padding: space.l, gap: space.m, backgroundColor: c.warnWash }}>
-              <View style={{ flexDirection: 'row', gap: space.s, alignItems: 'flex-start' }}>
-                <CircleAlert size={17} color={c.warn} style={{ marginTop: 2 }} />
-                <View style={{ flex: 1, gap: 2 }}>
-                  <T weight="600">{tr(gates.operation === 'rebase' ? 'Rebase in progress' : 'Merge in progress')}</T>
-                  <T size={font.control} tone="soft">
-                    {gates.conflicts
-                      ? tr(
-                          gates.conflicts === 1
-                            ? 'Resolve 1 conflicted file, stage it, then continue.'
-                            : 'Resolve {count} conflicted files, stage them, then continue.',
-                          { count: gates.conflicts },
-                        )
-                      : tr('Conflicts are resolved and staged.')}
-                  </T>
-                </View>
-              </View>
-              <View style={{ flexDirection: 'row', gap: space.s }}>
-                <Button
-                  title={tr('Continue')}
-                  disabled={busy || gates.conflicts > 0}
-                  style={{ flex: 1 }}
-                  onPress={() => void run(() => continueOperation('git.continueOperation'), 'Continued')}
-                />
-                <Button
-                  kind="secondary"
-                  title={tr(gates.operation === 'rebase' ? 'Abort rebase' : 'Abort merge')}
-                  disabled={busy}
-                  style={{ flex: 1 }}
+          style={{ backgroundColor: c.canvas }}
+          ListHeaderComponent={
+            <View style={{ paddingHorizontal: space.l, paddingTop: space.s, gap: space.l }}>
+              {!binding ? (
+                <T tone="muted">{tr('No repository is attached to this thread.')}</T>
+              ) : binding.notGit ? (
+                <Row
                   onPress={() =>
-                    Alert.alert(
-                      tr(gates.operation === 'rebase' ? 'Abort the rebase?' : 'Abort the merge?'),
-                      tr('Your branch returns to how it was before it started.'),
-                      [
-                        { text: tr('Cancel'), style: 'cancel' },
-                        {
-                          text: tr('Abort'),
-                          style: 'destructive',
-                          onPress: () => void run(() => continueOperation('git.abortOperation'), 'Aborted'),
-                        },
-                      ],
+                    void run(
+                      () => store.invoke(chat!.computerId, 'git.init', chat!.taskId, binding.repoId),
+                      'Initialized repository',
                     )
                   }
-                />
-              </View>
-            </Card>
-          ) : null}
-          {chat && binding && gitStatus && !hasRemote && gitStatus.branch && !gates.operation ? (
-            <PublishRepository
-              computerId={chat.computerId}
-              taskId={chat.taskId}
-              repoId={binding.repoId}
-              repoName={binding.repoName}
-              readOnly={!canWrite}
-              onPublished={() => {
-                void read().catch(() => {})
-                say('Published to GitHub')
-              }}
-              onError={(text) => notify(text, true)}
-            />
-          ) : null}
-          {chat && binding && hasRemote && gitStatus?.branch ? (
-            <CurrentPullRequest
-              chat={chat}
-              repoId={binding.repoId}
-              branch={gitStatus.branch}
-              readOnly={!canWrite}
-              onError={(text) => notify(text, true)}
-            />
-          ) : null}
-          {chat && binding && hasRemote ? (
-            // The repository's other pull requests are on the Pull requests page, narrowed to this repository.
-            <Pressable
-              accessibilityRole="link"
-              onPress={() => {
-                tap()
-                router.navigate({ pathname: '/pulls', params: { computer: chat.computerId, repo: binding.repoId } })
-              }}
-              style={({ pressed }) => ({
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: space.s,
-                height: 44,
-                marginTop: -space.s,
-                paddingHorizontal: space.m,
-                borderRadius: radius.m,
-                backgroundColor: pressed ? c.raised : c.raised2,
-              })}
-            >
-              <GitPullRequest size={15} color={c.soft} />
-              <T weight="500" numberOfLines={1} style={{ flex: 1 }}>
-                {tr('All pull requests in {0}', { 0: binding.repoName })}
-              </T>
-              <ChevronRight size={15} color={c.muted} />
-            </Pressable>
-          ) : null}
-          <Segmented
-            value={tab}
-            onChange={setTab}
-            options={[
-              { key: 'changes', label: tr('Changes'), count: changeCount },
-              { key: 'commits', label: tr('Commits'), count: commits.length },
-              { key: 'stashes', label: tr('Stashes'), count: stashes.length },
-            ]}
-          />
-          {tab === 'changes' ? (
-            <>
-              {conflicted.length ? (
-                <Group
-                  title={tr('Merge changes')}
-                  count={shownConflicted.length}
-                  open={!folded.conflicts}
-                  onToggle={() => setFolded((f) => ({ ...f, conflicts: !f.conflicts }))}
-                  action={
-                    canWrite
-                      ? {
-                          icon: CheckCheck,
-                          label: tr('Accept a side in every conflicted file'),
-                          onPress: () => setSheet('conflicts'),
-                        }
-                      : undefined
-                  }
                 >
-                  {shownConflicted.map((path, i) => (
-                    <View key={path}>
-                      {i ? <Divider inset={space.l} /> : null}
-                      <ConflictRow
-                        path={path}
-                        onOpen={() => openConflict(path)}
-                        onMenu={
-                          canWrite
-                            ? () => {
-                                setConflictPath(path)
-                                setSheet('conflict')
-                              }
-                            : undefined
-                        }
-                      />
-                    </View>
-                  ))}
-                </Group>
+                  <T>{tr('Initialize Git in {0}', { 0: binding.cwd })}</T>
+                </Row>
               ) : null}
-              {
-                <Group
-                  title={tr('Staged Changes')}
-                  count={shownStaged.length}
-                  open={!folded.staged}
-                  onToggle={() => setFolded((f) => ({ ...f, staged: !f.staged }))}
-                  action={
-                    staged.length
-                      ? {
-                          icon: Minus,
-                          label: tr('Unstage all changes'),
-                          onPress: () =>
-                            setStaged(
-                              staged.map((f) => f.path),
-                              false,
-                            ),
-                        }
-                      : undefined
-                  }
+              {/* One picker instead of tabs: a workspace project can hold any number of repositories. */}
+              {repos.length > 1 ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => {
+                    tap()
+                    setSheet('repo')
+                  }}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: space.s,
+                    height: 44,
+                    paddingHorizontal: space.m,
+                    borderRadius: radius.m,
+                    backgroundColor: pressed ? c.raised : c.raised2,
+                  })}
                 >
-                  {shownStaged.map((f, i) => (
-                    <View key={f.path}>
-                      {i ? <Divider inset={space.l} /> : null}
-                      <FileRow
-                        file={f}
-                        onOpen={() => openFile.open(binding!.repoId, f.path, { mode: 'staged' })}
-                        onStage={() => setStaged([f.path], false)}
-                      />
-                    </View>
-                  ))}
-                </Group>
-              }
+                  <FolderGit2 size={15} color={c.soft} />
+                  <T weight="600" numberOfLines={1} style={{ flexShrink: 1 }}>
+                    {repo}
+                  </T>
+                  <T size={font.caption} tone="muted" style={{ flex: 1 }} numberOfLines={1}>
+                    {!changeCount
+                      ? tr('no changes')
+                      : changeCount === 1
+                        ? tr('1 change')
+                        : tr('{count} changes', { count: changeCount })}{' '}
+                    · {tr('{count} repositories', { count: repos.length })}
+                  </T>
+                  <ChevronDown size={15} color={c.muted} />
+                </Pressable>
+              ) : null}
 
-              <Group
-                title={tr('Changes')}
-                count={shownUnstaged.length}
-                open={!folded.changes}
-                onToggle={() => setFolded((f) => ({ ...f, changes: !f.changes }))}
-                action={
-                  unstaged.length
-                    ? {
-                        icon: Plus,
-                        label: tr('Stage all changes'),
-                        onPress: () =>
-                          setStaged(
-                            unstaged.map((f) => f.path),
-                            true,
-                          ),
+              {/* Branch picker and sync, like the desktop's Git controls. */}
+              <View style={{ flexDirection: 'row', gap: space.s }}>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => {
+                    tap()
+                    setSheet('branch')
+                  }}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: space.s,
+                    height: 44,
+                    paddingHorizontal: space.m,
+                    borderRadius: radius.m,
+                    backgroundColor: pressed ? c.raised : c.raised2,
+                  })}
+                >
+                  <GitBranch size={15} color={c.soft} />
+                  <T weight="500" numberOfLines={1} style={{ flex: 1 }}>
+                    {branch}
+                  </T>
+                  <ChevronDown size={15} color={c.muted} />
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={busy || !gates.canRemote}
+                  onPress={() => {
+                    tap()
+                    if (published) sync()
+                    else void run(() => gitAction('git.push'), tr('Published {0} to origin', { 0: branch }))
+                  }}
+                  accessibilityLabel={published ? tr('Sync changes') : tr('Publish branch')}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    height: 44,
+                    paddingHorizontal: space.m,
+                    borderRadius: radius.m,
+                    backgroundColor: pressed ? c.raised : c.raised2,
+                    opacity: busy || !gates.canRemote ? 0.5 : 1,
+                  })}
+                >
+                  {published ? <RefreshCcw size={15} color={c.soft} /> : <CloudUpload size={15} color={c.soft} />}
+                  <T size={font.control} weight="500" tone="soft" style={{ fontVariant: ['tabular-nums'] }}>
+                    {published ? `${behind}↓ ${ahead}↑` : tr('Publish')}
+                  </T>
+                </Pressable>
+              </View>
+
+              {gates.operation ? (
+                <Card style={{ padding: space.l, gap: space.m, backgroundColor: c.warnWash }}>
+                  <View style={{ flexDirection: 'row', gap: space.s, alignItems: 'flex-start' }}>
+                    <CircleAlert size={17} color={c.warn} style={{ marginTop: 2 }} />
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <T weight="600">
+                        {tr(gates.operation === 'rebase' ? 'Rebase in progress' : 'Merge in progress')}
+                      </T>
+                      <T size={font.control} tone="soft">
+                        {gates.conflicts
+                          ? tr(
+                              gates.conflicts === 1
+                                ? 'Resolve 1 conflicted file, stage it, then continue.'
+                                : 'Resolve {count} conflicted files, stage them, then continue.',
+                              { count: gates.conflicts },
+                            )
+                          : tr('Conflicts are resolved and staged.')}
+                      </T>
+                    </View>
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: space.s }}>
+                    <Button
+                      title={tr('Continue')}
+                      disabled={busy || gates.conflicts > 0}
+                      style={{ flex: 1 }}
+                      onPress={() => void run(() => continueOperation('git.continueOperation'), 'Continued')}
+                    />
+                    <Button
+                      kind="secondary"
+                      title={tr(gates.operation === 'rebase' ? 'Abort rebase' : 'Abort merge')}
+                      disabled={busy}
+                      style={{ flex: 1 }}
+                      onPress={() =>
+                        Alert.alert(
+                          tr(gates.operation === 'rebase' ? 'Abort the rebase?' : 'Abort the merge?'),
+                          tr('Your branch returns to how it was before it started.'),
+                          [
+                            { text: tr('Cancel'), style: 'cancel' },
+                            {
+                              text: tr('Abort'),
+                              style: 'destructive',
+                              onPress: () => void run(() => continueOperation('git.abortOperation'), 'Aborted'),
+                            },
+                          ],
+                        )
                       }
-                    : undefined
-                }
-              >
-                {shownUnstaged.map((f, i) => (
-                  <View key={f.path}>
-                    {i ? <Divider inset={space.l} /> : null}
-                    <FileRow
-                      file={f}
-                      onOpen={() => openFile.open(binding!.repoId, f.path, { mode: 'changes' })}
-                      onStage={() => setStaged([f.path], true)}
-                      onDiscard={unstaged.some((entry) => entry.path === f.path) ? () => discard([f]) : undefined}
                     />
                   </View>
-                ))}
-              </Group>
-              {needle && !shownStaged.length && !shownUnstaged.length && !shownConflicted.length ? (
-                <T tone="muted">{tr('No changed file matches.')}</T>
+                </Card>
               ) : null}
-              {!changeCount ? <T tone="muted">{tr('No changes in this checkout.')}</T> : null}
-            </>
-          ) : null}
-          {tab === 'commits' || tab === 'stashes' ? (
-            <View style={{ marginHorizontal: -space.l }}>
-              {tab === 'commits' ? (
-                commits.length ? (
-                  commits.map((x, i) => (
-                    <View key={x.oid}>
+              {chat && binding && gitStatus && !hasRemote && gitStatus.branch && !gates.operation ? (
+                <PublishRepository
+                  computerId={chat.computerId}
+                  taskId={chat.taskId}
+                  repoId={binding.repoId}
+                  repoName={binding.repoName}
+                  readOnly={!canWrite}
+                  onPublished={() => {
+                    void read().catch(() => {})
+                    say('Published to GitHub')
+                  }}
+                  onError={(text) => notify(text, true)}
+                />
+              ) : null}
+              {chat && binding && hasRemote && gitStatus?.branch ? (
+                <CurrentPullRequest
+                  chat={chat}
+                  repoId={binding.repoId}
+                  branch={gitStatus.branch}
+                  readOnly={!canWrite}
+                  onError={(text) => notify(text, true)}
+                />
+              ) : null}
+              {chat && binding && hasRemote ? (
+                // The repository's other pull requests are on the Pull requests page, narrowed to this repository.
+                <Pressable
+                  accessibilityRole="link"
+                  onPress={() => {
+                    tap()
+                    router.navigate({ pathname: '/pulls', params: { computer: chat.computerId, repo: binding.repoId } })
+                  }}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: space.s,
+                    height: 44,
+                    marginTop: -space.s,
+                    paddingHorizontal: space.m,
+                    borderRadius: radius.m,
+                    backgroundColor: pressed ? c.raised : c.raised2,
+                  })}
+                >
+                  <GitPullRequest size={15} color={c.soft} />
+                  <T weight="500" numberOfLines={1} style={{ flex: 1 }}>
+                    {tr('All pull requests in {0}', { 0: binding.repoName })}
+                  </T>
+                  <ChevronRight size={15} color={c.muted} />
+                </Pressable>
+              ) : null}
+              <Segmented
+                value={tab}
+                onChange={setTab}
+                options={[
+                  { key: 'changes', label: tr('Changes'), count: changeCount },
+                  { key: 'commits', label: tr('Commits'), count: commits.length },
+                  { key: 'stashes', label: tr('Stashes'), count: stashes.length },
+                ]}
+              />
+            </View>
+          }
+          ListFooterComponent={
+            tab === 'changes' ? (
+              <View style={{ paddingHorizontal: space.l, paddingTop: space.l, gap: space.l }}>
+                {needle && !shownStaged.length && !shownUnstaged.length && !shownConflicted.length ? (
+                  <T tone="muted">{tr('No changed file matches.')}</T>
+                ) : null}
+                {!changeCount ? <T tone="muted">{tr('No changes in this checkout.')}</T> : null}
+              </View>
+            ) : (
+              // Commits and stashes are short lists the host bounds, drawn whole below the tabs.
+              <View style={{ marginTop: space.l }}>
+                {tab === 'commits' ? (
+                  commits.length ? (
+                    commits.map((x, i) => (
+                      <View key={x.oid}>
+                        {i ? <Divider inset={space.l + 20} /> : null}
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={tr('Open commit {hash}', { hash: x.oid.slice(0, 7) })}
+                          onPress={() =>
+                            openRevision(
+                              { oid: x.oid, stash: false },
+                              { subject: x.subject, author: x.author, at: x.at },
+                            )
+                          }
+                          style={({ pressed }) => ({
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: space.m,
+                            paddingHorizontal: space.l,
+                            paddingVertical: space.m,
+                            minHeight: 56,
+                            backgroundColor: pressed ? c.pressed : 'transparent',
+                          })}
+                        >
+                          <View
+                            style={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: 4,
+                              borderWidth: 1.5,
+                              borderColor: x.incoming ? c.ok : x.pushed ? c.muted : c.accent,
+                              backgroundColor: x.incoming ? c.ok : x.pushed ? 'transparent' : c.accent,
+                            }}
+                          />
+                          <View style={{ flex: 1, gap: 2 }}>
+                            <T size={font.body - 1} weight="500" numberOfLines={1}>
+                              {x.subject}
+                            </T>
+                            <T size={font.caption} tone="muted" numberOfLines={1}>
+                              {x.author} · {ago(x.at)}
+                              {x.incoming ? ` · ${tr('not pulled')}` : x.pushed ? '' : ` · ${tr('not pushed')}`}
+                            </T>
+                          </View>
+                          <T size={font.caption} mono tone="muted" numberOfLines={1} style={{ flexShrink: 0 }}>
+                            {x.oid.slice(0, 7)}
+                          </T>
+                          <ChevronRight size={16} color={c.muted} />
+                        </Pressable>
+                      </View>
+                    ))
+                  ) : (
+                    <T size={font.control} tone="muted" style={{ padding: space.l }}>
+                      {tr('No commits yet.')}
+                    </T>
+                  )
+                ) : stashes.length ? (
+                  stashes.map((s, i) => (
+                    <View key={s.oid + i}>
                       {i ? <Divider inset={space.l + 20} /> : null}
                       <Pressable
                         accessibilityRole="button"
-                        accessibilityLabel={tr('Open commit {hash}', { hash: x.oid.slice(0, 7) })}
-                        onPress={() =>
-                          openRevision({ oid: x.oid, stash: false }, { subject: x.subject, author: x.author, at: x.at })
-                        }
+                        accessibilityLabel={tr('Open {ref}', { ref: s.ref })}
+                        onPress={() => openRevision({ oid: s.oid, stash: true }, { subject: s.subject, ref: s.ref })}
                         style={({ pressed }) => ({
                           flexDirection: 'row',
                           alignItems: 'center',
@@ -1290,76 +1381,28 @@ export default function SourceControl() {
                           backgroundColor: pressed ? c.pressed : 'transparent',
                         })}
                       >
-                        <View
-                          style={{
-                            width: 8,
-                            height: 8,
-                            borderRadius: 4,
-                            borderWidth: 1.5,
-                            borderColor: x.incoming ? c.ok : x.pushed ? c.muted : c.accent,
-                            backgroundColor: x.incoming ? c.ok : x.pushed ? 'transparent' : c.accent,
-                          }}
-                        />
+                        <Archive size={16} color={c.muted} />
                         <View style={{ flex: 1, gap: 2 }}>
                           <T size={font.body - 1} weight="500" numberOfLines={1}>
-                            {x.subject}
+                            {stashTitle(s.subject)}
                           </T>
-                          <T size={font.caption} tone="muted" numberOfLines={1}>
-                            {x.author} · {ago(x.at)}
-                            {x.incoming ? ` · ${tr('not pulled')}` : x.pushed ? '' : ` · ${tr('not pushed')}`}
+                          <T size={font.caption} mono tone="muted" numberOfLines={1}>
+                            {s.ref}
                           </T>
                         </View>
-                        <T size={font.caption} mono tone="muted" numberOfLines={1} style={{ flexShrink: 0 }}>
-                          {x.oid.slice(0, 7)}
-                        </T>
                         <ChevronRight size={16} color={c.muted} />
                       </Pressable>
                     </View>
                   ))
                 ) : (
                   <T size={font.control} tone="muted" style={{ padding: space.l }}>
-                    {tr('No commits yet.')}
+                    {tr('No saved stashes. Stash changes from the ⋯ menu to set them aside.')}
                   </T>
-                )
-              ) : stashes.length ? (
-                stashes.map((s, i) => (
-                  <View key={s.oid + i}>
-                    {i ? <Divider inset={space.l + 20} /> : null}
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={tr('Open {ref}', { ref: s.ref })}
-                      onPress={() => openRevision({ oid: s.oid, stash: true }, { subject: s.subject, ref: s.ref })}
-                      style={({ pressed }) => ({
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: space.m,
-                        paddingHorizontal: space.l,
-                        paddingVertical: space.m,
-                        minHeight: 56,
-                        backgroundColor: pressed ? c.pressed : 'transparent',
-                      })}
-                    >
-                      <Archive size={16} color={c.muted} />
-                      <View style={{ flex: 1, gap: 2 }}>
-                        <T size={font.body - 1} weight="500" numberOfLines={1}>
-                          {stashTitle(s.subject)}
-                        </T>
-                        <T size={font.caption} mono tone="muted" numberOfLines={1}>
-                          {s.ref}
-                        </T>
-                      </View>
-                      <ChevronRight size={16} color={c.muted} />
-                    </Pressable>
-                  </View>
-                ))
-              ) : (
-                <T size={font.control} tone="muted" style={{ padding: space.l }}>
-                  {tr('No saved stashes. Stash changes from the ⋯ menu to set them aside.')}
-                </T>
-              )}
-            </View>
-          ) : null}
-        </ScrollView>
+                )}
+              </View>
+            )
+          }
+        />
         {tab === 'changes' && binding && !binding.notGit ? (
           <View
             style={{
