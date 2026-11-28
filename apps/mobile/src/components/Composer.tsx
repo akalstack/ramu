@@ -99,7 +99,7 @@ import { Glass } from './Glass'
 import { AutoResumeRows, LimitTray } from './LimitTray'
 import { AccountRows } from './AccountRows'
 import { canEditVerify } from '../runtime/goalVerify'
-import { isUserPaused } from '@ramu/shared/chat/goalHold'
+import { goalContinues, isUserPaused } from '@ramu/shared/chat/goalHold'
 import { GoalVerifySheet } from './GoalVerifySheet'
 import { DictationStatus, MicButton } from './DictationControls'
 import { dictationBusy } from '@ramu/shared/voice/dictation'
@@ -536,6 +536,8 @@ export function GoalQueueTray({
   if (!goal && !queue.length) return null
   // Only a goal the user paused reads as paused here; one held by a usage limit continues by itself and shows in the limit tray.
   const paused = isUserPaused(goal)
+  // Stopped at its turn limit, blocked or paused: the button resumes it, with a turn limit's count from zero.
+  const resumable = !!goal && !goalContinues(goal)
   return (
     <View
       style={{
@@ -564,13 +566,15 @@ export function GoalQueueTray({
               onPress={() => setVerifying(true)}
             />
           ) : null}
-          <IconButton
-            icon={paused ? Play : Pause}
-            label={paused ? say('Resume goal') : say('Pause goal')}
-            size={28}
-            tone="muted"
-            onPress={onToggleGoal}
-          />
+          {goal.status !== 'completed' ? (
+            <IconButton
+              icon={resumable ? Play : Pause}
+              label={resumable ? say('Resume goal') : say('Pause goal')}
+              size={28}
+              tone="muted"
+              onPress={onToggleGoal}
+            />
+          ) : null}
           <IconButton icon={X} label={say('Clear goal')} size={28} tone="muted" onPress={onClearGoal} />
         </View>
       ) : null}

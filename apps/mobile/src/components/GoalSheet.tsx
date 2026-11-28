@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { View } from 'react-native'
 import { Pause, Play, ShieldCheck, X } from 'lucide-react-native'
 import { goalTurnLimit, type ChatGoal } from '@ramu/shared/types'
-import { isUserPaused } from '@ramu/shared/chat/goalHold'
+import { goalContinues, isUserPaused } from '@ramu/shared/chat/goalHold'
 import { font, radius, space, useTheme } from '../theme'
 import { useSay, useT } from '../i18n'
 import { GoalVerifySheet } from './GoalVerifySheet'
@@ -40,6 +40,8 @@ export function GoalSheet({
   const [verifying, setVerifying] = useState(false)
   // Only a goal the person paused reads as paused; one held by a usage limit continues by itself.
   const paused = isUserPaused(goal)
+  // Stopped at its turn limit, blocked or paused: Resume starts it again, with a turn limit's count from zero.
+  const resumable = !goalContinues(goal)
   const limit = goalTurnLimit(goal, { maxTurns: defaultLimit })
   return (
     <View style={{ paddingHorizontal: space.l, paddingBottom: space.l, gap: space.l }}>
@@ -92,11 +94,11 @@ export function GoalSheet({
         />
       ) : null}
       <View style={{ gap: space.s }}>
-        {onToggle ? (
+        {onToggle && goal.status !== 'completed' ? (
           <Button
             kind="secondary"
-            icon={paused ? Play : Pause}
-            title={paused ? say('Resume goal') : say('Pause goal')}
+            icon={resumable ? Play : Pause}
+            title={resumable ? say('Resume goal') : say('Pause goal')}
             onPress={onToggle}
           />
         ) : null}

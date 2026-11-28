@@ -10306,6 +10306,15 @@ test('the phone goal sheet sets this goal’s own turn limit, and offers none on
   assert.equal(find(render({ goal: { ...goal, maxTurns: null } }), 'ChoiceRow').props.value, 'none')
   // A view-only device cannot change it, so the control is not offered.
   assert.equal(find(render({ onLimit: undefined }), 'ChoiceRow'), undefined)
+  // A goal stopped at its turn limit offers Resume, like a paused one; a running goal offers Pause; a done one neither.
+  const toggle = (status) =>
+    nodes(render({ goal: { ...goal, status }, onToggle() {} })).find(
+      (b) => b?.type === 'Button' && /goal$/.test(String(b.props.title)),
+    )?.props.title
+  assert.equal(toggle('turn-limit'), 'Resume goal')
+  assert.equal(toggle('blocked'), 'Resume goal')
+  assert.equal(toggle('active'), 'Pause goal')
+  assert.equal(toggle('completed'), undefined)
   hooks.dispose()
 })
 

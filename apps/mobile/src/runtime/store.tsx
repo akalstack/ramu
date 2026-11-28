@@ -46,7 +46,7 @@ import Constants from 'expo-constants'
 import type { PushEvents, RamuMethods, ReviewAddressResult } from '@ramu/shared/api'
 import type { PushArgs } from '@ramu/shared/pushChannels'
 import type { BackgroundActivity } from '@ramu/shared/chat/activity'
-import { isUserPaused } from '@ramu/shared/chat/goalHold'
+import { goalContinues } from '@ramu/shared/chat/goalHold'
 import type { InboxNotice } from '@ramu/shared/chat/notices'
 import type { LimitRetryResult } from '@ramu/shared/chat/providerWait'
 import type {
@@ -2337,7 +2337,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           pc,
           'agent.goal.control',
           session,
-          isUserPaused(ref.current.chats.find((c) => c.id === id)?.goal) ? 'resume' : 'pause',
+          // Like the desktop: a goal that is not continuing (paused, blocked or at its turn limit) is resumed.
+          goalContinues(ref.current.chats.find((c) => c.id === id)?.goal) ? 'pause' : 'resume',
         ),
       ),
     clearGoal: (id) => sessionAction(id, (pc, session) => invoke(pc, 'agent.goal.control', session, 'clear')),
