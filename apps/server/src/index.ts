@@ -1869,6 +1869,8 @@ async function stop(intentional = false, exitCode = 0) {
   if (intentional) writeFileSync(stoppedPath, String(Date.now()))
   if (stopping) return
   stopping = true
+  // First, so an agent the shutdown ends while the rest winds down is recovered, not recorded as failed.
+  agents.beginShutdown()
   clearInterval(tick)
   githubAppEvents.stop()
   await linkOffline()

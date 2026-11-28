@@ -694,6 +694,9 @@ export class SessionProcess {
   }
 
   fail(id: string, error: unknown): void {
+    // Stopped by the service shutting down (its SIGTERM reaches the provider too): not the provider's failure. The run
+    // keeps its state, so restart recovery resumes it and its goal stays active.
+    if (this.host.shutdown()) return
     this.host.record(id, { kind: 'error', message: errorMessage(error) })
     // A confident limit match holds the chat at the limit; a low-confidence one gets a single quiet retry first.
     const limit = classifyLimit(error, { channel: 'error' })

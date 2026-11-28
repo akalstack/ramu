@@ -557,6 +557,14 @@ export class AgentService {
     this.record(id, { kind: 'command-wait', taskId })
   }
 
+  /**
+   * The service is going down: from now on a provider process that ends is the shutdown stopping it, not a failure,
+   * so its run keeps its state for restart recovery instead of reading as failed with its goal blocked.
+   */
+  beginShutdown(): void {
+    this.shutdown = true
+  }
+
   stopAll(preserveRecovery = false): void {
     if (!preserveRecovery) this.db.prepare('DELETE FROM agent_recovery').run()
     this.shutdown = true

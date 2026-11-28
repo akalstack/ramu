@@ -29,6 +29,8 @@ export interface ClaudeStreamPumpHost
     Pick<FallbackRouter, 'fallback'>,
     Pick<SessionStore, 'events' | 'get'>,
     Pick<AgentTasks, 'settleTasks' | 'updateTask'> {
+  /** Whether the service is going down, so a process it ends is left for restart recovery. */
+  shutdown(): boolean
   usage(): AgentService['usage']
 }
 
@@ -99,8 +101,10 @@ export class ClaudeStreamPump {
         flush()
         this.host.settleTasks(id)
         this.host.live.delete(id)
-        // A finished turn stays idle when its process closes; only interrupted work reads as stopped.
-        if (['starting', 'running', 'needs-input'].includes(this.host.get(id).state)) this.host.setState(id, 'stopped')
+        // A finished turn stays idle when its process closes; only interrupted work reads as stopped. Work the
+        // service's shutdown ended keeps its state, so restart recovery resumes it.
+        if (!this.host.shutdown() && ['starting', 'running', 'needs-input'].includes(this.host.get(id).state))
+          this.host.setState(id, 'stopped')
       }
     } catch (err) {
       if (this.host.live.get(id)?.query !== query) return // stopped or replaced
