@@ -85,6 +85,19 @@ function axisOf(el: HTMLElement, axis: Axis): ScrollAxis {
  * Draws the app's one scrollbar for every natively scrolling element: a thin thumb per axis that floats over the
  * container being scrolled or pointed at, taking no layout width. Native scrollbars are hidden in styles.css.
  */
+/**
+ * Whether a container is covered where its thumb would show: the topmost of `hits` (what is at that point, topmost
+ * first), leaving out the thumbs' own layer, belongs to something other than the container.
+ */
+export function coveredBy(
+  el: Pick<Node, 'contains'>,
+  hits: readonly Element[],
+  layer: Pick<Node, 'contains'>,
+): boolean {
+  const top = hits.find((hit) => !layer.contains(hit))
+  return !!top && !el.contains(top)
+}
+
 export function installFloatingScrollbars(): void {
   // Outside <body>, so a modal dialog that marks the rest of the body inert leaves the thumbs usable.
   const layer = document.createElement('div')
@@ -141,6 +154,8 @@ export function installFloatingScrollbars(): void {
     for (const axis of AXES) slots[axis].hover = element ? findScroller(element, axis) : null
   }
 
+  const coveredAt = (el: HTMLElement, x: number, y: number) => coveredBy(el, document.elementsFromPoint(x, y), layer)
+
   const place = (axis: Axis, el: HTMLElement): boolean => {
     const state = slots[axis]
     const vertical = axis === 'y'
@@ -181,6 +196,9 @@ export function installFloatingScrollbars(): void {
       Math.max(0, clip.left - box.left),
     ].map(Math.ceil) as [number, number, number, number]
     if (inset[0] + inset[2] >= box.height || inset[1] + inset[3] >= box.width) return false
+    // The thumbs float above every layer so a scrolling menu or dialog shows its own; a container something else
+    // covers (a menu or dialog open over the sidebar) does not draw its thumb on top of that.
+    if (coveredAt(el, box.left + box.width / 2, box.top + box.height / 2)) return false
     const style =
       `transform:translate(${Math.round(box.left)}px,${Math.round(box.top)}px);` +
       `width:${Math.round(box.width)}px;height:${Math.round(box.height)}px;` +
