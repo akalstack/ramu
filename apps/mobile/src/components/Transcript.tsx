@@ -306,10 +306,27 @@ export function MessageActions({
 }
 
 /** An image in the chat: fits the column, keeps its aspect ratio, and opens large when tapped. */
-function ImageBlock({ uri, alt, size }: { uri: string; alt?: string; size?: number }) {
+function ImageBlock({ uri: source, alt, size }: { uri: string; alt?: string; size?: number }) {
   const { c } = useTheme()
   const [ratio, setRatio] = useState(4 / 3)
+  // Inline data and web addresses draw as they are; a path is a file on the host, fetched through it as the desktop does.
+  const direct = /^(data:|https?:)/i.test(source)
+  const references = useContext(ReferenceContext)
+  const [resolved, setResolved] = useState<{ source: string; uri: string | null } | null>(null)
   useEffect(() => {
+    if (direct) return
+    let active = true
+    void (references.image?.(source) ?? Promise.resolve(null)).then(
+      (uri) => active && setResolved({ source, uri }),
+      () => active && setResolved({ source, uri: null }),
+    )
+    return () => {
+      active = false
+    }
+  }, [direct, source, references])
+  const uri = direct ? source : resolved?.source === source ? resolved.uri : undefined
+  useEffect(() => {
+    if (!uri) return
     Image.getSize(
       uri,
       (w, h) => {
@@ -318,6 +335,20 @@ function ImageBlock({ uri, alt, size }: { uri: string; alt?: string; size?: numb
       () => {},
     )
   }, [uri])
+  const frame = size
+    ? { width: size, height: size, borderRadius: radius.s, backgroundColor: c.fill }
+    : { width: '100%' as const, maxWidth: 360, aspectRatio: ratio, borderRadius: radius.m, backgroundColor: c.fill }
+  // Loading from the host, or a file it could not give: the space it will take, then its name.
+  if (!uri)
+    return (
+      <View style={[frame, { alignItems: 'center', justifyContent: 'center', padding: space.s }]}>
+        {uri === null && alt ? (
+          <T size={font.caption} tone="muted" numberOfLines={2}>
+            {alt}
+          </T>
+        ) : null}
+      </View>
+    )
   return (
     <ImagePreview uri={uri} alt={alt}>
       <Image
@@ -1762,7 +1793,10 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
       ? item.subject.match(/[\w@~./-]+\.[A-Za-z0-9]+(?::\d+(?::\d+)?)?/)?.[0]
       : undefined)
   const diffs = item.diffs ?? []
-  const openable = Boolean(item.detail || item.input || diffs.length || item.file || item.ramu?.facts.length)
+  const images = item.images ?? []
+  const openable = Boolean(
+    item.detail || item.input || diffs.length || item.file || item.ramu?.facts.length || images.length,
+  )
   const I = toolIcons[item.tool]
   // A log is cropped to a few lines inline; the whole thing opens in a sheet (a bottom sheet on iOS and Android alike).
   const PREVIEW_LINES = 6
@@ -1911,6 +1945,13 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
                   </T>
                 </Pressable>
               ) : null}
+            </View>
+          ) : null}
+          {images.length ? (
+            <View style={{ gap: space.s, marginTop: space.s }}>
+              {images.map((image, n) => (
+                <ImageBlock key={`${image.uri.slice(0, 80)}-${n}`} uri={image.uri} alt={image.alt} />
+              ))}
             </View>
           ) : null}
         </>

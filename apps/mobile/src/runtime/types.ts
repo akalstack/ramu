@@ -57,6 +57,11 @@ export interface TranscriptTool {
   file?: import('@ramu/shared/chat/fileTools').FileToolLine
   /** An edit's changes, shown when its row is opened. */
   diffs?: { path: string; oldText: string | null; newText: string }[]
+  /**
+   * Images the call returned (a screenshot, a generated or read image), or the image file a read opened, shown when
+   * its row is opened as on the desktop. A `uri` that is neither data nor web is a path on the host.
+   */
+  images?: { uri: string; alt?: string }[]
   /** One of Ramu's own tools: what it did in words, and the few facts that matter, never the raw JSON. */
   ramu?: { done: string; running: string; subject?: string; facts: { label: string; value: string }[] }
 }

@@ -1,5 +1,5 @@
 import { mcpToolWords } from '@ramu/shared/chat/mcpToolWords'
-import type { AgentEvent } from '@ramu/shared/types'
+import type { AgentContent, AgentEvent } from '@ramu/shared/types'
 import { interactiveRevisions, interactiveSuccessor, interactiveUpdates } from '@ramu/shared/interactiveRevisions'
 import { helperGroups } from '@ramu/shared/chat/helperPresentation'
 import { toolKind } from '@ramu/shared/chat/agentTools'
@@ -358,6 +358,7 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
               : 'in_progress',
         detail: result?.summary,
         input: e.input,
+        ...toolImages(result?.content ?? e.content, file),
       })
     } else if (e.kind === 'question')
       items.push({
@@ -589,4 +590,26 @@ export function reconcileDelivered(outbox: OutboxItem[], chats: Chat[], now = Da
     const chat = chats.find((chat) => chat.id === item.chatId)
     return !chat || !deliveryVisible(item, chat)
   })
+}
+
+const IMAGE_FILE = /\.(png|jpe?g|gif|webp|avif|bmp|svg)$/i
+
+/**
+ * The images a tool call shows when opened, as on the desktop: what it returned (inline data, a web address or a host
+ * path), or else the image file a read opened.
+ */
+export function toolImages(
+  content: AgentContent[] | undefined,
+  file: { verb: string; path: string; name: string } | null,
+): { images?: { uri: string; alt?: string }[] } {
+  const images = (content ?? []).flatMap((c) =>
+    c.type === 'image' && (c.data || c.uri)
+      ? [{ uri: c.data ? `data:${c.mimeType};base64,${c.data}` : c.uri!, ...(c.alt ? { alt: c.alt } : {}) }]
+      : c.type === 'resource' && c.mimeType?.startsWith('image/') && c.blob
+        ? [{ uri: `data:${c.mimeType};base64,${c.blob}`, alt: c.name }]
+        : [],
+  )
+  if (!images.length && file?.verb === 'Read' && IMAGE_FILE.test(file.path))
+    images.push({ uri: file.path, alt: file.name })
+  return images.length ? { images } : {}
 }
