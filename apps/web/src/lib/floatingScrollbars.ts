@@ -198,7 +198,21 @@ export function installFloatingScrollbars(): void {
     if (inset[0] + inset[2] >= box.height || inset[1] + inset[3] >= box.width) return false
     // The thumbs float above every layer so a scrolling menu or dialog shows its own; a container something else
     // covers (a menu or dialog open over the sidebar) does not draw its thumb on top of that.
-    if (coveredAt(el, box.left + box.width / 2, box.top + box.height / 2)) return false
+    // Its ends and middle, so a thumb a menu only partly covers is hidden too, not drawn over the menu's edge.
+    const x = box.left + box.width / 2,
+      y = box.top + box.height / 2
+    const ends = vertical
+      ? [
+          [x, box.top + 2],
+          [x, y],
+          [x, box.top + box.height - 2],
+        ]
+      : [
+          [box.left + 2, y],
+          [x, y],
+          [box.left + box.width - 2, y],
+        ]
+    if (ends.some(([px, py]) => coveredAt(el, px!, py!))) return false
     const style =
       `transform:translate(${Math.round(box.left)}px,${Math.round(box.top)}px);` +
       `width:${Math.round(box.width)}px;height:${Math.round(box.height)}px;` +
