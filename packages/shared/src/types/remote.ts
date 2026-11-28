@@ -17,6 +17,11 @@ export interface BackgroundStatus {
    * desktop adds it for its own host.
    */
   keepRunning?: boolean
+  /**
+   * Whether Restart brings this service back by itself: the system's service manager (launchd or systemd) started it
+   * and starts it again. Another device offers Restart service only then, since a restart would otherwise leave it off.
+   */
+  restartable?: boolean
   version?: string
   build?: string
   bundledVersion?: string

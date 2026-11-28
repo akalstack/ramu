@@ -2520,6 +2520,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Restart Ramu': 'Mulai ulang Ramu',
   'Restart Ramu and the background service': 'Mulai ulang Ramu dan layanan latar belakang',
   'Restart service': 'Mulai ulang layanan',
+  'The host has not answered since it restarted.': 'Host belum menjawab sejak dimulai ulang.',
+  'This host’s service would not start again on its own. Restart it on that computer, or run `ramu up` there.':
+    'Layanan host ini tidak akan berjalan lagi dengan sendirinya. Mulai ulang di komputer itu, atau jalankan `ramu up` di sana.',
   'Restore files before this message': 'Pulihkan file sebelum pesan ini',
   'Restore selected file changes from this message and later runs, then send your revised message. Thread history stays available.':
     'Pulihkan perubahan file terpilih dari pesan ini dan proses setelahnya, lalu kirim pesan revisimu. Riwayat thread tetap tersedia.',

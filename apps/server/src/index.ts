@@ -1,4 +1,5 @@
 import { MEDIA_SERVICES } from '@ramu/shared/types/media'
+import { managedByServiceManager, RESTART_EXIT_CODE } from './serviceManager'
 import { resolveWorkModel, withWorkModel } from '@ramu/shared/providers/workModel'
 import { ServiceGrants } from './interactive/serviceGrants'
 import { DASHBOARD_ROWS_MAX } from '@ramu/shared/artifactSource'
@@ -374,6 +375,7 @@ const publicCandidates = () => (network.enabled && publicUrl() ? [{ url: publicU
 const stoppedPath = join(userData, 'background.stopped')
 const serviceBuild = runtimeBuild(process.argv[1] ?? '')
 const serviceVersion = runtimeVersion(process.argv[1] ?? '')
+const serviceManaged = managedByServiceManager(process.env)
 if (process.env.RAMU_SUPERVISOR === '1') {
   try {
     unlinkSync(stoppedPath)
@@ -2144,6 +2146,7 @@ async function performInvoke(
       startedAt,
       build: serviceBuild,
       version: serviceVersion,
+      restartable: serviceManaged,
       protocol: PROTOCOL_VERSION,
       capabilities: capabilities(),
       access: accessOf(device),
@@ -2164,7 +2167,12 @@ async function performInvoke(
   } else if (method === 'background.stop') {
     return { value: undefined, after: () => void stop(true) }
   } else if (method === 'background.restart') {
-    return { value: undefined, after: () => void stop() }
+    // From another device nothing here starts it again, so it exits as a failure for its service manager to restart.
+    if (remote && !serviceManaged)
+      throw new Error(
+        'This host’s service would not start again on its own. Restart it on that computer, or run `ramu up` there.',
+      )
+    return { value: undefined, after: () => void stop(false, remote ? RESTART_EXIT_CODE : 0) }
   } else {
     const encrypted = remote ? encryptedConnection(req?.socket as { encrypted?: boolean } | undefined) : true
     const dispatch = async () =>

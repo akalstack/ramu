@@ -1054,6 +1054,29 @@ export function BackgroundControls({ compact = false, onInstalled }: { compact?:
   // Keep running is reported only for this computer's own service, the one this app can restart.
   const own = status?.keepRunning !== undefined
   const restarting = useRestartingHosts().has(ownHostId()) && own
+  // Another host restarts under its own service manager; this waits until it answers again with a new process.
+  const [restartingThere, setRestartingThere] = useState(false)
+  const restartThere = async () => {
+    const before = status?.pid
+    setRestartingThere(true)
+    try {
+      await invoke('background.restart')
+      for (let tries = 0; tries < 45; tries++) {
+        await new Promise((resolve) => setTimeout(resolve, 2000))
+        const next = await invoke('background.status').catch(() => null)
+        if (next && next.pid !== before) {
+          setStatus(next)
+          setConnected(true)
+          return
+        }
+      }
+      notifyError(t('The host has not answered since it restarted.'), t('Restart service'))
+    } catch (e) {
+      notifyError(errorText(e), t('Restart service'))
+    } finally {
+      setRestartingThere(false)
+    }
+  }
   // Running is the normal state and the status bar already shows when it is not; only a stopped service needs a prompt here.
   if (compact)
     return connected ? null : (
@@ -1101,6 +1124,16 @@ export function BackgroundControls({ compact = false, onInstalled }: { compact?:
             onClick={() => void act(() => invoke('background.restartService', 'keep'))}
           >
             {t('Restart service')}
+          </Button>
+        ) : connected && status?.restartable ? (
+          // Another host whose service manager starts it again, so restarting it from here never leaves it off.
+          <Button
+            variant="secondary"
+            className="bg-fill hover:bg-fill-hover"
+            disabled={busy || restartingThere}
+            onClick={() => void restartThere()}
+          >
+            {restartingThere ? t('Restarting…') : t('Restart service')}
           </Button>
         ) : (
           !connected && (
