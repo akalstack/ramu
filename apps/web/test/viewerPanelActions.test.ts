@@ -230,3 +230,30 @@ it('does not fetch a revert plan or rewind when a viewer reaches an already-open
   await Promise.resolve()
   expect(state.invoke).not.toHaveBeenCalled()
 })
+
+it('lists a sub-agent’s brief, its work and its report as rows of one transcript list', () => {
+  const task: AgentTask = {
+    agentId: 'a',
+    name: 'Helper',
+    status: 'completed',
+    prompt: 'Check the tests',
+    summary: 'All green',
+    canStop: false,
+    canMessage: false,
+  }
+  state.index = 0
+  const tree = AgentTaskPanel({
+    tasks: [task],
+    openId: 'a',
+    events: [],
+    results: new Map(),
+    cwd: '',
+    live: true,
+    onSelect: vi.fn(),
+    onClose: vi.fn(),
+    onStop: vi.fn(),
+    onMessage: vi.fn(),
+  })
+  const list = nodes(tree).find((props) => props.layout === 'panel')!
+  expect((list.rows as { key: string }[]).map((row) => row.key)).toEqual(['prompt:', 'empty:', 'report:'])
+})

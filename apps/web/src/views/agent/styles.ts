@@ -59,6 +59,10 @@ export const PANEL_LABEL_CLASS =
 export const PANEL_BODY_CLASS =
   'agent-panel-body [&_.msg-wrap.user]:self-end [&_.msg-wrap.user]:max-w-[90%] [&_.msg-wrap.user_.msg.user]:mt-0 [&_>_*]:min-w-0 [&_>_*]:max-w-full [&_>_*]:flex-none [&_>_*]:[overflow-wrap:anywhere] flex-1 min-h-0 overflow-auto scroll-fade-y flex flex-col gap-2.5 p-[14px_14px_28px]'
 
+/** A sub-agent's conversation in the panel, drawn as a transcript list: the panel body's text rules and padding. */
+export const PANEL_TRANSCRIPT_CLASS =
+  'agent-panel-body [&_.msg-wrap.user]:self-end [&_.msg-wrap.user]:max-w-[90%] [&_.msg-wrap.user_.msg.user]:mt-0 [&_[data-transcript-row]]:[overflow-wrap:anywhere] flex-1 min-h-0 scroll-fade-y px-3.5 outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--line)]'
+
 /** A half of the selection split button. */
 export const SELECTION_ACTION_CLASS =
   'bg-fill hover:bg-fill-hover selection-action [&:hover:not(:disabled)]:bg-hover [&:hover:not(:disabled)]:[border:0] [&_svg]:text-soft h-[26px] min-h-[26px] gap-1.5 p-[0_10px] [border:0] rounded-full bg-transparent text-foreground text-control whitespace-nowrap'

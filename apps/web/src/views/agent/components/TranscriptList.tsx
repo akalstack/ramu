@@ -15,7 +15,7 @@ import { scrollMotion } from '../../../workspace/panelMotion'
 import { NEAR_BOTTOM_PX } from '../constants'
 import { awayFromEnd, gestured, newFollowIntent, pressed, scrolled } from '../lib/followIntent'
 import { transcriptOpening, type TranscriptAnchor, type TranscriptRow } from '../lib/transcriptRows'
-import { TRANSCRIPT_COLUMN_CLASS, TRANSCRIPT_VIEWPORT_CLASS } from '../styles'
+import { PANEL_TRANSCRIPT_CLASS, TRANSCRIPT_COLUMN_CLASS, TRANSCRIPT_VIEWPORT_CLASS } from '../styles'
 import { ScrollToLatestButton } from './ScrollToLatestButton'
 
 /** Every way the end can move: new rows, rows growing as a reply streams or folding, and the viewport resizing. */
@@ -29,6 +29,14 @@ const KEEP_IN_VIEW = { data: true, size: true }
 const ESTIMATED_ROW_PX = 160
 /** The padding the reading column had at its top and bottom, drawn as the list's own header and footer. */
 const FOOTER = <div aria-hidden className="h-7" />
+/**
+ * How the list sits in its place: the thread's centred reading column, or a sub-agent's conversation in the narrow
+ * panel beside it, whose rows sit closer together.
+ */
+const LAYOUT = {
+  thread: { viewport: TRANSCRIPT_VIEWPORT_CLASS, column: TRANSCRIPT_COLUMN_CLASS, gap: 'pt-3.5' },
+  panel: { viewport: PANEL_TRANSCRIPT_CLASS, column: 'min-w-0', gap: 'pt-2.5' },
+}
 
 const editable = (target: EventTarget | null) =>
   target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))
@@ -60,20 +68,22 @@ export function TranscriptList({
   working,
   scrollToEnd,
   onViewport,
+  layout = 'thread',
 }: {
   rows: TranscriptRow[]
   header: ReactNode
   /** Where the reader left this thread, if they did. */
   initial: { stick: boolean; anchor?: TranscriptAnchor } | undefined
   /** Kept current for the chat view: whether the reader is near the end, and the row they are reading. */
-  stick: RefObject<boolean>
-  anchor: RefObject<TranscriptAnchor | undefined>
+  stick?: RefObject<boolean>
+  anchor?: RefObject<TranscriptAnchor | undefined>
   everything: boolean
   pinned: string | null
   working: boolean
   /** Receives the action that scrolls to the end and follows from there. */
-  scrollToEnd: Ref<() => void>
-  onViewport: (element: HTMLDivElement | null) => void
+  scrollToEnd?: Ref<() => void>
+  onViewport?: (element: HTMLDivElement | null) => void
+  layout?: keyof typeof LAYOUT
 }) {
   useLanguage()
   const list = useRef<LegendListRef | null>(null)
@@ -111,9 +121,9 @@ export function TranscriptList({
       if (event.target !== viewport) return
       const left = gap()
       scrolled(state, viewport.scrollTop, left, performance.now())
-      stick.current = left < NEAR_BOTTOM_PX
-      const reading = list.current?.anchorVisibleContent({ hold: false })
-      if (reading) anchor.current = reading
+      if (stick) stick.current = left < NEAR_BOTTOM_PX
+      const reading = anchor && list.current?.anchorVisibleContent({ hold: false })
+      if (anchor && reading) anchor.current = reading
       sync()
     }
     const onDown = () => pressed(state, performance.now(), 'down')
@@ -202,10 +212,11 @@ export function TranscriptList({
       list.current = handle
       const element = (handle?.getScrollableNode() ?? null) as HTMLDivElement | null
       setViewport(element)
-      onViewport(element)
+      onViewport?.(element)
     },
     [onViewport],
   )
+  const place = LAYOUT[layout]
   const indexOf = new Map(rows.map((row, index) => [row.key, index]))
   const spanned = selected.map((key) => indexOf.get(key)).filter((index) => index !== undefined)
   const keep = [
@@ -221,10 +232,10 @@ export function TranscriptList({
         data={rows}
         keyExtractor={keyOf}
         getItemType={typeOf}
-        // The reading column's 14px between rows: the list places rows itself, so a CSS gap would not reach them, and
-        // its own gap leaves one more below the last row.
+        // The space between rows: the list places rows itself, so a CSS gap would not reach them, and its own gap
+        // leaves one more below the last row.
         renderItem={({ item, index }) => (
-          <div data-transcript-row={item.key} className={index ? 'min-w-0 pt-3.5' : 'min-w-0'}>
+          <div data-transcript-row={item.key} className={index ? `min-w-0 ${place.gap}` : 'min-w-0'}>
             {item.render()}
           </div>
         )}
@@ -238,12 +249,12 @@ export function TranscriptList({
         onReady={() => setReady(true)}
         ListHeaderComponent={<div className="pt-3">{header}</div>}
         ListFooterComponent={FOOTER}
-        contentContainerClassName={TRANSCRIPT_COLUMN_CLASS}
+        contentContainerClassName={place.column}
         role="region"
         tabIndex={0}
         aria-label={translate('Conversation')}
         // Hidden until it has landed where it opens, so the jump there is never seen.
-        className={`size-full min-h-0 min-w-0 scroll-fade-b overscroll-contain contain-content ${TRANSCRIPT_VIEWPORT_CLASS} ${ready ? '' : 'invisible'}`}
+        className={`size-full min-h-0 min-w-0 scroll-fade-b overscroll-contain contain-content ${place.viewport} ${ready ? '' : 'invisible'}`}
       />
       <ScrollToLatestButton working={working} active={away} onClick={toEnd} />
     </>

@@ -6,7 +6,7 @@ import { AgentContentView } from '../../../chat/AgentContentView'
 import { Button } from '@/components/desktop-button'
 import { ArrowLeft, Bot, Square, X } from 'lucide-react'
 import { visibleText } from '../lib/messages'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { MarkdownText } from '../../../chat/MarkdownText'
 import type { AgentEvent } from '@ramu/shared/types'
 import { effectiveStatus, helperConversation } from '@ramu/shared/chat/agentTasks'
@@ -34,6 +34,8 @@ import {
 import { Message, MessageContent } from '@/components/ui/message'
 import { ErrorNote } from './ErrorNote'
 import { UserBubble } from './UserMessage'
+import { TranscriptList } from './TranscriptList'
+import type { TranscriptRow } from '../lib/transcriptRows'
 
 /** A brief longer than this many characters or lines opens folded. */
 const LONG_PROMPT = { characters: 320, lines: 4 }
@@ -116,7 +118,6 @@ export function AgentTaskPanel({
   const historical = tasks.filter((entry) => !listed.includes(entry) && entry.taskType !== 'advisor')
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
-  const body = useRef<HTMLDivElement>(null)
   useEffect(() => {
     setDraft('')
   }, [openId])
@@ -133,10 +134,6 @@ export function AgentTaskPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [events, task?.agentId, task?.address, task?.taskType, task?.toolUseId] by design; the values it reads beyond these are current as of that run
     [events, task?.agentId, task?.address, task?.taskType, task?.toolUseId],
   )
-  useEffect(() => {
-    const el = body.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [own.length])
   const actions = task ? helperActions(task, !offline) : { canStop: false, canMessage: false }
   const status = task ? effectiveStatus(task, live) : 'stopped'
   const running = status === 'running' && live
@@ -144,6 +141,124 @@ export function AgentTaskPanel({
   const statusGroup = running ? own.findLast((block) => block.kind === 'tools') : undefined
   const working = !offline && !!task && helperActive(task)
   const meta = task ? taskMeta(task, status) : ''
+  const report =
+    task &&
+    status !== 'running' &&
+    (task.error ||
+      (task.summary &&
+        task.summary.toLowerCase() !== TASK_STATUS[status].toLowerCase() &&
+        !own.some(
+          (block) =>
+            block.kind === 'event' && block.event.kind === 'text' && block.event.text.trim() === task.summary!.trim(),
+        )))
+  // Each piece of the conversation is a row of the list, so only those near the view are drawn; it opens at the end
+  // and follows the helper's output while the reader stays there.
+  const prompt = task?.prompt
+  const rows: TranscriptRow[] = !task
+    ? []
+    : [
+        ...(task.recoveryError
+          ? [
+              {
+                key: 'recovery:',
+                render: () => (
+                  <p className="muted text-muted-foreground small text-caption" role="status">
+                    {translate(
+                      'Saved provider history could not be fully recovered. Previously received output is still shown.',
+                    )}{' '}
+                    {task.recoveryError}
+                  </p>
+                ),
+              },
+            ]
+          : []),
+        ...(prompt
+          ? [
+              {
+                key: 'prompt:',
+                render: () => (
+                  <div className="agent-panel-prompt p-[10px_12px] [border:1px_solid_transparent] rounded-(--radius-m) bg-raised">
+                    <span className={PANEL_LABEL_CLASS}>{translate('Task')}</span>
+                    <TaskPrompt key={task.agentId} text={prompt} />
+                  </div>
+                ),
+              },
+            ]
+          : []),
+        ...work.flatMap((item): TranscriptRow[] => {
+          if (Array.isArray(item)) return []
+          const block = item.kind === 'work' ? item.block : item
+          const at = own.indexOf(item.kind === 'work' ? item.first : item)
+          return [
+            {
+              key: `${block.kind === 'tools' ? 'tools' : block.event.kind}:${at}`,
+              render: () =>
+                block.kind === 'tools' ? (
+                  // Thoughts between calls fold into the group and the newest group names what it is doing now, as in the chat.
+                  <ToolGroup
+                    tools={block.tools}
+                    entries={item.kind === 'work' ? item.entries : undefined}
+                    results={results}
+                    cwd={cwd}
+                    active={running}
+                    live={isLiveToolGroup(block, statusGroup, own)}
+                    taskId={taskId}
+                    bare={task.taskType === 'local_bash'}
+                  />
+                ) : block.event.kind === 'text' ? (
+                  <AssistantText event={block.event} generating={false} actions={false} taskId={taskId} />
+                ) : block.event.kind === 'content' ? (
+                  <AgentContentView content={block.event.content} taskId={taskId} />
+                ) : block.event.kind === 'turn-diff' ? (
+                  <TurnDiff diff={block.event.diff} />
+                ) : block.event.kind === 'user' ? (
+                  <Message align="end">
+                    <MessageContent className="items-end">
+                      <UserBubble>{visibleText(block.event.text)}</UserBubble>
+                    </MessageContent>
+                  </Message>
+                ) : block.event.kind === 'thinking' ? (
+                  <ThinkingRow text={block.event.text} active={running && block === own.at(-1)} />
+                ) : block.event.kind === 'error' ? (
+                  <ErrorNote message={block.event.message} />
+                ) : null,
+            },
+          ]
+        }),
+        ...(!own.length
+          ? [
+              {
+                key: 'empty:',
+                render: () => (
+                  <p className="muted text-muted-foreground small text-caption">
+                    {status === 'running'
+                      ? translate('Working… its messages and tool calls appear here.')
+                      : task.taskType === 'local_bash'
+                        ? translate('This command left no output.')
+                        : translate('This agent left no transcript.')}
+                  </p>
+                ),
+              },
+            ]
+          : []),
+        ...(report
+          ? [
+              {
+                key: 'report:',
+                render: () => (
+                  <div
+                    className={`agent-panel-report [&.error]:[border-color:color-mix(in_srgb,_var(--bad)_40%,_transparent)] p-[10px_12px] [border:1px_solid_transparent] rounded-(--radius-m) bg-raised${task.error ? ' error text-bad' : ''}`}
+                  >
+                    <span className={PANEL_LABEL_CLASS}>{task.error ? translate('Error') : translate('Report')}</span>
+                    <MarkdownText density="compact" className={task.error ? 'text-bad' : undefined}>
+                      {task.error ?? task.summary ?? ''}
+                    </MarkdownText>
+                  </div>
+                ),
+              },
+            ]
+          : []),
+      ]
   const send = async () => {
     if (readOnly || !task || !draft.trim() || sending) return
     setSending(true)
@@ -270,86 +385,17 @@ export function AgentTaskPanel({
         </div>
       ) : (
         <>
-          <div ref={body} className={PANEL_BODY_CLASS}>
-            {task.recoveryError && (
-              <p className="muted text-muted-foreground small text-caption" role="status">
-                {translate(
-                  'Saved provider history could not be fully recovered. Previously received output is still shown.',
-                )}{' '}
-                {task.recoveryError}
-              </p>
-            )}
-            {task.prompt && (
-              <div className="agent-panel-prompt p-[10px_12px] [border:1px_solid_transparent] rounded-(--radius-m) bg-raised">
-                <span className={PANEL_LABEL_CLASS}>{translate('Task')}</span>
-                <TaskPrompt key={task.agentId} text={task.prompt} />
-              </div>
-            )}
-            {work.map((item) => {
-              if (Array.isArray(item)) return null
-              const block = item.kind === 'work' ? item.block : item
-              return (
-                <div key={own.indexOf(item.kind === 'work' ? item.first : item)}>
-                  {block.kind === 'tools' ? (
-                    // Thoughts between calls fold into the group and the newest group names what it is doing now, as in the chat.
-                    <ToolGroup
-                      tools={block.tools}
-                      entries={item.kind === 'work' ? item.entries : undefined}
-                      results={results}
-                      cwd={cwd}
-                      active={running}
-                      live={isLiveToolGroup(block, statusGroup, own)}
-                      taskId={taskId}
-                      bare={task.taskType === 'local_bash'}
-                    />
-                  ) : block.event.kind === 'text' ? (
-                    <AssistantText event={block.event} generating={false} actions={false} taskId={taskId} />
-                  ) : block.event.kind === 'content' ? (
-                    <AgentContentView content={block.event.content} taskId={taskId} />
-                  ) : block.event.kind === 'turn-diff' ? (
-                    <TurnDiff diff={block.event.diff} />
-                  ) : block.event.kind === 'user' ? (
-                    <Message align="end">
-                      <MessageContent className="items-end">
-                        <UserBubble>{visibleText(block.event.text)}</UserBubble>
-                      </MessageContent>
-                    </Message>
-                  ) : block.event.kind === 'thinking' ? (
-                    <ThinkingRow text={block.event.text} active={running && block === own.at(-1)} />
-                  ) : block.event.kind === 'error' ? (
-                    <ErrorNote message={block.event.message} />
-                  ) : null}
-                </div>
-              )
-            })}
-            {!own.length && (
-              <p className="muted text-muted-foreground small text-caption">
-                {status === 'running'
-                  ? translate('Working… its messages and tool calls appear here.')
-                  : task.taskType === 'local_bash'
-                    ? translate('This command left no output.')
-                    : translate('This agent left no transcript.')}
-              </p>
-            )}
-            {status !== 'running' &&
-              (task.error ||
-                (task.summary &&
-                  task.summary.toLowerCase() !== TASK_STATUS[status].toLowerCase() &&
-                  !own.some(
-                    (block) =>
-                      block.kind === 'event' &&
-                      block.event.kind === 'text' &&
-                      block.event.text.trim() === task.summary!.trim(),
-                  ))) && (
-                <div
-                  className={`agent-panel-report [&.error]:[border-color:color-mix(in_srgb,_var(--bad)_40%,_transparent)] p-[10px_12px] [border:1px_solid_transparent] rounded-(--radius-m) bg-raised${task.error ? ' error text-bad' : ''}`}
-                >
-                  <span className={PANEL_LABEL_CLASS}>{task.error ? translate('Error') : translate('Report')}</span>
-                  <MarkdownText density="compact" className={task.error ? 'text-bad' : undefined}>
-                    {task.error ?? task.summary ?? ''}
-                  </MarkdownText>
-                </div>
-              )}
+          <div className="relative flex min-h-0 flex-1 flex-col">
+            <TranscriptList
+              key={task.agentId}
+              layout="panel"
+              rows={rows}
+              header={null}
+              initial={undefined}
+              everything={false}
+              pinned={null}
+              working={running}
+            />
           </div>
           {readOnly && (
             <p className="px-3 text-caption text-muted-foreground" role="status">
