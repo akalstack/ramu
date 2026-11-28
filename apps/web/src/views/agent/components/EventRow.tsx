@@ -1,4 +1,5 @@
 import { ThreadMessageCard, ThreadsStartedCard } from './StartedThreads'
+import { commandLine } from '@ramu/shared/chat/commandLine'
 import { RamuEventRow } from './RamuEventRow'
 import { LocalInlineAction } from '@/components/inline-action'
 import { ContinuedCard } from './ContinuedCard'
@@ -317,7 +318,7 @@ export function EventRow({
     case 'background-terminal-stop':
       return (
         <div className={TURN_END_CLASS} role="status">
-          {translate('You requested a stop for {0}', { 0: e.command })}
+          {translate('You requested a stop for {0}', { 0: commandLine(e.command) })}
           <RepeatCount count={repeats} />
         </div>
       )
@@ -325,7 +326,7 @@ export function EventRow({
       return (
         <div className={TURN_END_CLASS} role="status">
           {translate(e.failed ? 'Background command failed: {0}' : 'Background command finished: {0}', {
-            0: e.command,
+            0: commandLine(e.command),
           })}
           <RepeatCount count={repeats} />
         </div>

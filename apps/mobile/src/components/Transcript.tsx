@@ -1186,7 +1186,12 @@ function NoteRow({ item, chat }: { item: Extract<TranscriptItem, { kind: 'note' 
         {change ?? (
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.s }}>
             {Icon ? <Icon size={13} color={item.failed ? c.bad : c.muted} style={{ flexShrink: 0 }} /> : null}
-            <T size={font.caption} tone={item.failed ? 'bad' : 'muted'} style={{ textAlign: 'center', flexShrink: 1 }}>
+            <T
+              size={font.caption}
+              tone={item.failed ? 'bad' : 'muted'}
+              numberOfLines={2}
+              style={{ textAlign: 'center', flexShrink: 1 }}
+            >
               {title}
             </T>
             <RepeatCount count={item.repeats} />

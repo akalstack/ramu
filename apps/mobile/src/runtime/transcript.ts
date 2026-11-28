@@ -1,4 +1,5 @@
 import { mcpToolWords } from '@ramu/shared/chat/mcpToolWords'
+import { commandLine } from '@ramu/shared/chat/commandLine'
 import type { AgentContent, AgentEvent } from '@ramu/shared/types'
 import { interactiveRevisions, interactiveSuccessor, interactiveUpdates } from '@ramu/shared/interactiveRevisions'
 import { helperGroups } from '@ramu/shared/chat/helperPresentation'
@@ -439,14 +440,19 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
       })
     // These notes read as the desktop's rows do.
     else if (e.kind === 'background-terminal-stop')
-      items.push({ kind: 'note', id, icon: 'stop', ...noteTitle('You requested a stop for {0}', { 0: e.command }) })
+      items.push({
+        kind: 'note',
+        id,
+        icon: 'stop',
+        ...noteTitle('You requested a stop for {0}', { 0: commandLine(e.command) }),
+      })
     else if (e.kind === 'background-command-end')
       items.push({
         kind: 'note',
         id,
         icon: 'command',
         ...noteTitle(e.failed ? 'Background command failed: {0}' : 'Background command finished: {0}', {
-          0: e.command,
+          0: commandLine(e.command),
         }),
         failed: e.failed,
       })
