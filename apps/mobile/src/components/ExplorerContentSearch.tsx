@@ -7,7 +7,7 @@ import { contentSearchOptions, groupSearchMatches } from '../runtime/contentSear
 import { useStore } from '../runtime/store'
 import { font, space, useTheme } from '../theme'
 import { FileIcon } from './FileIcon'
-import { PageFlatList } from './Screen'
+import { PageLegendList } from './Screen'
 import { T } from './ui'
 
 type ResultRow =
@@ -100,9 +100,11 @@ export function ExplorerContentSearch({
     [result],
   )
   return (
-    <PageFlatList
+    <PageLegendList
       data={rows}
       keyExtractor={(row) => row.key}
+      getItemType={(row) => row.kind}
+      estimatedItemSize={44}
       contentInsetAdjustmentBehavior="automatic"
       keyboardShouldPersistTaps="handled"
       ListHeaderComponent={

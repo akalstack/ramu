@@ -6,7 +6,7 @@ import { ArrowUp, ChevronRight, Copy, Folder } from 'lucide-react-native'
 import type { DirEntry } from '@ramu/shared/types'
 import { HOST_FILES_REPO } from '@ramu/shared/workspace/fileLinks'
 import { FileIcon } from '../components/FileIcon'
-import { Header, HeaderButton, PageFlatList, Screen } from '../components/Screen'
+import { Header, HeaderButton, PageLegendList, Screen } from '../components/Screen'
 import { Row, T } from '../components/ui'
 import { useSay, useT } from '../i18n'
 import { useStore } from '../runtime/store'
@@ -64,9 +64,10 @@ export default function HostFiles() {
           />
         }
       />
-      <PageFlatList
+      <PageLegendList
         data={shown?.entries ?? []}
         keyExtractor={(entry) => entry.path}
+        estimatedItemSize={48}
         ListHeaderComponent={
           <View style={{ gap: space.s, paddingBottom: space.s }}>
             <T size={font.caption} mono tone="muted" numberOfLines={2} style={{ paddingHorizontal: space.l }}>

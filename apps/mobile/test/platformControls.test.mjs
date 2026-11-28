@@ -8250,7 +8250,7 @@ test('Threads uses native toolbar buttons and its usage action opens the shared 
   const render = () => hooks.render(() => Threads())
   const tree = render()
   // Until the host's threads are read the empty list says it is syncing, and "No threads yet" only afterwards.
-  const footer = (rendered) => nodes(find(rendered, screen.PageFlatList).props.ListFooterComponent)
+  const footer = (rendered) => nodes(find(rendered, screen.PageLegendList).props.ListFooterComponent)
   assert.equal(footer(tree).find((node) => node.type === 'SyncLine').props.what, 'threads')
   assert.ok(!JSON.stringify(footer(tree)).includes('No threads yet'))
   threadReads = { a: 'read' }

@@ -48,7 +48,14 @@ import { font, radius, space, useTheme } from '../../../theme'
 import { useStore, type OutboxItem } from '../../../runtime/store'
 import { STANDALONE, type Chat, type MobileProject } from '../../../runtime/types'
 import { useT } from '../../../i18n'
-import { Header, HeaderButton, LargeTitle, Screen, useScrolledUnderBar, PageFlatList } from '../../../components/Screen'
+import {
+  Header,
+  HeaderButton,
+  LargeTitle,
+  Screen,
+  useScrolledUnderBar,
+  PageLegendList,
+} from '../../../components/Screen'
 import { PlanUsageSheet } from '../../../components/PlanUsage'
 import { HostResources } from '../../../components/HostResources'
 import { FloatingActionButton } from '../../../components/FloatingActionButton'
@@ -764,11 +771,13 @@ export default function Threads() {
           }
         />
       )}
-      <PageFlatList
+      <PageLegendList
         fullWidth
         data={rows}
         keyExtractor={(row) => row.key}
         renderItem={({ item: row }) => renderRow(row)}
+        getItemType={(row) => row.kind}
+        estimatedItemSize={60}
         contentInsetAdjustmentBehavior="automatic"
         // Room below the last row for Android's floating New thread button.
         contentContainerStyle={{ paddingBottom: Platform.OS === 'android' ? 96 : space.xl }}
@@ -777,8 +786,6 @@ export default function Threads() {
         onScroll={edge.onScroll}
         scrollEventThrottle={16}
         refreshControl={<RefreshControl refreshing={pulling} onRefresh={pullToRefresh} tintColor={c.muted} />}
-        initialNumToRender={14}
-        windowSize={9}
         ListHeaderComponent={
           <>
             <LargeTitle>{t.chats}</LargeTitle>

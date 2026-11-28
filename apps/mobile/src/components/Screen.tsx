@@ -1,5 +1,5 @@
 import { pastScrollEdge } from '../runtime/scrollSurface'
-import { type LegendListProps, type LegendListRef } from '@legendapp/list/react-native'
+import { LegendList, type LegendListProps, type LegendListRef } from '@legendapp/list/react-native'
 import { KeyboardAwareLegendList } from '@legendapp/list/keyboard'
 import { backHistory, goBackOrHome, screenTitles } from '../runtime/navigation'
 import {
@@ -131,6 +131,31 @@ export function PageFlatList<T>({
   return (
     <PrimaryScroll>
       <FlatList {...props} {...readable} ref={ref} style={[{ backgroundColor: c.window }, props.style]} />
+    </PrimaryScroll>
+  )
+}
+
+/**
+ * A page's long list on LegendList, in the page's reading column: only the rows near the screen are mounted, whatever
+ * the list's length. Rows keep their own state (a swipe, an open section) unless a list opts into reusing them.
+ */
+export function PageLegendList<T>({
+  ref,
+  recycleItems = false,
+  fullWidth,
+  ...props
+}: LegendListProps<T> & Readable & { ref?: Ref<LegendListRef> }) {
+  const { c } = useTheme()
+  const readable = useReadableProps(props, !props.horizontal && !fullWidth)
+  return (
+    <PrimaryScroll>
+      <LegendList
+        {...props}
+        {...readable}
+        ref={ref}
+        recycleItems={recycleItems}
+        style={[{ backgroundColor: c.window }, props.style]}
+      />
     </PrimaryScroll>
   )
 }
