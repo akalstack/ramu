@@ -1839,16 +1839,16 @@ for (const os of ['ios', 'android']) {
       '../i18n': { useT: () => ({ currentCheckout: 'Current checkout', existingWorkspace: 'Existing workspace' }) },
     })
     const render = () => hooks.render(() => Explorer())
-    const list = find(render(), 'PageFlatList')
+    const list = find(render(), 'PageLegendList')
     const projectRow = list.props.renderItem({ item: list.props.data[0] })
     projectRow.props.onPress()
-    const picker = find(render(), 'PageFlatList').props.ListEmptyComponent
+    const picker = find(render(), 'PageLegendList').props.ListEmptyComponent
     nodes(picker)
       .find((node) => node.key === 'w')
       .props.onPress()
     render()
     await settle()
-    const files = find(render(), 'PageFlatList')
+    const files = find(render(), 'PageLegendList')
     assert.equal(files.props.data[0].entry.path, 'README.md')
     files.props.renderItem({ item: files.props.data[0] }).props.onPress()
     assert.deepEqual(JSON.parse(JSON.stringify(destinations)), [
@@ -2343,7 +2343,7 @@ for (const os of ['ios', 'android']) {
       },
     )
     const render = () => hooks.render(() => Explorer())
-    const initial = find(render(), 'PageFlatList')
+    const initial = find(render(), 'PageLegendList')
     initial.props.ref.current = { scrollToIndex: (value) => scrolls.push(value), scrollToOffset() {} }
     await settle()
     render()
@@ -2358,7 +2358,7 @@ for (const os of ['ios', 'android']) {
       nodes(tree).some((node) => node.type === 'ActivityIndicator'),
       false,
     )
-    const list = find(tree, 'PageFlatList')
+    const list = find(tree, 'PageLegendList')
     assert.deepEqual(
       list.props.data.map((row) => [row.repoId, row.entry.path]),
       // Each repository is a root row (path '') with its tree one level below.
@@ -2385,7 +2385,7 @@ for (const os of ['ios', 'android']) {
       .find((node) => node.type === 'HeaderButton' && node.props.label === 'Collapse')
       .props.onPress()
     // Collapse leaves only the repository roots; opening one shows its top level again.
-    let collapsed = find(render(), 'PageFlatList')
+    let collapsed = find(render(), 'PageLegendList')
     assert.deepEqual(
       collapsed.props.data.map((row) => [row.repoId, row.entry.path]),
       [
@@ -2394,13 +2394,13 @@ for (const os of ['ios', 'android']) {
       ],
     )
     collapsed.props.renderItem({ item: collapsed.props.data[0] }).props.onPress()
-    collapsed = find(render(), 'PageFlatList')
+    collapsed = find(render(), 'PageLegendList')
     assert.deepEqual(
       collapsed.props.data.map((row) => row.entry.path),
       ['', 'README.md', ''],
     )
     collapsed.props.renderItem({ item: collapsed.props.data[0] }).props.onPress()
-    assert.equal(find(render(), 'PageFlatList').props.data.length, 2)
+    assert.equal(find(render(), 'PageLegendList').props.data.length, 2)
     nodes(find(render(), 'Header').props.right)
       .find((node) => node.type === 'HeaderButton' && node.props.label === 'Refresh')
       .props.onPress()
@@ -2408,7 +2408,7 @@ for (const os of ['ios', 'android']) {
     await settle()
     render()
     await settle()
-    assert.equal(find(render(), 'PageFlatList').props.data.length, 2, 'a refresh cannot undo an explicit Collapse')
+    assert.equal(find(render(), 'PageLegendList').props.data.length, 2, 'a refresh cannot undo an explicit Collapse')
     // A stale row from another host cannot open or expand anything in the newly selected scope.
     params = { ...params, computer: 'b', revealId: 'two' }
     render()
@@ -2813,7 +2813,7 @@ for (const scenario of ['unsupported', 'folder', 'line']) {
       assert.ok(nodes(tree).some((node) => node.props?.children === 'No Git in this folder'))
       assert.equal(find(tree, 'Segmented').props.options.length, 1)
     } else {
-      const list = find(tree, 'PageFlatList')
+      const list = find(tree, 'PageLegendList')
       assert.ok(list, 'a Markdown line link opens source so the requested line is visible')
       const scrolls = []
       list.props.ref.current = { scrollToIndex: (value) => scrolls.push(value) }
@@ -2868,10 +2868,10 @@ test('a later line link to an already-open Markdown preview switches to source a
   await settle()
   render()
   await settle()
-  assert.equal(find(render(), 'PageFlatList'), undefined)
+  assert.equal(find(render(), 'PageLegendList'), undefined)
   line = '2'
   render()
-  const list = find(render(), 'PageFlatList')
+  const list = find(render(), 'PageLegendList')
   list.props.ref.current = { scrollToIndex: (value) => scrolls.push(value) }
   for (const callback of timers.values()) callback()
   assert.equal(scrolls[0].index, 1)
@@ -3811,13 +3811,13 @@ for (const os of ['ios', 'android']) {
     render()
     await settle()
     let tree = render()
-    const more = nodes(find(tree, 'PageFlatList').props.ListFooterComponent).find((node) => node.type === 'Row')
+    const more = nodes(find(tree, 'PageLegendList').props.ListFooterComponent).find((node) => node.type === 'Row')
     assert.ok(more)
     more.props.onPress()
     more.props.onPress()
     tree = render()
     assert.equal(
-      nodes(find(tree, 'PageFlatList').props.ListFooterComponent).find((node) => node.type === 'Row').props.disabled,
+      nodes(find(tree, 'PageLegendList').props.ListFooterComponent).find((node) => node.type === 'Row').props.disabled,
       true,
     )
     assert.equal(calls.filter((call) => call[5] === 'page-2').length, 1)
@@ -3825,11 +3825,11 @@ for (const os of ['ios', 'android']) {
     await settle()
     tree = render()
     assert.deepEqual(
-      find(tree, 'PageFlatList').props.data.map((row) => row.entry.path),
+      find(tree, 'PageLegendList').props.data.map((row) => row.entry.path),
       ['a.txt', 'second.txt'],
     )
     assert.equal(
-      nodes(find(tree, 'PageFlatList').props.ListFooterComponent).filter((node) => node.type === 'Row').length,
+      nodes(find(tree, 'PageLegendList').props.ListFooterComponent).filter((node) => node.type === 'Row').length,
       0,
     )
     // Refresh, then switch hosts while the second page is outstanding.
@@ -3839,7 +3839,7 @@ for (const os of ['ios', 'android']) {
     render()
     await settle()
     tree = render()
-    nodes(find(tree, 'PageFlatList').props.ListFooterComponent)
+    nodes(find(tree, 'PageLegendList').props.ListFooterComponent)
       .find((node) => node.type === 'Row')
       .props.onPress()
     const oldFinish = finishPage
@@ -3854,11 +3854,11 @@ for (const os of ['ios', 'android']) {
     await settle()
     tree = render()
     assert.deepEqual(
-      find(tree, 'PageFlatList').props.data.map((row) => row.entry.path),
+      find(tree, 'PageLegendList').props.data.map((row) => row.entry.path),
       ['b.txt'],
     )
     assert.equal(
-      nodes(find(tree, 'PageFlatList').props.ListFooterComponent).filter((node) => node.type === 'Row').length,
+      nodes(find(tree, 'PageLegendList').props.ListFooterComponent).filter((node) => node.type === 'Row').length,
       0,
     )
     more.props.onPress()
@@ -5333,11 +5333,13 @@ test('Threads, Inbox and Schedules use native scroll edges without stacking a bl
 })
 
 test('native scroll-edge surfaces use the screen background and preserve list layout styles', () => {
-  const screen = load('components/Screen.tsx', 'ios', { 'react-native': { FlatList: 'FlatList' } })
-  const list = screen.PageFlatList({ data: [], style: { flex: 1 } })
-  const view = find(list, 'FlatList')
+  const screen = load('components/Screen.tsx', 'ios', { '@legendapp/list/react-native': { LegendList: 'LegendList' } })
+  const list = screen.PageLegendList({ data: [], style: { flex: 1 } })
+  const view = find(list, 'LegendList')
   assert.equal(view.props.style[0].backgroundColor, 'window')
   assert.equal(view.props.style[1].flex, 1)
+  // Rows keep their own state (an open diff, a swipe) unless a list opts into reusing them.
+  assert.equal(view.props.recycleItems, false)
 })
 
 test('the project picker uses the centered native title and menu actions preserve icons', () => {

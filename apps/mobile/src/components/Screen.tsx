@@ -22,9 +22,7 @@ import {
   ScrollView,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
-  FlatList,
   View,
-  type FlatListProps,
   type StyleProp,
   type ViewStyle,
   type LayoutChangeEvent,
@@ -120,19 +118,6 @@ export function PageScrollView({
     />
   )
   return horizontal ? view : <PrimaryScroll>{view}</PrimaryScroll>
-}
-export function PageFlatList<T>({
-  ref,
-  fullWidth,
-  ...props
-}: FlatListProps<T> & Readable & { ref?: Ref<FlatList<T>> }) {
-  const { c } = useTheme()
-  const readable = useReadableProps(props, !props.horizontal && !fullWidth)
-  return (
-    <PrimaryScroll>
-      <FlatList {...props} {...readable} ref={ref} style={[{ backgroundColor: c.window }, props.style]} />
-    </PrimaryScroll>
-  )
 }
 
 /**

@@ -41,7 +41,8 @@ import { shareDownloadedFile } from '../runtime/explorerShare'
 import { HostError } from '../runtime/transport'
 import { readExplorerNavigation } from '../runtime/explorerNavigation'
 import { font, radius, space, useTheme } from '../theme'
-import { Header, HeaderButton, PageFlatList, Screen } from '../components/Screen'
+import { Header, HeaderButton, PageLegendList, Screen } from '../components/Screen'
+import type { LegendListRef } from '@legendapp/list/react-native'
 import { Button, Row, Segmented, Sheet, T } from '../components/ui'
 import { SheetGroup, SheetOption } from '../components/SheetOptions'
 
@@ -74,7 +75,7 @@ export default function Explorer() {
   }))
   const scope = scopeSelection.routeKey === routeKey ? scopeSelection.value : routeScope
   const setScope = (value: ExplorerScope | null) => setScopeSelection({ routeKey, value })
-  const list = useRef<import('react-native').FlatList<ExplorerRow>>(null)
+  const list = useRef<LegendListRef>(null)
   const selected =
     scope && params.computer === scope.host && params.ctx === scope.context && params.repoId && params.path
       ? { repoId: params.repoId, path: params.path }
@@ -524,10 +525,11 @@ export default function Explorer() {
         }
       />
       {!scope ? (
-        <PageFlatList
+        <PageLegendList
           contentInsetAdjustmentBehavior="automatic"
           data={project ? [] : store.projects}
           keyExtractor={(project) => project.id}
+          estimatedItemSize={56}
           renderItem={({ item }) => (
             <Row onPress={() => setProject(item)}>
               {item.kind === 'workspace' ? (
@@ -628,7 +630,7 @@ export default function Explorer() {
         />
       ) : (
         <>
-          <PageFlatList
+          <PageLegendList
             ref={list}
             onScroll={(event) => {
               if (!query && navigation.current.identity === scopeIdentity)
@@ -637,11 +639,12 @@ export default function Explorer() {
             scrollEventThrottle={100}
             onMomentumScrollEnd={saveNavigation}
             onScrollEndDrag={saveNavigation}
-            onScrollToIndexFailed={(info) =>
-              list.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false })
-            }
             data={rows}
             keyExtractor={(row) => explorerKey(scope.host, scope.context, row.repoId, row.entry.path)}
+            getItemType={(row) => (row.root ? 'root' : 'entry')}
+            estimatedItemSize={44}
+            // The open file and the folders still loading mark rows, which the rows' own data does not carry.
+            extraData={[selected?.repoId, selected?.path, loadingDirs]}
             contentInsetAdjustmentBehavior="automatic"
             ListHeaderComponent={
               <View style={{ paddingHorizontal: space.m, gap: space.s }}>

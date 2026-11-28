@@ -13,7 +13,8 @@ import { font, radius, space, useTheme } from '../theme'
 import { useStore } from '../runtime/store'
 import { changedFile } from '../runtime/diff'
 import type { ChangedFile } from '../runtime/types'
-import { Header, HeaderButton, PageFlatList, Screen } from '../components/Screen'
+import { Header, HeaderButton, PageLegendList, Screen } from '../components/Screen'
+import type { LegendListRef } from '@legendapp/list/react-native'
 import { DiffLines } from '../components/DiffLines'
 import { CodeTokens, grammarFor, highlightLines } from '../components/Code'
 import { Markdown, ReferenceContext, type ReferenceActions } from '../components/Markdown'
@@ -200,7 +201,7 @@ export function FileViewer({
   useEffect(() => {
     if (target !== undefined) setPreview(false)
   }, [identity, target])
-  const list = useRef<import('react-native').FlatList<string>>(null)
+  const list = useRef<LegendListRef>(null)
   const name = path?.split('/').at(-1) ?? ''
   const dir = path?.includes('/') ? path.slice(0, path.lastIndexOf('/')) : ''
 
@@ -613,7 +614,7 @@ export function FileViewer({
         </TextInput>
       ) : null}
       {draft !== null ? null : state.kind === 'text' && !rendered ? (
-        <PageFlatList
+        <PageLegendList
           fullWidth
           ref={list}
           data={rows}
@@ -621,16 +622,9 @@ export function FileViewer({
           contentInsetAdjustmentBehavior="automatic"
           contentContainerStyle={{ padding: space.l, paddingBottom: space.xl * 2 }}
           ListHeaderComponent={head}
-          initialNumToRender={60}
-          windowSize={11}
-          onScrollToIndexFailed={(info) =>
-            setTimeout(
-              () =>
-                activeRead.current === readIdentity &&
-                list.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false }),
-              80,
-            )
-          }
+          estimatedItemSize={18}
+          // Colours arrive after the text and the line jumped to is marked, neither of which is in a line's data.
+          extraData={[colored, target]}
           renderItem={({ item, index }) => (
             <CodeLine
               line={item}
