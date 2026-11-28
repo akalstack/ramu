@@ -17,6 +17,7 @@ import { ProjectGroup } from './projects/ProjectGroup'
 import { SectionHead } from './projects/SectionHead'
 import { OlderDoneRow } from './projects/OlderDoneRow'
 import { TaskRow } from './projects/TaskRow'
+import { ThreadList, sectionRows } from './projects/ThreadList'
 import { BulkThreadActionsContext, ThreadSelectionBar, useBulkThreadActions } from './projects/ThreadSelectionBar'
 import { SidebarDisclosureButton } from '@/components/sidebar-disclosure-button'
 import { archivedThreads, openArchivedThreads, sidebarThreads, threadProjectName } from './projects/threadLists'
@@ -127,15 +128,14 @@ export function ProjectsPanel({
         )}
         <Collapse open={showProjects} id="projects-list">
           {recentMode && (
-            <div className="flex flex-col gap-0.5">
-              {identityView.arrange(
-                latest,
-                (task) => task.projectId,
+            <ThreadList
+              rows={sectionRows(
+                identityView.sections(latest, (task) => task.projectId),
                 (task) => (
-                  <TaskRow key={task.id} task={task} projectName={threadProjectName(ws.projects, task.projectId)} />
+                  <TaskRow task={task} projectName={threadProjectName(ws.projects, task.projectId)} />
                 ),
               )}
-            </div>
+            />
           )}
           {!recentMode && ws.projects.length === 0 && (
             <div className="add-project [&_.hint]:m-[6px_0_14px] [&_.hint]:leading-[1.55] p-[2px_8px_4px]">
@@ -200,11 +200,13 @@ export function ProjectsPanel({
               onToggle={() => doneSection.setOpen(!showDone)}
               controls="done-chats"
             />
-            <Collapse open={showDone} id="done-chats" className="task-list flex flex-col gap-0.5">
-              {done.map((task) => (
-                <TaskRow key={task.id} task={task} projectName={threadProjectName(ws.projects, task.projectId)} />
-              ))}
-              <OlderDoneRow hosts={[ws]} />
+            <Collapse open={showDone} id="done-chats" className="task-list">
+              <ThreadList
+                rows={sectionRows([{ key: 'done', heading: null, items: done }], (task) => (
+                  <TaskRow task={task} projectName={threadProjectName(ws.projects, task.projectId)} />
+                ))}
+                footer={<OlderDoneRow hosts={[ws]} />}
+              />
             </Collapse>
           </>
         )}

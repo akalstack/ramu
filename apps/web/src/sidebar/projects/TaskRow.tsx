@@ -2,6 +2,7 @@ import { pullRequestStageDetail } from '@ramu/shared/pullRequests'
 import { threadOriginLabel } from '@ramu/shared/workspace/threadOrigin'
 import { finishThreads } from '../../chat/FinishThreadDialog'
 import { animateThreadListChange } from '../../workspace/threadListMotion'
+import { listedThreadIds } from './ThreadList'
 import { useComputers } from '../../workspace/computers'
 import { useHost } from '../../workspace/HostProvider'
 import { useHostSelection } from '../../workspace/HostSelection'
@@ -443,12 +444,7 @@ export function TaskRow({
             if (renaming) return
             if (selectable && (e.metaKey || e.ctrlKey)) return threadSelection.toggle(task.id)
             if (selectable && e.shiftKey) {
-              const ordered = [
-                ...new Set(
-                  [...document.querySelectorAll<HTMLElement>('[data-task-row]')].map((row) => row.dataset.taskId!),
-                ),
-              ]
-              return threadSelection.range(task.id, ordered, onScreen ? (ws?.ui.activeTaskId ?? null) : null)
+              return threadSelection.range(task.id, listedThreadIds(), onScreen ? (ws?.ui.activeTaskId ?? null) : null)
             }
             // A plain click leaves selection mode and opens the thread, as in a file list.
             if (picked.size) threadSelection.clear()

@@ -32,6 +32,7 @@ import { useAddProject } from '../workspace/addProject'
 import { t, useLanguage } from '../i18n'
 import { FadeText } from '../FadeText'
 import { ProjectsPanel } from './ProjectsPanel'
+import { ThreadList, sectionRows, type ThreadListRow } from './projects/ThreadList'
 import { TaskRow } from './projects/TaskRow'
 import { OlderDoneRow } from './projects/OlderDoneRow'
 import { WorkingDot } from './projects/TaskStateIcon'
@@ -275,16 +276,18 @@ function OtherHostProjects({
           {action}
         </SectionHead>
         <Collapse id={key} open={open} className="flex flex-col gap-0.5">
-          {body ??
-            tasks.map((task) => (
-              <TaskRow
-                key={task.id}
-                task={task}
-                hidePin={hidePin}
-                projectName={name === 'Threads' ? undefined : threadProjectName(projects, task.projectId)}
-              />
-            ))}
-          {shared && rows.store && <OlderDoneRow hosts={[rows.store]} />}
+          {body ?? (
+            <ThreadList
+              rows={sectionRows([{ key: id, heading: null, items: tasks }], (task) => (
+                <TaskRow
+                  task={task}
+                  hidePin={hidePin}
+                  projectName={name === 'Threads' ? undefined : threadProjectName(projects, task.projectId)}
+                />
+              ))}
+              footer={shared && rows.store && <OlderDoneRow hosts={[rows.store]} />}
+            />
+          )}
         </Collapse>
       </>
     )
@@ -323,31 +326,35 @@ function OtherHostProjects({
           </SectionHead>
         )}
         <Collapse open={projectsOpen} id={projectsDomId}>
-          {preferences.recentChatMode
-            ? identityView.arrange(
-                active.filter((task) => !task.pinnedAt).sort(pinnedFirst),
-                (task) => task.projectId,
-                (task) => (
-                  <TaskRow key={task.id} task={task} projectName={threadProjectName(projects, task.projectId)} />
+          {preferences.recentChatMode ? (
+            <ThreadList
+              rows={sectionRows(
+                identityView.sections(
+                  active.filter((task) => !task.pinnedAt).sort(pinnedFirst),
+                  (task) => task.projectId,
                 ),
-              )
-            : identityView.arrange(
-                projects,
-                (project) => project.id,
-                (project) => (
-                  <OtherHostProject
-                    key={project.id}
-                    host={computer.id}
-                    project={project}
-                    tasks={all}
-                    available={available}
-                    openable={openable}
-                    limit={
-                      embedded ? Math.min(preferences.recentChats, EMBEDDED_THREAD_LIMIT) : preferences.recentChats
-                    }
-                  />
+                (task) => (
+                  <TaskRow task={task} projectName={threadProjectName(projects, task.projectId)} />
                 ),
               )}
+            />
+          ) : (
+            identityView.arrange(
+              projects,
+              (project) => project.id,
+              (project) => (
+                <OtherHostProject
+                  key={project.id}
+                  host={computer.id}
+                  project={project}
+                  tasks={all}
+                  available={available}
+                  openable={openable}
+                  limit={embedded ? Math.min(preferences.recentChats, EMBEDDED_THREAD_LIMIT) : preferences.recentChats}
+                />
+              ),
+            )
+          )}
         </Collapse>
         {!preferences.recentChatMode &&
           section('Threads', 'section:chats', loose, {
@@ -536,16 +543,20 @@ function MergedRow({ task, source }: { task: Task; source: HostThreads }) {
   )
 }
 
+const mergedListRow = ({ task, source }: { task: Task; source: HostThreads }): ThreadListRow => ({
+  key: `${source.host}:${task.id}`,
+  taskId: task.id,
+  render: () => <MergedRow task={task} source={source} />,
+})
+
 /** Activity mode with every host selected: one list by recency, each row naming its project and host. */
 function MergedRecent({ computers }: { computers: Computer[] }) {
   const rows = mergedThreads(useHostThreads(computers), (source) => source.active).sort(
     (a, b) => Number(!!b.task.pinnedAt) - Number(!!a.task.pinnedAt) || b.task.lastActiveAt - a.task.lastActiveAt,
   )
   return (
-    <section className="flex min-w-0 flex-col gap-0.5">
-      {rows.map(({ task, source }) => (
-        <MergedRow key={`${source.host}:${task.id}`} task={task} source={source} />
-      ))}
+    <section className="min-w-0">
+      <ThreadList rows={rows.map(mergedListRow)} />
     </section>
   )
 }
@@ -584,11 +595,8 @@ function MergedSection({
         onToggle={() => setOpen(!open)}
         controls={`all-hosts-${id}`}
       />
-      <Collapse open={open} id={`all-hosts-${id}`} className="flex flex-col gap-0.5">
-        {rows.map(({ task, source }) => (
-          <MergedRow key={`${source.host}:${task.id}`} task={task} source={source} />
-        ))}
-        {paged && <OlderDoneRow hosts={stores} />}
+      <Collapse open={open} id={`all-hosts-${id}`}>
+        <ThreadList rows={rows.map(mergedListRow)} footer={paged && <OlderDoneRow hosts={stores} />} />
       </Collapse>
     </section>
   )

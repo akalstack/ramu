@@ -113,46 +113,66 @@ export function useIdentityView(hostId: string) {
   ) : null
 
   /**
-   * Projects or threads in view order, with headings when grouped and the filter line when narrowed. A project the
-   * snapshot does not list yet, and a thread in no project, act as the default identity, as the host treats them.
+   * Projects or threads in view order, in sections: one per identity when grouped, under its heading, or one with the
+   * filter line when narrowed. A project the snapshot does not list yet, and a thread in no project, act as the default
+   * identity, as the host treats them.
    */
-  const arrange = <Item,>(
+  const sections = <Item,>(
     items: Item[],
     projectIdOf: (item: Item) => string,
-    render: (item: Item) => ReactNode,
-  ): ReactNode => {
-    if (!identities || !snapshot || active === 'all') return items.map(render)
+  ): { key: string; heading: ReactNode; items: Item[] }[] => {
+    if (!identities || !snapshot || active === 'all') return [{ key: 'all', heading: null, items }]
     const fallback = (identities.find((identity) => identity.isDefault) ?? identities[0])?.id
     const of = (item: Item) =>
       snapshot.projects.find((entry) => entry.projectId === projectIdOf(item))?.identityId ?? fallback
     if (active === 'group')
-      return identities.map((identity) => {
+      return identities.flatMap((identity) => {
         const caught = items.filter((item) => of(item) === identity.id)
-        return caught.length ? (
-          <Fragment key={identity.id}>
-            <p className="m-0 flex items-center gap-1.5 px-2 pt-3 pb-1 text-caption font-medium text-muted-foreground first:pt-1">
-              <IdentityDot color={identity.color} />
-              {identity.name}
-              <span className="font-normal tabular-nums opacity-70">{caught.length}</span>
-            </p>
-            {caught.map(render)}
-          </Fragment>
-        ) : null
+        return caught.length
+          ? [
+              {
+                key: identity.id,
+                heading: (
+                  <p className="m-0 flex items-center gap-1.5 px-2 pt-3 pb-1 text-caption font-medium text-muted-foreground first:pt-1">
+                    <IdentityDot color={identity.color} />
+                    {identity.name}
+                    <span className="font-normal tabular-nums opacity-70">{caught.length}</span>
+                  </p>
+                ),
+                items: caught,
+              },
+            ]
+          : []
       })
-    if (!only) return items.map(render)
+    if (!only) return [{ key: 'all', heading: null, items }]
     const shown = items.filter((item) => of(item) === only.id)
-    return (
-      <>
-        <p className="m-0 flex items-center gap-1.5 px-2 pt-1 pb-0.5 text-caption text-muted-foreground" role="status">
-          <IdentityDot color={only.color} />
-          {t('Showing only {name}: {hidden} more hidden', { name: only.name, hidden: items.length - shown.length })}
-          <Button size="xs" variant="ghost" onClick={() => choose('all')}>
-            {t('Show all')}
-          </Button>
-        </p>
-        {shown.map(render)}
-      </>
-    )
+    return [
+      {
+        key: only.id,
+        heading: (
+          <p
+            className="m-0 flex items-center gap-1.5 px-2 pt-1 pb-0.5 text-caption text-muted-foreground"
+            role="status"
+          >
+            <IdentityDot color={only.color} />
+            {t('Showing only {name}: {hidden} more hidden', { name: only.name, hidden: items.length - shown.length })}
+            <Button size="xs" variant="ghost" onClick={() => choose('all')}>
+              {t('Show all')}
+            </Button>
+          </p>
+        ),
+        items: shown,
+      },
+    ]
   }
-  return { picker, arrange }
+
+  /** The sections drawn in place, each heading above its items. */
+  const arrange = <Item,>(items: Item[], projectIdOf: (item: Item) => string, render: (item: Item) => ReactNode) =>
+    sections(items, projectIdOf).map((section) => (
+      <Fragment key={section.key}>
+        {section.heading}
+        {section.items.map(render)}
+      </Fragment>
+    ))
+  return { picker, sections, arrange }
 }
