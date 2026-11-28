@@ -7517,6 +7517,20 @@ test('mobile web startup applies its theme without calling a native-only Appeara
   hooks.dispose()
 })
 
+test('the status bar follows the screen color, so a dark palette under light appearance keeps it readable', () => {
+  // Brightness by channel sum stands in for WCAG luminance; only which of white or black contrasts more matters here.
+  const level = (hex) => [1, 3, 5].reduce((sum, at) => sum + parseInt(hex.slice(at, at + 2), 16), 0) / 765
+  const contrastRatio = (a, b) => Math.abs(level(a) - level(b))
+  const { statusBarStyle } = load('theme/index.tsx', 'ios', {
+    'react-native': { Appearance: {}, useColorScheme: () => 'light' },
+    '@ramu/shared/theme': { DEFAULT_THEME: { id: 'default' }, contrastRatio },
+    '@ramu/shared/themePresets': { themePreset: () => undefined, THEME_PRESETS: [] },
+  })
+  assert.equal(statusBarStyle('#0c0c0e', 'light'), 'light')
+  assert.equal(statusBarStyle('#f2f2f7', 'dark'), 'dark')
+  assert.equal(statusBarStyle('rgba(0,0,0,0.5)', 'dark'), 'light')
+})
+
 for (const os of ['ios', 'android']) {
   test(`${os} Settings sections center the title on iOS and lead with it on Android`, () => {
     const { default: Section } = load('app/settings/[section].tsx', os, {

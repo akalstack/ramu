@@ -9,7 +9,14 @@ import {
   saveThemeLibraryText,
   type TextSize,
 } from '../storage'
-import { DEFAULT_THEME, checkTheme, parseTheme, type RamuTheme, type ThemeIssue } from '@ramu/shared/theme'
+import {
+  DEFAULT_THEME,
+  checkTheme,
+  contrastRatio,
+  parseTheme,
+  type RamuTheme,
+  type ThemeIssue,
+} from '@ramu/shared/theme'
 import { themePreset } from '@ramu/shared/themePresets'
 import { mobilePalette } from '@ramu/shared/themeMobile'
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -233,6 +240,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     [scheme, appearance, textSize, theme, themes, trial],
   )
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
+}
+
+/**
+ * The status bar's content for a screen color: light on a dark background. A theme's light or dark palette can be
+ * either, so the appearance alone would leave the clock and battery dark on a dark theme.
+ */
+export function statusBarStyle(background: string, scheme: 'light' | 'dark'): 'light' | 'dark' {
+  if (!/^#[0-9a-f]{6}$/i.test(background)) return scheme === 'dark' ? 'light' : 'dark'
+  return contrastRatio(background, '#ffffff') >= contrastRatio(background, '#000000') ? 'light' : 'dark'
 }
 
 export function useTheme(): ThemeValue {

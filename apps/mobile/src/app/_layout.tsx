@@ -24,7 +24,7 @@ import { arrivalAnimation } from '../runtime/navigation'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { KeyboardMotion } from '../components/Keyboard'
-import { ThemeProvider, useTheme } from '../theme'
+import { ThemeProvider, statusBarStyle, useTheme } from '../theme'
 import { useEffect, useMemo, useRef } from 'react'
 import { Platform } from 'react-native'
 import { setHapticsEnabled } from '../components/ui'
@@ -96,7 +96,7 @@ function Navigator() {
       <PhoneBackup />
       <AccountHosts />
       <WelcomeGate />
-      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+      <StatusBar style={statusBarStyle(c.window, scheme)} />
       <NavigationThemeProvider value={navigationTheme}>
         <Stack
           screenOptions={{
