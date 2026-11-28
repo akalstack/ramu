@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from './store'
 import type { Chat } from './types'
+import { deviceToolKey } from './threadActivity'
 
 /** Metadata only: never opens a tab, grants a computer, or starts a terminal. */
 export function useThreadToolActivity(chat: Chat | undefined, visible: boolean) {
@@ -12,6 +13,9 @@ export function useThreadToolActivity(chat: Chat | undefined, visible: boolean) 
   const session = chat?.sessionId
   const scope = `${host}:${task}:${session}`
   const online = !!host && store.isOnline(host)
+  // The agent's own browser and computer calls, which also say when a desktop's browser changed.
+  const items = chat?.items
+  const deviceTools = useMemo(() => (items ? deviceToolKey(items) : ''), [items])
   const [reading, setReading] = useState({ scope, browser: false, computer: false, terminal: false, usage: false })
   useEffect(() => {
     if (!host || !task || !visible || !online) return
@@ -71,6 +75,6 @@ export function useThreadToolActivity(chat: Chat | undefined, visible: boolean) 
       off()
       unwatch()
     }
-  }, [host, task, session, scope, online, visible])
+  }, [host, task, session, scope, online, visible, deviceTools])
   return reading.scope === scope ? reading : { scope, browser: false, computer: false, terminal: false, usage: false }
 }

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mobileThreadActivity } from '../src/runtime/threadActivity.ts'
+import { deviceToolKey, mobileThreadActivity } from '../src/runtime/threadActivity.ts'
 const helper = (agentId, status = 'running', extra = {}) => ({
   id: agentId,
   agentId,
@@ -76,4 +76,16 @@ test('a thread waiting at its limit leaves the limit to the composer tray, and m
   assert.equal(mobileThreadActivity(chat(items), true).model.primary, null)
   assert.equal(mobileThreadActivity(chat(items, { status: 'running' }), true).model.primary, 'provider')
   assert.equal(mobileThreadActivity(chat(items, { status: 'running', doneAt: 1 }), true).model.primary, 'working')
+})
+
+test('the device tool key follows the newest browser or computer call, so the chips read again', () => {
+  const tool = (id, name, status = 'completed') => ({ kind: 'tool', id, source: { name }, status })
+  assert.equal(deviceToolKey([tool('a', 'Bash')]), '')
+  const items = [
+    tool('a', 'mcp__ramu__browser_open'),
+    { kind: 'tools', id: 'g', tools: [tool('b', 'Read'), tool('c', 'computer_click', 'in_progress')] },
+  ]
+  assert.equal(deviceToolKey(items), 'c:in_progress')
+  assert.equal(deviceToolKey([...items, tool('d', 'Read')]), 'c:in_progress')
+  assert.equal(deviceToolKey([tool('e', 'mcp__ramu__browser_navigate', 'failed')]), 'e:failed')
 })

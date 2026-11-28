@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Globe } from 'lucide-react-native'
 import type { BrowserTabInfo } from '@ramu/shared/types/browser'
 import { useSay } from '../i18n'
 import { useStore } from '../runtime/store'
 import type { Chat } from '../runtime/types'
+import { deviceToolKey } from '../runtime/threadActivity'
 import { ActivityPill } from './ActivityPill'
 
 /** This thread's browser tabs, metadata only. One reader feeds the activity pill and the viewer. */
@@ -14,6 +15,9 @@ export function useThreadBrowserTabs(chat: Chat | undefined) {
   const host = chat?.computerId ?? ''
   const task = chat?.taskId
   const online = !!host && store.isOnline(host)
+  // The agent's own browser calls also say when a desktop's browser changed, which only that desktop announces.
+  const items = chat?.items
+  const deviceTools = useMemo(() => (items ? deviceToolKey(items) : ''), [items])
   const viewOnly = store.computers?.find((computer) => computer.id === host)?.access === 'viewer'
   const [tabs, setTabs] = useState<BrowserTabInfo[]>([])
   const [viewable, setViewable] = useState(false)
@@ -44,7 +48,7 @@ export function useThreadBrowserTabs(chat: Chat | undefined) {
       active = false
       off()
     }
-  }, [host, task, online, viewOnly])
+  }, [host, task, online, viewOnly, deviceTools])
   return { tabs: viewOnly || !task ? [] : tabs, viewable: viewable && !viewOnly }
 }
 

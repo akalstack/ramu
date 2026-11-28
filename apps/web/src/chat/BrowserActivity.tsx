@@ -5,6 +5,7 @@ import { Globe, PictureInPicture2, Plus, X } from 'lucide-react'
 import type { BrowserTabInfo } from '@ramu/shared/types/browser'
 import { ramu } from '../ipc'
 import { ownHostId } from '../hosts'
+import { isDeviceTool } from '@ramu/shared/chat/deviceTools'
 import { t, useLanguage } from '../i18n'
 import { useHost } from '../workspace/HostProvider'
 import { useWorkspace, useHostRuntime } from '../workspace/workspace'
@@ -30,7 +31,14 @@ export async function readThreadTabs(
       tabs: (await invoke('hostBrowser.list', taskId)).map((tab) => ({ ...tab, hostId: host })),
       hostBrowser: true,
     }
-  return { tabs: host === ownHostId() ? await ramu.invoke('browser.list', host, taskId) : [], hostBrowser: false }
+  // Another host's agent uses that host's own desktop browser, which the host reports without a picture or control.
+  return {
+    tabs:
+      host === ownHostId()
+        ? await ramu.invoke('browser.list', host, taskId)
+        : (await invoke('browser.activity', taskId)).tabs,
+    hostBrowser: false,
+  }
 }
 
 /** Native tabs remain discoverable after an agent turn, without activating background threads or hosts. */
@@ -71,10 +79,19 @@ export function useBrowserActivity(taskId: string | undefined, visible: boolean)
       void load()
     })
     const offHost = events.on('hostBrowser:changed', () => void load())
+    // Another host's desktop announces its browser only to itself; the agent's browser calls say when it changed.
+    const calls = new Set<string>()
+    const offCalls = events.on('agent:event', ({ event }) => {
+      if (event.kind === 'tool-use' && isDeviceTool(event.name)) {
+        calls.add(event.toolUseId)
+        void load()
+      } else if (event.kind === 'tool-result' && calls.delete(event.toolUseId)) void load()
+    })
     return () => {
       active = false
       off()
       offHost()
+      offCalls()
     }
   }, [scope, host, taskId, visible, invoke, events])
   const fresh = reading.scope === scope

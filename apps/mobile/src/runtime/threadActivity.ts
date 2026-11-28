@@ -1,6 +1,7 @@
 import { helperActive } from '@ramu/shared/chat/helperPresentation'
 import { threadActivity } from '@ramu/shared/chat/threadActivity'
 import { isLimitHold } from '@ramu/shared/chat/goalHold'
+import { isDeviceTool } from '@ramu/shared/chat/deviceTools'
 import type { Chat, TranscriptItem } from './types'
 /**
  * Commands the provider itself moved to the background, shaped like a helper so the helper sheet can show their output
@@ -74,3 +75,18 @@ export const pendingRequest = (item: TranscriptItem) =>
   (item.kind === 'question' && item.answers === undefined) ||
   (item.kind === 'elicitation' && item.outcome === undefined) ||
   (item.kind === 'secret' && item.outcome === undefined)
+
+/**
+ * The thread's newest browser or computer call and how it stands, as a key that changes whenever the agent opens,
+ * moves or closes a tab or takes the computer. A browser opened on the desktop is announced only inside the desktop
+ * app, so the phone reads its chips again when this changes.
+ */
+export function deviceToolKey(items: readonly TranscriptItem[]): string {
+  for (let index = items.length - 1; index >= 0; index--) {
+    const item = items[index]!
+    const tools = item.kind === 'tool' ? [item] : item.kind === 'tools' ? item.tools : []
+    const last = tools.findLast((tool) => isDeviceTool(tool.source.name))
+    if (last) return `${last.id}:${last.status}`
+  }
+  return ''
+}
