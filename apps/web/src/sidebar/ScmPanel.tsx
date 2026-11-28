@@ -21,6 +21,7 @@ export function ScmPanel() {
   const [open, setOpen] = useState<Record<string, boolean>>({})
   // The Git section (branches, commits, stashes) exists once, pinned below the list, for the repository last opened.
   const [gitHost, setGitHost] = useState<HTMLElement | null>(null)
+  const [repos, setRepos] = useState<HTMLDivElement | null>(null)
   const [gitRepoId, setGitRepoId] = useState<string | null>(null)
   const layoutEpoch = useLayoutEpoch()
   const layout = usePanelLayout('scm', ['repos', 'git'], defaultScmLayout)
@@ -60,7 +61,7 @@ export function ScmPanel() {
               className="flex-1 min-h-0"
             >
               <ResizablePanel id="repos" minSize={SCM_MIN_HEIGHT}>
-                <OverlayScrollArea className="scm-repos h-full min-h-0" contentClassName="px-2">
+                <OverlayScrollArea className="scm-repos h-full min-h-0" contentClassName="px-2" viewportRef={setRepos}>
                   {bindings.map((b, index) => {
                     const expanded = isOpen(b.repoId, index)
                     return (
@@ -69,6 +70,7 @@ export function ScmPanel() {
                         taskId={taskId}
                         binding={b}
                         compact
+                        scroller={repos}
                         collapsed={many && !expanded}
                         gitHost={gitHost}
                         showGit={gitRepo?.repoId === b.repoId}

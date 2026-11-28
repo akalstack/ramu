@@ -2,6 +2,7 @@ import { OverlayScrollArea } from '@/components/overlay-scroll-area'
 import { switchBranch } from '../../git/SwitchBranchDialog'
 import { ContentSkeleton } from '@/components/content-skeleton'
 import { Minus, Plus } from 'lucide-react'
+import { LegendList } from '@legendapp/list/react'
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { GitCommit, GitStatusEntry, RepositoryBinding } from '@ramu/shared/types'
@@ -42,10 +43,15 @@ const ALL_TITLE: Record<ConflictChoice, string> = {
   both: 'Keep both sides in every conflicted file?',
 }
 
+/** A change row's height; the list measures each row once it is drawn. */
+const CHANGE_ROW_PX = 28
+const entryKey = (entry: GitStatusEntry) => entry.path
+
 export function RepositoryControl({
   taskId,
   binding,
   compact = false,
+  scroller,
   collapsed = false,
   gitHost = null,
   showGit = true,
@@ -57,6 +63,8 @@ export function RepositoryControl({
   taskId: string
   binding: RepositoryBinding
   compact?: boolean
+  /** What a compact panel's change lists scroll in; a full panel scrolls in its own area. */
+  scroller?: HTMLElement | null
   collapsed?: boolean
   gitHost?: HTMLElement | null
   showGit?: boolean
@@ -154,9 +162,10 @@ export function RepositoryControl({
     onDiscard: requestDiscard,
     reportError,
   })
+  const [ownScroller, setOwnScroller] = useState<HTMLDivElement | null>(null)
+  const scrollElement = compact ? (scroller ?? null) : ownScroller
   const row = (e: GitStatusEntry, isStaged: boolean) => (
     <ChangeRow
-      key={`${isStaged}:${e.path}`}
       taskId={taskId}
       repoId={binding.repoId}
       entry={e}
@@ -170,7 +179,26 @@ export function RepositoryControl({
   )
   // In a multi-repository list the Git section is portalled into the single pinned slot; nothing renders until that slot mounts.
   const inGitSlot = (node: ReactNode) => (compact ? gitHost && createPortal(node, gitHost) : node)
-  const Content = compact ? 'div' : OverlayScrollArea
+  // A checkout can hold thousands of changed files; only the rows near the view are drawn.
+  const rows = (entries: GitStatusEntry[], isStaged: boolean) => (
+    <LegendList<GitStatusEntry>
+      scrollElement={scrollElement}
+      data={entries}
+      keyExtractor={entryKey}
+      renderItem={({ item }) => row(item, isStaged)}
+      extraData={busy}
+      estimatedItemSize={CHANGE_ROW_PX}
+    />
+  )
+  const contentClassName = 'scm-content [.scm-repo-body.compact_&]:flex-none flex-1 min-w-0 min-h-0'
+  const inContent = (node: ReactNode) =>
+    compact ? (
+      <div className={contentClassName}>{node}</div>
+    ) : (
+      <OverlayScrollArea className={contentClassName} viewportRef={setOwnScroller}>
+        {node}
+      </OverlayScrollArea>
+    )
   return (
     <div ref={root} className={`scm-repo-body${compact ? ' compact' : ''}${collapsed ? ' collapsed' : ''}`}>
       {fileContext.contextMenu.menu}
@@ -217,7 +245,7 @@ export function RepositoryControl({
           onConfirm={dialog.confirm}
         />
       )}
-      <Content className="scm-content [.scm-repo-body.compact_&]:flex-none flex-1 min-w-0 min-h-0">
+      {inContent(
         <section className={REPO_SECTION}>
           <RepoHeader
             repoName={binding.repoName}
@@ -323,7 +351,7 @@ export function RepositoryControl({
                   )
                 }
               />
-              {stagedOpen && staged.map((e) => row(e, true))}
+              {stagedOpen && rows(staged, true)}
             </>
           )}
           <ChangeGroupHeader
@@ -341,14 +369,14 @@ export function RepositoryControl({
               )
             }
           />
-          {changesOpen && changes.map((e) => row(e, false))}
+          {changesOpen && rows(changes, false)}
           {!status?.entries.length && status && (
             <p className="muted text-muted-foreground small text-caption scm-empty p-[8px_0]">
               {t('No changes in this checkout.')}
             </p>
           )}
-        </section>
-      </Content>
+        </section>,
+      )}
       {showGit &&
         inGitSlot(
           <GitInspector

@@ -2,6 +2,7 @@ import { pullRequestLinkKey } from '@ramu/shared/browserLinks'
 import { useEffect, useRef, useState } from 'react'
 import { keptPullRequestRead } from './keptPullRequests'
 import { useQueries } from '@tanstack/react-query'
+import { LegendList, type LegendListRef } from '@legendapp/list/react'
 import { ArrowLeft, CircleCheck, CircleDot, CircleX, GitPullRequest, MessageSquare, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/desktop-button'
 import { SearchField } from '@/components/search-field'
@@ -53,6 +54,9 @@ const SERVICE = 'service:'
 const SORT_KEY = 'ramu.pull-requests-sort'
 /** Room for a title, its checks and the repository line; dragging can widen it for long titles or narrow it for the diff. */
 const LIST_WIDTH = { initial: 480, min: 320, max: 720 }
+/** A row's two lines; the list measures each row once it is drawn. */
+const ROW_PX = 48
+const rowKey = (entry: MergedPullRequestRow) => entry.pr.url
 
 /** The order last chosen on this device; storage may be unavailable, which leaves the default. */
 function savedSort(): PullRequestSort {
@@ -281,7 +285,6 @@ export function PullRequestsPage() {
       (pr.checks === 'failure' || pr.checks === 'pending')
     return (
       <RowButton
-        key={pr.url}
         data-pr-url={pr.url}
         stacked
         className="py-1.5"
@@ -366,16 +369,22 @@ export function PullRequestsPage() {
   }
 
   const listRef = useRef<HTMLDivElement>(null)
+  const list = useRef<LegendListRef>(null)
+  const [scroller, setScroller] = useState<HTMLDivElement | null>(null)
   /** Up and down move through the list, opening each pull request as a mail list does. */
-  const move = (event: React.KeyboardEvent) => {
+  const move = async (event: React.KeyboardEvent) => {
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
     if (!rows.length) return
     event.preventDefault()
     const at = rows.findIndex((entry) => entry.pr.url === selected?.pr.url)
     const step = event.key === 'ArrowDown' ? 1 : -1
-    const next = rows[at < 0 ? 0 : Math.min(rows.length - 1, Math.max(0, at + step))]!
+    const index = at < 0 ? 0 : Math.min(rows.length - 1, Math.max(0, at + step))
+    const next = rows[index]!
     setSelected(next)
-    listRef.current?.querySelector<HTMLElement>(`[data-pr-url="${CSS.escape(next.pr.url)}"]`)?.focus()
+    const find = () => listRef.current?.querySelector<HTMLElement>(`[data-pr-url="${CSS.escape(next.pr.url)}"]`)
+    // Only rows near the view are drawn; one further off is brought in first. Focus scrolls a drawn row into view.
+    if (!find()) await list.current?.scrollToIndex({ index, animated: false, viewPosition: 0.5 })
+    find()?.focus()
   }
 
   const services = [...new Set(repositories.map((repo) => repo.service ?? 'github'))]
@@ -479,8 +488,8 @@ export function PullRequestsPage() {
               </TabsList>
             </Tabs>
           </div>
-          <OverlayScrollArea className="min-h-0 flex-1">
-            <div ref={listRef} className="flex flex-col gap-px px-2 pt-2 pb-6" onKeyDown={move}>
+          <OverlayScrollArea className="min-h-0 flex-1" viewportRef={setScroller}>
+            <div ref={listRef} className="flex flex-col gap-px px-2 pt-2 pb-6" onKeyDown={(event) => void move(event)}>
               <RepositoryAccessNotices
                 repos={attention}
                 hosts={unreachable.map(({ host, query }) => ({
@@ -494,7 +503,18 @@ export function PullRequestsPage() {
                 retrying={refreshing}
               />
               {loading && !rows.length && <ContentSkeleton />}
-              {rows.map(row)}
+              <LegendList<MergedPullRequestRow>
+                ref={list}
+                scrollElement={scroller}
+                data={rows}
+                keyExtractor={rowKey}
+                // Rows sit 1px apart; the list places them itself, so the column's gap would not reach them.
+                renderItem={({ item, index }) => <div className={index ? 'pt-px' : undefined}>{row(item)}</div>}
+                extraData={`${selected?.pr.url}\n${manyHosts}`}
+                estimatedItemSize={ROW_PX}
+                // The open pull request keeps its focus while the reader scrolls away from it.
+                alwaysRender={{ keys: selected ? [selected.pr.url] : [] }}
+              />
               {settled && !rows.length && (
                 <Empty className="py-12">
                   <EmptyHeader>
