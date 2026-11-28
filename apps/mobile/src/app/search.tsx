@@ -6,9 +6,9 @@ import type { ChatSearchHit } from '@ramu/shared/types'
 import { Search } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
 import { useStore } from '../runtime/store'
-import { STANDALONE } from '../runtime/types'
+import { STANDALONE, type Chat } from '../runtime/types'
 import { useSay, useT } from '../i18n'
-import { Header, PageScrollView, Screen } from '../components/Screen'
+import { Header, PageLegendList, Screen } from '../components/Screen'
 import { ChatRow } from '../components/ChatRow'
 import { useTabActions } from '../components/Overlays'
 import { Nothing, Section } from '../components/InboxParts'
@@ -17,6 +17,12 @@ import { Button, Divider, Row, T } from '../components/ui'
 const RECENT = 10
 /** Message hits each host sends at a time. */
 const MESSAGE_PAGE = 20
+
+type SearchRow =
+  | { kind: 'head'; key: string; title: string; count: number }
+  | { kind: 'chat'; key: string; chat: Chat; divider: boolean }
+  | { kind: 'hit'; key: string; chat: Chat; hit: ChatSearchHit; divider: boolean }
+  | { kind: 'more'; key: string }
 
 /** Threads on every paired computer, found by title, last message, project or computer. */
 export default function SearchScreen() {
@@ -140,6 +146,55 @@ export default function SearchScreen() {
     const chat = store.chats.find((x) => x.computerId === computerId && x.taskId === hit.taskId)
     return chat ? [{ chat, hit }] : []
   })
+  // Matching threads, then the messages that matched, each under its heading, in one list that mounts only the rows
+  // near the screen.
+  const rows: SearchRow[] = [
+    ...(results.length
+      ? [
+          { kind: 'head' as const, key: 'head:threads', title: q ? t.chats : t.recent, count: q ? results.length : 0 },
+          ...results.map((chat, i) => ({ kind: 'chat' as const, key: `chat:${chat.id}`, chat, divider: i > 0 })),
+        ]
+      : []),
+    ...(messageHits.length
+      ? [
+          { kind: 'head' as const, key: 'head:messages', title: t.inMessages, count: messageHits.length },
+          ...messageHits.map(({ chat, hit }, i) => ({
+            kind: 'hit' as const,
+            key: `hit:${chat.id}:${hit.sessionId}:${hit.seq}`,
+            chat,
+            hit,
+            divider: i > 0,
+          })),
+          ...(Object.keys(pending).length ? [{ kind: 'more' as const, key: 'more' }] : []),
+        ]
+      : []),
+  ]
+  const renderRow = (row: SearchRow) => {
+    if (row.kind === 'head') return <Section title={row.title} count={row.count || undefined} />
+    if (row.kind === 'chat')
+      return <ChatRow chat={row.chat} project={label(row.chat.computerId, row.chat.projectId)} divider={row.divider} />
+    if (row.kind === 'more')
+      return <Button kind="ghost" title={say('Show more messages')} disabled={loadingMore} onPress={moreMessages} />
+    const { chat, hit } = row
+    return (
+      <View>
+        {row.divider ? <Divider inset={space.l} /> : null}
+        <Row
+          onPress={() => router.push({ pathname: '/chat/[id]', params: { id: chat.id } })}
+          style={{ paddingVertical: 11 }}
+        >
+          <View style={{ flex: 1, gap: 2 }}>
+            <T weight="500" numberOfLines={1}>
+              {chat.title}
+            </T>
+            <T size={font.control} tone="muted" numberOfLines={2}>
+              {hit.snippet}
+            </T>
+          </View>
+        </Row>
+      </View>
+    )
+  }
   return (
     <Screen>
       <Header large title={t.search} right={actions} />
@@ -163,75 +218,48 @@ export default function SearchScreen() {
           <Stack.Toolbar.SearchBarSlot />
         </Stack.Toolbar>
       ) : null}
-      <PageScrollView
+      <PageLegendList
         fullWidth
+        data={rows}
+        keyExtractor={(row) => row.key}
+        renderItem={({ item }) => renderRow(item)}
+        getItemType={(row) => row.kind}
+        estimatedItemSize={64}
+        // The Show more button turns off while a page loads, which its row's data does not carry.
+        extraData={loadingMore}
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         contentContainerStyle={{ paddingBottom: space.xl * 2 }}
-      >
-        {Platform.OS === 'web' ? (
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: space.s,
-              margin: space.l,
-              paddingHorizontal: space.l,
-              height: 44,
-              borderRadius: radius.full,
-              backgroundColor: c.raised,
-            }}
-          >
-            <Search size={16} color={c.muted} />
-            <TextInput
-              value={query}
-              onChangeText={setQuery}
-              placeholder={t.search}
-              placeholderTextColor={c.placeholder}
-              style={{ flex: 1, color: c.text, fontSize: font.body }}
-            />
-          </View>
-        ) : null}
-        {results.length ? (
-          <Section title={q ? t.chats : t.recent} count={q ? results.length : undefined}>
-            <View>
-              {results.map((chat, i) => (
-                <ChatRow key={chat.id} chat={chat} project={label(chat.computerId, chat.projectId)} divider={i > 0} />
-              ))}
+        ListHeaderComponent={
+          Platform.OS === 'web' ? (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: space.s,
+                margin: space.l,
+                paddingHorizontal: space.l,
+                height: 44,
+                borderRadius: radius.full,
+                backgroundColor: c.raised,
+              }}
+            >
+              <Search size={16} color={c.muted} />
+              <TextInput
+                value={query}
+                onChangeText={setQuery}
+                placeholder={t.search}
+                placeholderTextColor={c.placeholder}
+                style={{ flex: 1, color: c.text, fontSize: font.body }}
+              />
             </View>
-          </Section>
-        ) : !messageHits.length ? (
+          ) : null
+        }
+        ListEmptyComponent={
           <Nothing icon={Search} title={q ? t.searchEmpty : t.search} detail={q ? '' : t.searchHint} />
-        ) : null}
-        {messageHits.length ? (
-          <Section title={t.inMessages} count={messageHits.length}>
-            <View>
-              {messageHits.map(({ chat, hit }, i) => (
-                <View key={`${chat.id}:${hit.sessionId}:${hit.seq}`}>
-                  {i ? <Divider inset={space.l} /> : null}
-                  <Row
-                    onPress={() => router.push({ pathname: '/chat/[id]', params: { id: chat.id } })}
-                    style={{ paddingVertical: 11 }}
-                  >
-                    <View style={{ flex: 1, gap: 2 }}>
-                      <T weight="500" numberOfLines={1}>
-                        {chat.title}
-                      </T>
-                      <T size={font.control} tone="muted" numberOfLines={2}>
-                        {hit.snippet}
-                      </T>
-                    </View>
-                  </Row>
-                </View>
-              ))}
-              {Object.keys(pending).length ? (
-                <Button kind="ghost" title={say('Show more messages')} disabled={loadingMore} onPress={moreMessages} />
-              ) : null}
-            </View>
-          </Section>
-        ) : null}
-      </PageScrollView>
+        }
+      />
     </Screen>
   )
 }

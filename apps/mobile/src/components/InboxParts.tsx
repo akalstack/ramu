@@ -48,7 +48,8 @@ export function Section({
   title: string
   count?: number
   onSeeAll?: () => void
-  children: ReactNode
+  /** Left out by a list that draws the section's rows itself, below this heading. */
+  children?: ReactNode
 }) {
   const t = useT()
   return (

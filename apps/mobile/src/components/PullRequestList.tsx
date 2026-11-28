@@ -23,7 +23,8 @@ import { shortHostName } from '@ramu/shared/hostLabel'
 import { space, useTheme } from '../theme'
 import { useSay } from '../i18n'
 import { useStore } from '../runtime/store'
-import { Header, LargeTitle, PageScrollView, Screen, useScrolledUnderBar } from './Screen'
+import { LegendList } from '@legendapp/list/react-native'
+import { Header, LargeTitle, PageLegendList, Screen, useScrolledUnderBar } from './Screen'
 import { useTabActions } from './Overlays'
 import { Nothing } from './InboxParts'
 import { Chip, Divider, SectionLabel, Sheet, tap } from './ui'
@@ -219,7 +220,8 @@ export function PullRequestList({ pane }: { pane?: { openUrl: string; open(targe
       }}
     />
   ) : undefined
-  const content = (
+  // The search, filters and notices scroll above the rows; only the rows near the screen are mounted.
+  const header = (
     <>
       <ListSearch value={search} onChangeText={setSearch} label={say('Search pull requests')} />
       <ScrollView
@@ -275,51 +277,58 @@ export function PullRequestList({ pane }: { pane?: { openUrl: string; open(targe
         manyHosts={multi}
         onRetry={(host) => load(host, true)}
       />
-      {rows.length ? (
-        <View>
-          {filter === 'needs-you' ? <SectionLabel>{say('Waiting on you')}</SectionLabel> : null}
-          {rows.map((row, index) => (
-            <View key={`${row.host}:${row.pr.url}`}>
-              {index ? <Divider inset={PULL_REQUEST_ROW_TEXT_INSET} /> : null}
-              <PullRequestListRow
-                row={row}
-                hostName={multi ? name(row.host) : undefined}
-                elsewhere={row.sources.filter((source) => source.host !== row.host).length}
-                selected={pane?.openUrl === row.pr.url}
-                onOpen={() => open(row)}
-                onMenu={() => {
-                  tap()
-                  setMenu(row)
-                }}
-              />
-            </View>
-          ))}
-        </View>
-      ) : waiting ? (
-        <PageLoader style={{ marginVertical: space.xl }} />
-      ) : (
-        <Nothing
-          icon={GitPullRequest}
-          title={
-            !anyReachable && !attention.length
-              ? say('No repositories with a hosting service')
-              : search
-                ? say('No pull requests match')
-                : filter === 'needs-you'
-                  ? say('No pull requests waiting on you')
-                  : say('No pull requests here')
-          }
-          detail={
-            !anyReachable && !attention.length
-              ? say('Publish a project to GitHub, GitLab, Bitbucket or Azure DevOps to see its pull requests here.')
-              : filter === 'needs-you'
-                ? say('Reviews asked of you and your pull requests that are ready or blocked show here.')
-                : say('Try another tab or repository.')
-          }
-        />
-      )}
+      {rows.length && filter === 'needs-you' ? <SectionLabel>{say('Waiting on you')}</SectionLabel> : null}
     </>
   )
+  const empty = waiting ? (
+    <PageLoader style={{ marginVertical: space.xl }} />
+  ) : (
+    <Nothing
+      icon={GitPullRequest}
+      title={
+        !anyReachable && !attention.length
+          ? say('No repositories with a hosting service')
+          : search
+            ? say('No pull requests match')
+            : filter === 'needs-you'
+              ? say('No pull requests waiting on you')
+              : say('No pull requests here')
+      }
+      detail={
+        !anyReachable && !attention.length
+          ? say('Publish a project to GitHub, GitLab, Bitbucket or Azure DevOps to see its pull requests here.')
+          : filter === 'needs-you'
+            ? say('Reviews asked of you and your pull requests that are ready or blocked show here.')
+            : say('Try another tab or repository.')
+      }
+    />
+  )
+  const list = {
+    data: rows,
+    keyExtractor: (row: MergedPullRequestRow) => `${row.host}:${row.pr.url}`,
+    renderItem: ({ item: row, index }: { item: MergedPullRequestRow; index: number }) => (
+      <View>
+        {index ? <Divider inset={PULL_REQUEST_ROW_TEXT_INSET} /> : null}
+        <PullRequestListRow
+          row={row}
+          hostName={multi ? name(row.host) : undefined}
+          elsewhere={row.sources.filter((source) => source.host !== row.host).length}
+          selected={pane?.openUrl === row.pr.url}
+          onOpen={() => open(row)}
+          onMenu={() => {
+            tap()
+            setMenu(row)
+          }}
+        />
+      </View>
+    ),
+    // The marked row follows the open pull request, which no row's data carries.
+    extraData: pane?.openUrl,
+    estimatedItemSize: 76,
+    keyboardShouldPersistTaps: 'handled' as const,
+    ListEmptyComponent: empty,
+    refreshControl,
+  }
   const sheets = (
     <>
       <Sheet
@@ -416,30 +425,31 @@ export function PullRequestList({ pane }: { pane?: { openUrl: string; open(targe
   if (pane)
     return (
       <ListPane title={say('Pull requests')}>
-        <ScrollView
+        <LegendList
+          {...list}
           contentContainerStyle={{ paddingBottom: insets.bottom + space.l }}
-          keyboardShouldPersistTaps="handled"
-          refreshControl={refreshControl}
-        >
-          {content}
-        </ScrollView>
+          ListHeaderComponent={header}
+        />
         {sheets}
       </ListPane>
     )
   return (
     <Screen>
       <Header back={false} large scrollEdge collapsed={edge.scrolled} title={say('Pull requests')} right={actions} />
-      <PageScrollView
+      <PageLegendList
+        {...list}
         fullWidth
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ paddingBottom: space.xl * 2 }}
         onScroll={edge.onScroll}
         scrollEventThrottle={16}
-        refreshControl={refreshControl}
-      >
-        <LargeTitle>{say('Pull requests')}</LargeTitle>
-        {content}
-      </PageScrollView>
+        ListHeaderComponent={
+          <>
+            <LargeTitle>{say('Pull requests')}</LargeTitle>
+            {header}
+          </>
+        }
+      />
       {sheets}
     </Screen>
   )

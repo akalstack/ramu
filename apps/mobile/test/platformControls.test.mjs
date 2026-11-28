@@ -1052,7 +1052,7 @@ for (const os of ['android', 'ios']) {
           }),
         },
         '../i18n': {
-          useT: () => ({ search: 'Search threads', recent: 'Recent', chats: 'Threads' }),
+          useT: () => ({ search: 'Search threads', recent: 'Recent', chats: 'Threads', inMessages: 'In messages' }),
           useSay: () => (text) => text,
         },
         '../components/Overlays': { useTabActions: () => null },
@@ -1069,6 +1069,11 @@ for (const os of ['android', 'ios']) {
       cursor = 0
       return SearchScreen()
     }
+    // The rows the list would draw: threads, then message hits, each under its heading.
+    const drawn = (tree) => {
+      const list = find(tree, 'PageLegendList')
+      return list.props.data.flatMap((item, index) => nodes(list.props.renderItem({ item, index })))
+    }
     const initial = render()
     const search = find(initial, 'NativeSearch')
     assert.equal(
@@ -1076,16 +1081,27 @@ for (const os of ['android', 'ios']) {
       os === 'android',
       'Android also uses native autofocus for the initial header mount',
     )
-    assert.equal(nodes(initial).filter((node) => node.type === 'ChatRow').length, 2)
+    assert.equal(drawn(initial).filter((node) => node.type === 'ChatRow').length, 2)
     search.props.onChangeText({ nativeEvent: { text: 'pair' } })
     state[1] = [{ query: 'pair', computerId: 'host', hit: { taskId: 'pair-task', seq: 1, sessionId: 's' } }]
-    const results = nodes(render()).filter((node) => node.type === 'ChatRow')
+    const results = drawn(render()).filter((node) => node.type === 'ChatRow')
     assert.equal(results.length, 1)
     assert.equal(results[0].props.chat.id, 'b')
-    assert.equal(nodes(render()).filter((node) => node.type === 'Row').length, 1)
+    assert.equal(drawn(render()).filter((node) => node.type === 'Row').length, 1)
+    assert.deepEqual(
+      [...drawn(render()).filter((node) => node.type === 'Section')].map((node) => node.props.title),
+      ['Threads', 'In messages'],
+      'thread results come before the message hits, each under a heading',
+    )
+    // A host with more hits for this search offers the next page below them.
+    const more = () => drawn(render()).find((node) => node.type === 'Button')
+    assert.equal(more(), undefined)
+    state[2] = { query: 'pair', next: { host: 'next' } }
+    assert.equal(more().props.title, 'Show more messages')
+    state[2] = { query: '', next: {} }
     search.props.onChangeText({ nativeEvent: { text: 'fix' } })
     assert.equal(
-      nodes(render()).filter((node) => node.type === 'Row').length,
+      drawn(render()).filter((node) => node.type === 'Row').length,
       0,
       'old message matches disappear immediately when the query changes',
     )
@@ -1103,9 +1119,9 @@ for (const os of ['android', 'ios']) {
     leaveImmediately()
     flushFrames()
     assert.equal(focused, 2, 'a cancelled visit cannot open the keyboard on another tab')
-    assert.equal(nodes(render()).filter((node) => node.type === 'ChatRow').length, 1, 'rerendering keeps the query')
+    assert.equal(drawn(render()).filter((node) => node.type === 'ChatRow').length, 1, 'rerendering keeps the query')
     search.props.onCancelButtonPress()
-    assert.equal(nodes(render()).filter((node) => node.type === 'ChatRow').length, 2)
+    assert.equal(drawn(render()).filter((node) => node.type === 'ChatRow').length, 2)
   })
 }
 
@@ -10156,7 +10172,14 @@ test('every pull request row opens in full on the phone, a repository in no proj
     './Overlays': { useTabActions: () => null },
   })
   const render = () => hooks.render(() => Pulls({}))
-  const row = find(render(), 'PullRequestListRow')
+  // The list mounts only the rows near the screen; the search, chips and notices sit in its header.
+  const listOf = (tree) => find(tree, 'PageLegendList')
+  const rowsOf = (tree) => {
+    const list = listOf(tree)
+    return list.props.data.map((item, index) => find(list.props.renderItem({ item, index }), 'PullRequestListRow'))
+  }
+  const header = (tree) => listOf(tree).props.ListHeaderComponent
+  const row = rowsOf(render())[0]
   assert.equal(row.props.row.outside, true)
   row.props.onOpen()
   assert.deepEqual(JSON.parse(JSON.stringify(pushed)), [
@@ -10177,15 +10200,17 @@ test('every pull request row opens in full on the phone, a repository in no proj
     .map((node) => node.props.title)
   assert.ok(options.includes('Open on GitHub'), 'Open on GitHub is in the long-press menu')
   // The sign-in notice is one per host and service, handed to the notices above the list.
-  const notices = find(render(), 'PullRequestListNotices')
+  const notices = find(header(render()), 'PullRequestListNotices')
   assert.deepEqual([...notices.props.repos.map((entry) => entry.repoName)], ['ai-brain-web'])
   assert.deepEqual([...notices.props.offline], [])
+  assert.ok(find(header(render()), 'SectionLabel'), 'the rows waiting on you are labelled')
+  assert.equal(typeof listOf(render()).props.refreshControl.props.onRefresh, 'function')
   // Offline, the kept rows stay, the host is named as last known, and there is nothing to pull to refresh.
   status = 'offline'
   const offline = render()
-  assert.ok(find(offline, 'PullRequestListRow'))
-  assert.deepEqual([...find(offline, 'PullRequestListNotices').props.offline], ['a'])
-  assert.equal(find(offline, 'PageScrollView').props.refreshControl, undefined)
+  assert.equal(rowsOf(offline).length, 1)
+  assert.deepEqual([...find(header(offline), 'PullRequestListNotices').props.offline], ['a'])
+  assert.equal(listOf(offline).props.refreshControl, undefined)
   hooks.dispose()
 })
 
