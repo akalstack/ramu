@@ -38,8 +38,8 @@ export function readGesture(value: Record<string, unknown>): GestureDisplay | nu
 
 /**
  * The cursor pad shown while a held finger moves the terminal's cursor: a round glass pad with an arrow on each side,
- * fixed on the right edge. The arrow being sent sits on an accent disc that brightens and stacks more chevrons as the
- * cursor speeds up, so how far the finger has travelled reads at a glance without following it. On Android, which has
+ * fixed on the right edge. The arrow being sent turns the accent color and stacks more chevrons as the cursor speeds
+ * up, on the glass itself rather than a disc of its own, so how far the finger has travelled reads at a glance without following it. On Android, which has
  * no glass, it is a raised surface over the terminal.
  */
 export function TerminalGestureOverlay({
@@ -121,13 +121,11 @@ export function TerminalGestureOverlay({
                   ...keys[direction],
                   width: SPOT,
                   height: SPOT,
-                  borderRadius: SPOT / 2,
-                  backgroundColor: c.accent,
                 },
                 lit,
               ]}
             >
-              {glyphs(direction, '#ffffff', level)}
+              {glyphs(direction, c.accent, level)}
             </Reanimated.View>
           ) : (
             <View key={direction} style={{ position: 'absolute', ...keys[direction], width: SPOT, height: SPOT }}>
