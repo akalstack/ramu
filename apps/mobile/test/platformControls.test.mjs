@@ -10214,6 +10214,54 @@ test('every pull request row opens in full on the phone, a repository in no proj
   hooks.dispose()
 })
 
+test('Artifacts asks each host for its next page as the list nears its end, and the rows stay merged in order', async () => {
+  const hooks = hookHarness()
+  const asked = []
+  const artifact = (id, changedAt) => ({ id, title: `Tracker ${id}`, icon: '📋', kind: 'app', version: 1, changedAt })
+  const store = {
+    selected: 'a',
+    computers: [{ id: 'a', name: 'Host', status: 'online' }],
+    subscribe: () => () => {},
+    invoke: async (_host, method, _filter, cursor) => {
+      asked.push([method, cursor])
+      return cursor
+        ? { items: [artifact('older', 1)], next: null, kinds: ['app'] }
+        : { items: [artifact('newer', 2)], next: 'page-2', kinds: ['app'] }
+    },
+  }
+  const { default: Artifacts } = load('app/(tabs)/artifacts/index.tsx', 'ios', {
+    react: hooks.react,
+    '@ramu/shared/artifacts': await import('../../../packages/shared/src/artifacts.ts'),
+    '@ramu/shared/paging': await import('../../../packages/shared/src/paging.ts'),
+    '@ramu/shared/hostLabel': await import('../../../packages/shared/src/hostLabel.ts'),
+    '../../../runtime/store': { useStore: () => store },
+    '../../../components/Overlays': { useTabActions: () => null },
+    '../../../components/ArtifactKindMark': {
+      ArtifactKindMark: 'ArtifactKindMark',
+      kindIcon: () => 'KindIcon',
+      kindLabel: (kind) => kind,
+    },
+  })
+  const render = () => hooks.render(() => Artifacts())
+  render()
+  await settle()
+  let list = find(render(), 'PageLegendList')
+  assert.deepEqual([...list.props.data.map((row) => row.page.id)], ['newer'])
+  // Only rows near the screen are drawn, and reaching the end asks for the page after the one shown.
+  list.props.onEndReached({ distanceFromEnd: 0 })
+  await settle()
+  assert.deepEqual(asked, [
+    ['artifacts.page', null],
+    ['artifacts.page', 'page-2'],
+  ])
+  list = find(render(), 'PageLegendList')
+  assert.deepEqual([...list.props.data.map((row) => row.page.id)], ['newer', 'older'])
+  // With every page shown, the end of the list asks for nothing more.
+  assert.equal(list.props.onEndReached, undefined)
+  assert.equal(typeof list.props.refreshControl.props.onRefresh, 'function')
+  hooks.dispose()
+})
+
 test('the phone goal sheet sets this goal’s own turn limit, and offers none on a goal it cannot change', async () => {
   const hooks = hookHarness()
   const { GoalSheet } = load('components/GoalSheet.tsx', 'ios', {
