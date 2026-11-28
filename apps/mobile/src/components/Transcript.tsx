@@ -1,4 +1,5 @@
 import { MEDIA_SERVICE_NAMES } from '@ramu/shared/types/media'
+import { commandLine } from '@ramu/shared/chat/commandLine'
 import { ImagePreview } from './ImagePreview'
 import { MessageSelectionMenuContext, TextMarkContext, nativeMarkdown } from './NativeMarkdown'
 import { markSource } from '../runtime/textMark'
@@ -908,7 +909,13 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
     case 'note':
       // As on the desktop, the limit tray above the composer says when the thread resumes; a line here would repeat it.
       if (item.wait && item.limit) return null
-      return item.goalNote ? <GoalNote item={item} /> : <NoteRow item={item} chat={chat} />
+      return item.goalNote ? (
+        <GoalNote item={item} />
+      ) : item.command ? (
+        <CommandNote command={item.command} repeats={item.repeats} />
+      ) : (
+        <NoteRow item={item} chat={chat} />
+      )
     case 'learning':
       return <LearningTurnLine item={item} computerId={chat.computerId} />
     case 'end':
@@ -2683,6 +2690,66 @@ function ChangesCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: '
  * A turning point in a goal's life (set, paused, failed check…), left where it happened as the same quiet activity row
  * as a finished goal, as on the desktop; tapping it shows the goal and what happened.
  */
+/**
+ * A background command that finished, failed or was asked to stop, as a goal's note reads: its icon, what happened,
+ * the command's first line beside it, and the whole command when opened, as on the desktop.
+ */
+function CommandNote({
+  command,
+  repeats,
+}: {
+  command: NonNullable<Extract<TranscriptItem, { kind: 'note' }>['command']>
+  repeats?: number
+}) {
+  const { c } = useTheme()
+  const say = useSay()
+  const [open, setOpen] = useState(false)
+  const Icon = command.state === 'stop' ? OctagonX : SquareTerminal
+  const title =
+    command.state === 'stop'
+      ? say('Stop requested')
+      : command.state === 'failed'
+        ? say('Background command failed')
+        : say('Background command finished')
+  return (
+    <View style={{ gap: space.s }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${title}: ${commandLine(command.text)}`}
+        accessibilityState={{ expanded: open }}
+        onPress={() => {
+          tap()
+          setOpen((value) => !value)
+        }}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}
+      >
+        <Icon size={14} color={command.state === 'failed' ? c.bad : c.muted} strokeWidth={1.8} />
+        <T size={font.control} tone={command.state === 'failed' ? 'bad' : 'soft'}>
+          {title}
+        </T>
+        <T size={font.control} tone="muted" mono numberOfLines={1} style={{ flex: 1 }}>
+          {commandLine(command.text)}
+        </T>
+        {repeats && repeats > 1 ? (
+          <T size={font.caption} tone="muted">
+            {`×${repeats}`}
+          </T>
+        ) : null}
+        <Disclosure open={open} color={c.muted} />
+      </Pressable>
+      <Collapse open={open}>
+        <View
+          style={{ marginLeft: 14 + space.s, padding: space.s + 2, backgroundColor: c.code, borderRadius: radius.s }}
+        >
+          <T size={font.caption} mono tone="soft" copyable={command.text}>
+            {command.text}
+          </T>
+        </View>
+      </Collapse>
+    </View>
+  )
+}
+
 function GoalNote({ item }: { item: Extract<TranscriptItem, { kind: 'note' }> }) {
   const { c } = useTheme()
   const say = useSay()

@@ -445,6 +445,7 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
         id,
         icon: 'stop',
         ...noteTitle('You requested a stop for {0}', { 0: commandLine(e.command) }),
+        command: { text: e.command, state: 'stop' },
       })
     else if (e.kind === 'background-command-end')
       items.push({
@@ -455,6 +456,7 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
           0: commandLine(e.command),
         }),
         failed: e.failed,
+        command: { text: e.command, state: e.failed ? 'failed' : 'finished' },
       })
     else if (e.kind === 'recovery')
       items.push({ kind: 'note', id, icon: 'recovery', ...noteTitle('Resumed after restart') })

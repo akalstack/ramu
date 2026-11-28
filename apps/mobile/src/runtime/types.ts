@@ -230,6 +230,8 @@ export type TranscriptItem = (
       repeats?: number
       /** The mark drawn before the title, as the desktop's rows carry one. */
       icon?: NoteIcon
+      /** A background command's note: drawn as a goal's note is, its first line in the row and the whole when opened. */
+      command?: { text: string; state: 'finished' | 'failed' | 'stop' }
     }
   /** A finished turn's routine steps folded under "Worked for 12m 48s". */
   | {

@@ -3662,6 +3662,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Found no background command to wait on': 'Tidak menemukan perintah latar belakang untuk ditunggu',
   Saw: 'Dilihat',
   'Background command failed': 'Perintah latar belakang gagal',
+  'Stop requested': 'Penghentian diminta',
   'Background command finished': 'Perintah latar belakang selesai',
   'Background command stopped printing': 'Perintah latar belakang berhenti mengeluarkan output',
   'Stopped waiting': 'Berhenti menunggu',

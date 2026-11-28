@@ -1,5 +1,5 @@
 import { ThreadMessageCard, ThreadsStartedCard } from './StartedThreads'
-import { commandLine } from '@ramu/shared/chat/commandLine'
+import { CommandNote } from '../../../chat/CommandNote'
 import { RamuEventRow } from './RamuEventRow'
 import { LocalInlineAction } from '@/components/inline-action'
 import { ContinuedCard } from './ContinuedCard'
@@ -16,16 +16,7 @@ import { t as translate, useLanguage } from '../../../i18n'
 import { AgentContentView } from '../../../chat/AgentContentView'
 import { compactionLabel, compactionCounts } from '@ramu/shared/chat/compaction'
 import { Button } from '@/components/desktop-button'
-import {
-  ArrowRightLeft,
-  CircleAlert,
-  Minimize2,
-  OctagonX,
-  RotateCcw,
-  Settings2,
-  SquareTerminal,
-  Undo2,
-} from 'lucide-react'
+import { ArrowRightLeft, CircleAlert, Minimize2, RotateCcw, Settings2, Undo2 } from 'lucide-react'
 import type { Attachment, AgentEvent, AgentQuestion } from '@ramu/shared/types'
 import { ScheduleChatCard } from '../../../Automation'
 import { useHost } from '../../../workspace/HostProvider'
@@ -325,29 +316,9 @@ export function EventRow({
         </div>
       ) : null
     case 'background-terminal-stop':
-      return (
-        <div className={CONVERSATION_SEPARATOR_CLASS} role="status">
-          <span className="inline-flex min-w-0 items-center gap-2">
-            <OctagonX size={14} aria-hidden="true" className="flex-none" />
-            <span className="truncate">{translate('You requested a stop for {0}', { 0: commandLine(e.command) })}</span>
-            <RepeatCount count={repeats} />
-          </span>
-        </div>
-      )
+      return <CommandNote command={e.command} state="stop" repeats={repeats} />
     case 'background-command-end':
-      return (
-        <div className={`${CONVERSATION_SEPARATOR_CLASS}${e.failed ? ' text-bad' : ''}`} role="status">
-          <span className="inline-flex min-w-0 items-center gap-2">
-            <SquareTerminal size={14} aria-hidden="true" className="flex-none" />
-            <span className="truncate">
-              {translate(e.failed ? 'Background command failed: {0}' : 'Background command finished: {0}', {
-                0: commandLine(e.command),
-              })}
-            </span>
-            <RepeatCount count={repeats} />
-          </span>
-        </div>
-      )
+      return <CommandNote command={e.command} state={e.failed ? 'failed' : 'finished'} repeats={repeats} />
     case 'continued':
       return <ContinuedCard event={e} sessionId={sessionId} taskId={taskId} />
     case 'checkout-clash':
