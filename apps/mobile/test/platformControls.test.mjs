@@ -1001,7 +1001,7 @@ test('appearance overrides reach native controls and System releases the overrid
 
 for (const os of ['android', 'ios']) {
   test(`${os} thread search opens appropriately and filters without losing its query`, () => {
-    const state = ['', []]
+    const state = ['', [], { query: '', next: {} }, false]
     let cursor = 0
     let onEnter
     let focused = 0
@@ -1051,7 +1051,10 @@ for (const os of ['android', 'ios']) {
             ],
           }),
         },
-        '../i18n': { useT: () => ({ search: 'Search threads', recent: 'Recent', chats: 'Threads' }) },
+        '../i18n': {
+          useT: () => ({ search: 'Search threads', recent: 'Recent', chats: 'Threads' }),
+          useSay: () => (text) => text,
+        },
         '../components/Overlays': { useTabActions: () => null },
       },
       {

@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshControl, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { AppWindow, Pin, Search } from 'lucide-react-native'
 import { useTabActions } from '../../../components/Overlays'
 import { ARTIFACT_KINDS, type ArtifactInfo, type ArtifactKind } from '@ramu/shared/artifacts'
 import { shortHostName } from '@ramu/shared/hostLabel'
+import { appendPage, mergedPages } from '@ramu/shared/paging'
 import { font, space, useTheme } from '../../../theme'
 import { useStore } from '../../../runtime/store'
 import { ago, useSay } from '../../../i18n'
@@ -19,6 +20,20 @@ import { ArtifactKindMark, kindIcon, kindLabel } from '../../../components/Artif
 /** The column an artifact's emoji sits in, and where the row's text and divider start after it. */
 const ARTIFACT_ICON = 28
 const ARTIFACT_TEXT_INSET = space.l + ARTIFACT_ICON + space.m
+/** Artifacts each host sends at a time, and how near the end the next page starts loading. */
+const ARTIFACT_PAGE = 50
+const LOAD_AHEAD = 600
+
+/** What one host has sent for the current search and kind. */
+interface HostArtifacts {
+  items: ArtifactInfo[]
+  next: string | null
+  kinds: ArtifactKind[]
+}
+
+/** The list's order, as the host keeps it: pinned first, then the newest change. */
+const byListOrder = (a: ArtifactInfo, b: ArtifactInfo) =>
+  Number(b.pinned) - Number(a.pinned) || b.changedAt - a.changedAt || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0)
 
 /** Every artifact on the paired hosts, newest first with pinned ones on top, as the desktop's Artifacts. */
 export default function PagesScreen() {
@@ -26,30 +41,70 @@ export default function PagesScreen() {
   const say = useSay()
   const router = useRouter()
   const store = useStore()
-  const edge = useScrolledUnderBar(40)
+  const scrolledEdge = useScrolledUnderBar(40)
   const multi = store.computers.length > 1
   const [allHosts, setAllHosts] = useState(true)
   const hosts = useMemo(
     () => (multi && allHosts ? store.computers : store.computers.filter((x) => x.id === store.selected)),
     [multi, allHosts, store.computers, store.selected],
   )
-  const [pages, setPages] = useState<Record<string, ArtifactInfo[]>>({})
+  const [pages, setPages] = useState<Record<string, HostArtifacts>>({})
   const [query, setQuery] = useState('')
-  // The kind filter appears once the list holds more than one kind to tell apart.
+  // The kind filter appears once the host holds more than one kind to tell apart.
   const [kind, setKind] = useState<ArtifactKind | 'all'>('all')
   const [choosingKind, setChoosingKind] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  // The search goes to each host as typing pauses, so one word is one request.
+  const [searched, setSearched] = useState('')
+  useEffect(() => {
+    const timer = setTimeout(() => setSearched(query.trim()), 250)
+    return () => clearTimeout(timer)
+  }, [query])
+  const filter = useMemo(
+    () => ({ ...(searched ? { query: searched } : {}), ...(kind === 'all' ? {} : { kind }) }),
+    [searched, kind],
+  )
+  const filterKey = JSON.stringify(filter)
+  const latestFilter = useRef(filterKey)
+  latestFilter.current = filterKey
+  const loading = useRef(new Set<string>())
+  /** A host's first page for the current search and kind, or (`more`) the page after what it has shown. */
   const load = useCallback(
-    async (computerId: string) => {
+    async (computerId: string, more = false) => {
+      const asked = filterKey
+      const shown = pagesRef.current[computerId]
+      const cursor = more ? shown?.next : null
+      if (more && (!cursor || loading.current.has(computerId))) return
+      loading.current.add(computerId)
       try {
-        const list = await store.invoke(computerId, 'artifacts.list')
-        setPages((all) => ({ ...all, [computerId]: list }))
+        const page = await store
+          .invoke(computerId, 'artifacts.page', filter, cursor ?? null, ARTIFACT_PAGE)
+          .catch(async (error: unknown) => {
+            // A host too old to page gives its whole list, filtered here.
+            if (cursor) throw error
+            const all = await store.invoke(computerId, 'artifacts.list')
+            return { items: all, next: null, kinds: [...new Set(all.map((entry) => entry.kind))] }
+          })
+        if (asked !== latestFilter.current) return
+        setPages((all) => ({
+          ...all,
+          [computerId]: {
+            items: more ? appendPage(all[computerId]?.items ?? [], page.items, (entry) => entry.id) : page.items,
+            next: page.next,
+            kinds: page.kinds,
+          },
+        }))
       } catch {
         // An offline host keeps the list it last gave.
+      } finally {
+        loading.current.delete(computerId)
       }
     },
-    [store],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `filter` is keyed by filterKey
+    [store, filterKey],
   )
+  const pagesRef = useRef(pages)
+  pagesRef.current = pages
   const online = hosts.filter((host) => host.status === 'online').map((host) => host.id)
   const onlineKey = online.join(',')
   useEffect(() => {
@@ -66,24 +121,39 @@ export default function PagesScreen() {
   }, [onlineKey, load, store])
   // Artifacts come from threads; this tab is where they are found again, so it has no New of its own.
   const actions = useTabActions()
-  const kinds = ARTIFACT_KINDS.filter((entry) =>
-    hosts.some((host) => (pages[host.id] ?? []).some((page) => page.kind === entry)),
-  )
-  const rows = hosts
-    .flatMap((host) => (pages[host.id] ?? []).map((page) => ({ page, host })))
-    .filter(
-      ({ page }) =>
-        (kind === 'all' || page.kind === kind) && page.title.toLowerCase().includes(query.trim().toLowerCase()),
-    )
-    .sort((a, b) => Number(b.page.pinned) - Number(a.page.pinned) || b.page.changedAt - a.page.changedAt)
+  const kinds = ARTIFACT_KINDS.filter((entry) => hosts.some((host) => pages[host.id]?.kinds.includes(entry)))
+  const needle = query.trim().toLowerCase()
+  const rows = mergedPages(
+    hosts.map((host) => ({
+      items: (pages[host.id]?.items ?? []).map((page) => ({ page, host })),
+      next: pages[host.id]?.next ?? null,
+    })),
+    (a, b) => byListOrder(a.page, b.page),
+  ).filter(({ page }) => (kind === 'all' || page.kind === kind) && page.title.toLowerCase().includes(needle))
+  const more = hosts.some((host) => pages[host.id]?.next)
+  const loadMore = () => {
+    for (const host of hosts) if (pages[host.id]?.next && host.status === 'online') void load(host.id, true)
+  }
   return (
     <Screen>
-      <Header back={false} large scrollEdge collapsed={edge.scrolled} title={say('Artifacts')} right={actions} />
+      <Header
+        back={false}
+        large
+        scrollEdge
+        collapsed={scrolledEdge.scrolled}
+        title={say('Artifacts')}
+        right={actions}
+      />
       <PageScrollView
         fullWidth
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ paddingBottom: space.xl * 2 }}
-        onScroll={edge.onScroll}
+        onScroll={(event) => {
+          scrolledEdge.onScroll(event)
+          const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent
+          // Near the end, the next page is already on its way.
+          if (more && contentSize.height - contentOffset.y - layoutMeasurement.height < LOAD_AHEAD) loadMore()
+        }}
         scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
@@ -91,7 +161,7 @@ export default function PagesScreen() {
             tintColor={c.muted}
             onRefresh={() => {
               setRefreshing(true)
-              void Promise.all(online.map(load)).finally(() => setRefreshing(false))
+              void Promise.all(online.map((id) => load(id))).finally(() => setRefreshing(false))
             }}
           />
         }
@@ -150,7 +220,7 @@ export default function PagesScreen() {
               </Row>
             </View>
           ))
-        ) : hosts.some((host) => (pages[host.id] ?? []).length) ? (
+        ) : hosts.some((host) => pages[host.id]?.items.length) || filterKey !== '{}' ? (
           // Kept artifacts that the search or kind leaves out are not "none yet".
           <Nothing icon={Search} title={say('No matches')} detail={say('Try other words, or another kind.')} />
         ) : (

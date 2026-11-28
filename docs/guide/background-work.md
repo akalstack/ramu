@@ -46,6 +46,8 @@ The host also follows deployed apps without a schedule. After a push or merge fr
 
 On the phone, **Schedules** opens from the top of the Inbox. With several hosts connected, **Runs on** saves a schedule on another host, and Schedules lists each host's schedules. A schedule always runs on its own host.
 
+A schedule's runs list its whole history, newest first: **Show earlier runs** reads the next ones from its host, on the desktop and the phone.
+
 ### When a request arrives
 
 A schedule can start from a webhook instead of a clock. Choose **When a request arrives** as its frequency, then what starts it.

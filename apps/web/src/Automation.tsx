@@ -40,7 +40,7 @@ import { useRestartingHosts } from './workspace/restartingHosts'
 import { ownHostId } from './hosts'
 import { invokerFor } from './ipc'
 import { storeForHost } from './hostStorage'
-import { usePaged } from './settings/cards'
+import { useCursorPages } from './lib/useCursorPages'
 import { useViewOnly } from './composer/useViewOnly'
 import { VIEW_ONLY_WRITE_NOTICE } from './composer/viewerAccess'
 import { notifyError } from './chat/Notifications'
@@ -384,6 +384,9 @@ const RUN_PILL = {
 const ICON_BTN =
   'ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)'
 
+/** Runs a schedule's history shows at a time. */
+const RUN_PAGE = 10
+
 /** One schedule as a compact card: name, state and next run on top (actions replace the time on hover), then prompt and meta. */
 function ScheduleCard({
   schedule: s,
@@ -406,7 +409,16 @@ function ScheduleCard({
   const ws = useWorkspace()
   const { invoke } = useHost()
   const [open, setOpen] = useState(false)
-  const paged = usePaged(runs, 5)
+  // Its whole history from the host while open, a page at a time; the recent list shared by every schedule refreshes it.
+  const history = useCursorPages({
+    key: open ? s.id : null,
+    // A new run or the newest one changing is what moves the history; the list itself is rebuilt every render.
+    refresh: `${runs.length}:${runs[0]?.id}:${runs[0]?.status}`,
+    load: (cursor) => invoke('schedules.runsPage', s.id, cursor, RUN_PAGE),
+    id: (run) => run.id,
+    fallback: () => runs,
+  })
+  const shownRuns = history.loaded ? history.items : runs.slice(0, RUN_PAGE)
   const project =
     s.projectId === NO_PROJECT
       ? t('No project')
@@ -561,7 +573,7 @@ function ScheduleCard({
       )}
       {open && (
         <div className="schedule-history mt-1 flex flex-col border-t border-(--line) pt-1">
-          {paged.shown.map((r) => (
+          {shownRuns.map((r) => (
             <div key={r.id} className="schedule-run flex min-h-8 items-center gap-2 text-caption">
               <span
                 className={`flex-none rounded-full px-2 text-caption whitespace-nowrap ${RUN_PILL[runTone(r.status)]}`}
@@ -591,7 +603,17 @@ function ScheduleCard({
               )}
             </div>
           ))}
-          {paged.more}
+          {history.more ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="self-start text-muted-foreground small text-caption"
+              disabled={history.loading}
+              onClick={() => void history.loadMore().catch(() => {})}
+            >
+              {t('Show earlier runs')}
+            </Button>
+          ) : null}
         </div>
       )}
     </article>

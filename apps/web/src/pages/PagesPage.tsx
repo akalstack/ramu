@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AppWindow, CircleAlert, Pin } from 'lucide-react'
 import type { ArtifactInfo, ArtifactKind } from '@ramu/shared/artifacts'
 import { ARTIFACT_KINDS, declaredCapabilities } from '@ramu/shared/artifacts'
+import { appendPage, mergedPages } from '@ramu/shared/paging'
 import { ChoiceChip, ChoiceChips } from '@/components/choice-group'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { RowButton } from '../components/row-button'
@@ -22,39 +23,108 @@ import { Button } from '../components/desktop-button'
 import { useViewOnly } from '../composer/useViewOnly'
 import { ArtifactKindMark, artifactKindLabel } from './ArtifactKindMark'
 
-/** Every page kept on this host, newest first with pinned ones on top. */
-export function usePages() {
+/** Artifacts each host sends at a time, and how near the end of the page the next ones start loading. */
+const ARTIFACT_PAGE = 50
+const LOAD_AHEAD = 600
+
+/** The list's order, as the host keeps it: pinned first, then the newest change. */
+const byListOrder = (a: ArtifactInfo, b: ArtifactInfo) =>
+  Number(b.pinned) - Number(a.pinned) || b.changedAt - a.changedAt || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0)
+
+type ArtifactFilter = { query?: string; kind?: ArtifactKind }
+
+/**
+ * This host's artifacts for a search and kind, a page at a time in the list's order. A host too old to page gives its
+ * whole list, filtered here.
+ */
+function useArtifactPages(filter: ArtifactFilter) {
   const { invoke } = useHost()
   const { on } = useHostRuntime()
-  const [pages, setPages] = useState<ArtifactInfo[] | null>(null)
-  const reload = useCallback(() => {
-    void invoke('artifacts.list')
-      .then(setPages)
-      .catch(() => setPages([]))
-  }, [invoke])
+  const key = JSON.stringify(filter)
+  const [state, setState] = useState<{
+    key: string
+    pages: ArtifactInfo[]
+    next: string | null
+    kinds: ArtifactKind[]
+  } | null>(null)
+  const latest = useRef(key)
+  latest.current = key
+  const busy = useRef(false)
+  const read = useCallback(
+    async (cursor: string | null) => {
+      const asked = key
+      const parsed = JSON.parse(asked) as ArtifactFilter
+      const page = await invoke('artifacts.page', parsed, cursor, ARTIFACT_PAGE).catch(async (error: unknown) => {
+        if (cursor) throw error
+        const all = await invoke('artifacts.list')
+        const needle = parsed.query?.toLowerCase() ?? ''
+        return {
+          items: all.filter(
+            (page) => (!parsed.kind || page.kind === parsed.kind) && page.title.toLowerCase().includes(needle),
+          ),
+          next: null,
+          kinds: [...new Set(all.map((page) => page.kind))],
+        }
+      })
+      if (asked !== latest.current) return
+      setState((current) => ({
+        key: asked,
+        pages:
+          cursor && current?.key === asked ? appendPage(current.pages, page.items, (entry) => entry.id) : page.items,
+        next: page.next,
+        kinds: page.kinds,
+      }))
+    },
+    [invoke, key],
+  )
   useEffect(() => {
-    reload()
+    void read(null).catch(() => setState({ key, pages: [], next: null, kinds: [] }))
     return on('artifacts:changed', (payload) => {
-      if (!payload.run) reload()
+      if (!payload.run) void read(null).catch(() => {})
     })
-  }, [reload, on])
-  return pages
+  }, [read, on, key])
+  const next = state?.key === key ? state.next : null
+  const loadMore = useCallback(() => {
+    if (!next || busy.current) return
+    busy.current = true
+    void read(next)
+      .catch(() => {})
+      .finally(() => {
+        busy.current = false
+      })
+  }, [next, read])
+  return { pages: state ? state.pages : null, next, kinds: state?.kinds ?? [], loadMore }
 }
 
-/** One host's pages as the Artifacts page lists them, with the names of that host's projects. */
+/** One host's artifacts as the Artifacts page lists them, with the names of that host's projects. */
 interface HostPages {
   pages: ArtifactInfo[] | null
+  next: string | null
+  kinds: ArtifactKind[]
+  loadMore: () => void
   projects: Map<string, string>
 }
 
-/** Reads one host's pages for the Artifacts page, below that host's `HostContent`; it draws nothing itself. */
-function HostPagesFeed({ onChange }: { onChange(host: string, pages: HostPages | null): void }) {
+/** Reads one host's artifacts for the Artifacts page, below that host's `HostContent`; it draws nothing itself. */
+function HostPagesFeed({
+  filter,
+  onChange,
+}: {
+  filter: ArtifactFilter
+  onChange(host: string, pages: HostPages | null): void
+}) {
   const host = useHost().id
-  const pages = usePages()
+  const { pages, next, kinds, loadMore } = useArtifactPages(filter)
   const { projects } = useWorkspace()
   useEffect(() => {
-    onChange(host, { pages, projects: new Map(projects.map((project) => [project.id, project.name])) })
-  }, [host, pages, projects, onChange])
+    onChange(host, {
+      pages,
+      next,
+      kinds,
+      loadMore,
+      projects: new Map(projects.map((project) => [project.id, project.name])),
+    })
+  }, [host, pages, next, kinds, loadMore, projects, onChange])
   useEffect(() => () => onChange(host, null), [host, onChange])
   return null
 }
@@ -81,6 +151,16 @@ export function PagesPage() {
   )
   const [query, setQuery] = useState('')
   const [kind, setKind] = useState<ArtifactKind | 'all'>('all')
+  // The search goes to each host as typing pauses, so one word is one request.
+  const [searched, setSearched] = useState('')
+  useEffect(() => {
+    const timer = setTimeout(() => setSearched(query.trim()), 250)
+    return () => clearTimeout(timer)
+  }, [query])
+  const filter = useMemo(
+    () => ({ ...(searched ? { query: searched } : {}), ...(kind === 'all' ? {} : { kind }) }),
+    [searched, kind],
+  )
   const [importing, setImporting] = useState(false)
   const viewOnly = useViewOnly()
   const connected = hosts.filter((entry) => entry.status === 'connected')
@@ -100,7 +180,7 @@ export function PagesPage() {
   }, [])
   const feeds = connected.map((entry) => (
     <HostContent key={entry.id} host={entry.id}>
-      <HostPagesFeed onChange={report} />
+      <HostPagesFeed filter={filter} onChange={report} />
     </HostContent>
   ))
   if (open)
@@ -122,17 +202,31 @@ export function PagesPage() {
     )
   const loaded = connected.filter((entry) => lists[entry.id]?.pages)
   const loading = loaded.length < connected.length
-  const pages = connected.flatMap((entry) => (lists[entry.id]?.pages ?? []).map((page) => ({ page, host: entry.id })))
-  pages.sort((a, b) => Number(b.page.pinned) - Number(a.page.pinned) || b.page.changedAt - a.page.changedAt)
-  const shown = pages.filter(
-    ({ page }) =>
-      (kind === 'all' || page.kind === kind) && page.title.toLowerCase().includes(query.trim().toLowerCase()),
-  )
+  const needle = query.trim().toLowerCase()
+  const shown = mergedPages(
+    connected.map((entry) => ({
+      items: (lists[entry.id]?.pages ?? []).map((page) => ({ page, host: entry.id })),
+      next: lists[entry.id]?.next ?? null,
+    })),
+    (a, b) => byListOrder(a.page, b.page),
+  ).filter(({ page }) => (kind === 'all' || page.kind === kind) && page.title.toLowerCase().includes(needle))
+  // Whether any artifact is kept at all, beyond what this search and kind show.
+  const any = connected.some((entry) => lists[entry.id]?.kinds.length)
   const offline = hosts.filter((entry) => entry.status !== 'connected')
   // The kind filter appears once there is more than one kind to tell apart.
-  const kinds = ARTIFACT_KINDS.filter((entry) => pages.some(({ page }) => page.kind === entry))
+  const kinds = ARTIFACT_KINDS.filter((entry) => connected.some((host) => lists[host.id]?.kinds.includes(entry)))
+  const loadMore = () => {
+    for (const entry of connected) if (lists[entry.id]?.next) lists[entry.id]!.loadMore()
+  }
   return (
-    <div className="h-full w-full overflow-auto">
+    <div
+      className="h-full w-full overflow-auto"
+      onScroll={(event) => {
+        const el = event.currentTarget
+        // Near the end, the next page is already on its way.
+        if (el.scrollHeight - el.scrollTop - el.clientHeight < LOAD_AHEAD) loadMore()
+      }}
+    >
       {feeds}
       <div className="mx-auto flex w-full max-w-[760px] flex-col gap-4 px-6 pt-6 pb-10">
         <header className="flex items-start justify-between gap-4">
@@ -161,7 +255,7 @@ export function PagesPage() {
               .join(' · ')}
           </p>
         ))}
-        {pages.length > 0 && (
+        {any && (
           <SearchInput
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -188,8 +282,8 @@ export function PagesPage() {
             ))}
           </ChoiceChips>
         )}
-        {loading && !pages.length && <ContentSkeleton />}
-        {!loading && pages.length === 0 && (
+        {loading && !any && <ContentSkeleton />}
+        {!loading && !any && (
           <Empty className="py-16">
             <EmptyHeader>
               <EmptyMedia variant="icon">
@@ -209,7 +303,7 @@ export function PagesPage() {
             <ImportPageDialog onClose={() => setImporting(false)} />
           </HostProvider>
         )}
-        {pages.length > 0 && !shown.length && (
+        {any && !shown.length && (
           <p role="status" className="m-0 py-8 text-center text-control text-muted-foreground">
             {t('No matches')}
           </p>

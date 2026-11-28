@@ -68,7 +68,7 @@ Documents run in an isolated, sandboxed frame with no access to your files or Ra
 
 Ask for something to keep ("make me an artifact to split our trip costs") and the agent publishes it as an artifact, or choose **Keep as artifact** on any card. **Make an artifact from this thread** (in a thread's More actions) asks the agent to turn what the thread found or built into an App.
 
-**Artifacts** is on the rail along the sidebar's left edge and in the phone's tabs. It lists every artifact on the hosts the sidebar's host filter shows, naming each one's host when there are several, newest first, pinned ones on top, searchable by title. A project's menu lists its artifacts too. An artifact opens from the host that keeps it, full window on the desktop and full screen on the phone.
+**Artifacts** is on the rail along the sidebar's left edge and in the phone's tabs. It lists every artifact on the hosts the sidebar's host filter shows, naming each one's host when there are several, newest first, pinned ones on top, searchable by title and by kind. However many there are, the next ones load as you scroll to the end. A project's menu lists its artifacts too. An artifact opens from the host that keeps it, full window on the desktop and full screen on the phone.
 
 Saved values live on the host, so what you enter on the laptop is there on the phone. When two devices change it at once, the later one sees the other's values instead of overwriting them. The last version opened stays as a **Saved copy** while the host is away, never shown as current.
 

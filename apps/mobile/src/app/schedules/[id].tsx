@@ -6,6 +6,7 @@ import { CalendarClock, ChevronRight, Pause, Pencil, Play, Trash2, Zap } from 'l
 import { font, space, useTheme } from '../../theme'
 import { scoped, useStore } from '../../runtime/store'
 import { useAutomation } from '../../runtime/automation'
+import { useCursorPages } from '../../runtime/useCursorPages'
 import {
   NO_PROJECT,
   VIEW_ONLY_SCHEDULE_NOTICE,
@@ -50,23 +51,38 @@ export default function ScheduleDetail() {
         <Nothing icon={CalendarClock} title={data.loaded ? t.noSchedules : '…'} detail="" />
       </Screen>
     )
-  return <Detail computer={computer} schedule={schedule} runs={runsOf(data.runs, schedule.id)} />
+  return <Detail computer={computer} schedule={schedule} runs={runsOf(data.runs, schedule.id)} changed={data.runs} />
 }
+
+/** Runs shown at a time; Show earlier runs reads the next page from the host. */
+const RUN_PAGE = 20
 
 function Detail({
   computer,
   schedule,
-  runs,
+  runs: recent,
+  changed,
 }: {
   computer: string
   schedule: Schedule
   runs: ReturnType<typeof runsOf>
+  /** The host's recent runs, which change whenever any schedule runs. */
+  changed: unknown
 }) {
   const say = useSay()
   const { c } = useTheme()
   const t = useT()
   const router = useRouter()
   const store = useStore()
+  // Its whole history from the host, a page at a time; the recent list it shares with other schedules only refreshes it.
+  const history = useCursorPages({
+    key: `${computer}:${schedule.id}`,
+    refresh: changed,
+    load: (cursor) => store.invoke(computer, 'schedules.runsPage', schedule.id, cursor, RUN_PAGE),
+    id: (run) => run.id,
+    fallback: () => recent.slice(0, RUN_PAGE),
+  })
+  const runs = history.loaded ? history.items : recent.slice(0, RUN_PAGE)
   const commands = useScheduleCommands(computer, schedule)
   const lang = store.language
   const project =
@@ -130,7 +146,7 @@ function Detail({
           <SectionLabel>{t.recentRuns}</SectionLabel>
           {runs.length ? (
             <View>
-              {runs.slice(0, 20).map((run, i) => (
+              {runs.map((run, i) => (
                 <View key={run.id}>
                   {i ? <Divider inset={space.l} /> : null}
                   <Row
@@ -158,6 +174,14 @@ function Detail({
                   </Row>
                 </View>
               ))}
+              {history.more ? (
+                <Button
+                  kind="ghost"
+                  title={say('Show earlier runs')}
+                  disabled={history.loading}
+                  onPress={() => void history.loadMore().catch(() => {})}
+                />
+              ) : null}
             </View>
           ) : (
             <T tone="muted" style={{ paddingHorizontal: space.l, paddingTop: space.s }}>

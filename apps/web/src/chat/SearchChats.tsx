@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { MessageSquare, Sparkles, User } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ChatSearchHit, Task } from '@ramu/shared/types'
+import { appendPage } from '@ramu/shared/paging'
 import { useHost } from '../workspace/HostProvider'
 import { timeAgo } from '../Menu'
 import { SearchInput } from '../SearchInput'
@@ -27,6 +28,10 @@ function marked(text: string, query: string): ReactNode {
 
 type Result = { key: string; task: Task; hit?: ChatSearchHit }
 
+/** Message hits read at a time, and how near the end of the list the next page starts loading. */
+const MESSAGE_PAGE = 40
+const LOAD_AHEAD = 200
+
 /**
  * Search chats, like Codex: chat titles match as you type, and from two characters on, the text of every
  * conversation (your messages and the agent's replies). Opening a message match also finds it in the chat.
@@ -42,7 +47,17 @@ export function SearchChats({ onClose }: { onClose: () => void }) {
   const list = useRef<HTMLDivElement>(null)
   const needle = query.trim().toLowerCase()
 
+  // Where the host's next page of message hits starts; scrolling to the end of the list reads it.
+  const [next, setNext] = useState<string | null>(null)
+  const loadingMore = useRef(false)
+  const page = (cursor: string | null) =>
+    invoke('agent.searchMessagesPage', needle, cursor, MESSAGE_PAGE).catch(async (error: unknown) => {
+      // A host too old to page answers its first page the old way, with nothing after it.
+      if (cursor) throw error
+      return { items: await invoke('agent.searchMessages', needle), next: null }
+    })
   useEffect(() => {
+    setNext(null)
     if (needle.length < 2) {
       setHits([])
       setLoading(false)
@@ -52,10 +67,11 @@ export function SearchChats({ onClose }: { onClose: () => void }) {
     setLoading(true)
     const timer = setTimeout(
       () =>
-        void invoke('agent.searchMessages', needle).then(
+        void page(null).then(
           (found) => {
             if (!cancelled) {
-              setHits(found)
+              setHits(found.items)
+              setNext(found.next)
               setLoading(false)
             }
           },
@@ -72,7 +88,25 @@ export function SearchChats({ onClose }: { onClose: () => void }) {
       cancelled = true
       clearTimeout(timer)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [needle, invoke] by design; `page` reads them
   }, [needle, invoke])
+  const latestNeedle = useRef(needle)
+  latestNeedle.current = needle
+  const loadMore = () => {
+    if (!next || loadingMore.current) return
+    const asked = needle
+    loadingMore.current = true
+    void page(next)
+      .then((found) => {
+        if (asked !== latestNeedle.current) return
+        setHits((shown) => appendPage(shown, found.items, (hit) => `${hit.sessionId}:${hit.seq}`))
+        setNext(found.next)
+      })
+      .catch(() => {})
+      .finally(() => {
+        loadingMore.current = false
+      })
+  }
 
   const tasks = useMemo(() => new Map(ws.tasks.map((task) => [task.id, task])), [ws.tasks])
   const chats: Result[] = useMemo(() => {
@@ -94,7 +128,12 @@ export function SearchChats({ onClose }: { onClose: () => void }) {
     })
   }, [hits, tasks])
   const results = [...chats, ...messages]
-  useEffect(() => setSelected(0), [needle, hits])
+  useEffect(() => setSelected(0), [needle])
+  // Moving onto the last row, or scrolling near the end, reads the next page of message hits.
+  useEffect(() => {
+    if (selected >= results.length - 1) loadMore()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the selection moves
+  }, [selected])
   useEffect(() => {
     list.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' })
   }, [selected])
@@ -191,6 +230,10 @@ export function SearchChats({ onClose }: { onClose: () => void }) {
           role="listbox"
           aria-label={t('Search results')}
           ref={list}
+          onScroll={(event) => {
+            const el = event.currentTarget
+            if (el.scrollHeight - el.scrollTop - el.clientHeight < LOAD_AHEAD) loadMore()
+          }}
         >
           {chats.length > 0 && (
             <div className="chat-search-heading p-[10px_10px_4px] text-muted-foreground text-caption font-medium">

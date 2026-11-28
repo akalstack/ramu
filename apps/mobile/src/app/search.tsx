@@ -7,19 +7,22 @@ import { Search } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
 import { useStore } from '../runtime/store'
 import { STANDALONE } from '../runtime/types'
-import { useT } from '../i18n'
+import { useSay, useT } from '../i18n'
 import { Header, PageScrollView, Screen } from '../components/Screen'
 import { ChatRow } from '../components/ChatRow'
 import { useTabActions } from '../components/Overlays'
 import { Nothing, Section } from '../components/InboxParts'
-import { Divider, Row, T } from '../components/ui'
+import { Button, Divider, Row, T } from '../components/ui'
 
 const RECENT = 10
+/** Message hits each host sends at a time. */
+const MESSAGE_PAGE = 20
 
 /** Threads on every paired computer, found by title, last message, project or computer. */
 export default function SearchScreen() {
   const { c } = useTheme()
   const t = useT()
+  const say = useSay()
   const store = useStore()
   const router = useRouter()
   const actions = useTabActions(null)
@@ -65,21 +68,40 @@ export default function SearchScreen() {
     .filter((pc) => pc.status === 'online')
     .map((pc) => pc.id)
     .join(',')
+  // Each host's next page of message hits for the search they came from, so Show more messages continues every host
+  // that has more, and a page for an earlier search is dropped.
+  const [cursors, setCursors] = useState<{ query: string; next: Record<string, string> }>({ query: '', next: {} })
+  const [loadingMore, setLoadingMore] = useState(false)
+  const searchPage = (computerId: string, cursor: string | null) =>
+    store
+      .invoke(computerId, 'agent.searchMessagesPage', q, cursor, MESSAGE_PAGE)
+      .catch(async (error: unknown) => {
+        // A host too old to page answers its first page the old way, with nothing after it.
+        if (cursor) throw error
+        return { items: await store.invoke(computerId, 'agent.searchMessages', q), next: null }
+      })
+      .then((page) => ({ computerId, page }))
   useEffect(() => {
+    setCursors({ query: q, next: {} })
     if (q.length < 2 || !online) {
       setHits([])
       return
     }
     let alive = true
     const timer = setTimeout(() => {
-      void Promise.all(
-        online.split(',').map((computerId) =>
-          store
-            .invoke(computerId, 'agent.searchMessages', q)
-            .then((found) => found.map((hit) => ({ query: q, computerId, hit })))
-            .catch(() => []),
-        ),
-      ).then((all) => alive && setHits(all.flat().slice(0, 30)))
+      void Promise.all(online.split(',').map((computerId) => searchPage(computerId, null).catch(() => null))).then(
+        (pages) => {
+          if (!alive) return
+          const found = pages.filter((entry) => entry !== null)
+          setHits(found.flatMap(({ computerId, page }) => page.items.map((hit) => ({ query: q, computerId, hit }))))
+          setCursors({
+            query: q,
+            next: Object.fromEntries(
+              found.flatMap(({ computerId, page }) => (page.next ? [[computerId, page.next]] : [])),
+            ),
+          })
+        },
+      )
     }, 300)
     return () => {
       alive = false
@@ -87,6 +109,32 @@ export default function SearchScreen() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [q, online] by design; the values it reads beyond these are current as of that run
   }, [q, online])
+  const pending = cursors.query === q ? cursors.next : {}
+  const moreMessages = () => {
+    if (loadingMore) return
+    const asked = q
+    setLoadingMore(true)
+    void Promise.all(
+      Object.entries(pending).map(([computerId, cursor]) => searchPage(computerId, cursor).catch(() => null)),
+    )
+      .then((pages) => {
+        const found = pages.filter((entry) => entry !== null)
+        // Hits keep the search they answer, so ones for an earlier search never show under a newer one.
+        setHits((shown) => [
+          ...shown,
+          ...found.flatMap(({ computerId, page }) => page.items.map((hit) => ({ query: asked, computerId, hit }))),
+        ])
+        setCursors((current) => {
+          if (current.query !== asked) return current
+          const next = { ...current.next }
+          for (const { computerId, page } of found)
+            if (page.next) next[computerId] = page.next
+            else delete next[computerId]
+          return { query: asked, next }
+        })
+      })
+      .finally(() => setLoadingMore(false))
+  }
   const messageHits = hits.flatMap(({ query: searchedQuery, computerId, hit }) => {
     if (searchedQuery !== q || !q) return []
     const chat = store.chats.find((x) => x.computerId === computerId && x.taskId === hit.taskId)
@@ -177,6 +225,9 @@ export default function SearchScreen() {
                   </Row>
                 </View>
               ))}
+              {Object.keys(pending).length ? (
+                <Button kind="ghost" title={say('Show more messages')} disabled={loadingMore} onPress={moreMessages} />
+              ) : null}
             </View>
           </Section>
         ) : null}
