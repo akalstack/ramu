@@ -27,3 +27,76 @@ index 049fd22427b2bde17fd7ca59b8de65d0ee07b4b5..e68c7816dc0ec67bf02728dd2089d3cc
  - (void)updateContentScrollViewEdgeEffectsIfExists
  {
    [RNSScrollEdgeEffectApplicator applyToScrollView:[RNSScrollViewFinder findScrollViewInFirstDescendantChainFrom:self]
+diff --git a/ios/RNSScreenStackHeaderConfig.mm b/ios/RNSScreenStackHeaderConfig.mm
+index 12f2272..746538f 100644
+--- a/ios/RNSScreenStackHeaderConfig.mm
++++ b/ios/RNSScreenStackHeaderConfig.mm
+@@ -568,6 +568,56 @@ + (void)restoreNavigationBarAlphaIfTransitionIsCancelled:(UINavigationController
+ }
+ #endif // RNS_IPHONE_OS_VERSION_AVAILABLE(18_0) && !TARGET_OS_TV && !TARGET_OS_VISION
+ 
++#if !TARGET_OS_TV && !TARGET_OS_VISION
++// When a screen with a header is popped to one without, UIKit hides the bar by sliding it out with the leaving screen, so
++// the back button travels across the screen under the finger. Hide the bar at once and fade a picture of it out where it
++// stands, as UIKit does with bar items between two screens that both have a bar. The leaving screen keeps the bar's
++// height as extra safe area, so its content stays put while it slides away.
+++ (BOOL)fadeNavigationBarOutInPlaceIfPopping:(UINavigationController *)navctr
++                                    animated:(BOOL)animated
++                                   wasHidden:(BOOL)wasHidden
++{
++  if (@available(iOS 26.0, *)) {
++    id<UIViewControllerTransitionCoordinator> coordinator = navctr.transitionCoordinator;
++    if (!animated || wasHidden || coordinator == nil || coordinator.presentationStyle != UIModalPresentationNone) {
++      return NO;
++    }
++    UIViewController *fromVC = [coordinator viewControllerForKey:UITransitionContextFromViewControllerKey];
++    UIViewController *toVC = [coordinator viewControllerForKey:UITransitionContextToViewControllerKey];
++    // A pop: the leaving screen is already off the stack. Zoom transitions keep UIKit's own handling.
++    if (fromVC == nil || toVC == nil || [navctr.viewControllers containsObject:fromVC] ||
++        fromVC.preferredTransition != nil) {
++      return NO;
++    }
++    UINavigationBar *bar = navctr.navigationBar;
++    UIView *picture = [bar snapshotViewAfterScreenUpdates:NO];
++    if (picture == nil) {
++      return NO;
++    }
++    picture.frame = [bar convertRect:bar.bounds toView:navctr.view];
++    picture.userInteractionEnabled = NO;
++    [navctr.view addSubview:picture];
++    UIEdgeInsets kept = fromVC.additionalSafeAreaInsets;
++    fromVC.additionalSafeAreaInsets =
++        UIEdgeInsetsMake(kept.top + CGRectGetHeight(bar.frame), kept.left, kept.bottom, kept.right);
++    [navctr setNavigationBarHidden:YES animated:NO];
++    [coordinator
++        animateAlongsideTransition:^(id<UIViewControllerTransitionCoordinatorContext> _Nonnull context) {
++          picture.alpha = 0;
++        }
++        completion:^(id<UIViewControllerTransitionCoordinatorContext> _Nonnull context) {
++          [picture removeFromSuperview];
++          fromVC.additionalSafeAreaInsets = kept;
++          if (context.isCancelled) {
++            [navctr setNavigationBarHidden:NO animated:NO];
++          }
++        }];
++    return YES;
++  }
++  return NO;
++}
++#endif // !TARGET_OS_TV && !TARGET_OS_VISION
++
+ + (void)updateViewController:(UIViewController *)vc
+                   withConfig:(RNSScreenStackHeaderConfig *)config
+                     animated:(BOOL)animated
+@@ -615,6 +665,11 @@ + (void)updateViewController:(UIViewController *)vc
+   if (shouldHide) {
+     navitem.title = config.title;
+ 
++#if !TARGET_OS_TV && !TARGET_OS_VISION
++    if ([self fadeNavigationBarOutInPlaceIfPopping:navctr animated:animated wasHidden:wasHidden]) {
++      return;
++    }
++#endif // !TARGET_OS_TV && !TARGET_OS_VISION
+     // Setting navigation bar visibility is split to mitigate iOS 26 bug with bar button items.
+     [navctr setNavigationBarHidden:YES animated:animated];
+     return;
