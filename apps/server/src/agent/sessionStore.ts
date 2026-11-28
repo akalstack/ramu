@@ -215,6 +215,10 @@ export class SessionStore {
    * snapshot flagged `reset`: none yet, one from the future, a client that holds later rows than exist (a rewind),
    * or more changes than the bound. A client that asks for pages gets the first bounded part of a long catch-up with
    * `more`, and asks again from the cursor it returns, so no answer carries a whole transcript it already holds.
+   *
+   * A client that also passes `snapshotAfter` takes a snapshot in parts too: rows in order after that seq, each part
+   * bounded, with `after` naming where the next starts. A long thread then never needs one answer larger than a client
+   * accepts. Its first part (`snapshotAfter` 0) is the `reset`; the cursor to keep is that part's.
    */
   changes(
     id: string,
@@ -223,6 +227,7 @@ export class SessionStore {
     limit = 2000,
     maxBytes = MAX_CHANGE_BYTES,
     paged = false,
+    snapshotAfter?: number,
   ): {
     reset: boolean
     cursor: number
@@ -230,6 +235,7 @@ export class SessionStore {
     revision: number
     events: { seq: number; event: AgentEvent }[]
     more?: boolean
+    after?: number
   } {
     this.get(id)
     const head = this.db
@@ -259,6 +265,26 @@ export class SessionStore {
       }
       const page = changed.slice(0, count)
       return { reset: false, ...base, cursor: page.at(-1)!.rev, events: parse(page), more: true }
+    }
+    if (paged && snapshotAfter !== undefined && (snapshotAfter > 0 || !usable)) {
+      const rows = this.db
+        .prepare('SELECT seq, event FROM agent_events WHERE session_id = ? AND seq > ? ORDER BY seq LIMIT ?')
+        .all(id, snapshotAfter, limit + 1) as { seq: number; event: string }[]
+      let bytes = 0
+      let count = 0
+      for (const row of rows.slice(0, limit)) {
+        bytes += row.event.length
+        if (count && bytes > maxBytes) break
+        count++
+      }
+      const page = rows.slice(0, count)
+      const more = count < rows.length
+      return {
+        reset: snapshotAfter === 0,
+        ...base,
+        events: parse(page),
+        ...(more ? { more: true, after: page.at(-1)!.seq } : {}),
+      }
     }
     if (!usable || tooLarge) {
       const all = this.db.prepare('SELECT seq, event FROM agent_events WHERE session_id = ? ORDER BY seq').all(id) as {

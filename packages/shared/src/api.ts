@@ -1950,7 +1950,13 @@ export interface RamuMethods extends ArtifactMethods {
    * counter); `reset` means a full snapshot. With `paged`, a catch-up too long for one answer comes in parts: `more`
    * says to ask again from the returned `cursor`.
    */
-  'agent.changes'(sessionId: string, cursor: number, knownLastSeq: number, paged?: boolean): TranscriptChanges
+  'agent.changes'(
+    sessionId: string,
+    cursor: number,
+    knownLastSeq: number,
+    paged?: boolean,
+    snapshotAfter?: number,
+  ): TranscriptChanges
   'term.list'(taskId: string): TerminalInfo[]
   /** Runs a command in the workspace's newest idle shell, or a new one, and returns that shell. */
   'term.run'(ctx: string, command: string): TerminalInfo

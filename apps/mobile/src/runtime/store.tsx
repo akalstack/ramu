@@ -7,7 +7,7 @@ import {
   restoredStatus,
 } from './hostConnection'
 import type { ThreadListRead } from './threadsSync'
-import { pagingOf, readTranscriptChanges } from '@ramu/shared/transcriptChanges'
+import { changeArgs, pagingOf, readTranscriptChanges } from '@ramu/shared/transcriptChanges'
 import { relay as relayToHost } from './account'
 import { appForeground } from './chatViewport'
 import { requestPairing } from '@ramu/shared/pairRequest'
@@ -923,8 +923,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 }
                 const held = eventRows.current.get(key)
                 const result = await readTranscriptChanges(
-                  (from, known, paged) =>
-                    read('agent.changes', session.id, from, known, ...(paged ? [true as const] : [])),
+                  (from, known, paged, after) =>
+                    read('agent.changes', session.id, from, known, ...changeArgs(paged, after)),
                   held ? (changeCursors.current.get(key) ?? 0) : 0,
                   held ? Math.max(0, ...held.keys()) : 0,
                   pagingOf(id),
@@ -1049,7 +1049,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const cursor = changeCursors.current.get(key)
     if (!held || !cursor) return refresh(id, new Set([taskId]))
     const result = await readTranscriptChanges(
-      (from, known, paged) => invoke(id, 'agent.changes', sessionId, from, known, ...(paged ? [true as const] : [])),
+      (from, known, paged, after) => invoke(id, 'agent.changes', sessionId, from, known, ...changeArgs(paged, after)),
       cursor,
       Math.max(0, ...held.keys()),
       pagingOf(id),

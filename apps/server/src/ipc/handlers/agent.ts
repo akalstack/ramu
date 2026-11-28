@@ -70,9 +70,15 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
       run: (s: string, limit: number | null | 'default') => agents.setGoalTurnLimit(s, limit),
     },
     'agent.changes': {
-      args: z.tuple([id, z.number().int().min(0), z.number().int().min(0), z.boolean().optional()]),
-      run: (sessionId: string, cursor: number, knownLastSeq: number, paged?: boolean) =>
-        agents.changes(sessionId, cursor, knownLastSeq, undefined, undefined, paged === true),
+      args: z.tuple([
+        id,
+        z.number().int().min(0),
+        z.number().int().min(0),
+        z.boolean().optional(),
+        z.number().int().min(0).optional(),
+      ]),
+      run: (sessionId: string, cursor: number, knownLastSeq: number, paged?: boolean, snapshotAfter?: number) =>
+        agents.changes(sessionId, cursor, knownLastSeq, undefined, undefined, paged === true, snapshotAfter),
     },
     'agent.tail': { args: z.tuple([id]), run: (sessionId: string) => agents.tail(sessionId) },
     'agent.events': { args: z.tuple([id]), run: (sessionId: string) => agents.events(sessionId) },

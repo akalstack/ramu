@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { AgentEvent, AgentSessionInfo, AgentSessionState, QueuedMessage } from '@ramu/shared/types'
-import { pagingOf, readTranscriptChanges } from '@ramu/shared/transcriptChanges'
+import { changeArgs, pagingOf, readTranscriptChanges } from '@ramu/shared/transcriptChanges'
 import { cachedDataOn, ipcQueryKeyOn, queryClient } from '../../../dataQueries'
 import { ramu } from '../../../ipc'
 import { ownHostId } from '../../../hosts'
@@ -134,7 +134,7 @@ export function useAgentStream(sessionId: string, visible = true) {
     }
     const read = async (requestedAt: number) => {
       const result = await readTranscriptChanges(
-        (from, known, paged) => invoke('agent.changes', sessionId, from, known, ...(paged ? [true as const] : [])),
+        (from, known, paged, after) => invoke('agent.changes', sessionId, from, known, ...changeArgs(paged, after)),
         cursor,
         lastSeqOf(stored),
         pagingOf(host),

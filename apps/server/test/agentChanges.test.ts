@@ -64,6 +64,37 @@ describe('agent.changes', () => {
     expect(cursor).toBe(whole.cursor)
   })
 
+  it('sends a snapshot in bounded parts to a client that takes them, every row once and in order', async () => {
+    const { svc, id, record } = await start()
+    for (let index = 0; index < 7; index++)
+      record({ kind: 'text', text: `note ${index}\n\n`, messageId: `n${index}` } as AgentEvent)
+    const all = svc.changes(id, 0, 0).events.map((entry) => entry.seq)
+    // An older client, which passes no snapshot argument, still gets the snapshot whole.
+    expect(svc.changes(id, 0, 0, 3, undefined, true)).toMatchObject({
+      reset: true,
+      events: all.map(() => expect.anything()),
+    })
+
+    const first = svc.changes(id, 0, 0, 3, undefined, true, 0)
+    expect(first).toMatchObject({ reset: true, more: true })
+    const seen = first.events.map((entry) => entry.seq)
+    let after = first.after
+    for (let parts = 0; after !== undefined && parts < 10; parts++) {
+      const part = svc.changes(id, first.cursor, 0, 3, undefined, true, after)
+      expect(part.reset).toBe(false)
+      expect(part.events.length).toBeLessThanOrEqual(3)
+      seen.push(...part.events.map((entry) => entry.seq))
+      after = part.after
+    }
+    expect(seen).toEqual(all)
+    // A client holding a usable cursor still gets only what changed.
+    expect(svc.changes(id, first.cursor, Math.max(...all), 3, undefined, true, 0)).toMatchObject({
+      reset: false,
+      events: [],
+    })
+    svc.stop(id)
+  })
+
   it('sends a full snapshot first, then only what changed, including rows edited in place', async () => {
     const { svc, id, record } = await start()
     const first = svc.changes(id, 0, 0)

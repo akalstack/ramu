@@ -20,9 +20,9 @@ describe('readTranscriptChanges', () => {
       .mockResolvedValueOnce(answer(55, [4]))
     const result = await readTranscriptChanges(read, 5, 9, {})
     expect(read.mock.calls).toEqual([
-      [5, 9, true],
-      [20, 9, true],
-      [40, 9, true],
+      [5, 9, true, 0],
+      [20, 9, true, 0],
+      [40, 9, true, 0],
     ])
     expect(result).toMatchObject({ reset: false, cursor: 55 })
     expect(result.events.map((entry) => entry.seq)).toEqual([1, 2, 3, 2, 4])
@@ -58,5 +58,29 @@ describe('readTranscriptChanges', () => {
     })
     await expect(readTranscriptChanges(read, 5, 9, host)).rejects.toThrow('no longer exists')
     expect(host.unpaged).toBeUndefined()
+  })
+
+  it('gathers a snapshot sent in parts and keeps the cursor of its first part', async () => {
+    const read = vi
+      .fn()
+      .mockResolvedValueOnce(answer(70, [1, 2], { reset: true, more: true, after: 2 }))
+      .mockResolvedValueOnce(answer(75, [3, 4], { more: true, after: 4 }))
+      .mockResolvedValueOnce(answer(80, [5]))
+    const result = await readTranscriptChanges(read, 0, 0, {})
+    expect(read.mock.calls.map((call) => call[3])).toEqual([0, 2, 4])
+    expect(result).toMatchObject({ reset: true, cursor: 70 })
+    expect(result.events.map((entry) => entry.seq)).toEqual([1, 2, 3, 4, 5])
+  })
+
+  it('asks a host that sends snapshots whole without the snapshot argument, and remembers it', async () => {
+    const host: { unpaged?: boolean; wholeSnapshots?: boolean } = {}
+    const read = vi.fn(async (_cursor: number, _known: number, _paged: boolean, after?: number) => {
+      if (after !== undefined) throw new Error('Expected 4 arguments')
+      return answer(30, [1, 2, 3], { reset: true })
+    })
+    expect((await readTranscriptChanges(read, 0, 0, host)).events).toHaveLength(3)
+    expect(host).toEqual({ wholeSnapshots: true })
+    await readTranscriptChanges(read, 30, 3, host)
+    expect(read.mock.calls.at(-1)).toEqual([30, 3, true])
   })
 })

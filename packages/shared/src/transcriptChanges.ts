@@ -9,14 +9,31 @@ export interface TranscriptChanges {
   events: { seq: number; event: AgentEvent }[]
   /** A long catch-up came in parts and this is not the last: ask again from `cursor`. */
   more?: boolean
+  /** A snapshot coming in parts: the next part starts after this seq. */
+  after?: number
 }
 
-type ReadChanges = (cursor: number, knownLastSeq: number, paged: boolean) => Promise<TranscriptChanges>
+type ReadChanges = (
+  cursor: number,
+  knownLastSeq: number,
+  paged: boolean,
+  snapshotAfter?: number,
+) => Promise<TranscriptChanges>
 
-const hosts = new Map<string, { unpaged?: boolean }>()
+/** What a client learned about a host: `unpaged` knows no parts at all, `wholeSnapshots` sends a snapshot in one answer. */
+interface HostPaging {
+  unpaged?: boolean
+  wholeSnapshots?: boolean
+}
+
+const hosts = new Map<string, HostPaging>()
+
+/** The optional arguments of `agent.changes` after the cursor, as a reader asks for them; none for an unpaged read. */
+export const changeArgs = (paged: boolean, snapshotAfter?: number): [paged?: true, snapshotAfter?: number] =>
+  !paged ? [] : snapshotAfter === undefined ? [true] : [true, snapshotAfter]
 
 /** What this client learned about one host's support for parts, kept while the app runs. */
-export function pagingOf(host: string): { unpaged?: boolean } {
+export function pagingOf(host: string): HostPaging {
   let known = hosts.get(host)
   if (!known) hosts.set(host, (known = {}))
   return known
@@ -34,9 +51,9 @@ export async function readTranscriptChanges(
   read: ReadChanges,
   cursor: number,
   knownLastSeq: number,
-  host: { unpaged?: boolean },
+  host: HostPaging,
 ): Promise<TranscriptChanges> {
-  const part = async (from: number): Promise<TranscriptChanges> => {
+  const paged = async (from: number): Promise<TranscriptChanges> => {
     if (host.unpaged) return read(from, knownLastSeq, false)
     try {
       return await read(from, knownLastSeq, true)
@@ -48,7 +65,30 @@ export async function readTranscriptChanges(
       return plain
     }
   }
+  const part = async (from: number, after = 0): Promise<TranscriptChanges> => {
+    if (host.unpaged || host.wholeSnapshots) return paged(from)
+    try {
+      return await read(from, knownLastSeq, true, after)
+    } catch (error) {
+      // Only the first part can meet a host that sends snapshots whole; a later one failing is a real failure.
+      if (after > 0) throw error
+      const older = await paged(from).catch(() => null)
+      if (!older) throw error
+      host.wholeSnapshots = true
+      return older
+    }
+  }
   let result = await part(cursor)
+  if (result.reset && result.more && result.after !== undefined) {
+    // A snapshot in parts: keep the first part's cursor, so rows edited while it was read still arrive next time.
+    const first = result
+    const events = [...result.events]
+    for (let parts = 1; result.more && result.after !== undefined && parts < MAX_PARTS; parts++) {
+      result = await part(first.cursor, result.after)
+      events.push(...result.events)
+    }
+    return { reset: true, cursor: first.cursor, lastSeq: first.lastSeq, revision: first.revision, events }
+  }
   const events = [...result.events]
   for (let parts = 1; result.more && !result.reset && parts < MAX_PARTS; parts++) {
     result = await part(result.cursor)
