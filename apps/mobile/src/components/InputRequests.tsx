@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { View } from 'react-native'
+import { useRouter } from 'expo-router'
 import type { Chat } from '../runtime/types'
 import { pendingRequest } from '../runtime/threadActivity'
 import { useStore } from '../runtime/store'
@@ -12,11 +13,25 @@ import { InlineRequests, TranscriptItemView } from './Transcript'
 export function InputRequests({ chat }: { chat: Chat }) {
   const store = useStore()
   const say = useSay()
+  const router = useRouter()
   const online = store.isOnline(chat.computerId)
+  const requests = chat.items.filter(pendingRequest)
+  // The Inbox knows a thread waits before its messages are here; until they are, the thread itself can answer.
+  if (!requests.length)
+    return (
+      <View style={{ padding: space.m, gap: space.s, alignItems: 'flex-start' }}>
+        <T tone="muted">{say('The question is still loading.')}</T>
+        <Button
+          kind="secondary"
+          title={say('Open thread to answer')}
+          onPress={() => router.push({ pathname: '/chat/[id]', params: { id: chat.id } })}
+        />
+      </View>
+    )
   return (
     <InlineRequests.Provider value>
       <View style={{ padding: space.m, gap: space.m }}>
-        {chat.items.filter(pendingRequest).map((request) => (
+        {requests.map((request) => (
           <View key={request.id}>
             <T size={font.caption} tone="muted">
               {request.requestSource?.name ?? say('Main thread')}
