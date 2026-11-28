@@ -372,7 +372,10 @@ export default function Changes() {
         }}
         onOpenFile={f.repoId && f.status !== 'deleted' ? () => openFile.open(f.repoId!, f.path) : undefined}
         open={open[f.path] ?? (!!initialFile && f.fileId === initialFile)}
-        onToggle={() => setOpen((o) => ({ ...o, [f.path]: !o[f.path] }))}
+        // The file a card opened starts open without an entry here, so the first tap must close it.
+        onToggle={() =>
+          setOpen((o) => ({ ...o, [f.path]: !(o[f.path] ?? (!!initialFile && f.fileId === initialFile)) }))
+        }
       />
     </View>
   )
