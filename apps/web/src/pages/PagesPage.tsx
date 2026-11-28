@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AppWindow, CircleAlert, Pin } from 'lucide-react'
+import { LegendList } from '@legendapp/list/react'
 import type { ArtifactInfo, ArtifactKind } from '@ramu/shared/artifacts'
 import { ARTIFACT_KINDS, declaredCapabilities } from '@ramu/shared/artifacts'
 import { appendPage, mergedPages } from '@ramu/shared/paging'
@@ -23,9 +24,13 @@ import { Button } from '../components/desktop-button'
 import { useViewOnly } from '../composer/useViewOnly'
 import { ArtifactKindMark, artifactKindLabel } from './ArtifactKindMark'
 
-/** Artifacts each host sends at a time, and how near the end of the page the next ones start loading. */
+/** Artifacts each host sends at a time. */
 const ARTIFACT_PAGE = 50
-const LOAD_AHEAD = 600
+/** A row's two lines and the line between rows; the list measures each row once it is drawn. */
+const ROW_PX = 53
+
+type ShownArtifact = { page: ArtifactInfo; host: string }
+const shownKey = ({ page, host }: ShownArtifact) => `${host}\n${page.id}`
 
 /** The list's order, as the host keeps it: pinned first, then the newest change. */
 const byListOrder = (a: ArtifactInfo, b: ArtifactInfo) =>
@@ -170,6 +175,7 @@ export function PagesPage() {
   const hostName = (id: string) => hosts.find((entry) => entry.id === id)?.name ?? ''
   // A page starts as a request to an agent: New chat outside any project, with the request begun in the box.
   const [open, setOpen] = useState<PageTarget | null>(() => takePendingPage())
+  const [scroller, setScroller] = useState<HTMLDivElement | null>(null)
   useEffect(() => {
     const choose = (event: Event) => {
       takePendingPage()
@@ -219,14 +225,7 @@ export function PagesPage() {
     for (const entry of connected) if (lists[entry.id]?.next) lists[entry.id]!.loadMore()
   }
   return (
-    <div
-      className="h-full w-full overflow-auto"
-      onScroll={(event) => {
-        const el = event.currentTarget
-        // Near the end, the next page is already on its way.
-        if (el.scrollHeight - el.scrollTop - el.clientHeight < LOAD_AHEAD) loadMore()
-      }}
-    >
+    <div ref={setScroller} className="h-full w-full overflow-auto">
       {feeds}
       <div className="mx-auto flex w-full max-w-[760px] flex-col gap-4 px-6 pt-6 pb-10">
         <header className="flex items-start justify-between gap-4">
@@ -308,14 +307,22 @@ export function PagesPage() {
             {t('No matches')}
           </p>
         )}
-        {/* One card divided by lines, as the Inbox's lists are. */}
-        <ul
-          className={`m-0 flex list-none flex-col divide-y divide-(--line) overflow-hidden rounded-(--radius-m) bg-card p-0 ${shown.length ? '' : 'hidden'}`}
-        >
-          {shown.map(({ page, host }) => {
+        {/* One card divided by lines, as the Inbox's lists are. Only the rows near the view are drawn, and the next
+            page is on its way a screen before the end. */}
+        <LegendList<ShownArtifact>
+          scrollElement={scroller}
+          data={shown}
+          keyExtractor={shownKey}
+          extraData={manyHosts}
+          estimatedItemSize={ROW_PX}
+          onEndReached={loadMore}
+          onEndReachedThreshold={1}
+          role="list"
+          className={`overflow-hidden rounded-(--radius-m) bg-card ${shown.length ? '' : 'hidden'}`}
+          renderItem={({ item: { page, host }, index }) => {
             const uses = declaredCapabilities(page.capabilities)
             return (
-              <li key={`${host}\n${page.id}`}>
+              <div role="listitem" className={index ? 'border-t border-(--line)' : undefined}>
                 <RowButton
                   size="lg"
                   className="w-full rounded-none px-3 hover:bg-hover"
@@ -361,10 +368,10 @@ export function PagesPage() {
                   )}
                   <span className="flex-none text-caption text-muted-foreground">{timeAgo(page.changedAt)}</span>
                 </RowButton>
-              </li>
+              </div>
             )
-          })}
-        </ul>
+          }}
+        />
       </div>
     </div>
   )
