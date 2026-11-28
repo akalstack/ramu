@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { KeepAwakeService, onMainsPower } from '../src/background/keepAwake'
+import { KeepAwakeService, onMainsPower, WORK_GRACE_MS } from '../src/background/keepAwake'
 import { DEFAULT_APP_PREFERENCES } from '@ramu/shared/types'
 
 it('defaults to off before first background-service installation', () => {
@@ -88,3 +88,38 @@ it('lets go of the Linux sleep lock on battery under Plugged in only and takes i
     service.close()
   }
 })
+
+it.skipIf(process.platform !== 'darwin')(
+  'Plugged in only also keeps a Mac awake while agents work, and lets go a grace period after the last one',
+  () => {
+    let busy = false
+    let now = 1_000_000
+    const service = new KeepAwakeService(
+      () => true,
+      () => 'plugged-in',
+      'darwin',
+      undefined,
+      () => busy,
+      () => now,
+    )
+    const pids = () => {
+      const assertions = execFileSync('/usr/bin/pmset', ['-g', 'assertions'], { encoding: 'utf8' })
+      return assertions.split('\n').filter((line) => line.includes('PreventUserIdleSystemSleep')).length
+    }
+    try {
+      const before = pids()
+      busy = true
+      service.checkWork()
+      expect(service.status().active).toBe(true)
+      // The run ended: the lock stays through the grace, so the next run in a queue starts on an awake machine.
+      busy = false
+      now += WORK_GRACE_MS - 1
+      service.checkWork()
+      expect(pids()).toBeGreaterThanOrEqual(before)
+      now += 2
+      service.checkWork()
+    } finally {
+      service.close()
+    }
+  },
+)

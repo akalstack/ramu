@@ -568,7 +568,7 @@ export const SETTINGS_CATALOG: SettingsCatalogEntry[] = [
     section: 'system',
     title: 'When to keep awake',
     path: 'keepAwakeWhen',
-    help: 'Choose whether to keep awake on battery power.',
+    help: 'On battery, recommended keeps the host awake only while agents work, and a minute after.',
     words: 'battery power plugged in',
   },
   {

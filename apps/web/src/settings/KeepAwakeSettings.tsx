@@ -18,13 +18,16 @@ export function KeepAwakeSettings({ supported = true, ...props }: DraftProps & {
       />
       {draft.keepAwake && (
         <SettingsRow setting="keepAwakeWhen">
-          <SettingsLabel title={t('When to keep awake')} help={t('Choose whether to keep awake on battery power.')} />
+          <SettingsLabel
+            title={t('When to keep awake')}
+            help={t('On battery, recommended keeps the host awake only while agents work, and a minute after.')}
+          />
           <Dropdown
             label={t('When to keep awake')}
             value={draft.keepAwakeWhen}
             options={[
-              { value: 'plugged-in', label: t('Plugged in only (recommended)') },
-              { value: 'always', label: t('Plugged in and on battery') },
+              { value: 'plugged-in', label: t('Plugged in, or while agents work (recommended)') },
+              { value: 'always', label: t('Always') },
             ]}
             onChange={(when) => onChange({ ...draft, keepAwakeWhen: when === 'always' ? 'always' : 'plugged-in' })}
           />

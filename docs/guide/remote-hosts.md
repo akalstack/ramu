@@ -161,7 +161,7 @@ Restart=on-failure
 WantedBy=default.target
 ```
 
-The desktop app installs its own background service with **Settings → Background → Start at login**: a LaunchAgent on macOS, a systemd user service on Linux. It is off until you choose it; choosing **This network** or **Anywhere** in **Devices & access** turns it on as **Stay reachable after a restart**, together with **Keep host awake** while plugged in. **Keep host awake** stops the host suspending from idle while the service runs (`caffeinate` on macOS, a `systemd-inhibit` sleep lock on Linux); **Plugged in only** lets a laptop sleep on battery. **Restart service** in the same place restarts it and reconnects the window as soon as it is back; `ramu stop` stops it.
+The desktop app installs its own background service with **Settings → Background → Start at login**: a LaunchAgent on macOS, a systemd user service on Linux. It is off until you choose it; choosing **This network** or **Anywhere** in **Devices & access** turns it on as **Stay reachable after a restart**, together with **Keep host awake** while plugged in. **Keep host awake** stops the host suspending from idle while the service runs (`caffeinate` on macOS, a `systemd-inhibit` sleep lock on Linux); **Plugged in, or while agents work** keeps a laptop awake on battery only while agents work, and a minute after (so a queue of runs is not cut by sleep), and lets it sleep otherwise; **Always** keeps it awake on battery too. The display still dims and turns off as usual. **Restart service** in the same place restarts it and reconnects the window as soon as it is back; `ramu stop` stops it.
 
 ### Keeping hosts up to date
 

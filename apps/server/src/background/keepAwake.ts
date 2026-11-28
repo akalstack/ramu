@@ -6,6 +6,10 @@ const SYSTEMD_INHIBIT = ['/usr/bin/systemd-inhibit', '/bin/systemd-inhibit'].fin
 const POWER_SUPPLY = '/sys/class/power_supply'
 // Linux has no "only on AC" sleep lock, so Plugged in only re-reads the power source this often.
 const POWER_POLL_MS = 60_000
+// On battery, Plugged in only still keeps the host awake while agents work, read this often.
+const WORK_POLL_MS = 15_000
+/** How long the lock outlives the last running agent, so a machine does not sleep between back-to-back runs. */
+export const WORK_GRACE_MS = 60_000
 
 /**
  * Whether a Linux host runs on mains power. A machine with no battery always does; a laptop does while any mains
@@ -44,20 +48,64 @@ export class KeepAwakeService {
    * It then holds an idle lock, which any process may take and which stops idle suspend on desktops that honour it.
    */
   private linuxLock: 'sleep' | 'idle' = 'sleep'
+  /**
+   * Plugged in only, on battery: the host stays awake while agents work, as T3 Code does, and for a minute after, so
+   * a run that a laptop's owner left going is not cut off by idle sleep. On macOS a second assertion, `caffeinate -i`.
+   */
+  private workChild?: ChildProcess
+  private working = false
+  private lastWork = 0
+  private workPoll?: NodeJS.Timeout
   readonly supported: boolean
   constructor(
     private enabled: () => boolean,
     private when: () => 'plugged-in' | 'always' = () => 'plugged-in',
     private platform: NodeJS.Platform = process.platform,
     private mains: () => boolean = onMainsPower,
+    private busy: () => boolean = () => false,
+    private now: () => number = Date.now,
   ) {
     this.supported = platform === 'darwin' || (platform === 'linux' && !!SYSTEMD_INHIBIT)
     this.settingsChanged()
+  }
+  /** Re-reads whether agents work and holds or lets go of the work lock, keeping it a grace period past the last. */
+  checkWork() {
+    if (this.busy()) this.lastWork = this.now()
+    const working = this.lastWork > 0 && this.now() - this.lastWork < WORK_GRACE_MS
+    if (working === this.working) return
+    this.working = working
+    if (this.platform === 'linux') this.syncLinux()
+    else this.syncWorkLock()
+  }
+  private syncWorkLock() {
+    const wanted = this.working && this.mode === 'plugged-in' && this.enabled() && this.supported
+    if (wanted && !this.workChild) {
+      const child = spawn('/usr/bin/caffeinate', ['-i', '-w', String(process.pid)], { stdio: 'ignore' })
+      this.workChild = child
+      child.once('error', () => {
+        if (this.workChild === child) this.workChild = undefined
+      })
+      child.once('exit', () => {
+        if (this.workChild === child) this.workChild = undefined
+      })
+    } else if (!wanted && this.workChild) {
+      const child = this.workChild
+      this.workChild = undefined
+      try {
+        child.kill('SIGTERM')
+      } catch {
+        // Already gone.
+      }
+    }
   }
   settingsChanged() {
     if (!this.enabled() || !this.supported) {
       this.close()
       return
+    }
+    if (!this.workPoll) {
+      this.workPoll = setInterval(() => this.checkWork(), WORK_POLL_MS)
+      this.workPoll.unref()
     }
     if (this.platform === 'linux') {
       this.mode = this.when()
@@ -73,10 +121,11 @@ export class KeepAwakeService {
     this.mode = this.when()
     // -s is honored only on AC power; -i prevents idle sleep on either source.
     this.hold('/usr/bin/caffeinate', [this.mode === 'plugged-in' ? '-s' : '-i', '-w', String(process.pid)])
+    this.syncWorkLock()
   }
   /** Holds the Linux lock while the chosen power policy allows it and lets go on battery under Plugged in only. */
   private syncLinux() {
-    const wanted = this.mode === 'always' || this.mains()
+    const wanted = this.mode === 'always' || this.mains() || this.working
     if (wanted && !this.child)
       this.hold(SYSTEMD_INHIBIT!, [
         `--what=${this.linuxLock}`,
@@ -128,7 +177,7 @@ export class KeepAwakeService {
   status() {
     return {
       enabled: this.enabled(),
-      active: !!this.child && !this.child.killed,
+      active: (!!this.child && !this.child.killed) || !!this.workChild,
       supported: this.supported,
       error: this.error,
       when: this.when(),
@@ -137,6 +186,10 @@ export class KeepAwakeService {
   }
   close() {
     this.stopPolling()
+    clearInterval(this.workPoll)
+    this.workPoll = undefined
     this.release()
+    this.working = false
+    this.syncWorkLock()
   }
 }

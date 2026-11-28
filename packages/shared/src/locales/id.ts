@@ -1194,9 +1194,9 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Pengaturan di bagian ini akan kembali ke bawaan. Simpan perubahan untuk menerapkannya.',
 
   'When to keep awake': 'Kapan tetap aktif',
-  'Plugged in only (recommended)': 'Hanya saat terhubung ke listrik (disarankan)',
-  'Plugged in and on battery': 'Saat terhubung ke listrik dan memakai baterai',
-  'Choose whether to keep awake on battery power.': 'Pilih apakah host tetap aktif saat memakai baterai.',
+  'Plugged in, or while agents work (recommended)': 'Saat terhubung ke listrik, atau saat agen bekerja (disarankan)',
+  'Plugged in, or while agents work': 'Saat terhubung ke listrik, atau saat agen bekerja',
+  'On battery, recommended keeps the host awake only while agents work, and a minute after.': 'Saat memakai baterai, pilihan yang disarankan membuat host tetap aktif hanya saat agen bekerja, dan satu menit setelahnya.',
   Updates: 'Pembaruan',
   'Updates come from published GitHub releases.': 'Pembaruan diambil dari rilis GitHub.',
   'Check for updates': 'Periksa pembaruan',
@@ -7801,7 +7801,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Mati secara bawaan. Simpan error layanan yang sudah dibersihkan dan crash dump lokal di host. Tidak ada yang diunggah.',
   'Stop the host sleeping from idle while the service runs. Display sleep and manual sleep still work.':
     'Cegah host tidur karena diam selama layanan berjalan. Layar tidur dan tidur manual tetap berfungsi.',
-  'Plugged in only': 'Hanya saat terhubung ke listrik',
   'Look for new Ramu releases on the host.': 'Cari rilis Ramu baru di host.',
   'Install updates automatically': 'Pasang pembaruan otomatis',
   'Download and install new Ramu releases on the host when they are found.':

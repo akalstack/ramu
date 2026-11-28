@@ -119,6 +119,9 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
   const awake = new KeepAwakeService(
     () => storedPreferences().keepAwake ?? false,
     () => storedPreferences().keepAwakeWhen ?? 'plugged-in',
+    process.platform,
+    undefined,
+    () => (agents?.counts().running ?? 0) > 0,
   )
   const attachmentStore = new AttachmentStore(join(host.userData, 'attachments'))
   const updates = new AppUpdateService(

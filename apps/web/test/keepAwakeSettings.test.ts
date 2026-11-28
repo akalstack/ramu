@@ -27,7 +27,7 @@ it('edits the shared keep-awake preference and preserves its power policy', () =
     createElement(KeepAwakeSettings, { draft: { ...draft, keepAwake: true }, onChange, busy: false }),
   )
   expect(on).toContain('When to keep awake')
-  expect(on).toContain('Plugged in only (recommended)')
+  expect(on).toContain('Plugged in, or while agents work (recommended)')
 })
 
 it('leaves the row out on a host that cannot keep itself awake', () => {
