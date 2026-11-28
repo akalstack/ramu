@@ -1434,9 +1434,16 @@ test('helper details honor capabilities and disconnected hosts without losing th
 test('Inbox request cards retain their host and request identity and become read-only offline', async () => {
   const { pendingRequest } = await import('../src/runtime/threadActivity.ts')
   let online = true
+  const refreshed = []
   const { InputRequests, InboxThread } = load('components/InputRequests.tsx', 'ios', {
-    react: { useState: () => [true, () => {}] },
-    '../runtime/store': { useStore: () => ({ language: 'en', isOnline: () => online }) },
+    react: { useState: () => [true, () => {}], useRef: (current) => ({ current }), useEffect: (run) => run() },
+    '../runtime/store': {
+      useStore: () => ({
+        language: 'en',
+        isOnline: () => online,
+        refresh: async (host, depth) => refreshed.push([host, [...depth]]),
+      }),
+    },
     '../runtime/threadActivity': { pendingRequest },
   })
   const chat = {
@@ -1457,6 +1464,11 @@ test('Inbox request cards retain their host and request identity and become read
     nodes(row).some((node) => node.type === 'Button' && node.props.title === 'Hide requests · 1'),
     true,
   )
+  // A question the phone has not read yet: this thread alone is read in full, so the form comes up here.
+  assert.deepEqual(refreshed, [])
+  online = true
+  InputRequests({ chat: { ...chat, taskId: 'task-c', items: [] } })
+  assert.deepEqual(refreshed, [['remote', ['task-c']]])
   online = false
   assert.equal(find(InputRequests({ chat }), 'TranscriptItemView'), undefined)
 })
