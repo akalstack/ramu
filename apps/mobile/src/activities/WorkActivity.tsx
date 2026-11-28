@@ -1,5 +1,5 @@
 import { HStack, Image, Spacer, Text, VStack } from '@expo/ui/swift-ui'
-import { font, foregroundStyle, lineLimit, padding } from '@expo/ui/swift-ui/modifiers'
+import { font, foregroundStyle, frame, lineLimit, padding, resizable } from '@expo/ui/swift-ui/modifiers'
 import { createLiveActivity, type LiveActivityEnvironment } from 'expo-widgets'
 import type { MobileLiveActivityContent } from '@ramu/shared/api'
 
@@ -40,7 +40,19 @@ function WorkActivity(props: MobileLiveActivityContent, environment: LiveActivit
             : pick('#b7a6f3', '#5b40ad', island)
   const accent = toneColor(tone, false)
   const islandAccent = toneColor(tone, true)
-  const mark = 'terminal.fill'
+  // Ramu's own mark, a template image in the activity's asset catalog, in the system's primary color: white on the
+  // dark Live Activity and the Dynamic Island, and the system's single color in StandBy and the always-on display.
+  // The state's color stays on the status beside it. An image takes its color from the stack it fills.
+  const mark = (height: number) => (
+    <HStack
+      modifiers={[
+        frame({ width: Math.round(height * 0.92), height }),
+        foregroundStyle({ type: 'hierarchical', style: 'primary' }),
+      ]}
+    >
+      <Image assetName="RamuMark" modifiers={[resizable()]} />
+    </HStack>
+  )
   const symbol =
     tone === 'attention'
       ? need === 'limit'
@@ -149,7 +161,7 @@ function WorkActivity(props: MobileLiveActivityContent, environment: LiveActivit
     banner: (
       <VStack alignment="leading" spacing={10} modifiers={[padding({ all: 16 })]}>
         <HStack spacing={10}>
-          <Image systemName={mark} color={accent} modifiers={[font({ size: 20 })]} />
+          {mark(20)}
           <VStack alignment="leading" spacing={2}>
             <Text modifiers={[font({ size: 16, weight: 'semibold' }), lineLimit(1)]}>{headline}</Text>
             <Text
@@ -173,11 +185,11 @@ function WorkActivity(props: MobileLiveActivityContent, environment: LiveActivit
     ),
     bannerSmall: (
       <HStack spacing={8} modifiers={[padding({ all: 12 })]}>
-        <Image systemName={mark} color={accent} modifiers={[font({ size: 13 })]} />
+        {mark(13)}
         <Text modifiers={[font({ size: 13, weight: 'semibold' }), lineLimit(1)]}>{headline}</Text>
       </HStack>
     ),
-    compactLeading: <Image systemName={mark} color={islandAccent} modifiers={[font({ size: 14 })]} />,
+    compactLeading: mark(15),
     compactTrailing:
       tone === 'attention' && !stale ? (
         <HStack spacing={2}>
@@ -203,7 +215,7 @@ function WorkActivity(props: MobileLiveActivityContent, environment: LiveActivit
       ),
     expandedLeading: (
       <HStack spacing={6}>
-        <Image systemName={mark} color={islandAccent} modifiers={[font({ size: 14 })]} />
+        {mark(14)}
         <Text modifiers={[font({ size: 14, weight: 'semibold' })]}>Ramu</Text>
       </HStack>
     ),
