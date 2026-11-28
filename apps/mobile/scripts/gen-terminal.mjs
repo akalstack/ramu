@@ -23,6 +23,7 @@ const links = readFileSync(new URL('./terminal-links.js', import.meta.url), 'utf
 const copy = readFileSync(new URL('./terminal-copy.js', import.meta.url), 'utf8')
 const driver = readFileSync(new URL('./terminal-gesture.js', import.meta.url), 'utf8')
 const select = readFileSync(new URL('./terminal-select.js', import.meta.url), 'utf8')
+const remove = readFileSync(new URL('./terminal-delete.js', import.meta.url), 'utf8')
 const css = readFileSync(require.resolve('@xterm/xterm/css/xterm.css'), 'utf8')
 const html = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'"><style>${css}html,body,#terminal{margin:0;width:100%;height:100%;background:#0e0e10;overflow:hidden}</style></head><body><div id="terminal"></div><script>${js.replaceAll('</script', '<\\/script')}
 ;
@@ -39,10 +40,7 @@ ${copy};installTerminalCopy(term,post,blocksModule.terminalRowsText,blocks);
 ${select};const selecting = installTerminalSelect(term,post,blocks,blocksModule.terminalBlockAt);
 const gestureModule = (()=>{const exports={};${gesture};return exports})();${driver};installTerminalGesture(term,post,gestureModule.TerminalGesture,gestureModule.arrowSequence,gestureModule.pinchFontSize,()=>fit.fit(),selecting.selectWordAt);
 term.onData(data=>{blocks.input(data);post({kind:'input',data})});term.onResize(size=>post({kind:'resize',...size}));
-// Holding Backspace on a phone keyboard deletes once: the field the terminal types through is empty, so the keyboard has
-// nothing to repeat. Repeat it here while the key is held, at the keyboard's own pace, and let real repeats take over
-// when the system sends them. A hold stops on release, on blur, and after 60 deletes, so it can never run away.
-(()=>{const field=document.querySelector('.xterm-helper-textarea');if(!field)return;let wait=null,beat=null,sent=0;const stop=()=>{clearTimeout(wait);clearInterval(beat);wait=beat=null;sent=0};const del=()=>{if(++sent>60)return stop();blocks.input('\x7f');post({kind:'input',data:'\x7f'})};field.addEventListener('keydown',e=>{if(e.key!=='Backspace'&&e.keyCode!==8){stop();return}if(e.repeat){stop();return}if(wait||beat)return;wait=setTimeout(()=>{wait=null;beat=setInterval(del,70)},450)},true);field.addEventListener('keyup',e=>{if(e.key==='Backspace'||e.keyCode===8)stop()},true);field.addEventListener('blur',stop);})();
+${remove};(()=>{const field=document.querySelector('.xterm-helper-textarea');if(field)installTerminalDelete(field,()=>{blocks.input('\\x7f');post({kind:'input',data:'\\x7f'})})})();
 function receive(event){try{const value=JSON.parse(event.data);if(value.kind==='output')term.write(value.data);if(value.kind==='reset'){term.reset();term.write(value.data)}if(value.kind==='focus')term.focus();if(value.kind==='blur')term.blur();if(value.kind==='key'&&typeof value.key==='string'&&value.key.length<32){const data=keysModule.terminalKeySequence(value.key,term.modes.applicationCursorKeysMode);blocks.input(data);post({kind:'input',data})}if(value.kind==='font'&&Number.isInteger(value.size)&&value.size>=9&&value.size<=22){term.options.fontSize=value.size;fit.fit()}}catch{}}
 window.addEventListener('message',receive);document.addEventListener('message',receive);new ResizeObserver(()=>fit.fit()).observe(document.body);setTimeout(()=>{fit.fit();post({kind:'ready'})},0);
 </script></body></html>`
