@@ -35,6 +35,8 @@ import type { Attachment } from '@ramu/shared/types'
 // Menus, copy, save and reveal run on this machine's attachment store (main process); previews come from the host.
 import { invoke } from '../ipc'
 import { useHost } from '../workspace/HostProvider'
+import { useComputers } from '../workspace/computers'
+import { playableMedia } from '@ramu/shared/playableMedia'
 import { notifyError } from '../chat/Notifications'
 import { isModelFile, ModelViewer } from '../interactive/ModelViewer'
 
@@ -71,7 +73,13 @@ function AttachmentPreview({
   useLanguage()
   const host = useHost()
   const file = files[index]!
-  const [content, setContent] = useState<{ image?: string | null; text?: string | null; model?: true } | null>(null)
+  const [content, setContent] = useState<{
+    image?: string | null
+    text?: string | null
+    model?: true
+    media?: string
+  } | null>(null)
+  const computers = useComputers()
   const [loadError, setLoadError] = useState(false)
   const [zoom, setZoom] = useState<number | 'fit'>('fit')
   const [rotation, setRotation] = useState(0)
@@ -91,9 +99,17 @@ function AttachmentPreview({
     setNatural({ width: 1, height: 1 })
     const load = isModelFile(file)
       ? Promise.resolve({ model: true as const })
-      : isImage(file)
-        ? host.invoke('attachments.preview', file.id).then((image) => ({ image }))
-        : host.invoke('attachments.text', file.id).then((text) => ({ text }))
+      : playableMedia(file.mimeType)
+        ? // Streamed from its host by a short-lived address for this one file, so seeking works without a download.
+          host.invoke('attachments.stream', file.id).then(({ path, local }) => {
+            const remote = computers?.computers.find((entry) => entry.id === host.id)?.url
+            const media = host.isLocal && local ? local : remote ? `${remote.replace(/\/+$/, '')}${path}` : local
+            if (!media) throw new Error('No address for this host')
+            return { media }
+          })
+        : isImage(file)
+          ? host.invoke('attachments.preview', file.id).then((image) => ({ image }))
+          : host.invoke('attachments.text', file.id).then((text) => ({ text }))
     void load.then(
       (value) => {
         if (active) setContent(value)
@@ -359,6 +375,28 @@ function AttachmentPreview({
                 }}
               />
             </div>
+          ) : content.media ? (
+            file.mimeType.startsWith('audio/') ? (
+              <audio
+                src={content.media}
+                controls
+                autoPlay
+                aria-label={file.name}
+                className="m-auto w-[min(520px,_90%)]"
+              />
+            ) : (
+              <video
+                src={content.media}
+                controls
+                autoPlay
+                aria-label={file.name}
+                className="m-auto max-h-full max-w-full rounded-(--radius-m) bg-black"
+                onError={() => {
+                  setContent({})
+                  setLoadError(true)
+                }}
+              />
+            )
           ) : content.model ? (
             <ModelViewer
               source={file.id}

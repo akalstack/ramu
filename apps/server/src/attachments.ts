@@ -1,3 +1,4 @@
+import { playableMedia } from '@ramu/shared/playableMedia'
 import { randomUUID } from 'node:crypto'
 import { appendFileSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { basename, extname, join } from 'node:path'
@@ -186,7 +187,7 @@ export class AttachmentStore {
    */
   streamToken(id: string): string {
     const file = this.get(id)
-    if (!/^(video|audio)\//.test(file.mimeType)) throw new Error(`${file.name} is not a video or audio file.`)
+    if (!playableMedia(file.mimeType)) throw new Error(`${file.name} is not a video or audio file.`)
     const now = Date.now()
     for (const [token, entry] of streams) if (entry.until <= now) streams.delete(token)
     const token = randomUUID()

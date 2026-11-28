@@ -126,6 +126,8 @@ import { TestDeviceWaitCard } from './TestDeviceWaitCard'
 import { SettingsChangeCard } from './SettingsChangeCard'
 import { ToolSuggestionCard } from './ToolSuggestionCard'
 import { AttachmentTextSheet } from './AttachmentTextSheet'
+import AttachmentVideo from './AttachmentVideo'
+import { playableMedia } from '@ramu/shared/playableMedia'
 import { LearningTurnLine } from './LearningReviews'
 
 /** Drops the model change waiting for the next send; set by the chat screen that holds it. */
@@ -355,6 +357,7 @@ function AttachmentTile({ file, computerId }: { file: Attachment; computerId: st
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [file.id, image, computerId] by design; the values it reads beyond these are current as of that run
   }, [file.id, image, computerId])
   if (image && uri) return <ImageBlock uri={uri} alt={file.name} size={88} />
+  if (playableMedia(file.mimeType)) return <AttachmentVideo file={file} computerId={computerId} />
   if (isModelFile(file)) return <ModelTile file={file} computerId={computerId} />
   // Any other file opens its text, as the desktop's preview does.
   return (

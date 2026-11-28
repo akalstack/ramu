@@ -174,7 +174,9 @@ const CSP = [
   "script-src 'self' 'wasm-unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self' data:",
-  "media-src 'self' data:",
+  // A video or recording sent in a thread plays from its host's single-file stream address: this computer's loopback
+  // or a paired host's own address. Media plays and runs no code.
+  "media-src 'self' data: http: https:",
   'frame-src data: ramu-content: ramu-theme:',
   "img-src 'self' data:",
   "worker-src 'self' blob:",

@@ -7894,6 +7894,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Show earlier output': 'Tampilkan keluaran sebelumnya',
   'Show earlier runs': 'Tampilkan eksekusi sebelumnya',
   'Show more messages': 'Tampilkan pesan lainnya',
+  'Play {0}': 'Putar {0}',
+  'Could not play this video': 'Video ini tidak dapat diputar',
   'Reconnect to use agent controls.': 'Hubungkan kembali untuk memakai kontrol agent.',
   'This agent does not support direct messages.': 'Agent ini tidak mendukung pesan langsung.',
   'Stop command': 'Hentikan perintah',
