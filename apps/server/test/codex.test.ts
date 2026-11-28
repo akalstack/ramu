@@ -324,8 +324,13 @@ describe('Codex app-server wire adapter', () => {
     try {
       await runner.start('edits gate', null)
       await vi.waitFor(() => expect(events.filter((event) => event.kind === 'elicitation')).toHaveLength(2))
-      for (const id of [921, 922, 923])
-        expect(messages().find((message) => message.id === id)?.result, String(id)).toMatchObject({ action: 'accept' })
+      // Ramu's own answers are written as they are decided, which can trail the questions on a slow machine.
+      await vi.waitFor(() => {
+        for (const id of [921, 922, 923])
+          expect(messages().find((message) => message.id === id)?.result, String(id)).toMatchObject({
+            action: 'accept',
+          })
+      })
       for (const id of [924, 925]) expect(messages().some((message) => message.id === id && message.result)).toBe(false)
     } finally {
       await runner.stop()
