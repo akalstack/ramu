@@ -316,10 +316,10 @@ kbd {
     transform: translateY(var(--chat-enter-rise, 4px));
   }
 }
-/* A label at work: opacity only, so the compositor draws it without repainting the text. */
-@keyframes working-breathe {
+/* A label at work: its copy in the text color fades in and out over it, opacity only, so nothing repaints. */
+@keyframes working-glow {
   50% {
-    opacity: 0.45;
+    opacity: 1;
   }
 }
 @keyframes shimmer {

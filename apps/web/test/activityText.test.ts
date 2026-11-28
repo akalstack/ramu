@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { TOOL_MOTION } from '@ramu/shared/chat/presentation'
 
 type Slot = { current: unknown } | { deps: unknown[]; cleanup?: void | (() => void) }
-const state = vi.hoisted(() => ({ cursor: 0, slots: [] as Slot[], effects: [] as (() => void)[], reduced: false }))
+const state = vi.hoisted(() => ({ cursor: 0, slots: [] as Slot[], effects: [] as (() => void)[] }))
 function effect(run: () => void | (() => void), deps: unknown[]) {
   const index = state.cursor++
   const previous = state.slots[index] as Extract<Slot, { deps: unknown[] }> | undefined
@@ -14,82 +14,57 @@ function effect(run: () => void | (() => void), deps: unknown[]) {
 }
 vi.mock('react', async () => ({
   ...(await vi.importActual<typeof import('react')>('react')),
-  useRef: (initial: unknown) => (state.slots[state.cursor++] ??= { current: initial }),
   useState: (initial: unknown) => {
-    const slot = (state.slots[state.cursor++] ??= { current: initial }) as { current: unknown }
+    const slot = (state.slots[state.cursor++] ??= {
+      current: typeof initial === 'function' ? (initial as () => unknown)() : initial,
+    }) as { current: unknown }
     return [slot.current, (value: unknown) => void (slot.current = value)]
   },
   useEffect: effect,
-  useLayoutEffect: effect,
 }))
-vi.mock('../src/workspace/panelMotion', () => ({ reducedMotion: () => state.reduced }))
 import { ActivityText } from '../src/chat/ActivityText'
-const cancel = vi.fn()
-const animate = vi.fn((_keyframes: Keyframe[], _options: KeyframeAnimationOptions) => ({ cancel }))
+import { WorkingText } from '../src/views/agent/components/WorkingText'
+
 const render = (active: boolean, text = 'Read files') => {
   state.cursor = 0
   const tree = ActivityText({ active, children: text })
-  tree.props.children[1].props.ref.current = { animate }
-  state.effects.splice(0).forEach((effect) => effect())
+  state.effects.splice(0).forEach((run) => run())
   return tree
 }
-let now = 0
 beforeEach(() => {
-  now = 0
-  vi.spyOn(performance, 'now').mockImplementation(() => now)
   state.slots = []
   state.effects = []
-  state.reduced = false
-  animate.mockClear()
-  cancel.mockClear()
 })
 afterEach(() => {
   for (const slot of state.slots) if ('deps' in slot) slot.cleanup?.()
 })
-it('keeps completed history still and sweeps once only after a live step settles', () => {
-  render(false)
-  expect(animate).not.toHaveBeenCalled()
-  render(true)
-  render(true, 'Reading more files')
-  expect(animate).not.toHaveBeenCalled()
-  now = TOOL_MOTION.quietMs
-  const tree = render(false, 'Read files')
-  expect(tree.props.children[0].props.children).toBe('Read files')
-  expect(tree.props.children[1].props['aria-hidden']).toBe('true')
-  expect(animate).toHaveBeenCalledTimes(1)
-  expect(animate.mock.calls[0]?.[1]).toMatchObject({ delay: TOOL_MOTION.settleMs, duration: TOOL_MOTION.finishMs })
-  expect(animate.mock.calls[0]?.[0][0]).toMatchObject({ clipPath: 'inset(0 100% 0 0)' })
-  render(false, 'Read three files')
-  expect(animate).toHaveBeenCalledTimes(1)
-  render(true)
-  expect(cancel).toHaveBeenCalledTimes(1)
-})
-it('does not light up a row that has only just appeared, as when its group opens', () => {
-  render(true)
-  now = TOOL_MOTION.quietMs - 1
-  render(false)
-  expect(animate).not.toHaveBeenCalled()
-})
-it('shows the completed label immediately with reduced motion and no decorative animation', () => {
-  state.reduced = true
-  render(true)
-  const tree = render(false, 'Completed')
-  expect(tree.props.children[0].props.children).toBe('Completed')
-  expect(animate).not.toHaveBeenCalled()
-})
-it('shimmers only once a call has run for a moment, so a quick command never flashes', () => {
+
+it('pulses only once a call has run for a moment, and a finished call is just its label', () => {
   vi.useFakeTimers()
   try {
     render(true)
     render(false)
     vi.advanceTimersByTime(TOOL_MOTION.shimmerDelayMs)
-    expect(render(false).props.children[0].props.children).toBe('Read files')
+    expect(render(false).props.children).toBe('Read files')
     render(true)
     vi.advanceTimersByTime(TOOL_MOTION.shimmerDelayMs - 1)
-    expect(render(true).props.children[0].props.children).toBe('Read files')
+    expect(render(true).props.children).toBe('Read files')
     vi.advanceTimersByTime(1)
-    expect(typeof render(true).props.children[0].props.children).toBe('object')
+    expect(render(true).props.children.type).toBe(WorkingText)
+    // Done: the label as it is, with nothing sweeping across it.
+    expect(render(false, 'Read three files').props.children).toBe('Read three files')
   } finally {
     vi.useRealTimers()
   }
+})
+
+it('a working label pulses lighter: a copy in the text color fades in over it, rather than the label dimming', () => {
+  state.cursor = 0
+  const tree = WorkingText({ children: 'Running tests' })
+  const [label, glow] = tree.props.children
+  expect(label.props.children).toBe('Running tests')
+  expect(glow.props['aria-hidden']).toBe('true')
+  expect(glow.props.className).toContain('text-foreground')
+  expect(glow.props.className).toContain('opacity-0')
+  expect(glow.props.style.animation).toContain('working-glow')
 })

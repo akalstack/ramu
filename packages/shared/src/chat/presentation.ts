@@ -32,22 +32,10 @@ export const REFERENCE_APPEARANCE = {
   fontWeight: '400' as const,
 }
 
-/** Tool labels share a left-to-right sweep; only the decorative completion highlight waits. */
+/** How a running tool label moves: one pulse every label shares, after a short wait. */
 export const TOOL_MOTION = {
-  /** One pass of the working shimmer: across the label, then off its end before the next. */
+  /** One pulse of a working label, in and out. */
   sweepMs: 2200,
-  /** The completion highlight's pace across a label, with `finishMs` as its shortest run. */
-  finishPxPerSecond: 360,
-  /** How long a finished tool stays finished before its label lights up; the next tool starting meanwhile cancels it. */
-  settleMs: 300,
-  finishMs: 650,
   /** A call that ends sooner than this never starts its working shimmer, so a quick command does not flash. */
   shimmerDelayMs: 600,
-  /** A row this new does not light up: it has only just appeared, as when its group opens. */
-  quietMs: 500,
-  fadeAt: 0.8,
 } as const
-
-/** How long a highlight takes to cross a label `width` pixels wide at `pxPerSecond`, never shorter than `minMs`. */
-export const sweepDuration = (width: number, minMs: number, pxPerSecond: number): number =>
-  Math.max(minMs, Math.round((width / pxPerSecond) * 1000))
