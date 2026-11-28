@@ -12,7 +12,7 @@ import { formatSize } from '@ramu/shared/formatSize'
 import { reviewRichKind } from '@ramu/shared/review/reviewRich'
 import { ReviewRichDiff } from '../../../components/ReviewRichDiff'
 import { changedFile } from '../../../runtime/diff'
-import { GlassButton, Header, Screen, PageScrollView as ScrollView } from '../../../components/Screen'
+import { GlassButton, Header, Screen, PageLegendList } from '../../../components/Screen'
 import { ReadableColumn } from '../../../components/ReadableColumn'
 import { BottomFade, floatingChrome } from '../../../components/Glass'
 import { Button, Card, Divider, Pill, Segmented, Sheet, T, tap } from '../../../components/ui'
@@ -358,6 +358,24 @@ export default function Changes() {
   const loading = !!chat?.sessionId && !error && (!listed || (!!reviewId && detail?.id !== reviewId))
   const add = changes.reduce((n, f) => n + f.additions, 0)
   const del = changes.reduce((n, f) => n + f.deletions, 0)
+  const renderFile = (f: ChangedFile) => (
+    <View style={{ paddingHorizontal: space.l, paddingBottom: space.s }}>
+      <FileDiff
+        file={f}
+        source={detail?.files.find((x) => x.id === f.fileId)}
+        review={detail && chat ? { id: detail.id, computerId: chat.computerId } : undefined}
+        comments={review?.comments.filter((x) => x.fileId === f.fileId && x.author === 'human') ?? []}
+        onRemove={(id) => void action(() => store.invoke(chat!.computerId, 'reviews.removeComment', review!.id, id))}
+        onLine={(line) => {
+          setCommenting({ file: f, line })
+          setDraft('')
+        }}
+        onOpenFile={f.repoId && f.status !== 'deleted' ? () => openFile.open(f.repoId!, f.path) : undefined}
+        open={open[f.path] ?? (!!initialFile && f.fileId === initialFile)}
+        onToggle={() => setOpen((o) => ({ ...o, [f.path]: !o[f.path] }))}
+      />
+    </View>
+  )
   return (
     <Screen bg="canvas">
       <Header
@@ -370,129 +388,127 @@ export default function Changes() {
             : undefined
         }
       />
-      <ScrollView
+      {/* Only the files near the screen are mounted, so a run that touched hundreds of files opens at once. */}
+      <PageLegendList
         fullWidth
+        data={loading ? [] : changes}
+        keyExtractor={(f) => f.path}
+        renderItem={({ item }) => renderFile(item)}
+        estimatedItemSize={68}
+        // A row's open state, comments and review live beside the files, so every change to them redraws the rows.
+        extraData={{ open, review, detail, chat }}
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{
-          padding: space.l,
-          gap: space.s,
+          paddingTop: space.l,
           paddingBottom: Platform.OS === 'ios' ? space.xl : insets.bottom + 90,
         }}
-      >
-        {error ? <T tone="bad">{error}</T> : null}
-        {loading ? (
-          <View accessibilityRole="progressbar" style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
-            <ActivityIndicator color={c.muted} />
-            <T tone="muted">{say('Loading changes…')}</T>
+        style={{ backgroundColor: c.canvas }}
+        ListHeaderComponent={
+          <View style={{ paddingHorizontal: space.l, paddingBottom: space.s, gap: space.s }}>
+            {error ? <T tone="bad">{error}</T> : null}
+            {loading ? (
+              <View
+                accessibilityRole="progressbar"
+                style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}
+              >
+                <ActivityIndicator color={c.muted} />
+                <T tone="muted">{say('Loading changes…')}</T>
+              </View>
+            ) : !reviews.length ? (
+              <T tone="muted">{say('No recorded changes for this thread yet.')}</T>
+            ) : null}
+            {/* Which run's changes are shown: one row that opens the list, newest first. */}
+            {reviews.length ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={say('Choose a run')}
+                onPress={() => setPickingRun(true)}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: space.s,
+                  minHeight: 44,
+                  paddingHorizontal: space.m,
+                  borderRadius: radius.m,
+                  backgroundColor: pressed ? c.pressed : c.fill,
+                })}
+              >
+                <T style={{ flex: 1 }} numberOfLines={1}>
+                  {runLabel(
+                    Math.max(
+                      0,
+                      reviews.findIndex((r) => r.id === reviewId),
+                    ),
+                  )}
+                </T>
+                <ChevronDown size={16} color={c.muted} />
+              </Pressable>
+            ) : null}
+            <TextInput
+              value={note}
+              onChangeText={setNote}
+              multiline
+              placeholder={say('Review comment for the agent…')}
+              placeholderTextColor={c.muted}
+              style={{ padding: space.m, color: c.text, backgroundColor: c.fill, borderRadius: radius.m }}
+            />
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: space.s,
+                paddingBottom: space.s,
+                opacity: loading ? 0 : 1,
+              }}
+            >
+              <T size={font.control} tone="muted" style={{ flex: 1 }}>
+                {say('{count} files changed', { count: changes.length })}
+              </T>
+              <T size={font.control} mono tone="ok">
+                +{add}
+              </T>
+              <T size={font.control} mono tone="bad">
+                −{del}
+              </T>
+            </View>
           </View>
-        ) : !reviews.length ? (
-          <T tone="muted">{say('No recorded changes for this thread yet.')}</T>
-        ) : null}
-        {/* Which run's changes are shown: one row that opens the list, newest first. */}
-        {reviews.length ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={say('Choose a run')}
-            onPress={() => setPickingRun(true)}
-            style={({ pressed }) => ({
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: space.s,
-              minHeight: 44,
-              paddingHorizontal: space.m,
-              borderRadius: radius.m,
-              backgroundColor: pressed ? c.pressed : c.fill,
-            })}
-          >
-            <T style={{ flex: 1 }} numberOfLines={1}>
-              {runLabel(
-                Math.max(
-                  0,
-                  reviews.findIndex((r) => r.id === reviewId),
-                ),
-              )}
-            </T>
-            <ChevronDown size={16} color={c.muted} />
-          </Pressable>
-        ) : null}
-        <Sheet open={pickingRun} onClose={() => setPickingRun(false)} title={say('Runs')}>
-          <SheetGroup>
-            {reviews.map((r, index) => (
-              <SheetOption
-                key={r.id}
-                title={runLabel(index)}
-                selected={r.id === reviewId}
-                onPress={() => {
-                  setReviewId(r.id)
-                  setPickingRun(false)
-                }}
+        }
+        ListFooterComponent={
+          chat &&
+          detail?.id === reviewId &&
+          (detail.elsewhere?.length || detail.files.some((f) => f.sharedWith?.length || f.editedByYou)) ? (
+            <View style={{ paddingHorizontal: space.l }}>
+              <ElsewhereChanges
+                chat={chat}
+                groups={detail.elsewhere ?? []}
+                shared={detail.files.filter((f) => f.sharedWith?.length || f.editedByYou)}
+                busy={busy}
+                onClaim={
+                  store.computers.find((pc) => pc.id === chat.computerId)?.access === 'viewer'
+                    ? undefined
+                    : (fileIds) =>
+                        void action(() => store.invoke(chat.computerId, 'reviews.claimElsewhere', detail.id, fileIds))
+                }
               />
-            ))}
-          </SheetGroup>
-        </Sheet>
-        <TextInput
-          value={note}
-          onChangeText={setNote}
-          multiline
-          placeholder={say('Review comment for the agent…')}
-          placeholderTextColor={c.muted}
-          style={{ padding: space.m, color: c.text, backgroundColor: c.fill, borderRadius: radius.m }}
-        />
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: space.s,
-            paddingBottom: space.s,
-            opacity: loading ? 0 : 1,
-          }}
-        >
-          <T size={font.control} tone="muted" style={{ flex: 1 }}>
-            {say('{count} files changed', { count: changes.length })}
-          </T>
-          <T size={font.control} mono tone="ok">
-            +{add}
-          </T>
-          <T size={font.control} mono tone="bad">
-            −{del}
-          </T>
-        </View>
-        {(loading ? [] : changes).map((f) => (
-          <FileDiff
-            key={f.path}
-            file={f}
-            source={detail?.files.find((x) => x.id === f.fileId)}
-            review={detail && chat ? { id: detail.id, computerId: chat.computerId } : undefined}
-            comments={review?.comments.filter((x) => x.fileId === f.fileId && x.author === 'human') ?? []}
-            onRemove={(id) =>
-              void action(() => store.invoke(chat!.computerId, 'reviews.removeComment', review!.id, id))
-            }
-            onLine={(line) => {
-              setCommenting({ file: f, line })
-              setDraft('')
-            }}
-            onOpenFile={f.repoId && f.status !== 'deleted' ? () => openFile.open(f.repoId!, f.path) : undefined}
-            open={open[f.path] ?? (!!initialFile && f.fileId === initialFile)}
-            onToggle={() => setOpen((o) => ({ ...o, [f.path]: !o[f.path] }))}
-          />
-        ))}
-        {chat &&
-        detail?.id === reviewId &&
-        (detail.elsewhere?.length || detail.files.some((f) => f.sharedWith?.length || f.editedByYou)) ? (
-          <ElsewhereChanges
-            chat={chat}
-            groups={detail.elsewhere ?? []}
-            shared={detail.files.filter((f) => f.sharedWith?.length || f.editedByYou)}
-            busy={busy}
-            onClaim={
-              store.computers.find((pc) => pc.id === chat.computerId)?.access === 'viewer'
-                ? undefined
-                : (fileIds) =>
-                    void action(() => store.invoke(chat.computerId, 'reviews.claimElsewhere', detail.id, fileIds))
-            }
-          />
-        ) : null}
-      </ScrollView>
+            </View>
+          ) : null
+        }
+      />
+      <Sheet open={pickingRun} onClose={() => setPickingRun(false)} title={say('Runs')}>
+        <SheetGroup>
+          {reviews.map((r, index) => (
+            <SheetOption
+              key={r.id}
+              title={runLabel(index)}
+              selected={r.id === reviewId}
+              onPress={() => {
+                setReviewId(r.id)
+                setPickingRun(false)
+              }}
+            />
+          ))}
+        </SheetGroup>
+      </Sheet>
       {Platform.OS === 'ios' ? (
         // The system's floating bottom toolbar, as Settings and Search use, with native buttons.
         <Stack.Toolbar placement="bottom">
