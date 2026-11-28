@@ -65,3 +65,20 @@ export function liveActivityStep(input: {
   if (!input.active) return input.foreground ? 'start' : 'none'
   return 'update'
 }
+
+/**
+ * Which of the activities on screen to keep. A host can start one by push while Ramu is open (an older host, or before
+ * this phone's own activity reached it): the app takes it over when it has none, unless the person dismissed this
+ * host's, and ends every other beside the one kept and the one finishing.
+ */
+export function keepOneActivity(input: {
+  live: string[]
+  current: string | null
+  finishing: string | null
+  dismissed: boolean
+}): { adopt: string | null; end: string[] } {
+  const live = input.live.filter((id) => id !== input.finishing)
+  const adopt = !input.current && !input.dismissed ? (live[0] ?? null) : null
+  const kept = input.current ?? adopt
+  return { adopt, end: live.filter((id) => id !== kept) }
+}

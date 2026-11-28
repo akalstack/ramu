@@ -10,7 +10,7 @@ import {
   liveActivityOrder,
 } from '@ramu/shared/liveActivity'
 import { useStore } from '../runtime/store'
-import { liveActivityStep, liveActivityThreads } from '../runtime/liveActivity'
+import { keepOneActivity, liveActivityStep, liveActivityThreads } from '../runtime/liveActivity'
 import { isThreadViewed, onThreadViewed } from '../runtime/threadViewing'
 
 type Activity = LiveActivity<MobileLiveActivityContent>
@@ -214,6 +214,22 @@ export function LiveActivityMonitor() {
         }
       }
       if (current.current) for (const instance of instances.slice(1)) await instance.end('immediate').catch(() => {})
+    }
+    if (state.drafts['live-activities-enabled'] !== 'no') {
+      const live = WorkActivityFactory.getInstances()
+      const keep = keepOneActivity({
+        live: live.map((instance) => instance.getId()),
+        current: current.current?.instance.getId() ?? null,
+        finishing: ending.current?.instance.getId() ?? null,
+        dismissed: suppressed.current === state.selected,
+      })
+      const adopted = live.find((instance) => instance.getId() === keep.adopt)
+      if (adopted) {
+        current.current = { instance: adopted, computerId: state.selected, startedAt: Date.now(), remote: false }
+        persist(current.current)
+      }
+      for (const instance of live)
+        if (keep.end.includes(instance.getId())) await instance.end('immediate').catch(() => {})
     }
     await syncStart()
     state = latest.current

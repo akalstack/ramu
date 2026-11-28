@@ -1,6 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { liveActivityStep, liveActivityThreads, liveThreadStatus } from '../src/runtime/liveActivity.ts'
+import {
+  keepOneActivity,
+  liveActivityStep,
+  liveActivityThreads,
+  liveThreadStatus,
+} from '../src/runtime/liveActivity.ts'
 
 const chat = (id, status, extra = {}) => ({
   id,
@@ -80,4 +85,22 @@ test('the activity starts with work, stays while anything runs or waits, and fin
   // With the host out of reach nothing is known, so the last real state stays until it goes stale.
   assert.equal(step({ active: true, ongoing: 0, followed: 2, online: false }), 'none')
   assert.equal(step({ ongoing: 0 }), 'none')
+})
+
+test('one activity at a time: a host-started one beside the app’s is ended, and taken over when the app has none', () => {
+  // The app's own and one a host pushed while Ramu was open: the host's goes.
+  assert.deepEqual(keepOneActivity({ live: ['app', 'host'], current: 'app', finishing: null, dismissed: false }), {
+    adopt: null,
+    end: ['host'],
+  })
+  // None of the app's own: the host's is kept and followed instead of starting a second.
+  assert.deepEqual(keepOneActivity({ live: ['host', 'other'], current: null, finishing: null, dismissed: false }), {
+    adopt: 'host',
+    end: ['other'],
+  })
+  // The one showing finished work stays its few minutes; one for a host the person dismissed is not taken over.
+  assert.deepEqual(keepOneActivity({ live: ['done', 'host'], current: null, finishing: 'done', dismissed: true }), {
+    adopt: null,
+    end: ['host'],
+  })
 })
